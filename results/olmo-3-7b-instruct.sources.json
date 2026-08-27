@@ -1,0 +1,76 @@
+{
+  "sft": {
+    "dataset": "allenai/Dolci-Instruct-SFT",
+    "total": 2152112,
+    "columns": {
+      "domain": {
+        "Coding": 328614,
+        "Reasoning": 310572,
+        "Chat": 309538,
+        "Math": 269937,
+        "Other": 254863,
+        "Tool Use": 227579,
+        "Precise IF": 136833,
+        "Safety": 110295,
+        "Science": 103825,
+        "Multilingual": 99987,
+        "Hardcoded Data": 69
+      },
+      "source_dataset": {
+        "Verifiable Reasoning": 310572,
+        "Wildchat": 302406,
+        "Dolci Instruct Tool Use": 227579,
+        "Dolci Instruct Python Algorithms": 186345,
+        "Logic Puzzles": 159882,
+        "Tulu 3 Persona MATH": 149958,
+        "Dolci Instruct Precise IF": 136833,
+        "Evol CodeAlpaca": 107270,
+        "Aya": 99987,
+        "Dolci Instruct OpenThoughts3+ Science": 99268,
+        "FLAN": 89981,
+        "OpenMathInstruct 2": 50000,
+        "Tulu 3 Persona GSM": 49980,
+        "WildJailbreak": 49965,
+        "WildGuardMix": 49373,
+        "Tulu 3 Persona Python": 34999,
+        "Tulu 3 Persona Algebra": 19999,
+        "CoCoNot": 10957,
+        "OpenAssistant": 7132,
+        "TableGPT": 5000,
+        "SciRiff": 4557,
+        "Hardcoded Data": 69
+      }
+    }
+  },
+  "dpo": {
+    "dataset": "allenai/Dolci-Instruct-DPO",
+    "total": 259922,
+    "columns": {
+      "preference_type": {
+        "llm_judged": 124980,
+        "delta_learning": 124942,
+        "multiturn_synthetic_context": 5000,
+        "multiturn_self_talk": 5000
+      }
+    }
+  },
+  "rlvr": {
+    "dataset": "allenai/Dolci-Instruct-RL",
+    "total": 169964,
+    "columns": {
+      "data_source": {
+        "math_dapo": 7000
+      },
+      "dataset_source": {
+        "allenai/rlvr_general_mix-keyword-filtered-topic-chars-char-filt-topic-filtered": 48398,
+        "allenai/IF_multi_constraints_upto5_filtered_dpo_0625_filter-keyword-filtered-topic-char-topic-filtered": 37568,
+        "hamishivi/omega-combined-no-boxed_filtered": 20000,
+        "hamishivi/rlvr_acecoder_filtered_filtered": 20000,
+        "hamishivi/polaris_53k": 14000,
+        "hamishivi/rlvr_orz_math_57k_collected_filtered": 14000,
+        "hamishivi/MathSub-30K_filtered": 8998,
+        "hamishivi/DAPO-Math-17k-Processed_filtered": 7000
+      }
+    }
+  }
+}
