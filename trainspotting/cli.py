@@ -1,6 +1,7 @@
 import argparse
 import json
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -99,6 +100,42 @@ def cmd_classify(args):
         print(f"{s['stage']}: {counts}  -> {path}", file=sys.stderr)
 
 
+def cmd_ask(args):
+    """Score sampled prompts from every post-training stage against a free-form question."""
+    model = registry.get_model(args.model)
+    slug = args.slug or re.sub(r"[^a-z0-9]+", "-", args.question.lower()).strip("-")[:60]
+    RESULTS.mkdir(exist_ok=True)
+    print(f"question: {args.question}\n", file=sys.stderr)
+    for s in registry.post_training_stages(model):
+        print(f"sampling {args.sample} rows from {s['hf_dataset']} ...", file=sys.stderr)
+        rows = hf.sample_rows(s["hf_dataset"], args.sample, seed=args.seed)
+        prompts = [extract.extract_prompt(r, s["prompt_path"]) for r in rows]
+        keep = [p for p in prompts if p]
+        labels = classify.classify_prompts(keep, model=args.classifier, question=args.question)
+        records = [{"prompt": p, "match": lab == "yes"} for p, lab in zip(keep, labels) if lab]
+        k, n = sum(r["match"] for r in records), len(records)
+        lo, hi = _wilson(k, n)
+        path = RESULTS / f"{args.model}.{s['stage']}.ask-{slug}.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "question": args.question,
+                    "dataset": s["hf_dataset"],
+                    "sample": args.sample,
+                    "seed": args.seed,
+                    "classifier": args.classifier,
+                    "records": records,
+                },
+                indent=2,
+            )
+        )
+        print(
+            f"{s['stage']}: {k}/{n} match = {k / n * 100 if n else 0:.1f}%"
+            f" (95% CI {lo * 100:.1f}–{hi * 100:.1f}%) -> {path}",
+            file=sys.stderr,
+        )
+
+
 def cmd_report(args):
     model = registry.get_model(args.model)
     print(f"# Training-data audit: {args.model}\n")
@@ -138,6 +175,15 @@ def main():
         p.set_defaults(fn=fn)
         if name == "sources":
             p.add_argument("--json", action="store_true", help="also write results/<model>.sources.json")
+
+    p = sub.add_parser("ask", help="score sampled prompts against a free-form yes/no question")
+    p.add_argument("model")
+    p.add_argument("question")
+    p.add_argument("--sample", type=int, default=300)
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--classifier", default="claude-opus-5")
+    p.add_argument("--slug", help="short name for the result files (default: derived from the question)")
+    p.set_defaults(fn=cmd_ask)
 
     p = sub.add_parser("classify")
     p.add_argument("model")

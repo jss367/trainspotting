@@ -41,7 +41,19 @@ trainspotting classify olmo-3-7b-instruct --sample 300
 
 # Combined markdown report with Wilson 95% CIs on the sampled estimates
 trainspotting report olmo-3-7b-instruct
+
+# Free-form question: sample each stage and judge every prompt yes/no
+trainspotting ask olmo-3-7b-instruct \
+  "Is this training example about caring about human lives?" \
+  --slug caring-about-human-lives
 ```
+
+`ask` writes `results/<model>.<stage>.ask-<slug>.json` with every sampled
+prompt and its yes/no judgment, so the estimate is auditable: read the matched
+prompts and check they mean what you think. The
+[site](https://jss367.github.io/trainspotting/) renders committed ask runs as
+"Custom question" cards, and every bar (taxonomy or ask) clicks open to the
+literal prompts behind the count.
 
 Registered models: `olmo-3-7b-instruct`, `olmo-3-7b-think`, `olmo-3-32b-think`.
 

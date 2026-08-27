@@ -37,7 +37,7 @@ If a prompt is a harmful or trick request (even disguised as a normal task), lab
 Reply with ONLY a JSON array: [{"i": <index>, "label": "<label>"}, ...] covering every index you were given."""
 
 
-def _parse(text: str, n: int) -> dict[int, str]:
+def _parse(text: str, n: int, valid: list[str] = LABELS) -> dict[int, str]:
     m = re.search(r"\[.*\]", text, re.DOTALL)
     if not m:
         return {}
@@ -51,9 +51,18 @@ def _parse(text: str, n: int) -> dict[int, str]:
             i, label = int(item["i"]), str(item["label"])
         except (KeyError, TypeError, ValueError):
             continue
-        if 0 <= i < n and label in LABELS:
+        if 0 <= i < n and label in valid:
             out[i] = label
     return out
+
+
+ASK_SYSTEM = """You judge language-model training prompts against a question the user wants answered about the training data. The question is:
+
+{question}
+
+For each numbered prompt, decide whether this training example matches the question — i.e., whether training on it plausibly teaches the model the thing the question asks about. Judge the training signal, not surface keywords: a math problem that merely mentions people does not match a question about caring for people; a harmful request the model must refuse does match a question about protecting people.
+
+Reply with ONLY a JSON array: [{{"i": <index>, "label": "yes" or "no"}}, ...] covering every index you were given."""
 
 
 def classify_prompts(
@@ -61,8 +70,15 @@ def classify_prompts(
     model: str = "claude-opus-5",
     batch_size: int = 20,
     workers: int = 4,
+    question: str | None = None,
 ) -> list[str | None]:
-    """Return one label (or None) per prompt, preserving order."""
+    """Return one label (or None) per prompt, preserving order.
+
+    With `question` set, labels are "yes"/"no" judgments of that question
+    instead of the fixed taxonomy.
+    """
+    system = ASK_SYSTEM.format(question=question) if question else SYSTEM
+    valid = ["yes", "no"] if question else LABELS
     client = anthropic.Anthropic()
     batches = [
         (start, prompts[start : start + batch_size])
@@ -80,7 +96,7 @@ def classify_prompts(
                 max_tokens=4000,
                 betas=["server-side-fallback-2026-07-01"],
                 extra_body={"fallbacks": "default"},
-                system=SYSTEM,
+                system=system,
                 messages=[{"role": "user", "content": numbered}],
             )
         except anthropic.APIStatusError:
@@ -88,7 +104,7 @@ def classify_prompts(
         if resp.stop_reason == "refusal":
             return start, {}
         text = "".join(b.text for b in resp.content if b.type == "text")
-        return start, _parse(text, len(items))
+        return start, _parse(text, len(items), valid)
 
     labels: list[str | None] = [None] * len(prompts)
     with ThreadPoolExecutor(max_workers=workers) as ex:

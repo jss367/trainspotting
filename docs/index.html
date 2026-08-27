@@ -85,6 +85,21 @@
   }
   .ci::before { left: 0; } .ci::after { right: 0; }
   .note { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+  .row.clickable { cursor: pointer; border-radius: 6px; }
+  .row.clickable:hover { background: var(--track); }
+  .drill {
+    border-left: 2px solid var(--grid); margin: 4px 0 10px 12px; padding: 4px 0 4px 12px;
+  }
+  .drill .dnote { font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
+  .drill details { margin: 2px 0; }
+  .drill summary {
+    font-size: 13px; color: var(--text-secondary); cursor: pointer;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 640px;
+  }
+  .drill pre {
+    white-space: pre-wrap; font: 12px/1.5 ui-monospace, Menlo, monospace;
+    background: var(--track); border-radius: 6px; padding: 8px 10px; margin: 4px 0 8px;
+  }
   footer { color: var(--muted); font-size: 13px; margin-top: 28px; }
   footer a { color: inherit; }
   #tip {
@@ -143,8 +158,11 @@ function hover(el, html){
   el.addEventListener("pointerleave", () => tip.style.display = "none");
 }
 
+const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
 // One bar row on a shared 0–max% scale. CI whisker in muted ink.
-function barRow(label, frac, lo, hi, max, tipHtml, isValue){
+// With `prompts`, clicking the row toggles the literal sampled prompts behind the count.
+function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, prompts){
   const row = document.createElement("div");
   row.className = "row";
   const w = f => Math.min(100, f/max*100);
@@ -156,7 +174,20 @@ function barRow(label, frac, lo, hi, max, tipHtml, isValue){
     </div>
     <div class="val">${pct(frac)} <small>${pct(lo)}–${pct(hi)}</small></div>`;
   hover(row.querySelector(".trackbar"), tipHtml);
-  return row;
+  parent.appendChild(row);
+  if (prompts && prompts.length){
+    row.classList.add("clickable");
+    row.title = "click to see the sampled prompts behind this count";
+    let panel = null;
+    row.addEventListener("click", () => {
+      if (panel){ panel.remove(); panel = null; return; }
+      panel = document.createElement("div");
+      panel.className = "drill";
+      panel.innerHTML = `<p class="dnote">the ${prompts.length} sampled prompt${prompts.length>1?"s":""} behind this bar — click one to read it in full</p>` +
+        prompts.map(p => `<details><summary>${esc(p.slice(0,160))}</summary><pre>${esc(p)}</pre></details>`).join("");
+      row.after(panel);
+    });
+  }
 }
 
 let REG, MANIFEST, DATA = {};
@@ -224,13 +255,45 @@ async function render(model){
       }
       const k = counts[l] || 0;
       const [lo, hi] = wilson(k, n);
-      hhh.appendChild(barRow(NICE[l], k/n, lo, hi, max,
-        `<b>${NICE[l]}</b><br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}`,
-        VALUE_LABELS.has(l)));
+      barRow(hhh, NICE[l], k/n, lo, hi, max,
+        `<b>${NICE[l]}</b><br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
+        VALUE_LABELS.has(l),
+        recs.filter(r => r.label === l).map(r => r.prompt));
     }
   }
   if (!any) hhh.innerHTML += `<p class="note">No classification runs committed for this model yet — run <code>trainspotting classify ${model}</code>.</p>`;
   main.appendChild(hhh);
+
+  // ---- custom questions (trainspotting ask) ----
+  const askFiles = MANIFEST.filter(f => f.startsWith(model + ".") && f.includes(".ask-"));
+  const bySlug = {};
+  for (const f of askFiles){
+    const [, stage, rest] = f.match(/^[^.]+\.([^.]+)\.ask-(.+)\.json$/) || [];
+    if (stage) (bySlug[rest] ||= []).push([stage, f]);
+  }
+  for (const [slug, files] of Object.entries(bySlug)){
+    const stageOrder = post.map(s => s.stage);
+    files.sort((a,b) => stageOrder.indexOf(a[0]) - stageOrder.indexOf(b[0]));
+    const card = document.createElement("section");
+    card.className = "card";
+    const first = await getData(files[0][1]);
+    card.innerHTML = `<h2>Custom question</h2>
+      <p class="sub">“${esc(first.question)}” — share of sampled prompts judged a match by ${first.classifier}. Click a bar to read the matching prompts verbatim.</p>`;
+    const rows = [];
+    for (const [stage, f] of files){
+      const d = await getData(f);
+      const n = d.records.length, k = d.records.filter(r => r.match).length;
+      rows.push({stage, d, n, k, ci: wilson(k, n)});
+    }
+    const max = Math.max(...rows.map(r => r.ci[1]), 0.01);
+    for (const r of rows){
+      barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
+        `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
+        false,
+        r.d.records.filter(x => x.match).map(x => x.prompt));
+    }
+    main.appendChild(card);
+  }
 
   // ---- exact mix composition ----
   if (sources){
