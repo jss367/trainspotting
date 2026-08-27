@@ -14,10 +14,15 @@ ROWS_PER_PAGE = 100  # server maximum for /rows length
 
 
 def _get(path: str, **params) -> dict:
+    """GET with backoff. The datasets-server rate-limits (429) and occasionally
+    500s on a large page; both clear on a retry."""
     for attempt in range(6):
         r = requests.get(f"{BASE}/{path}", params=params, timeout=60)
         if r.status_code == 429:
             time.sleep(int(r.headers.get("retry-after", 0)) or 5 * 2**attempt)
+            continue
+        if r.status_code >= 500:
+            time.sleep(2 * 2**attempt)
             continue
         r.raise_for_status()
         return r.json()
@@ -49,6 +54,35 @@ def column_frequencies(
     return out
 
 
+def sample_rows_with_index(
+    dataset: str,
+    n: int,
+    seed: int = 0,
+    config: str = "default",
+    split: str = "train",
+) -> list[tuple[int, dict]]:
+    """Sample ~n rows via random pages of the /rows endpoint, keeping row indices.
+
+    Rows within a page are correlated (adjacent on disk), so we draw many small
+    chunks from uniformly random offsets rather than a few full pages. The index
+    is the row's absolute position in the split, which addresses it in the HF
+    dataset viewer.
+    """
+    total = num_rows(dataset, config, split)
+    rng = random.Random(seed)
+    chunk = 10
+    n_pages = (n + chunk - 1) // chunk
+    offsets = sorted(rng.randrange(max(1, total - chunk)) for _ in range(n_pages))
+    rows: list[tuple[int, dict]] = []
+    for off in offsets:
+        j = _get(
+            "rows", dataset=dataset, config=config, split=split, offset=off, length=chunk
+        )
+        rows.extend((off + i, r["row"]) for i, r in enumerate(j["rows"]))
+    rng.shuffle(rows)
+    return rows[:n]
+
+
 def sample_rows(
     dataset: str,
     n: int,
@@ -56,21 +90,5 @@ def sample_rows(
     config: str = "default",
     split: str = "train",
 ) -> list[dict]:
-    """Sample ~n rows via random pages of the /rows endpoint.
-
-    Rows within a page are correlated (adjacent on disk), so we draw many small
-    chunks from uniformly random offsets rather than a few full pages.
-    """
-    total = num_rows(dataset, config, split)
-    rng = random.Random(seed)
-    chunk = 10
-    n_pages = (n + chunk - 1) // chunk
-    offsets = sorted(rng.randrange(max(1, total - chunk)) for _ in range(n_pages))
-    rows: list[dict] = []
-    for off in offsets:
-        j = _get(
-            "rows", dataset=dataset, config=config, split=split, offset=off, length=chunk
-        )
-        rows.extend(r["row"] for r in j["rows"])
-    rng.shuffle(rows)
-    return rows[:n]
+    """The same sample as sample_rows_with_index, without the indices."""
+    return [row for _, row in sample_rows_with_index(dataset, n, seed, config, split)]

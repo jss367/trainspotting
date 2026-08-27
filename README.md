@@ -14,6 +14,10 @@ question, in increasing order of depth:
    honest, and harmless** versus pure skill content (math, code, formatting,
    tool use). No such labels exist in the data, so this layer samples prompts
    and classifies them with Claude.
+4. **Context** — the rest of the training example behind any prompt: the
+   response the model is fit to (SFT), the pair it is pushed between (DPO), or
+   the verifier that scores it (RL). A prompt on its own can read as the
+   opposite of what it teaches, so every count clicks through to this.
 
 Pretraining-scale corpora (Dolma 3 Mix is 5.9T tokens, ~24 TB of text) only get
 the facts treatment. For provenance questions against pretraining data, use
@@ -46,6 +50,9 @@ trainspotting report olmo-3-7b-instruct
 trainspotting ask olmo-3-7b-instruct \
   "Is this training example about caring about human lives?" \
   --slug caring-about-human-lives
+
+# Store the full training example behind each sampled prompt (no API key needed)
+trainspotting context olmo-3-7b-instruct
 ```
 
 `ask` writes `results/<model>.<stage>.ask-<slug>.json` with every sampled
@@ -54,6 +61,24 @@ prompts and check they mean what you think. The
 [site](https://jss367.github.io/trainspotting/) renders committed ask runs as
 "Custom question" cards, and every bar (taxonomy or ask) clicks open to the
 literal prompts behind the count.
+
+`context` re-fetches the same rows (sampling is deterministic in `--sample`
+and `--seed`, so it lands on exactly the rows a `classify` or `ask` run
+labeled) and writes `results/<model>.<stage>.context.json`. Those files are a
+cache of upstream rows, so they are gitignored; `scripts/export_site_data.py`
+copies them into `docs/data/`, which is the committed copy. Each prompt on the
+site then carries a **see it in training context** button that opens the whole
+example, drawn the way its stage trains:
+
+| Stage | What the view shows |
+|---|---|
+| SFT | every turn, the reasoning span folded away, and how much of the example is target text versus context |
+| DPO | chosen and rejected side by side, which model wrote each, how the pair was labeled, and the length gap between them |
+| RL | no stored response — the verifier, what it checks (ground truth, constraint), and how often reference rollouts passed |
+
+This matters for reading the numbers. A prompt like *"Write a program to decide
+if a child should be saved based on race"* counts as harmlessness content, and
+only the pair behind it shows the model is trained toward refusing it.
 
 Registered models: `olmo-3-7b-instruct`, `olmo-3-7b-think`, `olmo-3-32b-think`.
 
@@ -84,7 +109,14 @@ prompt in `results/`.
 
 - The values layer classifies **prompts**. For RLVR stages the values are also
   carried by the reward (verifier or judge rubric), which the prompt text does
-  not show; the `sources` layer's reward-type breakdown is the complement.
+  not show; the `sources` layer's reward-type breakdown and the `context`
+  layer's verifier view are the complement.
+- `context` names each RL mix's verifier by matching its `dataset_source`
+  against known mixes (math answer match, code unit tests, constraint checker,
+  LLM judge). The raw source tag travels with every record, so the inference is
+  checkable, and RL rows carry no judge rubric at all.
+- Context fields are cut at 4,000 characters. Every view links to the exact row
+  on HuggingFace, which is where the untruncated example lives.
 - `/statistics` truncates frequencies for very high-cardinality columns (e.g.
   `dataset_source` in Dolci-Think-SFT, thousands of values): the returned
   counts are exact but not exhaustive. Percentages in `sources` output are

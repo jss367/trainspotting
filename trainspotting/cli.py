@@ -5,7 +5,7 @@ import re
 import sys
 from pathlib import Path
 
-from . import classify, extract, hf, registry
+from . import classify, context, extract, hf, registry
 
 RESULTS = Path(__file__).resolve().parent.parent / "results"
 
@@ -136,6 +136,44 @@ def cmd_ask(args):
         )
 
 
+def cmd_context(args):
+    """Re-fetch the sampled rows and store the full training example behind each prompt.
+
+    Sampling is deterministic in (sample, seed), so the same defaults as a
+    classify/ask run pull exactly the rows those runs labeled. No model is
+    called here — this is the deterministic half of the drill-down.
+    """
+    model = registry.get_model(args.model)
+    stages = registry.post_training_stages(model)
+    if args.stage:
+        stages = [s for s in stages if s["stage"] == args.stage]
+        if not stages:
+            sys.exit(f"no post-training stage {args.stage!r} for {args.model}")
+    RESULTS.mkdir(exist_ok=True)
+    for s in stages:
+        print(f"re-fetching {args.sample} sampled rows from {s['hf_dataset']} ...", file=sys.stderr)
+        rows = hf.sample_rows_with_index(s["hf_dataset"], args.sample, seed=args.seed)
+        records = []
+        for row_index, row in rows:
+            prompt = extract.extract_prompt(row, s["prompt_path"])
+            if prompt:
+                records.append(context.build(row, s["stage"], s["prompt_path"], prompt, row_index))
+        path = RESULTS / f"{args.model}.{s['stage']}.context.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "dataset": s["hf_dataset"],
+                    "stage": s["stage"],
+                    "sample": args.sample,
+                    "seed": args.seed,
+                    "records": records,
+                },
+                indent=2,
+            )
+        )
+        print(f"{s['stage']}: {len(records)} records -> {path} ({path.stat().st_size / 1e6:.1f} MB)", file=sys.stderr)
+
+
 def cmd_report(args):
     model = registry.get_model(args.model)
     print(f"# Training-data audit: {args.model}\n")
@@ -184,6 +222,13 @@ def main():
     p.add_argument("--classifier", default="claude-opus-5")
     p.add_argument("--slug", help="short name for the result files (default: derived from the question)")
     p.set_defaults(fn=cmd_ask)
+
+    p = sub.add_parser("context", help="store the full training example behind each sampled prompt")
+    p.add_argument("model")
+    p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
+    p.add_argument("--sample", type=int, default=300)
+    p.add_argument("--seed", type=int, default=0)
+    p.set_defaults(fn=cmd_context)
 
     p = sub.add_parser("classify")
     p.add_argument("model")

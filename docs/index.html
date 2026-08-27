@@ -17,6 +17,13 @@
     --border:    rgba(11,11,11,0.10);
     --series-1:  #2a78d6;
     --track:     #f0efec;
+    /* diverging pole for "trained away from" (blue ↔ red, gray midpoint) */
+    --neg:       #e34948;
+    /* one-hue ordinal ramp for parts of a single training example */
+    --ramp-lo:   #86b6ef;
+    --ramp-hi:   #2a78d6;
+    --meter-track: #cde2fb;
+    --scrim:     rgba(11,11,11,0.35);
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -31,6 +38,11 @@
       --border:    rgba(255,255,255,0.10);
       --series-1:  #3987e5;
       --track:     #262624;
+      --neg:       #e66767;
+      --ramp-lo:   #184f95;
+      --ramp-hi:   #3987e5;
+      --meter-track: #0d366b;
+      --scrim:     rgba(0,0,0,0.6);
     }
   }
   * { box-sizing: border-box; }
@@ -91,23 +103,120 @@
     border-left: 2px solid var(--grid); margin: 4px 0 10px 12px; padding: 4px 0 4px 12px;
   }
   .drill .dnote { font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
-  .drill details { margin: 2px 0; }
+  .pitem { margin: 0 0 6px; }
+  .drill details { margin: 0; }
   .drill summary {
     font-size: 13px; color: var(--text-secondary); cursor: pointer;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 640px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; max-width: 660px;
   }
-  .drill pre {
-    white-space: pre-wrap; font: 12px/1.5 ui-monospace, Menlo, monospace;
+  .drill details[open] summary { -webkit-line-clamp: unset; color: var(--text-primary); }
+  .drill pre, .ctxtext {
+    white-space: pre-wrap; overflow-wrap: anywhere;
+    font: 12px/1.55 ui-monospace, Menlo, monospace;
     background: var(--track); border-radius: 6px; padding: 8px 10px; margin: 4px 0 8px;
   }
+  /* long spans scroll in place, so the shape of the example stays visible */
+  .ctxtext { max-height: 280px; overflow: auto; }
+  .ctxbtn {
+    font: inherit; font-size: 12px; cursor: pointer; margin: 2px 0 2px;
+    padding: 3px 10px; border-radius: 999px; background: transparent;
+    border: 1px solid var(--series-1); color: var(--text-primary);
+  }
+  .ctxbtn:hover { background: var(--track); }
   footer { color: var(--muted); font-size: 13px; margin-top: 28px; }
   footer a { color: inherit; }
   #tip {
-    position: fixed; pointer-events: none; z-index: 10; display: none; max-width: 300px;
+    position: fixed; pointer-events: none; z-index: 20; display: none; max-width: 300px;
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px;
     padding: 6px 10px; font-size: 12px; color: var(--text-primary);
     box-shadow: 0 2px 10px rgba(0,0,0,.15);
   }
+
+  /* ---- training-context dialog ---- */
+  dialog#ctx {
+    width: min(1040px, 94vw); max-height: 88vh; overflow: auto; padding: 0; border: 1px solid var(--border);
+    border-radius: 12px; background: var(--surface-1); color: var(--text-primary);
+    box-shadow: 0 12px 40px rgba(0,0,0,.28);
+  }
+  dialog#ctx::backdrop { background: var(--scrim); }
+  .ctxhead {
+    position: sticky; top: 0; z-index: 2; display: flex; gap: 12px; align-items: baseline;
+    justify-content: space-between; padding: 16px 20px 12px;
+    background: var(--surface-1); border-bottom: 1px solid var(--border);
+  }
+  .ctxhead h2 { font-size: 15px; margin: 0 0 3px; }
+  .ctxhead p { margin: 0; font-size: 13px; color: var(--text-secondary); max-width: 720px; }
+  .ctxclose {
+    font: inherit; cursor: pointer; border: 1px solid var(--border); border-radius: 8px;
+    background: transparent; color: var(--text-secondary); padding: 4px 10px;
+  }
+  .ctxbody { padding: 14px 20px 24px; }
+  .ctxsec { margin: 0 0 20px; }
+  .ctxsec > h3 {
+    font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 6px; font-weight: 600;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+  .chip {
+    font-size: 12px; padding: 2px 9px; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--text-secondary); background: var(--track);
+  }
+  .chip b { color: var(--text-primary); font-weight: 600; }
+  .chip.link { background: transparent; }
+  .chip.link a { color: inherit; text-decoration: none; }
+  .chip.link a:hover { text-decoration: underline; }
+
+  /* stacked composition strip (one training example, by part) */
+  .strip { display: flex; gap: 2px; height: 14px; margin: 2px 0 8px; }
+  .strip > div { border-radius: 0; min-width: 2px; }
+  .strip > div:first-child { border-radius: 4px 0 0 4px; }
+  .strip > div:last-child  { border-radius: 0 4px 4px 0; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-secondary); }
+  .legend span.k { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .legend em { color: var(--muted); font-style: normal; font-variant-numeric: tabular-nums; }
+
+  /* preference pair */
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .pair { grid-template-columns: 1fr; } }
+  .side { border: 1px solid var(--border); border-radius: 10px; padding: 0 0 10px; overflow: hidden; }
+  .side > .sh { padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  .side .verdict { font-size: 13px; font-weight: 650; display: flex; align-items: center; gap: 7px; }
+  .side .verdict i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .side .who { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .side.pos { border-top: 3px solid var(--series-1); }
+  .side.neg { border-top: 3px solid var(--neg); }
+  .side .body { padding: 0 12px; }
+  .lenrow { display: grid; grid-template-columns: 92px 1fr 92px; gap: 10px; align-items: center; padding: 2px 0; }
+  .lenrow .lbl { font-size: 12px; color: var(--text-secondary); text-align: right; }
+  .lenrow .val { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .lenbar { height: 12px; border-radius: 0 4px 4px 0; }
+
+  /* rl reward flow */
+  .flow { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .flow .step {
+    flex: 1 1 150px; border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px;
+    background: var(--track);
+  }
+  .flow .step.accent { background: transparent; border-color: var(--series-1); box-shadow: inset 0 0 0 1px var(--series-1); }
+  .flow .step .t { font-size: 12px; color: var(--muted); }
+  .flow .step .v { font-size: 13px; font-weight: 600; }
+  .flow .arrow { align-self: center; color: var(--muted); font-size: 15px; }
+  .meterwrap { max-width: 420px; }
+  .meter { height: 14px; border-radius: 4px; background: var(--meter-track); position: relative; overflow: hidden; }
+  .meter > div { position: absolute; inset: 0 auto 0 0; background: var(--series-1); border-radius: 4px 0 0 4px; }
+  .hero { font-size: 30px; font-weight: 650; line-height: 1.1; }
+  .ctxsec details { margin: 6px 0; }
+  .ctxsec summary { font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+  .turn { margin: 0 0 10px; }
+  .turn .role {
+    font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 3px; display: flex; gap: 8px; align-items: baseline;
+  }
+  .turn .role b { color: var(--text-primary); font-weight: 600; letter-spacing: 0; text-transform: none; font-size: 12px; }
+  .kv { font-size: 13px; color: var(--text-secondary); margin: 0 0 8px; }
+  .kv b { color: var(--text-primary); }
 </style>
 </head>
 <body>
@@ -123,14 +232,28 @@
   <footer>
     Mix composition is exact (from each dataset's own label columns via the
     HuggingFace datasets-server). HHH shares are estimated from prompts sampled
-    per stage and labeled with Claude; whiskers are Wilson 95% intervals. For RLVR
-    stages the prompt text understates value content carried by the reward signal.
+    per stage and labeled with Claude; whiskers are Wilson 95% intervals. Click any
+    bar for the prompts behind it, then <em>see it in training context</em> for the
+    rest of the training example — the response the model is fit to, the pair it is
+    pushed between, or the verifier that scores it.
     Data: Ai2's <a href="https://allenai.org/blog/olmo3">OLMo 3</a> release
-    (Dolma 3 / Dolci). Regenerate with <code>trainspotting classify</code> +
-    <code>scripts/export_site_data.py</code>.
+    (Dolma 3 / Dolci). Regenerate with <code>trainspotting classify</code>,
+    <code>trainspotting context</code> + <code>scripts/export_site_data.py</code>.
   </footer>
 </div>
 <div id="tip" role="tooltip"></div>
+
+<dialog id="ctx" aria-label="training context">
+  <div class="ctxhead">
+    <div>
+      <h2 id="ctxtitle"></h2>
+      <p id="ctxlede"></p>
+    </div>
+    <button class="ctxclose" id="ctxclose" aria-label="close">✕ close</button>
+  </div>
+  <div class="ctxbody" id="ctxbody"></div>
+</dialog>
+
 <script>
 const LABELS = ["helpfulness","honesty","harmlessness","capability","instruction_following","tool_use","other"];
 const VALUE_LABELS = new Set(["helpfulness","honesty","harmlessness"]);
@@ -139,6 +262,7 @@ const NICE = {helpfulness:"helpful", honesty:"honest", harmlessness:"harmless",
   tool_use:"tool use", other:"other"};
 const fmtTok = n => n >= 1e12 ? (n/1e12).toFixed(1)+"T" : n >= 1e9 ? Math.round(n/1e9)+"B" : n.toLocaleString();
 const pct = x => (x*100).toFixed(1)+"%";
+const num = n => (n ?? 0).toLocaleString();
 
 function wilson(k, n, z=1.96){
   if (!n) return [0,0];
@@ -157,12 +281,232 @@ function hover(el, html){
   });
   el.addEventListener("pointerleave", () => tip.style.display = "none");
 }
+// Markup built as strings carries its tooltip in data-tip; this wires them up after insert.
+function wireTips(root){
+  root.querySelectorAll("[data-tip]").forEach(el => hover(el, el.dataset.tip));
+}
 
-const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const escAttr = s => esc(s).replace(/"/g,"&quot;");
+
+// ---------------------------------------------------------------- context ---
+// One training example, rendered the way its stage actually trains: SFT fits a
+// target response, DPO pushes between a pair, RL scores a rollout the model
+// writes itself.
+
+const STAGE_LEDE = {
+  sft: "Supervised fine-tuning. The model is fit directly to the assistant turns below — it learns to produce this text after this prompt.",
+  dpo: "Direct preference optimization. The model is pushed toward the chosen response and away from the rejected one. Only the difference between the two is the training signal.",
+  rlvr: "Reinforcement learning. No response is stored. The model writes its own answer during training and a verifier scores it, so what gets trained is whatever the verifier rewards.",
+};
+const PREF_EXPLAIN = {
+  delta_learning: "Delta learning: the chosen response comes from a larger model and the rejected one from a smaller model. No human or judge compared these two responses — the size gap is the label.",
+  llm_judged: "A judge model scored both responses; the higher-scored one became chosen.",
+  multiturn_synthetic_context: "A synthetic multi-turn pair built by Ai2 — see the dataset card for how the two continuations were produced.",
+  multiturn_self_talk: "A synthetic self-talk multi-turn pair built by Ai2 — see the dataset card for how the two continuations were produced.",
+};
+
+// Turns arrive with the thinking span already separated, so a long trace never
+// swallows the answer behind it.
+const turnChars = t => t.chars + (t.reasoning ? t.reasoning.chars : 0);
+const assistantChars = side =>
+  (side.turns || []).filter(t => t.role === "assistant").reduce((a,t) => a + turnChars(t), 0);
+
+function textBlock(text, chars){
+  const cut = chars > text.length
+    ? `<p class="note">showing the first ${num(text.length)} of ${num(chars)} characters</p>` : "";
+  return `<div class="ctxtext">${esc(text)}</div>${cut}`;
+}
+
+function turnBlock(turn, trained){
+  const r = turn.reasoning;
+  return `<div class="turn">
+    <div class="role">${esc(turn.role)} ${trained ? `<b>${trained}</b>` : ""}</div>
+    ${r ? `<details><summary>reasoning — ${num(r.chars)} characters, folded away</summary>${textBlock(r.text, r.chars)}</details>` : ""}
+    ${textBlock(turn.text, turn.chars)}
+  </div>`;
+}
+
+function chips(rec, dataset){
+  const out = [];
+  for (const [k, v] of Object.entries(rec.meta || {})){
+    const ex = PREF_EXPLAIN[v];
+    out.push(`<span class="chip"${ex ? ` data-tip="${escAttr(ex)}"` : ""}>${esc(k.replace(/_/g," "))} <b>${esc(v)}</b></span>`);
+  }
+  const url = `https://huggingface.co/datasets/${dataset}/viewer/default/train?row=${rec.row}`;
+  out.push(`<span class="chip link"><a href="${escAttr(url)}" target="_blank" rel="noopener">row ${num(rec.row)} on HuggingFace ↗</a></span>`);
+  return `<div class="chips">${out.join("")}</div>`;
+}
+
+function promptSection(rec){
+  const p = rec.prompt_full || {text: rec.prompt, chars: rec.prompt.length};
+  return `<section class="ctxsec"><h3>the prompt</h3>${textBlock(p.text, p.chars)}</section>`;
+}
+
+// SFT: how much of the example is the target the model is fit to.
+function renderSFT(rec, dataset){
+  const parts = {context: 0, reasoning: 0, answer: 0};
+  for (const t of rec.turns){
+    if (t.role === "assistant"){
+      parts.reasoning += t.reasoning ? t.reasoning.chars : 0;
+      parts.answer += t.chars;
+    } else {
+      parts.context += t.chars;
+    }
+  }
+  const segs = [
+    {k: "prompt and conversation", n: parts.context, c: "var(--baseline)", why: "context the model reads but is not scored on"},
+    {k: "assistant reasoning", n: parts.reasoning, c: "var(--ramp-lo)", why: "the thinking span, itself a training target"},
+    {k: "assistant answer", n: parts.answer, c: "var(--ramp-hi)", why: "the visible response the model is fit to"},
+  ].filter(s => s.n > 0);
+  const total = segs.reduce((a,s) => a + s.n, 0) || 1;
+  const strip = segs.map(s =>
+    `<div style="flex:${s.n};background:${s.c}" data-tip="<b>${escAttr(s.k)}</b><br>${num(s.n)} characters (${pct(s.n/total)})<br>${escAttr(s.why)}"></div>`).join("");
+  const legend = segs.map(s =>
+    `<span class="k"><i style="background:${s.c}"></i>${esc(s.k)} <em>${num(s.n)} ch · ${pct(s.n/total)}</em></span>`).join("");
+  const nturns = rec.turns.length;
+
+  return `${chips(rec, dataset)}
+    <section class="ctxsec">
+      <h3>what this example is made of</h3>
+      <div class="strip">${strip}</div>
+      <div class="legend">${legend}</div>
+      <p class="note">Characters across ${nturns} turn${nturns > 1 ? "s" : ""}, counted before any
+        display truncation. The assistant text is the training target; everything else is context.</p>
+    </section>
+    <section class="ctxsec">
+      <h3>the example</h3>
+      ${rec.turns.map(t => turnBlock(t, t.role === "assistant" ? "trained to produce this" : "")).join("")}
+    </section>`;
+}
+
+// DPO: the pair, side by side, plus the length gap between the two responses.
+function renderDPO(rec, dataset){
+  const sides = [
+    {key: "chosen", side: rec.chosen, cls: "pos", mark: "✓", verdict: "chosen — trained toward this", color: "var(--series-1)"},
+    {key: "rejected", side: rec.rejected, cls: "neg", mark: "✗", verdict: "rejected — trained away from this", color: "var(--neg)"},
+  ];
+  const maxLen = Math.max(...sides.map(s => assistantChars(s.side)), 1);
+  const lens = sides.map(s => {
+    const n = assistantChars(s.side);
+    return `<div class="lenrow">
+      <div class="lbl">${s.mark} ${s.key}</div>
+      <div><div class="lenbar" style="width:${n/maxLen*100}%;background:${s.color}"
+        data-tip="<b>${s.key}</b><br>${num(n)} characters"></div></div>
+      <div class="val">${num(n)} ch</div>
+    </div>`;
+  }).join("");
+
+  const panels = sides.map(s => {
+    const turns = (s.side.turns || []).filter(t => t.role === "assistant");
+    return `<div class="side ${s.cls}">
+      <div class="sh">
+        <div class="verdict"><i style="background:${s.color}"></i>${s.mark} ${esc(s.verdict)}</div>
+        <div class="who">written by ${esc(s.side.model || "an unnamed model")}</div>
+      </div>
+      <div class="body">${turns.map(t => turnBlock(t, "")).join("") || '<p class="note">no assistant turn stored</p>'}</div>
+    </div>`;
+  }).join("");
+
+  const pref = rec.meta && rec.meta.preference_type;
+  return `${chips(rec, dataset)}
+    ${pref && PREF_EXPLAIN[pref] ? `<p class="kv">${esc(PREF_EXPLAIN[pref])}</p>` : ""}
+    <section class="ctxsec">
+      <h3>response length</h3>
+      ${lens}
+      <p class="note">Length is the most common confound in preference data — a pair that differs
+        mainly in length teaches length.</p>
+    </section>
+    ${promptSection(rec)}
+    <section class="ctxsec">
+      <h3>the pair</h3>
+      <div class="pair">${panels}</div>
+    </section>`;
+}
+
+// RL: there is no stored response — show the verifier and what it checks.
+function renderRLVR(rec, dataset){
+  const r = rec.reward || {};
+  const roll = rec.rollouts || {};
+  const flow = `<div class="flow">
+    <div class="step"><div class="t">1 · input</div><div class="v">the prompt</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="t">2 · rollout</div><div class="v">the model writes its own answer</div></div>
+    <div class="arrow">→</div>
+    <div class="step accent"><div class="t">3 · verifier</div><div class="v">${esc(r.kind || "unknown")}</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="t">4 · reward</div><div class="v">score on that answer</div></div>
+  </div>`;
+
+  const GT_LABEL = {
+    "constraint checker": "checker configuration",
+    "unit tests": "test cases the answer is run against",
+  };
+  const checks = [];
+  if (r.ground_truth) checks.push([GT_LABEL[r.kind] || "ground truth the answer is matched against", r.ground_truth]);
+  if (r.constraint) checks.push([`constraint checked${r.constraint_type ? " (" + r.constraint_type + ")" : ""}`, r.constraint]);
+  if (r.solution) checks.push(["reference solution", r.solution]);
+  // Code mixes store their tests as one base64 blob; dumping it reads as noise.
+  const blob = v => v.text.length > 200 && !/\s/.test(v.text);
+  const check = ([k, v]) => `<p class="kv"><b>${esc(k)}</b></p>` + (blob(v)
+    ? `<details><summary>encoded blob, ${num(v.chars)} characters — the verifier decodes it before running</summary>${textBlock(v.text, v.chars)}</details>`
+    : textBlock(v.text, v.chars));
+
+  let meter = "";
+  if (roll.total){
+    const p = roll.passrate != null ? roll.passrate : (roll.correct || 0) / roll.total;
+    meter = `<section class="ctxsec">
+      <h3>how hard this prompt was for the reference model</h3>
+      <div class="meterwrap">
+        <div class="hero">${pct(p)}</div>
+        <div class="meter" data-tip="${escAttr(num(roll.correct) + " of " + num(roll.total) + " sampled rollouts passed the verifier")}"><div style="width:${Math.min(100, p*100)}%"></div></div>
+        <p class="note">${num(roll.correct)} of ${num(roll.total)} sampled rollouts passed. Ai2 used this
+          rate to filter the mix — prompts that always pass or never pass carry no gradient.</p>
+      </div>
+    </section>`;
+  }
+
+  return `${chips(rec, dataset)}
+    <section class="ctxsec">
+      <h3>how this prompt trains the model</h3>
+      ${flow}
+      <p class="kv">${esc(r.explain || "")}</p>
+    </section>
+    ${promptSection(rec)}
+    ${checks.length ? `<section class="ctxsec"><h3>what the verifier checks</h3>
+      ${checks.map(check).join("")}
+    </section>` : `<section class="ctxsec"><h3>what the verifier checks</h3>
+      <p class="kv">This row stores no ground truth or constraint — the reward comes from a judge model
+        whose rubric is not published with the dataset.</p></section>`}
+    ${meter}
+    ${roll.sample ? `<section class="ctxsec"><h3>one sampled rollout</h3>
+      <details><summary>show the answer the reference model produced</summary>${textBlock(roll.sample.text, roll.sample.chars)}</details>
+      <p class="note">Stored for difficulty filtering, not as a training target. RL trains on the
+        policy's own answers, not on this one.</p></section>` : ""}`;
+}
+
+const RENDER = {sft: renderSFT, dpo: renderDPO, rlvr: renderRLVR};
+
+const dlg = document.getElementById("ctx");
+document.getElementById("ctxclose").onclick = () => dlg.close();
+dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); });
+
+function openContext(rec, stage, dataset, stageName){
+  document.getElementById("ctxtitle").textContent = `${stage.toUpperCase()} — ${stageName}`;
+  document.getElementById("ctxlede").textContent = STAGE_LEDE[stage] || "";
+  const body = document.getElementById("ctxbody");
+  body.innerHTML = (RENDER[stage] || RENDER.sft)(rec, dataset);
+  wireTips(body);
+  dlg.scrollTop = 0;
+  if (!dlg.open) dlg.showModal();
+}
+
+// ------------------------------------------------------------------ charts ---
 
 // One bar row on a shared 0–max% scale. CI whisker in muted ink.
-// With `prompts`, clicking the row toggles the literal sampled prompts behind the count.
-function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, prompts){
+// With `prompts`, clicking the row toggles the literal sampled prompts behind
+// the count; each prompt offers the full training example it came from.
+function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, prompts, ctx){
   const row = document.createElement("div");
   row.className = "row";
   const w = f => Math.min(100, f/max*100);
@@ -183,18 +527,56 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, prompts){
       if (panel){ panel.remove(); panel = null; return; }
       panel = document.createElement("div");
       panel.className = "drill";
-      panel.innerHTML = `<p class="dnote">the ${prompts.length} sampled prompt${prompts.length>1?"s":""} behind this bar — click one to read it in full</p>` +
-        prompts.map(p => `<details><summary>${esc(p.slice(0,160))}</summary><pre>${esc(p)}</pre></details>`).join("");
+      panel.innerHTML = `<p class="dnote">the ${prompts.length} sampled prompt${prompts.length>1?"s":""} behind this bar — click one to read it in full</p>`;
+      for (const p of prompts){
+        const item = document.createElement("div");
+        item.className = "pitem";
+        item.innerHTML = `<details><summary>${esc(p.slice(0,200))}</summary><pre>${esc(p)}</pre></details>`;
+        if (ctx && ctx.hasContext){
+          const b = document.createElement("button");
+          b.className = "ctxbtn";
+          b.textContent = "see it in training context ›";
+          b.onclick = async () => {
+            b.disabled = true;
+            const was = b.textContent;
+            b.textContent = "loading…";
+            const rec = await contextFor(ctx.model, ctx.stage, p);
+            b.disabled = false;
+            b.textContent = was;
+            if (rec) openContext(rec, ctx.stage, ctx.dataset, ctx.stageName);
+            else b.textContent = "context not found for this prompt";
+          };
+          item.appendChild(b);
+        }
+        panel.appendChild(item);
+      }
       row.after(panel);
     });
   }
 }
 
-let REG, MANIFEST, DATA = {};
+let REG, MANIFEST, DATA = {}, CTXMAPS = {};
 async function fetchJSON(p){ const r = await fetch("data/"+p); if(!r.ok) throw new Error(p); return r.json(); }
 async function getData(name){
   if (!DATA[name] && MANIFEST.includes(name)) DATA[name] = await fetchJSON(name);
   return DATA[name];
+}
+const ctxFile = (model, stage) => `${model}.${stage}.context.json`;
+
+async function contextFor(model, stage, prompt){
+  const f = ctxFile(model, stage);
+  if (!CTXMAPS[f]){
+    const d = await getData(f);
+    const m = new Map();
+    for (const r of (d ? d.records : [])){
+      if (!m.has(r.prompt)) m.set(r.prompt, r);
+      const head = r.prompt.slice(0, 200);        // fallback for differently-cut copies
+      if (!m.has(head)) m.set(head, r);
+    }
+    CTXMAPS[f] = m;
+  }
+  const m = CTXMAPS[f];
+  return m.get(prompt) || m.get(prompt.slice(0, 200));
 }
 
 async function render(model){
@@ -205,6 +587,10 @@ async function render(model){
 
   const sources = await getData(model + ".sources.json");
   const post = m.stages.filter(s => s.hf_dataset);
+  const ctxFor = s => ({
+    model, stage: s.stage, dataset: s.hf_dataset, stageName: s.name,
+    hasContext: MANIFEST.includes(ctxFile(model, s.stage)),
+  });
 
   // ---- pipeline tiles ----
   const facts = document.createElement("section");
@@ -258,7 +644,7 @@ async function render(model){
       barRow(hhh, NICE[l], k/n, lo, hi, max,
         `<b>${NICE[l]}</b><br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
         VALUE_LABELS.has(l),
-        recs.filter(r => r.label === l).map(r => r.prompt));
+        recs.filter(r => r.label === l).map(r => r.prompt), ctxFor(s));
     }
   }
   if (!any) hhh.innerHTML += `<p class="note">No classification runs committed for this model yet — run <code>trainspotting classify ${model}</code>.</p>`;
@@ -287,10 +673,11 @@ async function render(model){
     }
     const max = Math.max(...rows.map(r => r.ci[1]), 0.01);
     for (const r of rows){
+      const s = post.find(p => p.stage === r.stage) || {stage: r.stage, hf_dataset: r.d.dataset, name: r.d.dataset};
       barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
         `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
         false,
-        r.d.records.filter(x => x.match).map(x => x.prompt));
+        r.d.records.filter(x => x.match).map(x => x.prompt), ctxFor(s));
     }
     main.appendChild(card);
   }

@@ -10,7 +10,7 @@ def _first_user(messages) -> str | None:
     return None
 
 
-def extract_prompt(row: dict, prompt_path: str) -> str | None:
+def extract_prompt(row: dict, prompt_path: str, max_chars: int = MAX_CHARS) -> str | None:
     if prompt_path == "messages":
         text = _first_user(row.get("messages"))
     elif prompt_path == "chosen_messages":
@@ -28,4 +28,4 @@ def extract_prompt(row: dict, prompt_path: str) -> str | None:
     if not text:
         return None
     text = str(text).strip()
-    return text[:MAX_CHARS] if text else None
+    return text[:max_chars] if text else None
