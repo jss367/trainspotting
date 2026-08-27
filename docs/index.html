@@ -333,13 +333,15 @@ function chips(rec, dataset){
     const ex = PREF_EXPLAIN[v];
     out.push(`<span class="chip"${ex ? ` data-tip="${escAttr(ex)}"` : ""}>${esc(k.replace(/_/g," "))} <b>${esc(v)}</b></span>`);
   }
-  const url = `https://huggingface.co/datasets/${dataset}/viewer/default/train?row=${rec.row}`;
-  out.push(`<span class="chip link"><a href="${escAttr(url)}" target="_blank" rel="noopener">row ${num(rec.row)} on HuggingFace ↗</a></span>`);
+  if (rec.row != null){
+    const url = `https://huggingface.co/datasets/${dataset}/viewer/default/train?row=${rec.row}`;
+    out.push(`<span class="chip link"><a href="${escAttr(url)}" target="_blank" rel="noopener">row ${num(rec.row)} on HuggingFace ↗</a></span>`);
+  }
   return `<div class="chips">${out.join("")}</div>`;
 }
 
 function promptSection(rec){
-  const p = rec.prompt_full || {text: rec.prompt, chars: rec.prompt.length};
+  const p = rec.prompt_full;
   return `<section class="ctxsec"><h3>the prompt</h3>${textBlock(p.text, p.chars)}</section>`;
 }
 
@@ -504,9 +506,9 @@ function openContext(rec, stage, dataset, stageName){
 // ------------------------------------------------------------------ charts ---
 
 // One bar row on a shared 0–max% scale. CI whisker in muted ink.
-// With `prompts`, clicking the row toggles the literal sampled prompts behind
-// the count; each prompt offers the full training example it came from.
-function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, prompts, ctx){
+// With `records`, clicking the row toggles the literal sampled examples behind
+// the count; each one opens the whole training example it came from.
+function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx){
   const row = document.createElement("div");
   row.className = "row";
   const w = f => Math.min(100, f/max*100);
@@ -519,32 +521,40 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, prompts, ctx
     <div class="val">${pct(frac)} <small>${pct(lo)}–${pct(hi)}</small></div>`;
   hover(row.querySelector(".trackbar"), tipHtml);
   parent.appendChild(row);
-  if (prompts && prompts.length){
+  if (records && records.length){
     row.classList.add("clickable");
-    row.title = "click to see the sampled prompts behind this count";
+    row.title = "click to see the sampled examples behind this count";
     let panel = null;
     row.addEventListener("click", () => {
       if (panel){ panel.remove(); panel = null; return; }
       panel = document.createElement("div");
       panel.className = "drill";
-      panel.innerHTML = `<p class="dnote">the ${prompts.length} sampled prompt${prompts.length>1?"s":""} behind this bar — click one to read it in full</p>`;
-      for (const p of prompts){
+      const dpoNote = ctx.stage === "dpo"
+        ? " These prompts are often deliberately harmful: the training signal is the preference between the two responses, not the prompt."
+        : "";
+      panel.innerHTML = `<p class="dnote">the ${records.length} sampled prompt${records.length>1?"s":""} behind
+        this bar. A prompt is half of a training example — ${ctx.hasContext
+          ? "open the training context for the response the model is fit to, the pair it is pushed between, or the verifier that scores it."
+          : `no context run is committed for this stage, so only the prompts are here (run <code>trainspotting context ${ctx.model}</code>).`}${dpoNote}</p>`;
+      for (const r of records){
         const item = document.createElement("div");
         item.className = "pitem";
-        item.innerHTML = `<details><summary>${esc(p.slice(0,200))}</summary><pre>${esc(p)}</pre></details>`;
-        if (ctx && ctx.hasContext){
+        item.innerHTML = `<details><summary>${esc(r.prompt.slice(0,200))}</summary><pre>${esc(r.prompt)}</pre></details>`;
+        if (ctx.hasContext){
           const b = document.createElement("button");
           b.className = "ctxbtn";
           b.textContent = "see it in training context ›";
           b.onclick = async () => {
             b.disabled = true;
-            const was = b.textContent;
             b.textContent = "loading…";
-            const rec = await contextFor(ctx.model, ctx.stage, p);
+            let rec = await contextFor(ctx.model, ctx.stage, r.prompt);
+            // the labeled record keeps a longer prompt copy than the context record
+            if (rec && r.prompt.length > rec.prompt_full.chars)
+              rec = {...rec, prompt_full: {text: r.prompt, chars: r.prompt.length}};
             b.disabled = false;
-            b.textContent = was;
+            b.textContent = "see it in training context ›";
             if (rec) openContext(rec, ctx.stage, ctx.dataset, ctx.stageName);
-            else b.textContent = "context not found for this prompt";
+            else b.textContent = "this prompt is not in the committed context run";
           };
           item.appendChild(b);
         }
@@ -561,6 +571,7 @@ async function getData(name){
   if (!DATA[name] && MANIFEST.includes(name)) DATA[name] = await fetchJSON(name);
   return DATA[name];
 }
+const KEY_CHARS = 400;  // must match trainspotting/context.py
 const ctxFile = (model, stage) => `${model}.${stage}.context.json`;
 
 async function contextFor(model, stage, prompt){
@@ -568,15 +579,10 @@ async function contextFor(model, stage, prompt){
   if (!CTXMAPS[f]){
     const d = await getData(f);
     const m = new Map();
-    for (const r of (d ? d.records : [])){
-      if (!m.has(r.prompt)) m.set(r.prompt, r);
-      const head = r.prompt.slice(0, 200);        // fallback for differently-cut copies
-      if (!m.has(head)) m.set(head, r);
-    }
+    for (const r of (d ? d.records : [])) if (!m.has(r.key)) m.set(r.key, r);
     CTXMAPS[f] = m;
   }
-  const m = CTXMAPS[f];
-  return m.get(prompt) || m.get(prompt.slice(0, 200));
+  return CTXMAPS[f].get(prompt.slice(0, KEY_CHARS));
 }
 
 async function render(model){
@@ -644,7 +650,7 @@ async function render(model){
       barRow(hhh, NICE[l], k/n, lo, hi, max,
         `<b>${NICE[l]}</b><br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
         VALUE_LABELS.has(l),
-        recs.filter(r => r.label === l).map(r => r.prompt), ctxFor(s));
+        recs.filter(r => r.label === l), ctxFor(s));
     }
   }
   if (!any) hhh.innerHTML += `<p class="note">No classification runs committed for this model yet — run <code>trainspotting classify ${model}</code>.</p>`;
@@ -677,7 +683,7 @@ async function render(model){
       barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
         `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
         false,
-        r.d.records.filter(x => x.match).map(x => x.prompt), ctxFor(s));
+        r.d.records.filter(x => x.match), ctxFor(s));
     }
     main.appendChild(card);
   }

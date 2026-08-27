@@ -12,6 +12,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import anthropic
 
+from . import extract
+
 LABELS = [
     "harmlessness",
     "honesty",
@@ -87,7 +89,9 @@ def classify_prompts(
 
     def run(batch):
         start, items = batch
-        numbered = "\n\n".join(f"### {i}\n{p}" for i, p in enumerate(items))
+        numbered = "\n\n".join(
+            f"### {i}\n{p[:extract.MAX_CLASSIFY_CHARS]}" for i, p in enumerate(items)
+        )
         try:
             # Server-side refusal fallback: some prompts are raw jailbreak text,
             # so a decline on one batch falls back instead of losing the batch.

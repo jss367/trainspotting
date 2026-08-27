@@ -2,7 +2,7 @@
 
 Spot what's in a model's training data. Audits what a fully open model was
 trained on — currently the OLMo 3 pipelines (Ai2), whose pretraining (Dolma 3)
-and post-training (Dolci) data are public. The tool answers three kinds of
+and post-training (Dolci) data are public. The tool answers four kinds of
 question, in increasing order of depth:
 
 1. **Facts** — stage sizes for a model's whole training pipeline (pretrain →
@@ -64,11 +64,15 @@ literal prompts behind the count.
 
 `context` re-fetches the same rows (sampling is deterministic in `--sample`
 and `--seed`, so it lands on exactly the rows a `classify` or `ask` run
-labeled) and writes `results/<model>.<stage>.context.json`. Those files are a
-cache of upstream rows, so they are gitignored; `scripts/export_site_data.py`
-copies them into `docs/data/`, which is the committed copy. Each prompt on the
-site then carries a **see it in training context** button that opens the whole
-example, drawn the way its stage trains:
+labeled) and writes `results/<model>.<stage>.context.json`, joined to the
+labeled prompts by their first 400 characters. Those files are a cache of
+upstream rows, so they are gitignored; `scripts/export_site_data.py` copies
+them into `docs/data/`, which is the committed copy. Responses live only here —
+`classify` and `ask` records keep the prompt and the label, so the files the
+site loads to draw a chart stay small.
+
+Each prompt on the site then carries a **see it in training context** button
+that opens the whole example, drawn the way its stage trains:
 
 | Stage | What the view shows |
 |---|---|

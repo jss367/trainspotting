@@ -12,9 +12,8 @@ Records are keyed by the same prompt text the classifier saw, so the site can
 join them onto committed label and ask results without re-running any model.
 """
 
-from . import extract
-
 MAX_TEXT = 4000  # per field; the full row stays one click away on HuggingFace
+KEY_CHARS = 400  # prompt prefix that joins a context record to a labeled prompt
 
 
 def _text(value) -> dict:
@@ -110,16 +109,16 @@ def _reward(row: dict) -> dict:
     }
 
 
-def build(row: dict, stage: str, prompt_path: str, prompt: str, row_index: int) -> dict:
+def build(row: dict, stage: str, prompt: str, row_index: int) -> dict:
     """One stage-appropriate context record for an already-sampled row.
 
-    `prompt` is the classifier's copy (the join key); `prompt_full` is the same
-    prompt cut at this module's larger cap, so the site can show text the
-    classifier's copy had already lost.
+    `key` is the prompt prefix that joins this record to a labeled prompt in a
+    classify or ask run. Two rows sharing a 400-character opening join to the
+    first of them, which is close enough for a drill-down.
     """
     rec = {
-        "prompt": prompt,
-        "prompt_full": _text(extract.extract_prompt(row, prompt_path, MAX_TEXT) or prompt),
+        "key": prompt[:KEY_CHARS],
+        "prompt_full": _text(prompt),
         "row": row_index,
         "id": row.get("id") or row.get("prompt_id") or row.get("custom_id"),
     }

@@ -74,11 +74,11 @@ def cmd_classify(args):
         print(f"sampling {args.sample} rows from {s['hf_dataset']} ...", file=sys.stderr)
         rows = hf.sample_rows(s["hf_dataset"], args.sample, seed=args.seed)
         prompts = [extract.extract_prompt(r, s["prompt_path"]) for r in rows]
-        keep = [(i, p) for i, p in enumerate(prompts) if p]
+        keep = [(rows[i], p) for i, p in enumerate(prompts) if p]
         print(f"classifying {len(keep)} prompts with {args.classifier} ...", file=sys.stderr)
         labels = classify.classify_prompts([p for _, p in keep], model=args.classifier)
         records = [
-            {"prompt": p, "label": label}
+            {"prompt": extract.clip(p), "label": label}
             for (_, p), label in zip(keep, labels)
         ]
         path = RESULTS / f"{args.model}.{s['stage']}.labels.json"
@@ -110,9 +110,14 @@ def cmd_ask(args):
         print(f"sampling {args.sample} rows from {s['hf_dataset']} ...", file=sys.stderr)
         rows = hf.sample_rows(s["hf_dataset"], args.sample, seed=args.seed)
         prompts = [extract.extract_prompt(r, s["prompt_path"]) for r in rows]
-        keep = [p for p in prompts if p]
-        labels = classify.classify_prompts(keep, model=args.classifier, question=args.question)
-        records = [{"prompt": p, "match": lab == "yes"} for p, lab in zip(keep, labels) if lab]
+        keep = [(rows[i], p) for i, p in enumerate(prompts) if p]
+        labels = classify.classify_prompts(
+            [p for _, p in keep], model=args.classifier, question=args.question
+        )
+        records = [
+            {"prompt": extract.clip(p), "match": lab == "yes"}
+            for (_, p), lab in zip(keep, labels) if lab
+        ]
         k, n = sum(r["match"] for r in records), len(records)
         lo, hi = _wilson(k, n)
         path = RESULTS / f"{args.model}.{s['stage']}.ask-{slug}.json"
@@ -157,7 +162,7 @@ def cmd_context(args):
         for row_index, row in rows:
             prompt = extract.extract_prompt(row, s["prompt_path"])
             if prompt:
-                records.append(context.build(row, s["stage"], s["prompt_path"], prompt, row_index))
+                records.append(context.build(row, s["stage"], prompt, row_index))
         path = RESULTS / f"{args.model}.{s['stage']}.context.json"
         path.write_text(
             json.dumps(
