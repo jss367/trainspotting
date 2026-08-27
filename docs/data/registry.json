@@ -1,0 +1,167 @@
+{
+  "olmo-3-7b-instruct": {
+    "hf_model": "allenai/Olmo-3-7B-Instruct",
+    "stages": [
+      {
+        "stage": "pretrain",
+        "name": "Dolma 3 Mix",
+        "tokens": 5900000000000,
+        "note": "Sampled from the ~9.3T-token Dolma 3 pool (web, olmOCR science PDFs, code, math, encyclopedic).",
+        "hf_dataset": null
+      },
+      {
+        "stage": "midtrain",
+        "name": "Dolma 3 Dolmino Mix",
+        "tokens": 100000000000,
+        "note": "Sampled from a ~2.2T-token pool of math, science, code, IF, and reading-comprehension data.",
+        "hf_dataset": null
+      },
+      {
+        "stage": "long-context",
+        "name": "Dolma 3 Longmino Mix",
+        "tokens": 50000000000,
+        "note": "Long-context extension mix.",
+        "hf_dataset": null
+      },
+      {
+        "stage": "sft",
+        "name": "Dolci Instruct SFT",
+        "hf_dataset": "allenai/Dolci-Instruct-SFT",
+        "prompt_path": "messages",
+        "source_columns": [
+          "domain",
+          "source_dataset"
+        ]
+      },
+      {
+        "stage": "dpo",
+        "name": "Dolci Instruct DPO",
+        "hf_dataset": "allenai/Dolci-Instruct-DPO",
+        "prompt_path": "chosen_messages",
+        "source_columns": [
+          "preference_type"
+        ]
+      },
+      {
+        "stage": "rlvr",
+        "name": "Dolci Instruct RL",
+        "hf_dataset": "allenai/Dolci-Instruct-RL",
+        "prompt_path": "prompt",
+        "source_columns": [
+          "dataset_source",
+          "data_source"
+        ]
+      }
+    ]
+  },
+  "olmo-3-7b-think": {
+    "hf_model": "allenai/Olmo-3-7B-Think",
+    "stages": [
+      {
+        "stage": "pretrain",
+        "name": "Dolma 3 Mix",
+        "tokens": 5900000000000,
+        "note": "Sampled from the ~9.3T-token Dolma 3 pool (web, olmOCR science PDFs, code, math, encyclopedic).",
+        "hf_dataset": null
+      },
+      {
+        "stage": "midtrain",
+        "name": "Dolma 3 Dolmino Mix",
+        "tokens": 100000000000,
+        "note": "Sampled from a ~2.2T-token pool of math, science, code, IF, and reading-comprehension data.",
+        "hf_dataset": null
+      },
+      {
+        "stage": "long-context",
+        "name": "Dolma 3 Longmino Mix",
+        "tokens": 50000000000,
+        "note": "Long-context extension mix.",
+        "hf_dataset": null
+      },
+      {
+        "stage": "sft",
+        "name": "Dolci Think SFT 7B",
+        "hf_dataset": "allenai/Dolci-Think-SFT-7B",
+        "prompt_path": "messages",
+        "source_columns": [
+          "dataset_source"
+        ]
+      },
+      {
+        "stage": "dpo",
+        "name": "Dolci Think DPO 7B",
+        "hf_dataset": "allenai/Dolci-Think-DPO-7B",
+        "prompt_path": "prompt",
+        "source_columns": [
+          "dataset_source",
+          "preference_type"
+        ]
+      },
+      {
+        "stage": "rlvr",
+        "name": "Dolci Think RL 7B",
+        "hf_dataset": "allenai/Dolci-Think-RL-7B",
+        "prompt_path": "prompt",
+        "source_columns": [
+          "dataset_source",
+          "dataset"
+        ]
+      }
+    ]
+  },
+  "olmo-3-32b-think": {
+    "hf_model": "allenai/Olmo-3-32B-Think",
+    "stages": [
+      {
+        "stage": "pretrain",
+        "name": "Dolma 3 Mix",
+        "tokens": 5900000000000,
+        "note": "Sampled from the ~9.3T-token Dolma 3 pool (web, olmOCR science PDFs, code, math, encyclopedic).",
+        "hf_dataset": null
+      },
+      {
+        "stage": "midtrain",
+        "name": "Dolma 3 Dolmino Mix",
+        "tokens": 100000000000,
+        "note": "Sampled from a ~2.2T-token pool of math, science, code, IF, and reading-comprehension data.",
+        "hf_dataset": null
+      },
+      {
+        "stage": "long-context",
+        "name": "Dolma 3 Longmino Mix",
+        "tokens": 50000000000,
+        "note": "Long-context extension mix.",
+        "hf_dataset": null
+      },
+      {
+        "stage": "sft",
+        "name": "Dolci Think SFT 32B",
+        "hf_dataset": "allenai/Dolci-Think-SFT-32B",
+        "prompt_path": "messages",
+        "source_columns": [
+          "dataset_source"
+        ]
+      },
+      {
+        "stage": "dpo",
+        "name": "Dolci Think DPO 32B",
+        "hf_dataset": "allenai/Dolci-Think-DPO-32B",
+        "prompt_path": "prompt",
+        "source_columns": [
+          "dataset_source",
+          "preference_type"
+        ]
+      },
+      {
+        "stage": "rlvr",
+        "name": "Dolci Think RL 32B",
+        "hf_dataset": "allenai/Dolci-Think-RL-32B",
+        "prompt_path": "prompt",
+        "source_columns": [
+          "dataset_source",
+          "dataset"
+        ]
+      }
+    ]
+  }
+}

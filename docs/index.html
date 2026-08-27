@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>trainspotting — what was this model trained on?</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:      #f9f9f7;
+    --surface-1: #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --muted:     #898781;
+    --grid:      #e1e0d9;
+    --baseline:  #c3c2b7;
+    --border:    rgba(11,11,11,0.10);
+    --series-1:  #2a78d6;
+    --track:     #f0efec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page:      #0d0d0d;
+      --surface-1: #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --muted:     #898781;
+      --grid:      #2c2c2a;
+      --baseline:  #383835;
+      --border:    rgba(255,255,255,0.10);
+      --series-1:  #3987e5;
+      --track:     #262624;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--text-primary);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 32px 20px 64px; }
+  header h1 { font-size: 26px; margin: 0 0 2px; }
+  header p  { margin: 0 0 20px; color: var(--text-secondary); }
+  header a  { color: inherit; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+  .tabs button {
+    font: inherit; padding: 6px 14px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary);
+  }
+  .tabs button[aria-pressed="true"] {
+    color: var(--text-primary); border-color: var(--series-1);
+    box-shadow: inset 0 0 0 1px var(--series-1);
+  }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px 22px; margin-bottom: 20px;
+  }
+  .card h2 { font-size: 16px; margin: 0 0 4px; }
+  .card > p.sub { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+  .tiles { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .tile { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .tile .v { font-size: 22px; font-weight: 650; }
+  .tile .k { font-size: 12px; color: var(--text-secondary); }
+  .tile .d { font-size: 12px; color: var(--muted); }
+  h3.stage { font-size: 14px; margin: 22px 0 2px; }
+  h3.stage:first-of-type { margin-top: 8px; }
+  .stage-sub { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
+  .grp { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 10px 0 4px; }
+  .row { display: grid; grid-template-columns: 170px 1fr 130px; gap: 10px; align-items: center; padding: 3px 0; }
+  .row .val { white-space: nowrap; }
+  .row .lbl { font-size: 13px; color: var(--text-secondary); text-align: right; }
+  .row .val { font-size: 13px; font-variant-numeric: tabular-nums; }
+  .row .val small { color: var(--muted); }
+  .trackbar { position: relative; height: 12px; background: var(--track); border-radius: 4px; }
+  .fill {
+    position: absolute; left: 0; top: 1px; bottom: 1px;
+    background: var(--series-1); border-radius: 0 4px 4px 0; min-width: 1px;
+  }
+  .fill.zero { background: transparent; }
+  .ci {
+    position: absolute; top: 50%; height: 0; border-top: 1.5px solid var(--muted); opacity: .9;
+  }
+  .ci::before, .ci::after {
+    content: ""; position: absolute; top: -4px; width: 1.5px; height: 8px; background: var(--muted);
+  }
+  .ci::before { left: 0; } .ci::after { right: 0; }
+  .note { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 28px; }
+  footer a { color: inherit; }
+  #tip {
+    position: fixed; pointer-events: none; z-index: 10; display: none; max-width: 300px;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 10px; font-size: 12px; color: var(--text-primary);
+    box-shadow: 0 2px 10px rgba(0,0,0,.15);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>trainspotting</h1>
+    <p>Spot what's in a model's training data — stage sizes, exact mix composition,
+       and how much of post-training is about being helpful, honest, and harmless.
+       <a href="https://github.com/jss367/trainspotting">GitHub</a></p>
+  </header>
+  <nav class="tabs" id="tabs" aria-label="model"></nav>
+  <main id="main"></main>
+  <footer>
+    Mix composition is exact (from each dataset's own label columns via the
+    HuggingFace datasets-server). HHH shares are estimated from prompts sampled
+    per stage and labeled with Claude; whiskers are Wilson 95% intervals. For RLVR
+    stages the prompt text understates value content carried by the reward signal.
+    Data: Ai2's <a href="https://allenai.org/blog/olmo3">OLMo 3</a> release
+    (Dolma 3 / Dolci). Regenerate with <code>trainspotting classify</code> +
+    <code>scripts/export_site_data.py</code>.
+  </footer>
+</div>
+<div id="tip" role="tooltip"></div>
+<script>
+const LABELS = ["helpfulness","honesty","harmlessness","capability","instruction_following","tool_use","other"];
+const VALUE_LABELS = new Set(["helpfulness","honesty","harmlessness"]);
+const NICE = {helpfulness:"helpful", honesty:"honest", harmlessness:"harmless",
+  capability:"capability (math/code/science)", instruction_following:"precise instruction following",
+  tool_use:"tool use", other:"other"};
+const fmtTok = n => n >= 1e12 ? (n/1e12).toFixed(1)+"T" : n >= 1e9 ? Math.round(n/1e9)+"B" : n.toLocaleString();
+const pct = x => (x*100).toFixed(1)+"%";
+
+function wilson(k, n, z=1.96){
+  if (!n) return [0,0];
+  const p = k/n, d = 1 + z*z/n;
+  const c = (p + z*z/(2*n)) / d;
+  const h = z * Math.sqrt(p*(1-p)/n + z*z/(4*n*n)) / d;
+  return [Math.max(0,c-h), Math.min(1,c+h)];
+}
+
+const tip = document.getElementById("tip");
+function hover(el, html){
+  el.addEventListener("pointerenter", () => { tip.innerHTML = html; tip.style.display = "block"; });
+  el.addEventListener("pointermove", e => {
+    tip.style.left = Math.min(e.clientX + 14, innerWidth - 320) + "px";
+    tip.style.top = (e.clientY + 14) + "px";
+  });
+  el.addEventListener("pointerleave", () => tip.style.display = "none");
+}
+
+// One bar row on a shared 0–max% scale. CI whisker in muted ink.
+function barRow(label, frac, lo, hi, max, tipHtml, isValue){
+  const row = document.createElement("div");
+  row.className = "row";
+  const w = f => Math.min(100, f/max*100);
+  row.innerHTML = `
+    <div class="lbl" style="${isValue ? "font-weight:600;color:var(--text-primary)" : ""}">${label}</div>
+    <div class="trackbar">
+      <div class="fill ${frac ? "" : "zero"}" style="width:${w(frac)}%"></div>
+      ${hi > lo ? `<div class="ci" style="left:${w(lo)}%;width:${Math.max(0, w(hi)-w(lo))}%"></div>` : ""}
+    </div>
+    <div class="val">${pct(frac)} <small>${pct(lo)}–${pct(hi)}</small></div>`;
+  hover(row.querySelector(".trackbar"), tipHtml);
+  return row;
+}
+
+let REG, MANIFEST, DATA = {};
+async function fetchJSON(p){ const r = await fetch("data/"+p); if(!r.ok) throw new Error(p); return r.json(); }
+async function getData(name){
+  if (!DATA[name] && MANIFEST.includes(name)) DATA[name] = await fetchJSON(name);
+  return DATA[name];
+}
+
+async function render(model){
+  const m = REG[model];
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === model));
+
+  const sources = await getData(model + ".sources.json");
+  const post = m.stages.filter(s => s.hf_dataset);
+
+  // ---- pipeline tiles ----
+  const facts = document.createElement("section");
+  facts.className = "card";
+  facts.innerHTML = `<h2>Training pipeline</h2>
+    <p class="sub">${m.hf_model} — token counts from the OLMo 3 paper; example counts from the datasets themselves.</p>
+    <div class="tiles"></div>`;
+  const tiles = facts.querySelector(".tiles");
+  for (const s of m.stages){
+    const t = document.createElement("div");
+    t.className = "tile";
+    const size = s.tokens ? fmtTok(s.tokens) + " tok"
+      : (sources && sources[s.stage] ? sources[s.stage].total.toLocaleString() + " ex" : "—");
+    t.innerHTML = `<div class="v">${size}</div><div class="k">${s.stage}</div><div class="d">${s.name}</div>`;
+    if (s.note) hover(t, s.note);
+    tiles.appendChild(t);
+  }
+  main.appendChild(facts);
+
+  // ---- HHH classification ----
+  const hhh = document.createElement("section");
+  hhh.className = "card";
+  hhh.innerHTML = `<h2>How much of post-training is about being helpful, honest, harmless?</h2>
+    <p class="sub">Share of sampled prompts per stage whose primary training signal is each label. Whiskers: Wilson 95% CI.</p>`;
+  let any = false;
+  for (const s of post){
+    const d = await getData(`${model}.${s.stage}.labels.json`);
+    if (!d) continue;
+    any = true;
+    const recs = d.records.filter(r => r.label);
+    const n = recs.length;
+    const counts = {};
+    for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
+    const h = document.createElement("h3");
+    h.className = "stage";
+    h.textContent = s.stage.toUpperCase() + " — " + s.name;
+    const sub = document.createElement("p");
+    sub.className = "stage-sub";
+    sub.textContent = `${d.dataset} · n=${n} sampled prompts labeled by ${d.classifier}`;
+    hhh.append(h, sub);
+    const max = Math.max(...LABELS.map(l => wilson(counts[l]||0, n)[1]), 0.01);
+    let lastGrp = null;
+    for (const l of LABELS){
+      const grp = VALUE_LABELS.has(l) ? "values" : "skills";
+      if (grp !== lastGrp){
+        const g = document.createElement("div"); g.className = "grp"; g.textContent = grp;
+        hhh.appendChild(g); lastGrp = grp;
+      }
+      const k = counts[l] || 0;
+      const [lo, hi] = wilson(k, n);
+      hhh.appendChild(barRow(NICE[l], k/n, lo, hi, max,
+        `<b>${NICE[l]}</b><br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}`,
+        VALUE_LABELS.has(l)));
+    }
+  }
+  if (!any) hhh.innerHTML += `<p class="note">No classification runs committed for this model yet — run <code>trainspotting classify ${model}</code>.</p>`;
+  main.appendChild(hhh);
+
+  // ---- exact mix composition ----
+  if (sources){
+    const mix = document.createElement("section");
+    mix.className = "card";
+    mix.innerHTML = `<h2>Exact mix composition</h2>
+      <p class="sub">From each dataset's own label columns — exact counts, not samples.</p>`;
+    for (const s of post){
+      const st = sources[s.stage];
+      if (!st) continue;
+      const h = document.createElement("h3");
+      h.className = "stage";
+      h.textContent = s.stage.toUpperCase() + " — " + st.dataset + ` (${st.total.toLocaleString()} examples)`;
+      mix.appendChild(h);
+      for (const [col, freq] of Object.entries(st.columns)){
+        const sub = document.createElement("p");
+        sub.className = "stage-sub"; sub.textContent = col;
+        mix.appendChild(sub);
+        const entries = Object.entries(freq);
+        const shown = entries.slice(0, 12);
+        const maxf = Math.max(...entries.map(([,c]) => c/st.total));
+        for (const [v, c] of shown){
+          const f = c/st.total;
+          const row = document.createElement("div");
+          row.className = "row";
+          row.innerHTML = `
+            <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v}</div>
+            <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
+            <div class="val">${pct(f)} <small>${c.toLocaleString()}</small></div>`;
+          hover(row.querySelector(".trackbar"), `<b>${v}</b><br>${c.toLocaleString()} of ${st.total.toLocaleString()} (${pct(f)})`);
+          mix.appendChild(row);
+        }
+        const restN = entries.length - shown.length;
+        const sum = entries.reduce((a,[,c]) => a+c, 0);
+        const notes = [];
+        if (restN > 0) notes.push(`+${restN} more values (${pct((sum - shown.reduce((a,[,c])=>a+c,0))/st.total)})`);
+        if (sum < st.total * 0.95) notes.push(`values shown cover ${pct(sum/st.total)} of rows — the rest are null or not enumerated by the stats API`);
+        if (notes.length){
+          const p = document.createElement("p"); p.className = "note"; p.textContent = notes.join(" · ");
+          mix.appendChild(p);
+        }
+      }
+    }
+    main.appendChild(mix);
+  }
+}
+
+(async () => {
+  [REG, MANIFEST] = await Promise.all([fetchJSON("registry.json"), fetchJSON("manifest.json")]);
+  const tabs = document.getElementById("tabs");
+  for (const name of Object.keys(REG)){
+    const b = document.createElement("button");
+    b.textContent = name; b.dataset.m = name;
+    b.onclick = () => render(name);
+    tabs.appendChild(b);
+  }
+  render(Object.keys(REG)[0]);
+})();
+</script>
+</body>
+</html>

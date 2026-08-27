@@ -1,0 +1,28 @@
+{
+  "sft": {
+    "dataset": "allenai/Dolci-Think-SFT-32B",
+    "total": 2253684,
+    "columns": {}
+  },
+  "dpo": {
+    "dataset": "allenai/Dolci-Think-DPO-32B",
+    "total": 200000,
+    "columns": {
+      "preference_type": {
+        "delta_learning": 200000
+      }
+    }
+  },
+  "rlvr": {
+    "dataset": "allenai/Dolci-Think-RL-32B",
+    "total": 102026,
+    "columns": {
+      "dataset_source": {
+        "hamishivi/math_rlvr_mixture_dpo": 30182,
+        "allenai/IF_multi_constraints_upto5_filtered_dpo_0625_filter-keyword-filtered-topic-char-topic-filtered": 29847,
+        "saurabh5/code_rlvr_mixture_dpo": 21289,
+        "allenai/rlvr_general_mix-keyword-filtered-topic-chars-char-filt-topic-filtered": 20708
+      }
+    }
+  }
+}
