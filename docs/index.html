@@ -160,9 +160,19 @@ function hover(el, html){
 
 const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
 
+// Render one sampled record: the prompt, then whatever completions the example
+// trains on (SFT target, or the DPO chosen/rejected preference pair).
+function recordHtml(r){
+  let inner = `<p class="dnote">prompt</p><pre>${esc(r.prompt)}</pre>`;
+  if (r.response) inner += `<p class="dnote">target response — the model is trained to imitate this</p><pre>${esc(r.response)}</pre>`;
+  if (r.chosen)   inner += `<p class="dnote">chosen response — trained toward</p><pre>${esc(r.chosen)}</pre>`;
+  if (r.rejected) inner += `<p class="dnote">rejected response — trained away from</p><pre>${esc(r.rejected)}</pre>`;
+  return `<details><summary>${esc(r.prompt.slice(0,160))}</summary>${inner}</details>`;
+}
+
 // One bar row on a shared 0–max% scale. CI whisker in muted ink.
-// With `prompts`, clicking the row toggles the literal sampled prompts behind the count.
-function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, prompts){
+// With `records`, clicking the row toggles the literal sampled examples behind the count.
+function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records){
   const row = document.createElement("div");
   row.className = "row";
   const w = f => Math.min(100, f/max*100);
@@ -175,16 +185,20 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, prompts){
     <div class="val">${pct(frac)} <small>${pct(lo)}–${pct(hi)}</small></div>`;
   hover(row.querySelector(".trackbar"), tipHtml);
   parent.appendChild(row);
-  if (prompts && prompts.length){
+  if (records && records.length){
     row.classList.add("clickable");
-    row.title = "click to see the sampled prompts behind this count";
+    row.title = "click to see the sampled examples behind this count";
     let panel = null;
     row.addEventListener("click", () => {
       if (panel){ panel.remove(); panel = null; return; }
       panel = document.createElement("div");
       panel.className = "drill";
-      panel.innerHTML = `<p class="dnote">the ${prompts.length} sampled prompt${prompts.length>1?"s":""} behind this bar — click one to read it in full</p>` +
-        prompts.map(p => `<details><summary>${esc(p.slice(0,160))}</summary><pre>${esc(p)}</pre></details>`).join("");
+      const hasPair = records.some(r => r.chosen || r.rejected);
+      const note = hasPair
+        ? " For DPO the prompt is often deliberately harmful — the training signal is the preference between the two responses below it."
+        : "";
+      panel.innerHTML = `<p class="dnote">the ${records.length} sampled example${records.length>1?"s":""} behind this bar — click one to read it in full.${note}</p>` +
+        records.map(recordHtml).join("");
       row.after(panel);
     });
   }
@@ -258,7 +272,7 @@ async function render(model){
       barRow(hhh, NICE[l], k/n, lo, hi, max,
         `<b>${NICE[l]}</b><br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
         VALUE_LABELS.has(l),
-        recs.filter(r => r.label === l).map(r => r.prompt));
+        recs.filter(r => r.label === l));
     }
   }
   if (!any) hhh.innerHTML += `<p class="note">No classification runs committed for this model yet — run <code>trainspotting classify ${model}</code>.</p>`;
@@ -290,7 +304,7 @@ async function render(model){
       barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
         `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
         false,
-        r.d.records.filter(x => x.match).map(x => x.prompt));
+        r.d.records.filter(x => x.match));
     }
     main.appendChild(card);
   }

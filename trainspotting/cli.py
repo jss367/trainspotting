@@ -74,13 +74,15 @@ def cmd_classify(args):
         print(f"sampling {args.sample} rows from {s['hf_dataset']} ...", file=sys.stderr)
         rows = hf.sample_rows(s["hf_dataset"], args.sample, seed=args.seed)
         prompts = [extract.extract_prompt(r, s["prompt_path"]) for r in rows]
-        keep = [(i, p) for i, p in enumerate(prompts) if p]
+        keep = [(rows[i], p) for i, p in enumerate(prompts) if p]
         print(f"classifying {len(keep)} prompts with {args.classifier} ...", file=sys.stderr)
         labels = classify.classify_prompts([p for _, p in keep], model=args.classifier)
-        records = [
-            {"prompt": p, "label": label}
-            for (_, p), label in zip(keep, labels)
-        ]
+        records = []
+        for (row, p), label in zip(keep, labels):
+            rec = {"prompt": extract.clip(p), "label": label}
+            for k, v in extract.extract_responses(row, s["prompt_path"]).items():
+                rec[k] = extract.clip(v)
+            records.append(rec)
         path = RESULTS / f"{args.model}.{s['stage']}.labels.json"
         path.write_text(
             json.dumps(
@@ -110,9 +112,18 @@ def cmd_ask(args):
         print(f"sampling {args.sample} rows from {s['hf_dataset']} ...", file=sys.stderr)
         rows = hf.sample_rows(s["hf_dataset"], args.sample, seed=args.seed)
         prompts = [extract.extract_prompt(r, s["prompt_path"]) for r in rows]
-        keep = [p for p in prompts if p]
-        labels = classify.classify_prompts(keep, model=args.classifier, question=args.question)
-        records = [{"prompt": p, "match": lab == "yes"} for p, lab in zip(keep, labels) if lab]
+        keep = [(rows[i], p) for i, p in enumerate(prompts) if p]
+        labels = classify.classify_prompts(
+            [p for _, p in keep], model=args.classifier, question=args.question
+        )
+        records = []
+        for (row, p), lab in zip(keep, labels):
+            if not lab:
+                continue
+            rec = {"prompt": extract.clip(p), "match": lab == "yes"}
+            for k, v in extract.extract_responses(row, s["prompt_path"]).items():
+                rec[k] = extract.clip(v)
+            records.append(rec)
         k, n = sum(r["match"] for r in records), len(records)
         lo, hi = _wilson(k, n)
         path = RESULTS / f"{args.model}.{s['stage']}.ask-{slug}.json"
