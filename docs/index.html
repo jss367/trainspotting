@@ -1123,8 +1123,16 @@ function setHash(...parts){
   location.hash = h;
 }
 
+// A truncated or hand-edited link can hold a malformed escape ("%E0", "%"),
+// which makes decodeURIComponent throw. Fall back to the raw segment: it just
+// won't match any model/stage/label, so route() lands on the default view and
+// skips the drill-down — and the VALID segments of the hash still apply.
+function decodeSeg(s){
+  try { return decodeURIComponent(s); } catch { return s; }
+}
+
 function parseHash(){
-  const seg = location.hash.replace(/^#/, "").split("/").filter(Boolean).map(decodeURIComponent);
+  const seg = location.hash.replace(/^#/, "").split("/").filter(Boolean).map(decodeSeg);
   const row = seg[3] && /^row-\d+$/.test(seg[3]) ? +seg[3].slice(4) : null;
   return {view: seg[0] || null, stage: seg[1], key: seg[2], row};
 }
