@@ -5,7 +5,7 @@ import re
 import sys
 from pathlib import Path
 
-from . import classify, context, extract, hf, registry
+from . import classify, context, extract, hf, pretrain, registry
 
 RESULTS = Path(__file__).resolve().parent.parent / "results"
 
@@ -38,6 +38,8 @@ def cmd_facts(args):
         if s.get("hf_dataset"):
             n = hf.num_rows(s["hf_dataset"])
             line += f" — {n:,} examples ({s['hf_dataset']})"
+        elif s.get("sample_dataset"):
+            line += f" — samplable ({s['sample_dataset']})"
         print(line)
         if s.get("note"):
             print(f"    {s['note']}")
@@ -140,6 +142,146 @@ def cmd_ask(args):
             file=sys.stderr,
         )
 
+    if not args.pretrain:
+        return
+
+    # Pretraining documents are judged from the file `pretrain` wrote, not
+    # re-sampled, so asking a second question scores the same documents and
+    # costs nothing but the API call.
+    for s in registry.pretrain_stages(model):
+        docs_path = _pretrain_docs_path(args.model, s["stage"])
+        if not docs_path.exists():
+            print(
+                f"{s['stage']}: no sample yet"
+                f" (`trainspotting pretrain {args.model} --stage {s['stage']}`)",
+                file=sys.stderr,
+            )
+            continue
+        data = json.loads(docs_path.read_text())
+        docs = data["records"]
+        labels = classify.classify_prompts(
+            [d["text"] for d in docs],
+            model=args.classifier,
+            question=args.question,
+            system=classify.ASK_DOC_SYSTEM,
+        )
+        records = [
+            {
+                "prompt": d["text"],
+                "match": lab == "yes",
+                "source": d["source"],
+                "topic": d["topic"],
+                "shard": d["shard"],
+            }
+            for d, lab in zip(docs, labels)
+            if lab
+        ]
+        k, n = sum(r["match"] for r in records), len(records)
+        lo, hi = _wilson(k, n)
+        path = RESULTS / f"{args.model}.{s['stage']}.ask-{slug}.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "question": args.question,
+                    "dataset": data["dataset"],
+                    "stage": s["stage"],
+                    "sample": data["sample"],
+                    "seed": data["seed"],
+                    "classifier": args.classifier,
+                    "scope": data.get("scope"),
+                    "caveat": data.get("caveat"),
+                    "records": records,
+                },
+                indent=2,
+            )
+        )
+        print(
+            f"{s['stage']}: {k}/{n} match = {k / n * 100 if n else 0:.1f}%"
+            f" (95% CI {lo * 100:.1f}–{hi * 100:.1f}%) -> {path}",
+            file=sys.stderr,
+        )
+
+
+def _pretrain_docs_path(model_name: str, stage: str) -> Path:
+    return RESULTS / f"{model_name}.{stage}.docs.json"
+
+
+def cmd_pretrain(args):
+    """Sample documents from a stage's Dolma 3 shard repo.
+
+    The datasets-server cannot serve these corpora (it indexes only the first
+    ~5 GB and the shards are topic-ordered), so this reads the repo files by
+    range request instead. No model is called; this is the deterministic half,
+    and `ask --pretrain` scores whatever it wrote.
+    """
+    model = registry.get_model(args.model)
+    stages = registry.pretrain_stages(model)
+    if args.stage:
+        stages = [s for s in stages if s["stage"] == args.stage]
+        if not stages:
+            sys.exit(f"no pretraining stage {args.stage!r} for {args.model}")
+    RESULTS.mkdir(exist_ok=True)
+    for s in stages:
+        dataset = s["sample_dataset"]
+        print(f"listing shards in {dataset} ...", file=sys.stderr)
+        shards = pretrain.list_shards(dataset)
+        groups = pretrain.group_sizes(shards)
+        total_bytes = sum(x["size"] for x in shards)
+        print(
+            f"  {len(shards):,} shards, {total_bytes / 1e9:.0f} GB compressed,"
+            f" {len(groups)} source/topic groups",
+            file=sys.stderr,
+        )
+
+        def progress(i, n, path):
+            print(f"\r  fetching shard {i}/{n} ", end="", file=sys.stderr, flush=True)
+
+        docs = pretrain.sample_documents(
+            dataset,
+            args.sample,
+            seed=args.seed,
+            shards=shards,
+            docs_per_shard=args.docs_per_shard,
+            progress=progress,
+        )
+        print(file=sys.stderr)
+        records = [
+            {
+                "id": d["id"],
+                "text": extract.clip(d["text"]),
+                "source": d["source"],
+                "topic": d["topic"],
+                "shard": d["shard"],
+                "metadata": d["metadata"],
+            }
+            for d in docs
+        ]
+        path = _pretrain_docs_path(args.model, s["stage"])
+        path.write_text(
+            json.dumps(
+                {
+                    "dataset": dataset,
+                    "stage": s["stage"],
+                    "name": s["name"],
+                    "sample": args.sample,
+                    "seed": args.seed,
+                    "docs_per_shard": args.docs_per_shard,
+                    "scope": s.get("sample_scope"),
+                    "caveat": pretrain.SAMPLING_CAVEAT,
+                    "shards": len(shards),
+                    "bytes": total_bytes,
+                    "groups": groups,
+                    "records": records,
+                },
+                indent=2,
+            )
+        )
+        print(
+            f"{s['stage']}: {len(records)} documents -> {path}"
+            f" ({path.stat().st_size / 1e6:.1f} MB)",
+            file=sys.stderr,
+        )
+
 
 def cmd_context(args):
     """Re-fetch the sampled rows and store the full training example behind each prompt.
@@ -226,7 +368,26 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--classifier", default="claude-opus-5")
     p.add_argument("--slug", help="short name for the result files (default: derived from the question)")
+    p.add_argument(
+        "--pretrain",
+        action="store_true",
+        help="also score pretraining documents sampled by `trainspotting pretrain`",
+    )
     p.set_defaults(fn=cmd_ask)
+
+    p = sub.add_parser("pretrain", help="sample documents from the Dolma 3 pretraining shards")
+    p.add_argument("model")
+    p.add_argument("--stage", help="only this stage (pretrain/midtrain/long-context)")
+    p.add_argument("--sample", type=int, default=300)
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument(
+        "--docs-per-shard",
+        type=int,
+        default=1,
+        help="documents kept per sampled shard; >1 is faster but the documents "
+        "are correlated, which widens any interval computed over them",
+    )
+    p.set_defaults(fn=cmd_pretrain)
 
     p = sub.add_parser("context", help="store the full training example behind each sampled prompt")
     p.add_argument("model")

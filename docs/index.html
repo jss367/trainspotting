@@ -124,6 +124,38 @@
   .ptile .d { font-size: 12px; color: var(--text-secondary); }
   .parrow { align-self: center; flex: none; color: var(--baseline); font-size: 16px; user-select: none; }
 
+  /* ---- pretraining documents ---- */
+  .corpusfacts {
+    display: flex; flex-wrap: wrap; gap: 6px 18px;
+    font-size: 12px; color: var(--text-secondary); margin: 0 0 10px;
+  }
+  .corpusfacts b { font-weight: 650; color: var(--text-primary); }
+  /* Source/topic names are long and there is no CI to show — give the label
+     column the width the value column does not need. */
+  .corpus .row { grid-template-columns: 250px 1fr 96px; }
+  .scope {
+    font-size: 12px; color: var(--text-secondary); margin: 0 0 12px;
+    border-left: 2px solid var(--grid); padding-left: 10px;
+  }
+  .doc {
+    border-top: 1px solid var(--grid); padding: 10px 0 11px;
+  }
+  .doc:first-of-type { border-top: none; }
+  .doctags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
+  .doctags span {
+    font-size: 11px; border: 1px solid var(--border); border-radius: 999px;
+    padding: 1px 8px; color: var(--text-secondary); white-space: nowrap;
+  }
+  .doctags span.prov { color: var(--text-primary); font-weight: 600; }
+  .doc details summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); }
+  .doc pre {
+    white-space: pre-wrap; word-break: break-word; font-size: 12px;
+    background: var(--track); border-radius: 8px; padding: 10px 12px;
+    max-height: 340px; overflow: auto; margin: 8px 0 0;
+  }
+  .doc a.shard { font-size: 11px; color: var(--muted); text-decoration: none; }
+  .doc a.shard:hover { text-decoration: underline; }
+
   /* ---- stage sections ---- */
   h3.stage { font-size: 14px; margin: 26px 0 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   h3.stage:first-of-type { margin-top: 10px; }
@@ -353,8 +385,14 @@ const NICE = {helpfulness:"helpful", honesty:"honest", harmlessness:"harmless",
   capability:"capability (math/code/science)", instruction_following:"precise instruction following",
   tool_use:"tool use", other:"other"};
 // Each post-training stage keeps one hue everywhere it appears (tiles, headers, bars).
+// The three corpus stages deliberately get no hue of their own: a 4th categorical
+// slot cannot clear the all-pairs CVD floors against these three in both modes, and
+// they are a different kind of thing anyway. They read as neutral in the pipeline,
+// and their own card is single-series, so one hue there carries no cross-card claim.
 const STAGE_HUE = {sft: "var(--stage-sft)", dpo: "var(--stage-dpo)", rlvr: "var(--stage-rlvr)"};
 const hueFor = stage => STAGE_HUE[stage] || "var(--series-1)";
+const fmtBytes = n => n >= 1e12 ? (n/1e12).toFixed(1)+" TB" : n >= 1e9 ? Math.round(n/1e9)+" GB" : Math.round(n/1e6)+" MB";
+const niceGroup = g => g.replace(/_/g, " ");
 const fmtTok = n => n >= 1e12 ? (n/1e12).toFixed(1)+"T" : n >= 1e9 ? Math.round(n/1e9)+"B" : n.toLocaleString();
 const fmtEx = n => n >= 1e6 ? (n/1e6).toFixed(2)+"M" : n >= 1e3 ? Math.round(n/1e3)+"K" : String(n);
 const pct = x => (x*100).toFixed(1)+"%";
@@ -631,7 +669,11 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
       const dpoNote = ctx.stage === "dpo"
         ? " These prompts are often deliberately harmful: the training signal is the preference between the two responses, not the prompt."
         : "";
-      panel.innerHTML = `<p class="dnote">the ${records.length} sampled prompt${records.length>1?"s":""} behind
+      panel.innerHTML = ctx.isCorpus
+        ? `<p class="dnote">the ${records.length} sampled document${records.length>1?"s":""} behind this bar.
+            These are raw corpus documents, not requests to a model — nothing here was written to teach
+            anything, so what the model takes from them is whatever fitting the text implies.</p>`
+        : `<p class="dnote">the ${records.length} sampled prompt${records.length>1?"s":""} behind
         this bar. A prompt is half of a training example — ${ctx.hasContext
           ? "open the training context for the response the model is fit to, the pair it is pushed between, or the verifier that scores it."
           : `no context run is committed for this stage, so only the prompts are here (run <code>trainspotting context ${ctx.model}</code>).`}${dpoNote}</p>`;
@@ -661,6 +703,55 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
       }
       row.after(panel);
     });
+  }
+}
+
+// ------------------------------------------------- pretraining documents ---
+
+// One sampled document: where it came from, what the filters recorded about it,
+// and the text itself. The provenance chips are the point — they are what a
+// search index over the same corpus cannot give you.
+function docBlock(rec){
+  const m = rec.metadata || {};
+  const tags = [`<span class="prov">${esc(rec.source)}${rec.topic ? " · " + esc(niceGroup(rec.topic)) : ""}</span>`];
+  if (m.cc_dump) tags.push(`<span>${esc(m.cc_dump)}</span>`);
+  if (m.quality_score != null) tags.push(`<span>quality ${m.quality_score.toFixed(2)}</span>`);
+  if (m.lang) tags.push(`<span>${esc(m.lang)}${m.lang_score ? " " + m.lang_score.toFixed(2) : ""}</span>`);
+  if (m.word_count) tags.push(`<span>${num(m.word_count)} words</span>`);
+  if (m.exact_duplicates) tags.push(`<span>${num(m.exact_duplicates)} exact dupes</span>`);
+  const head = rec.text.slice(0, 150).replace(/\s+/g, " ").trim() || "(empty)";
+  return `<div class="doc">
+    <div class="doctags">${tags.join("")}</div>
+    <details><summary>${esc(head)}${rec.text.length > 150 ? "…" : ""}</summary>
+      <pre>${esc(rec.text)}</pre>
+      <a class="shard" href="https://huggingface.co/datasets/${escAttr(rec.dataset)}/blob/main/${escAttr(rec.shard)}" target="_blank" rel="noopener">${esc(rec.shard)} ›</a>
+    </details>
+  </div>`;
+}
+
+// Composition comes from the file listing, so it is exact: every shard in the
+// repo, weighed by compressed bytes. Only the documents are sampled.
+function corpusComposition(parent, groups, totalBytes, limit = 14){
+  const entries = Object.entries(groups).slice(0, limit);
+  const max = Math.max(...entries.map(([, g]) => g.bytes / totalBytes), 0.001);
+  for (const [key, g] of entries){
+    const f = g.bytes / totalBytes;
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `
+      <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(niceGroup(key))}</div>
+      <div class="trackbar"><div class="fill" style="width:${f/max*100}%"></div></div>
+      <div class="val">${pct(f)} <small>${fmtBytes(g.bytes)}</small></div>`;
+    hover(row.querySelector(".trackbar"),
+      `<b>${esc(niceGroup(key))}</b><br>${fmtBytes(g.bytes)} compressed across ${num(g.shards)} shards<br>${pct(f)} of the mix by bytes`);
+    parent.appendChild(row);
+  }
+  const rest = Object.keys(groups).length - entries.length;
+  if (rest > 0){
+    const p = document.createElement("p");
+    p.className = "note";
+    p.textContent = `+${rest} more source/topic groups`;
+    parent.appendChild(p);
   }
 }
 
@@ -764,6 +855,64 @@ async function render(model){
   if (!any) hhh.innerHTML += `<p class="note">No classification runs committed for this model yet — run <code>trainspotting classify ${model}</code>.</p>`;
   main.appendChild(hhh);
 
+  // ---- pretraining documents ----
+  const corpusStages = m.stages.filter(s => s.sample_dataset);
+  const corpusData = [];
+  for (const s of corpusStages){
+    const d = await getData(`${model}.${s.stage}.docs.json`);
+    if (d) corpusData.push([s, d]);
+  }
+  if (corpusData.length){
+    const card = document.createElement("section");
+    card.className = "card corpus";
+    card.innerHTML = `<h2>What's actually in the pretraining data</h2>
+      <p class="sub">The dataset viewer indexes only the first few GB of these corpora and the
+        shards are ordered by topic, so sampling it returns one cluster at a time. These documents
+        come from the shard files directly: shards drawn in proportion to their size, each one's
+        head pulled with a range request. Composition below is exact — it is the whole file
+        listing, not a sample.</p>`;
+    for (const [s, d] of corpusData){
+      const h = document.createElement("h3");
+      h.className = "stage";
+      h.innerHTML = `<i class="sw" style="background:var(--baseline)"></i>${esc(s.stage.toUpperCase())}
+        <span class="ds">— ${esc(d.dataset)}</span>`;
+      card.appendChild(h);
+
+      const facts = document.createElement("p");
+      facts.className = "corpusfacts";
+      facts.innerHTML = `<span><b>${num(d.shards)}</b> shards</span>
+        <span><b>${fmtBytes(d.bytes)}</b> compressed</span>
+        <span><b>${Object.keys(d.groups).length}</b> source/topic groups</span>
+        <span><b>${num(d.records.length)}</b> documents sampled</span>`;
+      card.appendChild(facts);
+
+      if (d.scope || d.caveat){
+        const scope = document.createElement("p");
+        scope.className = "scope";
+        scope.textContent = [d.scope, d.caveat].filter(Boolean).join(" ");
+        card.appendChild(scope);
+      }
+
+      corpusComposition(card, d.groups, d.bytes);
+
+      const det = document.createElement("details");
+      det.innerHTML = `<summary class="stage-sub" style="cursor:pointer;margin:12px 0 0">
+        read the ${d.records.length} sampled documents</summary>`;
+      const holder = document.createElement("div");
+      holder.innerHTML = d.records.map(r => docBlock({...r, dataset: d.dataset})).join("");
+      det.appendChild(holder);
+      card.appendChild(det);
+    }
+    main.appendChild(card);
+  } else if (corpusStages.length){
+    const card = document.createElement("section");
+    card.className = "card corpus";
+    card.innerHTML = `<h2>What's actually in the pretraining data</h2>
+      <p class="note">No pretraining sample committed for this model yet — run
+        <code>trainspotting pretrain ${esc(model)}</code>.</p>`;
+    main.appendChild(card);
+  }
+
   // ---- custom questions (trainspotting ask) ----
   const askFiles = MANIFEST.filter(f => f.startsWith(model + ".") && f.includes(".ask-"));
   const bySlug = {};
@@ -772,13 +921,17 @@ async function render(model){
     if (stage) (bySlug[rest] ||= []).push([stage, f]);
   }
   for (const [slug, files] of Object.entries(bySlug)){
-    const stageOrder = post.map(s => s.stage);
+    // Pipeline order, not just post-training order — a question asked with
+    // --pretrain puts corpus stages in the same card, and they come first.
+    const stageOrder = m.stages.map(s => s.stage);
     files.sort((a,b) => stageOrder.indexOf(a[0]) - stageOrder.indexOf(b[0]));
     const card = document.createElement("section");
     card.className = "card";
     const first = await getData(files[0][1]);
+    const kinds = files.map(([stage]) => corpusStages.some(c => c.stage === stage) ? "documents" : "prompts");
+    const unitLabel = [...new Set(kinds)].join(" and ");
     card.innerHTML = `<h2>Custom question</h2>
-      <p class="sub">“${esc(first.question)}” — share of sampled prompts judged a match by ${first.classifier}. Click a bar to read the matching prompts verbatim.</p>`;
+      <p class="sub">“${esc(first.question)}” — share of sampled ${unitLabel} judged a match by ${first.classifier}. Click a bar to read the matches verbatim.</p>`;
     const rows = [];
     for (const [stage, f] of files){
       const d = await getData(f);
@@ -788,10 +941,20 @@ async function render(model){
     const max = Math.max(...rows.map(r => r.ci[1]), 0.01);
     for (const r of rows){
       const s = post.find(p => p.stage === r.stage) || {stage: r.stage, hf_dataset: r.d.dataset, name: r.d.dataset};
+      const isCorpus = corpusStages.some(c => c.stage === r.stage);
+      const unit = isCorpus ? "documents" : "prompts";
       barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
-        `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
+        `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
         false,
-        r.d.records.filter(x => x.match), ctxFor(s));
+        r.d.records.filter(x => x.match), {...ctxFor(s), isCorpus});
+    }
+    if (rows.some(r => corpusStages.some(c => c.stage === r.stage))){
+      const p = document.createElement("p");
+      p.className = "note";
+      p.textContent = "Corpus stages and post-training stages are not on the same footing: "
+        + "the first are documents the model fit, the second are examples built to teach it. "
+        + "A given rate means something different in each.";
+      card.appendChild(p);
     }
     main.appendChild(card);
   }

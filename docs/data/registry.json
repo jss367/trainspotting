@@ -7,21 +7,27 @@
         "name": "Dolma 3 Mix",
         "tokens": 5900000000000,
         "note": "Sampled from the ~9.3T-token Dolma 3 pool (web, olmOCR science PDFs, code, math, encyclopedic).",
-        "hf_dataset": null
+        "hf_dataset": null,
+        "sample_dataset": "allenai/dolma3_mix-6T-1025-7B",
+        "sample_scope": "The exact mix used to pretrain Olmo 3 7B. Some olmOCR science PDFs were redacted to `[REMOVED]` after training, so a few documents here show a placeholder where the model saw real text."
       },
       {
         "stage": "midtrain",
         "name": "Dolma 3 Dolmino Mix",
         "tokens": 100000000000,
         "note": "Sampled from a ~2.2T-token pool of math, science, code, IF, and reading-comprehension data.",
-        "hf_dataset": null
+        "hf_dataset": null,
+        "sample_dataset": "allenai/dolma3_dolmino_mix-100B-1125",
+        "sample_scope": "The 100B-token Dolmino mix itself."
       },
       {
         "stage": "long-context",
         "name": "Dolma 3 Longmino Mix",
         "tokens": 50000000000,
         "note": "Long-context extension mix.",
-        "hf_dataset": null
+        "hf_dataset": null,
+        "sample_dataset": "allenai/dolma3_longmino_mix-100B-1125",
+        "sample_scope": "The 100B-token Longmino mix; the 7B run drew 50B tokens from it."
       },
       {
         "stage": "sft",
@@ -62,21 +68,27 @@
         "name": "Dolma 3 Mix",
         "tokens": 5900000000000,
         "note": "Sampled from the ~9.3T-token Dolma 3 pool (web, olmOCR science PDFs, code, math, encyclopedic).",
-        "hf_dataset": null
+        "hf_dataset": null,
+        "sample_dataset": "allenai/dolma3_mix-6T-1025-7B",
+        "sample_scope": "The exact mix used to pretrain Olmo 3 7B. Some olmOCR science PDFs were redacted to `[REMOVED]` after training, so a few documents here show a placeholder where the model saw real text."
       },
       {
         "stage": "midtrain",
         "name": "Dolma 3 Dolmino Mix",
         "tokens": 100000000000,
         "note": "Sampled from a ~2.2T-token pool of math, science, code, IF, and reading-comprehension data.",
-        "hf_dataset": null
+        "hf_dataset": null,
+        "sample_dataset": "allenai/dolma3_dolmino_mix-100B-1125",
+        "sample_scope": "The 100B-token Dolmino mix itself."
       },
       {
         "stage": "long-context",
         "name": "Dolma 3 Longmino Mix",
         "tokens": 50000000000,
         "note": "Long-context extension mix.",
-        "hf_dataset": null
+        "hf_dataset": null,
+        "sample_dataset": "allenai/dolma3_longmino_mix-100B-1125",
+        "sample_scope": "The 100B-token Longmino mix; the 7B run drew 50B tokens from it."
       },
       {
         "stage": "sft",
@@ -117,21 +129,27 @@
         "name": "Dolma 3 Mix",
         "tokens": 5900000000000,
         "note": "Sampled from the ~9.3T-token Dolma 3 pool (web, olmOCR science PDFs, code, math, encyclopedic).",
-        "hf_dataset": null
+        "hf_dataset": null,
+        "sample_dataset": "allenai/dolma3_mix-6T",
+        "sample_scope": "The primary Dolma 3 6T mix, used to pretrain Olmo 3 32B. No redactions."
       },
       {
         "stage": "midtrain",
         "name": "Dolma 3 Dolmino Mix",
         "tokens": 100000000000,
         "note": "Sampled from a ~2.2T-token pool of math, science, code, IF, and reading-comprehension data.",
-        "hf_dataset": null
+        "hf_dataset": null,
+        "sample_dataset": "allenai/dolma3_dolmino_mix-100B-1125",
+        "sample_scope": "The 100B-token Dolmino mix itself."
       },
       {
         "stage": "long-context",
         "name": "Dolma 3 Longmino Mix",
         "tokens": 50000000000,
         "note": "Long-context extension mix.",
-        "hf_dataset": null
+        "hf_dataset": null,
+        "sample_dataset": "allenai/dolma3_longmino_mix-100B-1125",
+        "sample_scope": "The 100B-token Longmino mix; the 7B run drew 50B tokens from it."
       },
       {
         "stage": "sft",
