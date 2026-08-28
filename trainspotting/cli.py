@@ -13,6 +13,15 @@ RESULTS = Path(__file__).resolve().parent.parent / "results"
 SITE_DATA = Path(__file__).resolve().parent.parent / "docs" / "data"
 
 
+def _positive_int(value: str) -> int:
+    """argparse type for counts. Zero divides by zero deep inside the sampler and
+    a negative one silently returns nothing; both should be a usage error."""
+    n = int(value)
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"must be a positive integer, got {n}")
+    return n
+
+
 def _fmt_tokens(n: int) -> str:
     if n >= 1e12:
         return f"{n / 1e12:.1f}T"
@@ -454,7 +463,7 @@ def main():
     p = sub.add_parser("ask", help="score sampled prompts against a free-form yes/no question")
     p.add_argument("model")
     p.add_argument("question")
-    p.add_argument("--sample", type=int, default=300)
+    p.add_argument("--sample", type=_positive_int, default=300)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--classifier", default="claude-opus-5")
     p.add_argument("--slug", help="short name for the result files (default: derived from the question)")
@@ -468,11 +477,11 @@ def main():
     p = sub.add_parser("pretrain", help="sample documents from the Dolma 3 pretraining shards")
     p.add_argument("model")
     p.add_argument("--stage", help="only this stage (pretrain/midtrain/long-context)")
-    p.add_argument("--sample", type=int, default=300)
+    p.add_argument("--sample", type=_positive_int, default=300)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument(
         "--docs-per-shard",
-        type=int,
+        type=_positive_int,
         default=1,
         help="documents kept per sampled shard; >1 is faster but the documents "
         "are correlated, which widens any interval computed over them",
@@ -482,14 +491,14 @@ def main():
     p = sub.add_parser("context", help="store the full training example behind each sampled prompt")
     p.add_argument("model")
     p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
-    p.add_argument("--sample", type=int, default=300)
+    p.add_argument("--sample", type=_positive_int, default=300)
     p.add_argument("--seed", type=int, default=0)
     p.set_defaults(fn=cmd_context)
 
     p = sub.add_parser("classify")
     p.add_argument("model")
     p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
-    p.add_argument("--sample", type=int, default=300)
+    p.add_argument("--sample", type=_positive_int, default=300)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--classifier", default="claude-opus-5")
     p.set_defaults(fn=cmd_classify)
