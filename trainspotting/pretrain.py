@@ -361,6 +361,7 @@ def sample_documents(
             return i, shard, []
 
     out: list[dict] = []
+    draws: list[list[dict]] = []   # documents grouped by the pick that found them
     seen: set[tuple[str, str]] = set()
     pick_no = 0
     # A draw that contributes fewer documents than it was asked for — because
@@ -438,10 +439,22 @@ def sample_documents(
                     )
                 if len(out) - before < docs_per_shard:
                     short_draws += 1
+                if len(out) > before:
+                    draws.append(out[before:])
         pick_no += len(batch)
 
-    rng.shuffle(out)
-    return out[:n], short_draws
+    # Trim whole draws, not arbitrary documents. Shuffling the flat list and
+    # slicing it would leave a shard that filled its quota contributing two
+    # documents and its neighbour four, which contradicts the caveat stored
+    # alongside the sample and hides the real cluster sizes from anyone reading
+    # them back. One draw may still be cut short to land exactly on n.
+    rng.shuffle(draws)
+    out = []
+    for draw in draws:
+        if len(out) >= n:
+            break
+        out.extend(draw[: n - len(out)])
+    return out, short_draws
 
 
 # Dolma 3 keeps its per-document provenance in a JSON string. These are the
