@@ -994,7 +994,12 @@ async function renderCompare(gen){
   const color = m => MODEL_COLORS[models.indexOf(m) % MODEL_COLORS.length];
   const legend = `<div class="legend" style="margin:0 0 4px">${models.map(m =>
     `<span class="k"><i style="background:${color(m)}"></i>${m}</span>`).join("")}</div>`;
-  const stages = REG[models[0]].stages.filter(s => s.hf_dataset).map(s => s.stage);
+  // Order-preserving union across all models, so a stage that only some models
+  // have (heterogeneous pipelines) still gets a section instead of vanishing.
+  const stages = [];
+  for (const m of models)
+    for (const s of REG[m].stages)
+      if (s.hf_dataset && !stages.includes(s.stage)) stages.push(s.stage);
   const ctxOf = (m, stage, ds) => {
     const s = REG[m].stages.find(x => x.stage === stage) || {stage, hf_dataset: ds, name: ds};
     return {model: m, view: "compare", stage: s.stage, dataset: s.hf_dataset, stageName: s.name,
