@@ -1008,8 +1008,11 @@ async function renderCompare(gen){
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === "compare"));
 
   const color = m => MODEL_COLORS[models.indexOf(m) % MODEL_COLORS.length];
-  const legend = `<div class="legend" style="margin:0 0 4px">${models.map(m =>
+  // Colors are keyed to the global model list, so a model keeps its color even
+  // in a legend that only names a subset (the per-bucket ask legends below).
+  const legendFor = ms => `<div class="legend" style="margin:0 0 4px">${ms.map(m =>
     `<span class="k"><i style="background:${color(m)}"></i>${m}</span>`).join("")}</div>`;
+  const legend = legendFor(models);
   // Order-preserving union across all models, so a stage that only some models
   // have (heterogeneous pipelines) still gets a section instead of vanishing.
   const stages = [];
@@ -1115,10 +1118,15 @@ async function renderCompare(gen){
       }
     }
     for (const {question, classifier, rowsByStage} of buckets.values()){
+      // The legend names only this bucket's models: a model whose run for this
+      // slug answers a different question belongs to another card, and listing
+      // it here would advertise a row (or a missing-run note) that never comes.
+      const bucketModels = models.filter(m =>
+        [...rowsByStage.values()].some(rows => rows.some(r => r.m === m)));
       const card = document.createElement("section");
       card.className = "card";
       card.innerHTML = `<h2>Custom question — model against model</h2>
-        <p class="sub">“${esc(question)}” — share of sampled prompts judged a match by ${classifier}.</p>${legend}`;
+        <p class="sub">“${esc(question)}” — share of sampled prompts judged a match by ${classifier}.</p>${legendFor(bucketModels)}`;
       const max = Math.max(...[...rowsByStage.values()].flat().map(r => r.ci[1]), 0.01);
       for (const [stage, rows] of rowsByStage){
         const h = document.createElement("h3");
