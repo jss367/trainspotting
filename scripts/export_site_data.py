@@ -30,5 +30,18 @@ for f in sorted((ROOT / "results").glob("*.json")):
         shutil.copy(f, out / f.name)
     total += (out / f.name).stat().st_size
     copied.append(f.name)
-(out / "manifest.json").write_text(json.dumps(copied, indent=2))
-print(f"wrote registry.json + manifest.json and {len(copied)} result files ({total / 1e6:.1f} MB)")
+
+# The manifest lists what the site can fetch, so it is built from docs/data
+# itself rather than from what this run copied. results/*.context.json is
+# gitignored (a regenerable cache of upstream rows), so a fresh checkout has
+# none — listing only the copied files would drop every committed context file
+# and silently turn off the drill-downs.
+served = sorted(
+    f.name for f in out.glob("*.json") if f.name not in {"registry.json", "manifest.json"}
+)
+(out / "manifest.json").write_text(json.dumps(served, indent=2))
+kept = len(served) - len(copied)
+print(
+    f"wrote registry.json + manifest.json and {len(copied)} result files ({total / 1e6:.1f} MB)"
+    + (f"; manifest also lists {kept} file(s) already in docs/data" if kept else "")
+)
