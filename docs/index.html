@@ -186,6 +186,35 @@
   .cmp-lbl { font-size: 13px; color: var(--text-secondary); margin: 8px 0 1px; }
   .cmp-lbl.value { font-weight: 600; color: var(--text-primary); }
 
+  /* ---- language stages ----
+     Fifty-odd bars, nearly all of them slivers, is most of the page for a
+     question most visitors answer with one number. Each stage is one line
+     until someone opens it. */
+  details.langstage { border-top: 1px solid var(--grid); }
+  details.langstage:first-of-type { border-top: none; }
+  details.langstage > summary {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    list-style: none; cursor: pointer; font-size: 13px;
+    padding: 9px 6px; margin: 0 -6px; border-radius: 7px; transition: background .12s;
+  }
+  details.langstage > summary::-webkit-details-marker { display: none; }
+  details.langstage > summary:hover { background: var(--track); }
+  .langstage summary i.sw {
+    width: 10px; height: 10px; border-radius: 3px; flex: none;
+    background: var(--bar, var(--series-1)); display: inline-block;
+  }
+  .langstage summary b { font-weight: 650; }
+  .langstage summary .ds { color: var(--muted); font-size: 12px; }
+  .langstage summary .lsum {
+    margin-left: auto; color: var(--text-secondary); font-variant-numeric: tabular-nums;
+  }
+  .langstage summary .lsum em { font-style: normal; color: var(--text-primary); font-weight: 650; }
+  .langstage summary .caret { color: var(--muted); font-size: 11px; transition: transform .15s; }
+  .langstage[open] > summary .caret { transform: rotate(90deg); }
+  .langstage[open] > summary { background: var(--track); }
+  .langbody { padding: 2px 0 14px; }
+  @media (max-width: 640px) { .langstage summary .lsum { margin-left: 18px; width: 100%; } }
+
   /* ---- bar rows ---- */
   .row {
     display: grid; grid-template-columns: 170px 1fr 130px; gap: 10px; align-items: center;
@@ -979,18 +1008,20 @@ async function renderModel(model, gen){
   main.appendChild(hhh);
 
   // ---- language breakdown ----
-  // English swamps everything, so the two groups get separate scales: one bar at
-  // full width for English, then the rest against the largest non-English share.
-  // A shared scale would render every other language as an invisible sliver.
+  // A stage detects a dozen-odd languages and all but English are slivers, so
+  // the full breakdown is three screens of bars answering a question most
+  // visitors answer with one number. Each stage collapses to that number and
+  // draws its bars when someone opens it.
   const langCard = document.createElement("section");
   langCard.className = "card";
   langCard.innerHTML = `<h2>What language is post-training written in?</h2>
     <p class="sub">Detected locally with py3langid over the same sampled prompts — no model is called.
        The Dolci datasets carry no language column, so this is the only way to get the breakdown.
-       Click any language to read its prompts.</p>`;
+       Open a stage for every language it found, and click any language to read its prompts.</p>`;
   let anyLang = false;
   for (const s of post){
     const d = await getData(`${model}.${s.stage}.languages.json`);
+    if (gen !== GEN) return;
     if (!d) continue;
     anyLang = true;
     const recs = d.records;
@@ -1001,44 +1032,65 @@ async function renderModel(model, gen){
       .sort((a,b) => counts[b] - counts[a]);
     const nonEn = rest.reduce((a,c) => a + counts[c], 0);
 
-    const h = document.createElement("h3");
-    h.className = "stage";
-    h.style.setProperty("--bar", hueFor(s.stage));
-    h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())} <span class="ds">— ${esc(s.name)}</span>`;
-    const sub = document.createElement("p");
-    sub.className = "stage-sub";
-    sub.textContent = `${d.dataset} · n=${n} sampled prompts · ${rest.length} languages other than English`
-      + ` · detector ${d.detector}`;
-    langCard.append(h, sub);
+    const det = document.createElement("details");
+    det.className = "langstage";
+    det.style.setProperty("--bar", hueFor(s.stage));
+    det.innerHTML = `<summary>
+      <i class="sw"></i><b>${esc(s.stage.toUpperCase())}</b>
+      <span class="ds">— ${esc(s.name)}</span>
+      <span class="lsum"><em>${pct(nonEn/n)}</em> not English ·
+        ${rest.length} other language${rest.length === 1 ? "" : "s"} · n=${n}</span>
+      <span class="caret">›</span></summary>`;
+    const body = document.createElement("div");
+    body.className = "langbody";
+    det.appendChild(body);
+    langCard.appendChild(det);
 
-    const g1 = document.createElement("div"); g1.className = "grp"; g1.textContent = "english";
-    langCard.appendChild(g1);
-    const enK = counts.en || 0, enCI = wilson(enK, n);
-    barRow(langCard, "English", enK/n, enCI[0], enCI[1], Math.max(enCI[1], 0.01),
-      `<b>English</b><br>${enK} of ${n} sampled prompts (${pct(enK/n)})<br>95% CI ${pct(enCI[0])}–${pct(enCI[1])}<br>click to see the prompts`,
-      true, recs.filter(r => r.label === "en"), ctxFor(s));
+    // Bars are built on first open, not up front: three stages of them is a few
+    // hundred elements nobody has asked to see yet.
+    let built = false;
+    det.addEventListener("toggle", () => {
+      if (!det.open || built) return;
+      built = true;
 
-    const g2 = document.createElement("div"); g2.className = "grp";
-    g2.textContent = "every other language — own scale";
-    langCard.appendChild(g2);
-    if (!rest.length){
-      const p = document.createElement("p"); p.className = "note";
-      p.textContent = "no non-English prompts in this sample";
-      langCard.appendChild(p);
-    }
-    const restMax = Math.max(...rest.map(c => wilson(counts[c], n)[1]), 0.005);
-    for (const c of rest){
-      const k = counts[c], [lo, hi] = wilson(k, n);
-      barRow(langCard, esc(langName(c)), k/n, lo, hi, restMax,
-        `<b>${esc(langName(c))}</b> (${esc(c)})<br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
-        false, recs.filter(r => r.label === c), ctxFor(s));
-    }
-    const und = counts.undetermined || 0;
-    const note = document.createElement("p");
-    note.className = "note";
-    note.textContent = `${pct(nonEn/n)} of this sample is not English.`
-      + (und ? ` ${und} prompt${und>1?"s":""} (${pct(und/n)}) ${und>1?"were":"was"} too short, too much code, or too evenly mixed to call, and ${und>1?"are":"is"} counted in neither group.` : "");
-    langCard.appendChild(note);
+      const sub = document.createElement("p");
+      sub.className = "stage-sub";
+      sub.textContent = `${d.dataset} · n=${n} sampled prompts · detector ${d.detector}`;
+      body.appendChild(sub);
+
+      // English swamps everything, so the two groups get separate scales: one bar
+      // at full width for English, then the rest against the largest non-English
+      // share. A shared scale would render every other language as an invisible
+      // sliver.
+      const g1 = document.createElement("div"); g1.className = "grp"; g1.textContent = "english";
+      body.appendChild(g1);
+      const enK = counts.en || 0, enCI = wilson(enK, n);
+      barRow(body, "English", enK/n, enCI[0], enCI[1], Math.max(enCI[1], 0.01),
+        `<b>English</b><br>${enK} of ${n} sampled prompts (${pct(enK/n)})<br>95% CI ${pct(enCI[0])}–${pct(enCI[1])}<br>click to see the prompts`,
+        true, recs.filter(r => r.label === "en"), ctxFor(s));
+
+      const g2 = document.createElement("div"); g2.className = "grp";
+      g2.textContent = "every other language — own scale";
+      body.appendChild(g2);
+      if (!rest.length){
+        const p = document.createElement("p"); p.className = "note";
+        p.textContent = "no non-English prompts in this sample";
+        body.appendChild(p);
+      }
+      const restMax = Math.max(...rest.map(c => wilson(counts[c], n)[1]), 0.005);
+      for (const c of rest){
+        const k = counts[c], [lo, hi] = wilson(k, n);
+        barRow(body, esc(langName(c)), k/n, lo, hi, restMax,
+          `<b>${esc(langName(c))}</b> (${esc(c)})<br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
+          false, recs.filter(r => r.label === c), ctxFor(s));
+      }
+      const und = counts.undetermined || 0;
+      const note = document.createElement("p");
+      note.className = "note";
+      note.textContent = `${pct(nonEn/n)} of this sample is not English.`
+        + (und ? ` ${und} prompt${und>1?"s":""} (${pct(und/n)}) ${und>1?"were":"was"} too short, too much code, or too evenly mixed to call, and ${und>1?"are":"is"} counted in neither group.` : "");
+      body.appendChild(note);
+    });
   }
   if (!anyLang) langCard.innerHTML += `<p class="note">No language run committed for this model yet — run <code>trainspotting languages ${model}</code>.</p>`;
   main.appendChild(langCard);
