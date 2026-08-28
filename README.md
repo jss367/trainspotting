@@ -180,11 +180,12 @@ duplicates it had.
 | Stage | Corpus sampled |
 |---|---|
 | pretrain | `allenai/dolma3_mix-6T-1025-7B` (7B models) / `allenai/dolma3_mix-6T` (32B) |
-| midtrain | `allenai/dolma3_dolmino_mix-100B-1125` |
-| long-context | `allenai/dolma3_longmino_mix-100B-1125` |
+| midtrain | `allenai/dolma3_dolmino_mix-100B-1025` (7B models) / `allenai/dolma3_dolmino_mix-100B-1125` (32B) |
+| long-context | `allenai/dolma3_longmino_mix-50B-1025` (7B models) / `allenai/dolma3_longmino_mix-100B-1125` (32B) |
 
 Sampling is one document per shard by default, which costs a round trip per
-document and keeps the draws independent. `--docs-per-shard N` is roughly N times
+document and keeps the draws near-independent — see the note on repeat picks
+below. `--docs-per-shard N` is roughly N times
 faster and returns correlated documents — neighbours in a shard share a topic
 cluster — so an interval computed over the document count understates the true
 one by about that factor.

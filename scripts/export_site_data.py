@@ -26,6 +26,26 @@ BULK = (".context.json", ".docs.json")
 out = ROOT / "docs" / "data"
 out.mkdir(parents=True, exist_ok=True)
 
+# Every dataset the registry samples must appear in the README's stage table.
+# This is the second hand-maintained fact to drift from the registry in review —
+# the table said the 7B models sample the -1125 mixes long after they moved to
+# -1025 — so the command that rebuilds the site checks it rather than trusting
+# the next person to remember.
+readme = (ROOT / "README.md").read_text()
+missing = sorted(
+    {
+        s["sample_dataset"]
+        for m in registry.MODELS.values()
+        for s in registry.pretrain_stages(m)
+    }
+    - {d for d in readme.split("`") if d.startswith("allenai/")}
+)
+if missing:
+    sys.exit(
+        "README's corpus table is out of date with the registry; missing: "
+        + ", ".join(missing)
+    )
+
 (out / "registry.json").write_text(json.dumps(registry.MODELS, indent=2))
 # The site labels language bars with these; keeping the map here means the CLI
 # and the page can never disagree about what "gu" is called.
