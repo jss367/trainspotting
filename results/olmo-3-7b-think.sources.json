@@ -8,6 +8,9 @@
         "allenai/tulu_v3.9_wildchat_100k_english-r1-final-content-filtered": 46312,
         "allenai/wildchat-r1-p2-repetition-filter": 36742
       }
+    },
+    "links": {
+      "saumyamalik/OpenThoughts3-full-filtered-math-decontam-v2": "https://huggingface.co/datasets/saumyamalik/OpenThoughts3-full-filtered-math-decontam-v2"
     }
   },
   "dpo": {
@@ -43,7 +46,8 @@
       "preference_type": {
         "delta_learning": 150000
       }
-    }
+    },
+    "links": {}
   },
   "rlvr": {
     "dataset": "allenai/Dolci-Think-RL-7B",
@@ -55,6 +59,12 @@
         "hamishivi/code_rlvr_mixture_dpo": 21385,
         "hamishivi/rlvr_general_mix": 20636
       }
+    },
+    "links": {
+      "hamishivi/math_rlvr_mixture_dpo": "https://huggingface.co/datasets/hamishivi/math_rlvr_mixture_dpo",
+      "hamishivi/IF_multi_constraints_upto5_filtered_dpo_0625_filter": "https://huggingface.co/datasets/hamishivi/IF_multi_constraints_upto5_filtered_dpo_0625_filter",
+      "hamishivi/code_rlvr_mixture_dpo": "https://huggingface.co/datasets/hamishivi/code_rlvr_mixture_dpo",
+      "hamishivi/rlvr_general_mix": "https://huggingface.co/datasets/hamishivi/rlvr_general_mix"
     }
   }
 }

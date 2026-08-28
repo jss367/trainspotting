@@ -5,6 +5,7 @@ row counts, /statistics for exact column value frequencies, /rows for sampling.
 """
 
 import random
+import re
 import time
 
 import requests
@@ -92,3 +93,27 @@ def sample_rows(
 ) -> list[dict]:
     """The same sample as sample_rows_with_index, without the indices."""
     return [row for _, row in sample_rows_with_index(dataset, n, seed, config, split)]
+
+
+HUB = "https://huggingface.co"
+_REPO_ID = re.compile(r"[\w.-]+/[\w.-]+")
+
+
+def dataset_url(value: str) -> str | None:
+    """The public hub page for a source label, or None.
+
+    Source-mixture labels are a mix of real dataset repo ids ("hamishivi/
+    math_rlvr_mixture_dpo") and bare internal names ("flan_v2_converted") that
+    address nothing. Even among the repo-shaped ones some are private, and the
+    hub answers 401 for private and missing alike — so only labels that resolve
+    anonymously get a link.
+    """
+    if not _REPO_ID.fullmatch(value):
+        return None
+    url = f"{HUB}/datasets/{value}"
+    try:
+        if requests.head(url, timeout=30, allow_redirects=True).status_code == 200:
+            return url
+    except requests.RequestException:
+        return None
+    return None
