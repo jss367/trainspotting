@@ -1029,11 +1029,16 @@ async function renderCompare(gen){
     <p class="sub">Share of sampled prompts per stage whose primary training signal is each label,
       all models on one axis. Whiskers: Wilson 95% CI. Click a bar for the prompts behind it.</p>${legend}`;
   for (const stage of stages){
-    const per = [];
+    const per = [], missing = [];
     for (const m of models){
       const d = await getData(`${m}.${stage}.labels.json`);
       if (gen !== GEN) return;
-      if (!d) continue;
+      if (!d){
+        // Only a model whose registry actually has this stage is "missing" —
+        // in a heterogeneous pipeline the absence isn't an uncommitted run.
+        if (REG[m].stages.some(x => x.stage === stage && x.hf_dataset)) missing.push(m);
+        continue;
+      }
       const recs = d.records.filter(r => r.label);
       const counts = {};
       for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
@@ -1044,6 +1049,14 @@ async function renderCompare(gen){
     h.className = "stage";
     h.textContent = stage.toUpperCase();
     hhh.appendChild(h);
+    // Say so when a legend model has no committed run for this stage, so a
+    // partial experiment doesn't silently read as a complete comparison.
+    for (const m of missing){
+      const p = document.createElement("p");
+      p.className = "note";
+      p.textContent = `${m} — no classification run committed for this stage`;
+      hhh.appendChild(p);
+    }
     const max = Math.max(...per.flatMap(p => LABELS.map(l => wilson(p.counts[l]||0, p.n)[1])), 0.01);
     let lastGrp = null;
     for (const l of LABELS){
@@ -1078,11 +1091,21 @@ async function renderCompare(gen){
     // one card per distinct pair instead of merging everything under whichever
     // file happened to load first.
     const buckets = new Map();
+    // Models with no ask file at all for a stage (as opposed to one that
+    // landed in a different question bucket) are missing from EVERY bucket
+    // of this slug, so the note below is accurate in each.
+    const missingByStage = new Map();
     for (const stage of stages){
       for (const m of models){
         const d = await getData(`${m}.${stage}.ask-${slug}.json`);
         if (gen !== GEN) return;
-        if (!d) continue;
+        if (!d){
+          if (REG[m].stages.some(x => x.stage === stage && x.hf_dataset)){
+            if (!missingByStage.has(stage)) missingByStage.set(stage, []);
+            missingByStage.get(stage).push(m);
+          }
+          continue;
+        }
         const key = `${d.question}\u0000${d.classifier}`;
         if (!buckets.has(key)) buckets.set(key, {question: d.question, classifier: d.classifier, rowsByStage: new Map()});
         const b = buckets.get(key);
@@ -1102,6 +1125,12 @@ async function renderCompare(gen){
         h.className = "stage";
         h.textContent = stage.toUpperCase();
         card.appendChild(h);
+        for (const m of missingByStage.get(stage) || []){
+          const p = document.createElement("p");
+          p.className = "note";
+          p.textContent = `${m} — no ask run committed for this stage`;
+          card.appendChild(p);
+        }
         for (const r of rows){
           barRow(card, shortName(r.m), r.k/r.n, r.ci[0], r.ci[1], max,
             `<b>${r.m}</b> · ${stage}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
@@ -1199,7 +1228,10 @@ async function applyHashState(nav){
   if (st.row != null){
     // Compare keys are <model>.<key>; per-model views carry the model in the hash root.
     const model = VIEW === "compare" ? st.key.split(".", 1)[0] : VIEW;
-    const rec = REG[model] ? await contextRowFor(model, st.stage, st.row) : null;
+    // Only honor the row when the stage/key named a real drill-down (`el`
+    // resolved above): a hash whose key names no bar would otherwise claim a
+    // nonexistent label/ask result while a modal lends it false credibility.
+    const rec = el && REG[model] ? await contextRowFor(model, st.stage, st.row) : null;
     if (nav !== NAV) return;   // any newer hash move makes this modal stale
     const s = REG[model] && REG[model].stages.find(x => x.stage === st.stage);
     if (rec && s) openContext(rec, st.stage, s.hf_dataset, s.name, [VIEW, st.stage, st.key, "row-" + st.row]);
