@@ -220,3 +220,7 @@ __marimo__/
 # Context records are a cache of upstream dataset rows, regenerable with
 # `trainspotting context`. The committed copy the site reads lives in docs/data/.
 results/*.context.json
+results/*.docs.json
+
+# Cached HuggingFace shard listings for the pretraining sampler (re-fetchable).
+.shard-cache/

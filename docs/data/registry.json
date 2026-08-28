@@ -7,7 +7,9 @@
         "name": "Dolma 3 Mix",
         "tokens": 5930000000000,
         "note": "5.93T tokens over 3.87B documents, sampled (with upsampling of the smaller sources) from the ~9.3T-token Dolma 3 pool. Three quarters of pretraining is Common Crawl web text.",
-        "hf": "allenai/dolma3_mix-6T-1025",
+        "hf": "allenai/dolma3_mix-6T-1025-7B",
+        "sample_dataset": "allenai/dolma3_mix-6T-1025-7B",
+        "sample_scope": "The exact mix used to pretrain Olmo 3 7B. Some olmOCR science PDFs were redacted to `[REMOVED]` after training, so a few documents here show a placeholder where the model saw real text.",
         "composition": [
           {
             "name": "Common Crawl (web)",
@@ -42,6 +44,8 @@
         "tokens": 100000000000,
         "note": "Curated to boost math, code, QA, instruction following, and thinking \u2014 much of it synthetic (reasoning traces, generated QA, Flan/Tulu instructions) alongside the highest-quality web and PDF data from pretraining.",
         "hf": "allenai/dolma3_dolmino_mix-100B-1025",
+        "sample_dataset": "allenai/dolma3_dolmino_mix-100B-1025",
+        "sample_scope": "The 100B-token Dolmino mix itself.",
         "composition": [
           {
             "name": "web pages",
@@ -80,6 +84,8 @@
         "tokens": 50000000000,
         "note": "Extends context length: two thirds replays the midtraining mix, one third is long science PDFs (real and synthetic, 8K\u201364K tokens).",
         "hf": "allenai/dolma3_longmino_mix-50B-1025",
+        "sample_dataset": "allenai/dolma3_longmino_mix-50B-1025",
+        "sample_scope": "The 50B-token Longmino mix the 7B run used.",
         "composition": [
           {
             "name": "midtraining data (replay)",
@@ -135,7 +141,9 @@
         "name": "Dolma 3 Mix",
         "tokens": 5930000000000,
         "note": "5.93T tokens over 3.87B documents, sampled (with upsampling of the smaller sources) from the ~9.3T-token Dolma 3 pool. Three quarters of pretraining is Common Crawl web text.",
-        "hf": "allenai/dolma3_mix-6T-1025",
+        "hf": "allenai/dolma3_mix-6T-1025-7B",
+        "sample_dataset": "allenai/dolma3_mix-6T-1025-7B",
+        "sample_scope": "The exact mix used to pretrain Olmo 3 7B. Some olmOCR science PDFs were redacted to `[REMOVED]` after training, so a few documents here show a placeholder where the model saw real text.",
         "composition": [
           {
             "name": "Common Crawl (web)",
@@ -170,6 +178,8 @@
         "tokens": 100000000000,
         "note": "Curated to boost math, code, QA, instruction following, and thinking \u2014 much of it synthetic (reasoning traces, generated QA, Flan/Tulu instructions) alongside the highest-quality web and PDF data from pretraining.",
         "hf": "allenai/dolma3_dolmino_mix-100B-1025",
+        "sample_dataset": "allenai/dolma3_dolmino_mix-100B-1025",
+        "sample_scope": "The 100B-token Dolmino mix itself.",
         "composition": [
           {
             "name": "web pages",
@@ -208,6 +218,8 @@
         "tokens": 50000000000,
         "note": "Extends context length: two thirds replays the midtraining mix, one third is long science PDFs (real and synthetic, 8K\u201364K tokens).",
         "hf": "allenai/dolma3_longmino_mix-50B-1025",
+        "sample_dataset": "allenai/dolma3_longmino_mix-50B-1025",
+        "sample_scope": "The 50B-token Longmino mix the 7B run used.",
         "composition": [
           {
             "name": "midtraining data (replay)",
@@ -264,6 +276,8 @@
         "tokens": 5500000000000,
         "note": "5.50T tokens of the same Dolma 3 Mix recipe as the 7B run (the paper's Table 4 mix applies to both); shares below are the mix's own proportions.",
         "hf": "allenai/dolma3_mix-6T",
+        "sample_dataset": "allenai/dolma3_mix-6T",
+        "sample_scope": "The primary Dolma 3 6T mix, used to pretrain Olmo 3 32B. No redactions.",
         "composition": [
           {
             "name": "Common Crawl (web)",
@@ -298,6 +312,8 @@
         "tokens": 200000000000,
         "note": "Two separate 100B Dolmino runs (web, code, math, QA, thinking, instruction, PDFs \u2014 heavily synthetic) whose checkpoints were model-merged before the long-context stage.",
         "hf": "allenai/dolma3_dolmino_mix-100B-1125",
+        "sample_dataset": "allenai/dolma3_dolmino_mix-100B-1125",
+        "sample_scope": "The 100B-token Dolmino mix itself.",
         "hf_dataset": null
       },
       {
@@ -306,6 +322,8 @@
         "tokens": 100000000000,
         "note": "Extends context length: midtraining-data replay plus long science PDFs.",
         "hf": "allenai/dolma3_longmino_mix-100B-1125",
+        "sample_dataset": "allenai/dolma3_longmino_mix-100B-1125",
+        "sample_scope": "The 100B-token Longmino mix.",
         "hf_dataset": null
       },
       {

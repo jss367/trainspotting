@@ -5,9 +5,21 @@ import re
 import sys
 from pathlib import Path
 
-from . import classify, context, extract, hf, languages, registry
+from . import classify, context, extract, hf, languages, pretrain, registry
 
 RESULTS = Path(__file__).resolve().parent.parent / "results"
+# The committed half of the bulk artifacts: gitignored under results/, shipped
+# here for the site, and so the only copy present in a fresh clone.
+SITE_DATA = Path(__file__).resolve().parent.parent / "docs" / "data"
+
+
+def _positive_int(value: str) -> int:
+    """argparse type for counts. Zero divides by zero deep inside the sampler and
+    a negative one silently returns nothing; both should be a usage error."""
+    n = int(value)
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"must be a positive integer, got {n}")
+    return n
 
 
 def _fmt_tokens(n: int) -> str:
@@ -18,14 +30,66 @@ def _fmt_tokens(n: int) -> str:
     return f"{n:,}"
 
 
-def _wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
-    if n == 0:
+def _wilson(k: float, n: float, z: float = 1.96) -> tuple[float, float]:
+    """Wilson score interval. k and n may be non-integer effective counts."""
+    if n <= 0:
         return 0.0, 0.0
     p = k / n
     denom = 1 + z**2 / n
     center = (p + z**2 / (2 * n)) / denom
     half = z * math.sqrt(p * (1 - p) / n + z**2 / (4 * n**2)) / denom
     return max(0.0, center - half), min(1.0, center + half)
+
+
+def _cluster_wilson(records: list[dict], key: str = "shard") -> tuple[float, float, float]:
+    """Wilson interval widened by the design effect of clustering by `key`.
+
+    Documents drawn from one shard share a topic cluster, so they are not
+    independent observations and a binomial interval over the document count is
+    too narrow. Rescaling the match count to the number of distinct shards, which
+    is what this used to do, is not an interval over shards either: a shard
+    contributing five matches and one contributing a single non-match would round
+    to "two successes out of two clusters", hiding the disagreement between them.
+
+    So take the design effect properly, from the Taylor-linearised variance of the
+    ratio estimator over clusters:
+
+        Var(p) = C / ((C - 1) · M²) · Σ (y_c - p·m_c)²
+
+    where cluster c holds m_c documents of which y_c match, and M = Σ m_c. Divide
+    by the binomial variance to get the design effect, and evaluate Wilson at the
+    effective sample size n/deff. Wilson is kept rather than a normal interval
+    because it still behaves at rates near 0 and 1, which several of these are.
+
+    Returns (lo, hi, n_effective). With one document per shard every cluster has
+    size one, the design effect is C/(C-1) ≈ 1, and this is the ordinary interval.
+    """
+    n = len(records)
+    if n == 0:
+        return 0.0, 0.0, 0.0
+    clusters: dict[str, list[int]] = {}
+    for r in records:
+        clusters.setdefault(r.get(key) or "", []).append(1 if r["match"] else 0)
+    C = len(clusters)
+    p = sum(r["match"] for r in records) / n
+    if C < 2 or p in (0.0, 1.0):
+        # The design effect is unestimable here, not 1. With a single cluster
+        # there is nothing to compare it against; with a unanimous outcome the
+        # observed between-cluster variance is zero, which is 0/0 rather than
+        # evidence of independence. Either way, falling back to the document
+        # count would hand a clustered run the narrow interval for n independent
+        # observations — and "no matches at all" is a likely answer to a pointed
+        # question, so that branch fires exactly when the number matters. Use the
+        # cluster count instead: assume documents sharing a shard told us one
+        # thing, not m_c things. At one document per shard C is n and nothing
+        # changes.
+        return (*_wilson(p * C, C), float(C))
+    ss = sum((sum(ys) - p * len(ys)) ** 2 for ys in clusters.values())
+    var_cluster = C / ((C - 1) * n**2) * ss
+    var_binomial = p * (1 - p) / n
+    deff = max(1.0, var_cluster / var_binomial) if var_binomial else 1.0
+    n_eff = max(1.0, n / deff)
+    return (*_wilson(p * n_eff, n_eff), n_eff)
 
 
 def cmd_facts(args):
@@ -38,6 +102,8 @@ def cmd_facts(args):
         if s.get("hf_dataset"):
             n = hf.num_rows(s["hf_dataset"])
             line += f" — {n:,} examples ({s['hf_dataset']})"
+        elif s.get("sample_dataset"):
+            line += f" — samplable ({s['sample_dataset']})"
         print(line)
         if s.get("note"):
             print(f"    {s['note']}")
@@ -121,6 +187,24 @@ def cmd_ask(args):
     slug = args.slug or re.sub(r"[^a-z0-9]+", "-", args.question.lower()).strip("-")[:60]
     RESULTS.mkdir(exist_ok=True)
     print(f"question: {args.question}\n", file=sys.stderr)
+
+    # Warn before spending anything. The post-training stages cost an API call
+    # per batch, and finding out afterwards that the pretraining half has no
+    # sample to score is a slow way to learn it.
+    if args.pretrain:
+        missing = [
+            st["stage"]
+            for st in registry.pretrain_stages(model)
+            if _pretrain_docs_source(args.model, st["stage"]) is None
+        ]
+        if missing:
+            print(
+                f"warning: no document sample for {', '.join(missing)}"
+                f" — run `trainspotting pretrain {args.model}` first;"
+                " scoring the post-training stages anyway\n",
+                file=sys.stderr,
+            )
+
     for s in registry.post_training_stages(model):
         print(f"sampling {args.sample} rows from {s['hf_dataset']} ...", file=sys.stderr)
         rows = hf.sample_rows(s["hf_dataset"], args.sample, seed=args.seed)
@@ -152,6 +236,203 @@ def cmd_ask(args):
         print(
             f"{s['stage']}: {k}/{n} match = {k / n * 100 if n else 0:.1f}%"
             f" (95% CI {lo * 100:.1f}–{hi * 100:.1f}%) -> {path}",
+            file=sys.stderr,
+        )
+
+    if not args.pretrain:
+        return
+
+    # Pretraining documents are judged from the file `pretrain` wrote, not
+    # re-sampled, so asking a second question scores the same documents and
+    # costs nothing but the API call.
+    for s in registry.pretrain_stages(model):
+        docs_path = _pretrain_docs_source(args.model, s["stage"])
+        if docs_path is None:
+            print(
+                f"{s['stage']}: no sample yet"
+                f" (`trainspotting pretrain {args.model} --stage {s['stage']}`)",
+                file=sys.stderr,
+            )
+            continue
+        data = json.loads(docs_path.read_text())
+        docs = data["records"]
+        # Judge an excerpt spanning the whole document, not its first 1,500
+        # characters. A corpus document does not announce itself the way a
+        # prompt does, and the long-context mixes run past 200k characters, so
+        # truncating would report a rate over opening boilerplate. Bigger inputs
+        # mean fewer per request.
+        labels = classify.classify_prompts(
+            # Already stored as an excerpt spanning the whole document, so this
+            # judges precisely the text the site shows.
+            [d["text"] for d in docs],
+            model=args.classifier,
+            question=args.question,
+            system=classify.ASK_DOC_SYSTEM,
+            max_chars=extract.MAX_DOCUMENT_CHARS,
+            batch_size=5,
+        )
+        records = [
+            {
+                "prompt": d["text"],
+                "match": lab == "yes",
+                "source": d["source"],
+                "topic": d["topic"],
+                "shard": d["shard"],
+            }
+            for d, lab in zip(docs, labels)
+            if lab
+        ]
+        k, n = sum(r["match"] for r in records), len(records)
+        lo, hi, n_eff = _cluster_wilson(records)
+        path = RESULTS / f"{args.model}.{s['stage']}.ask-{slug}.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "question": args.question,
+                    "dataset": data["dataset"],
+                    "stage": s["stage"],
+                    "sample": data["sample"],
+                    "seed": data["seed"],
+                    "classifier": args.classifier,
+                    "scope": data.get("scope"),
+                    "caveat": data.get("caveat"),
+                    "judged_chars": extract.MAX_DOCUMENT_CHARS,
+                    "n_effective": round(n_eff, 2),
+                    # Stored, not recomputed by the site: the cluster correction
+                    # lives in one place so the page and the CLI cannot drift.
+                    "ci": [lo, hi],
+                    "records": records,
+                },
+                indent=2,
+            )
+        )
+        print(
+            f"{s['stage']}: {k}/{n} match = {k / n * 100 if n else 0:.1f}%"
+            f" (95% CI {lo * 100:.1f}–{hi * 100:.1f}%) -> {path}",
+            file=sys.stderr,
+        )
+
+
+def _pretrain_docs_path(model_name: str, stage: str) -> Path:
+    """Where `pretrain` writes a document sample."""
+    return RESULTS / f"{model_name}.{stage}.docs.json"
+
+
+def _pretrain_docs_source(model_name: str, stage: str) -> Path | None:
+    """Where to read one back, or None if this checkout has neither copy.
+
+    `results/*.docs.json` is gitignored — it is a regenerable cache — so on a
+    fresh clone the only copy of a committed sample is the one under docs/data/
+    that the site serves. Reading only from results/ would tell someone who just
+    cloned the repo that the sample shipped with it does not exist.
+    """
+    for path in (
+        _pretrain_docs_path(model_name, stage),
+        SITE_DATA / f"{model_name}.{stage}.docs.json",
+    ):
+        if path.exists():
+            return path
+    return None
+
+
+def cmd_pretrain(args):
+    """Sample documents from a stage's Dolma 3 shard repo.
+
+    The datasets-server cannot serve these corpora (it indexes only the first
+    ~5 GB and the shards are topic-ordered), so this reads the repo files by
+    range request instead. No model is called; this is the deterministic half,
+    and `ask --pretrain` scores whatever it wrote.
+    """
+    model = registry.get_model(args.model)
+    stages = registry.pretrain_stages(model)
+    if args.stage:
+        stages = [s for s in stages if s["stage"] == args.stage]
+        if not stages:
+            sys.exit(f"no pretraining stage {args.stage!r} for {args.model}")
+    RESULTS.mkdir(exist_ok=True)
+    for s in stages:
+        dataset = s["sample_dataset"]
+        print(f"listing shards in {dataset} ...", file=sys.stderr)
+        shards, revision = pretrain.list_shards(dataset)
+        groups = pretrain.group_sizes(shards)
+        total_bytes = sum(x["size"] for x in shards)
+        print(
+            f"  {len(shards):,} shards, {total_bytes / 1e9:.0f} GB compressed,"
+            f" {len(groups)} source/topic groups at {revision[:7]}",
+            file=sys.stderr,
+        )
+
+        def progress(i, n, path):
+            print(f"\r  fetching shard {i}/{n} ", end="", file=sys.stderr, flush=True)
+
+        docs, short = pretrain.sample_documents(
+            dataset,
+            args.sample,
+            seed=args.seed,
+            revision=revision,
+            shards=shards,
+            docs_per_shard=args.docs_per_shard,
+            progress=progress,
+        )
+        print(file=sys.stderr)
+        records = [
+            {
+                "id": d["id"],
+                # An excerpt spanning the document, not its first 12k characters.
+                # These run past 200k in the long-context mixes, and a prefix
+                # would be the nav bar and the abstract — unrepresentative both
+                # to read on the site and to classify. `chars` keeps the true
+                # length so nothing pretends the excerpt is the whole document.
+                "text": extract.excerpt(d["text"]),
+                "chars": len(d["text"]),
+                "source": d["source"],
+                "topic": d["topic"],
+                "shard": d["shard"],
+                "metadata": d["metadata"],
+            }
+            for d in docs
+        ]
+        path = _pretrain_docs_path(args.model, s["stage"])
+        if len(records) < args.sample:
+            # A corpus can genuinely fail to fill the request — 55 huge shards
+            # cannot yield 300 documents at one apiece — so say so rather than
+            # letting "sample" claim a size the file does not have.
+            print(
+                f"  note: asked for {args.sample}, corpus yielded {len(records)}",
+                file=sys.stderr,
+            )
+        path.write_text(
+            json.dumps(
+                {
+                    "dataset": dataset,
+                    # The exact commit the composition and documents came from.
+                    # "main" moves; a result file that cites exact byte shares
+                    # has to say which revision it counted.
+                    "revision": revision,
+                    "stage": s["stage"],
+                    "name": s["name"],
+                    "sample": len(records),
+                    "requested": args.sample,
+                    "seed": args.seed,
+                    "docs_per_shard": args.docs_per_shard,
+                    # Shard draws that contributed fewer documents than asked
+                    # for. Non-zero means the sample is weighted by reachable
+                    # document density as well as by size.
+                    "short_draws": short,
+                    "scope": s.get("sample_scope"),
+                    "caveat": pretrain.sampling_caveat(args.docs_per_shard),
+                    "shards": len(shards),
+                    "bytes": total_bytes,
+                    "groups": groups,
+                    "records": records,
+                },
+                indent=2,
+            )
+        )
+        print(
+            f"{s['stage']}: {len(records)} documents -> {path}"
+            f" ({path.stat().st_size / 1e6:.1f} MB)"
+            + (f", {short} short draw(s) made up by others" if short else ""),
             file=sys.stderr,
         )
 
@@ -326,16 +607,35 @@ def main():
     p = sub.add_parser("ask", help="score sampled prompts against a free-form yes/no question")
     p.add_argument("model")
     p.add_argument("question")
-    p.add_argument("--sample", type=int, default=300)
+    p.add_argument("--sample", type=_positive_int, default=300)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--classifier", default="claude-opus-5")
     p.add_argument("--slug", help="short name for the result files (default: derived from the question)")
+    p.add_argument(
+        "--pretrain",
+        action="store_true",
+        help="also score pretraining documents sampled by `trainspotting pretrain`",
+    )
     p.set_defaults(fn=cmd_ask)
+
+    p = sub.add_parser("pretrain", help="sample documents from the Dolma 3 pretraining shards")
+    p.add_argument("model")
+    p.add_argument("--stage", help="only this stage (pretrain/midtrain/long-context)")
+    p.add_argument("--sample", type=_positive_int, default=300)
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument(
+        "--docs-per-shard",
+        type=_positive_int,
+        default=1,
+        help="documents kept per sampled shard; >1 is faster but the documents "
+        "are correlated, which widens any interval computed over them",
+    )
+    p.set_defaults(fn=cmd_pretrain)
 
     p = sub.add_parser("context", help="store the full training example behind each sampled prompt")
     p.add_argument("model")
     p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
-    p.add_argument("--sample", type=int, default=300)
+    p.add_argument("--sample", type=_positive_int, default=300)
     p.add_argument("--seed", type=int, default=0)
     p.set_defaults(fn=cmd_context)
 
@@ -351,7 +651,7 @@ def main():
     p = sub.add_parser("classify")
     p.add_argument("model")
     p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
-    p.add_argument("--sample", type=int, default=300)
+    p.add_argument("--sample", type=_positive_int, default=300)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--classifier", default="claude-opus-5")
     p.set_defaults(fn=cmd_classify)

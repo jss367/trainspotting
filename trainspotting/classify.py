@@ -67,19 +67,40 @@ For each numbered prompt, decide whether this training example matches the quest
 Reply with ONLY a JSON array: [{{"i": <index>, "label": "yes" or "no"}}, ...] covering every index you were given."""
 
 
+ASK_DOC_SYSTEM = """You judge documents from a language model's PRETRAINING corpus against a question the user wants answered about the training data. The question is:
+
+{question}
+
+These are raw documents — web pages, scientific PDFs, source code, forum posts — not instructions to a model and not written for it. Nobody curated them to teach anything. So judge what a model would absorb from fitting this text: the claims it asserts, the norms it takes for granted, the behaviour it depicts approvingly or disapprovingly.
+
+Two failure modes to avoid. Do not match on topic alone: a news report that a person died is about death, but it teaches nothing about valuing life. Do not require the document to be explicit: a story where a character is condemned for letting someone drown carries the norm without ever stating it.
+
+Boilerplate, navigation chrome, link dumps, and near-empty pages are "no".
+
+Reply with ONLY a JSON array: [{{"i": <index>, "label": "yes" or "no"}}, ...] covering every index you were given."""
+
+
 def classify_prompts(
     prompts: list[str],
     model: str = "claude-opus-5",
     batch_size: int = 20,
     workers: int = 4,
     question: str | None = None,
+    system: str | None = None,
+    max_chars: int = extract.MAX_CLASSIFY_CHARS,
 ) -> list[str | None]:
     """Return one label (or None) per prompt, preserving order.
 
     With `question` set, labels are "yes"/"no" judgments of that question
-    instead of the fixed taxonomy.
+    instead of the fixed taxonomy. `system` overrides the prompt entirely, which
+    is how pretraining documents get judged as documents rather than as requests.
+    `max_chars` is how much of each input the model sees; corpus documents need
+    far more of it than prompts do, so callers raise it and shrink the batch.
     """
-    system = ASK_SYSTEM.format(question=question) if question else SYSTEM
+    if system:
+        system = system.format(question=question) if question else system
+    else:
+        system = ASK_SYSTEM.format(question=question) if question else SYSTEM
     valid = ["yes", "no"] if question else LABELS
     client = anthropic.Anthropic()
     batches = [
@@ -90,7 +111,7 @@ def classify_prompts(
     def run(batch):
         start, items = batch
         numbered = "\n\n".join(
-            f"### {i}\n{p[:extract.MAX_CLASSIFY_CHARS]}" for i, p in enumerate(items)
+            f"### {i}\n{p[:max_chars]}" for i, p in enumerate(items)
         )
         try:
             # Server-side refusal fallback: some prompts are raw jailbreak text,
