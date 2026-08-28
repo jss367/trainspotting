@@ -121,7 +121,13 @@ data/stack_edu-Python-0001/shard_00000009.jsonl.zst
 The sampler lists every shard once (cached in `.shard-cache/`), draws shards with
 probability proportional to compressed size, and pulls each pick's head with an
 HTTP range request — a zstd stream decodes from the front, so ~96 KB over the
-wire yields a document out of a shard that may be 150 MB. Nothing is downloaded.
+wire yields a document out of a shard that may be 400 MB. Nothing is downloaded.
+
+A shard whose head decodes to nothing gets one retry at 8x the read. That case is
+not rare: the long-context mixes hold documents past 200k characters, so a third
+of `lc_synth-rex_s2pdf`'s shards yield zero documents at 96 KB and would
+otherwise drop out silently — biasing the sample against exactly the long
+documents that stage exists to train on.
 
 That makes the composition **exact**: it comes from the full file listing, not a
 sample. For `allenai/dolma3_mix-6T-1025-7B` — the actual mix Olmo 3 7B was
@@ -144,6 +150,12 @@ document and keeps the draws independent. `--docs-per-shard N` is roughly N time
 faster and returns correlated documents — neighbours in a shard share a topic
 cluster — so an interval computed over the document count understates the true
 one by about that factor.
+
+Shards are drawn with replacement, so the same shard can come up twice; the
+per-document RNG is seeded on the pick index as well as the shard path so a
+repeat draw yields a different document, and an explicit dedupe catches the
+residual chance collision. Byte-weighting makes repeats common wherever a big
+corpus sits in few shards (`lc_synth-rex_s2pdf` is 21 GB over 55 shards).
 
 The 7B pretraining mix has one wrinkle Ai2 documents: some olmOCR science PDFs
 were redacted to `[REMOVED]` after the model was trained, so a few sampled

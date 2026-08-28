@@ -15,8 +15,9 @@ paths that name their own provenance:
 
 We list every shard once, draw shards with probability proportional to size,
 and read each pick's head with an HTTP range request. A zstd stream decodes
-from the front, so ~256 KB over the wire yields ~20 whole documents out of a
-shard that may be 150 MB.
+from the front, so ~96 KB over the wire yields whole documents out of a shard
+that may be 400 MB — with one larger retry where a single document runs longer
+than that read, which the long-context mixes are full of.
 
 The bias this leaves is stated plainly in `SAMPLING_CAVEAT` and travels with
 every result file: shards are drawn properly, documents within a shard are not
@@ -34,15 +35,21 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import requests
+import requests.exceptions
 import zstandard
 
 HF_API = "https://huggingface.co/api/datasets"
 HF_RESOLVE = "https://huggingface.co/datasets/{dataset}/resolve/{revision}/{path}"
 
 # One range request per sampled shard. 96 KB decompresses to roughly 300 KB of
-# JSONL — dozens of documents even for olmOCR papers, which are the longest
-# things in the corpus, and only one of them is kept.
+# JSONL, which is dozens of web pages or a handful of olmOCR papers — and only
+# one document is kept, so reading more is wasted on most shards.
 READ_BYTES = 96_000
+
+# Except where a single document is longer than the whole read. The long-context
+# mixes hold documents past 200k characters, so their shards decode to nothing
+# at 96 KB; those get one retry at this multiple.
+LONG_DOC_FACTOR = 8
 
 SAMPLING_CAVEAT = (
     "Shards are drawn with probability proportional to size and one document is "
@@ -60,17 +67,36 @@ def _cache_path(dataset: str, revision: str) -> Path:
 
 
 def _get(url: str, **kwargs) -> requests.Response:
-    """GET with backoff. The Hub rate-limits (429) and occasionally 500s."""
+    """GET with backoff, returning a response whose body is already in memory.
+
+    The Hub rate-limits (429), occasionally 500s, and occasionally hangs up
+    mid-body on a range request — a truncated transfer raises only when the
+    content is read, so `.content` is touched here, inside the retry loop,
+    rather than leaving a landmine for the caller.
+    """
+    last: Exception | None = None
     for attempt in range(6):
-        r = requests.get(url, timeout=90, **kwargs)
-        if r.status_code == 429:
-            time.sleep(int(r.headers.get("retry-after", 0)) or 5 * 2**attempt)
-            continue
-        if r.status_code >= 500:
+        try:
+            r = requests.get(url, timeout=90, **kwargs)
+            if r.status_code == 429:
+                time.sleep(int(r.headers.get("retry-after", 0)) or 5 * 2**attempt)
+                continue
+            if r.status_code >= 500:
+                time.sleep(2 * 2**attempt)
+                continue
+            r.raise_for_status()
+            r.content
+            return r
+        except (
+            requests.ConnectionError,
+            requests.Timeout,
+            # Not re-exported at the top level of `requests`, unlike the others.
+            requests.exceptions.ChunkedEncodingError,
+        ) as e:
+            last = e
             time.sleep(2 * 2**attempt)
-            continue
-        r.raise_for_status()
-        return r
+    if last:
+        raise last
     r.raise_for_status()
 
 
@@ -258,22 +284,39 @@ def sample_documents(
     n_shards = (n + docs_per_shard - 1) // docs_per_shard
     picks = rng.choices(shards, weights=weights, k=int(n_shards * 1.3) + 1)
 
-    def fetch(shard):
+    def fetch(pick):
+        i, shard = pick
         try:
-            return shard, read_shard_head(dataset, shard["path"], revision, read_bytes)
-        except (requests.HTTPError, requests.ConnectionError):
-            return shard, []
+            docs = read_shard_head(dataset, shard["path"], revision, read_bytes)
+            # A head that decodes to nothing usable means the first document is
+            # longer than the read. Common in the long-context mixes, where
+            # single documents run past 200k characters, and silently dropping
+            # those shards would bias the sample against exactly the documents
+            # the stage exists to train on. Pay for one larger read there only.
+            if not any((d.get("text") or "").strip() for d in docs):
+                docs = read_shard_head(
+                    dataset, shard["path"], revision, read_bytes * LONG_DOC_FACTOR
+                )
+            return i, shard, docs
+        except requests.RequestException:
+            # One unreachable shard out of hundreds should cost a document, not
+            # the whole run — the over-draw above covers the shortfall.
+            return i, shard, []
 
     out: list[dict] = []
+    seen: set[tuple[str, str]] = set()
     done = 0
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        for shard, docs in ex.map(fetch, picks):
+        for i, shard, docs in ex.map(fetch, enumerate(picks)):
             done += 1
             if progress:
                 progress(done, len(picks), shard["path"])
-            # Deterministic per-shard draw, so the choice of documents within a
-            # shard does not depend on the order threads happen to finish in.
-            random.Random(f"{seed}:{shard['path']}").shuffle(docs)
+            # Seeded on the pick index as well as the shard, so the draw stays
+            # deterministic regardless of thread completion order AND a shard
+            # drawn twice — which byte-weighting makes common, a 21 GB mix like
+            # lc_synth-rex_s2pdf spreads over only 55 shards — yields a different
+            # document each time instead of the same one twice.
+            random.Random(f"{seed}:{i}:{shard['path']}").shuffle(docs)
             kept = 0
             for doc in docs:
                 if kept >= docs_per_shard:
@@ -281,6 +324,12 @@ def sample_documents(
                 text = (doc.get("text") or "").strip()
                 if not text:
                     continue
+                # Belt and braces: independent draws can still collide by chance,
+                # and the same document twice is not a second observation.
+                key = (shard["path"], doc.get("id") or text[:200])
+                if key in seen:
+                    continue
+                seen.add(key)
                 kept += 1
                 out.append(
                     {
