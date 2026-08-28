@@ -110,27 +110,34 @@ def _chunks(text: str) -> list[str]:
 def detect(text: str) -> tuple[str, float]:
     """(language code, confidence). `undetermined` when there's too little to go on.
 
-    Detection is per paragraph, weighted by length, because a lot of these
-    prompts are mixed: an English judge or translation template wrapped around a
+    Detection is per line, weighted by length, because a lot of these prompts
+    are mixed: an English judge or translation template wrapped around a
     question in another language. Classifying the whole blob at once returns
-    neither language — one such prompt came back as Latin, confidently. The
-    winner is the language holding the most text, and the confidence it returns
-    is that language's share, so a genuinely half-and-half prompt falls below
-    the threshold instead of picking a side.
+    neither language — one such prompt came back as Latin, confidently.
+
+    The winner is the language holding the most text. Confidence divides its
+    weight by the full letter mass, not by the summed weight, so both ways of
+    being unsure pull it down: text split between languages, and text the
+    detector was never confident about in the first place. Dividing by the
+    summed weight would hand every single-line prompt a flat 1.0 and the
+    threshold would never fire. A tie lands exactly on the threshold and is
+    rejected, because picking the winner out of a tie only reports dict order.
     """
     stripped = strip_noise(text)
     if _letters(stripped) < MIN_LETTERS:
         return UNDETERMINED, 0.0
     weights: dict[str, float] = {}
+    mass = 0
     for chunk in _chunks(stripped):
         code, prob = _ident().classify(chunk)
-        weights[code] = weights.get(code, 0.0) + _letters(chunk) * float(prob)
-    total = sum(weights.values())
-    if not total:
+        letters = _letters(chunk)
+        weights[code] = weights.get(code, 0.0) + letters * float(prob)
+        mass += letters
+    if not mass or not weights:
         return UNDETERMINED, 0.0
     code = max(weights, key=weights.get)
-    share = weights[code] / total
-    if share < MIN_CONFIDENCE:
+    share = weights[code] / mass
+    if share <= MIN_CONFIDENCE:
         return UNDETERMINED, share
     return code, share
 

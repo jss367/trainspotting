@@ -76,8 +76,12 @@ literal prompts behind the count.
 with an ISO 639-1 code per prompt. Detection runs line by line and is weighted
 by length, because a lot of these prompts are mixed — an English translation or
 judge template wrapped around a question in another language. Code fences,
-LaTeX, and URLs are stripped first; anything left too short or split too evenly
-between languages comes back `undetermined` rather than being guessed at. The
+LaTeX, and URLs are stripped first. Confidence divides the winning language's
+weight by the prompt's full letter mass, so both ways of being unsure pull it
+down: text split between languages, and text the detector was never sure about.
+Anything at or below half comes back `undetermined` rather than being guessed
+at — which covers bare greetings, mostly-tabular tasks, and code with comments
+in a second language. The
 site renders it as its own card, with English on one scale and every other
 language on its own, and every language clicks open to its prompts.
 

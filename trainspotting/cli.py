@@ -188,12 +188,15 @@ def cmd_languages(args):
             print(f"sampling {args.sample} rows from {s['hf_dataset']} ...", file=sys.stderr)
             rows = hf.sample_rows(s["hf_dataset"], args.sample, seed=args.seed)
             prompts = [extract.extract_prompt(r, s["prompt_path"]) for r in rows]
-            prompts = [p for p in prompts if p]
+            # Clip before detecting, not after. A classify run stores the clipped
+            # prompt, so detecting the full text here would make --from-labels
+            # disagree with this path on the handful of prompts past the cutoff.
+            prompts = [extract.clip(p) for p in prompts if p]
         records = []
         for p in prompts:
             code, conf = languages.detect(p)
             records.append(
-                {"prompt": extract.clip(p), "label": code, "confidence": round(conf, 3)}
+                {"prompt": p, "label": code, "confidence": round(conf, 3)}
             )
         path = RESULTS / f"{args.model}.{s['stage']}.languages.json"
         path.write_text(
