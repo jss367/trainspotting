@@ -647,10 +647,10 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
     row._toggle = (writeHash = true) => {
       if (panel){
         panel.remove(); panel = null;
-        if (writeHash && ctx.linkKey) setHash(ctx.model);
+        if (writeHash && ctx.linkKey) setHash(ctx.view || ctx.model);
         return;
       }
-      if (writeHash && ctx.linkKey) setHash(ctx.model, ctx.stage, ctx.linkKey);
+      if (writeHash && ctx.linkKey) setHash(ctx.view || ctx.model, ctx.stage, ctx.linkKey);
       panel = document.createElement("div");
       panel.className = "drill";
       panel.style.setProperty("--bar", hueFor(ctx.stage));
@@ -679,7 +679,7 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
             b.disabled = false;
             b.textContent = "see it in training context ›";
             if (rec) openContext(rec, ctx.stage, ctx.dataset, ctx.stageName,
-              ctx.linkKey && rec.row != null ? [ctx.model, ctx.stage, ctx.linkKey, "row-" + rec.row] : null);
+              ctx.linkKey && rec.row != null ? [ctx.view || ctx.model, ctx.stage, ctx.linkKey, "row-" + rec.row] : null);
             else b.textContent = "this prompt is not in the committed context run";
           };
           item.appendChild(b);
@@ -718,13 +718,14 @@ async function contextRowFor(model, stage, row){
   return d ? d.records.find(r => r.row === row) : null;
 }
 
-async function renderModel(model){
+async function renderModel(model, gen){
   const m = REG[model];
   const main = document.getElementById("main");
   main.innerHTML = "";
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === model));
 
   const sources = await getData(model + ".sources.json");
+  if (gen !== GEN) return;
   const post = m.stages.filter(s => s.hf_dataset);
   const ctxFor = s => ({
     model, stage: s.stage, dataset: s.hf_dataset, stageName: s.name,
@@ -765,6 +766,7 @@ async function renderModel(model){
   let any = false;
   for (const s of post){
     const d = await getData(`${model}.${s.stage}.labels.json`);
+    if (gen !== GEN) return;
     if (!d) continue;
     any = true;
     const recs = d.records.filter(r => r.label);
@@ -811,11 +813,13 @@ async function renderModel(model){
     const card = document.createElement("section");
     card.className = "card";
     const first = await getData(files[0][1]);
+    if (gen !== GEN) return;
     card.innerHTML = `<h2>Custom question</h2>
       <p class="sub">“${esc(first.question)}” — share of sampled prompts judged a match by ${first.classifier}. Click a bar to read the matching prompts verbatim.</p>`;
     const rows = [];
     for (const [stage, f] of files){
       const d = await getData(f);
+      if (gen !== GEN) return;
       const n = d.records.length, k = d.records.filter(r => r.match).length;
       rows.push({stage, d, n, k, ci: wilson(k, n)});
     }
@@ -885,7 +889,7 @@ async function renderModel(model){
 const MODEL_COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)"];
 const shortName = m => m.replace(/^olmo-3-/, "");
 
-async function renderCompare(){
+async function renderCompare(gen){
   const models = Object.keys(REG);
   const main = document.getElementById("main");
   main.innerHTML = "";
@@ -897,7 +901,7 @@ async function renderCompare(){
   const stages = REG[models[0]].stages.filter(s => s.hf_dataset).map(s => s.stage);
   const ctxOf = (m, stage, ds) => {
     const s = REG[m].stages.find(x => x.stage === stage) || {stage, hf_dataset: ds, name: ds};
-    return {model: m, stage: s.stage, dataset: s.hf_dataset, stageName: s.name,
+    return {model: m, view: "compare", stage: s.stage, dataset: s.hf_dataset, stageName: s.name,
       hasContext: MANIFEST.includes(ctxFile(m, s.stage))};
   };
 
@@ -911,6 +915,7 @@ async function renderCompare(){
     const per = [];
     for (const m of models){
       const d = await getData(`${m}.${stage}.labels.json`);
+      if (gen !== GEN) return;
       if (!d) continue;
       const recs = d.records.filter(r => r.label);
       const counts = {};
@@ -940,7 +945,7 @@ async function renderCompare(){
         barRow(hhh, shortName(p.m), k/p.n, lo, hi, max,
           `<b>${p.m}</b> · ${NICE[l]}<br>${k} of ${p.n} sampled prompts (${pct(k/p.n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
           false,
-          p.recs.filter(r => r.label === l), ctxOf(p.m, stage, p.dataset), color(p.m));
+          p.recs.filter(r => r.label === l), {...ctxOf(p.m, stage, p.dataset), linkKey: `${p.m}.${l}`}, color(p.m));
       }
     }
   }
@@ -955,6 +960,7 @@ async function renderCompare(){
     for (const stage of stages){
       for (const m of models){
         const d = await getData(`${m}.${stage}.ask-${slug}.json`);
+        if (gen !== GEN) return;
         if (!d) continue;
         question ||= d.question; classifier ||= d.classifier;
         if (!rowsByStage.has(stage)) rowsByStage.set(stage, []);
@@ -977,7 +983,7 @@ async function renderCompare(){
         barRow(card, shortName(r.m), r.k/r.n, r.ci[0], r.ci[1], max,
           `<b>${r.m}</b> · ${stage}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
           false,
-          r.d.records.filter(x => x.match), ctxOf(r.m, stage, r.d.dataset), color(r.m));
+          r.d.records.filter(x => x.match), {...ctxOf(r.m, stage, r.d.dataset), linkKey: `${r.m}.ask-${slug}`}, color(r.m));
       }
     }
     main.appendChild(card);
@@ -989,7 +995,10 @@ async function renderCompare(){
 //   #<model> | #compare                a tab
 //   #<model>/<stage>/<key>             an open drill-down (key = label or ask-<slug>)
 //   #<model>/<stage>/<key>/row-<n>     one training example, in the context modal
-let VIEW = null, suppress = 0;
+// In the compare view the key is <model>.<label-or-ask-slug>, so the same two
+// hash forms work with "compare" in the first segment.
+// GEN discards a render that a newer navigation superseded mid-await.
+let VIEW = null, suppress = 0, GEN = 0;
 
 function setHash(...parts){
   const h = "#" + parts.map(encodeURIComponent).join("/");
@@ -1010,18 +1019,28 @@ async function route(){
   const view = st.view && (REG[st.view] || st.view === "compare") ? st.view : Object.keys(REG)[0];
   if (view !== VIEW){
     VIEW = view;
-    await (view === "compare" ? renderCompare() : renderModel(view));
+    const gen = ++GEN;
+    await (view === "compare" ? renderCompare(gen) : renderModel(view, gen));
+    if (gen !== GEN) return;   // a newer navigation took over mid-render
   }
   if (st.row == null && dlg.open){ dlg._backLink = null; dlg.close(); }
-  if (view === "compare" || !st.stage || !st.key) return;
-  const el = document.querySelector(`[data-link="${CSS.escape(st.stage + "/" + st.key)}"]`);
+  // Back/Forward restores a hash; close any panel that hash does not name.
+  const want = st.stage && st.key ? st.stage + "/" + st.key : null;
+  for (const open of document.querySelectorAll("[data-link]"))
+    if (open.dataset.link !== want && open._isOpen()) open._toggle(false);
+  if (!want) return;
+  const el = document.querySelector(`[data-link="${CSS.escape(want)}"]`);
   if (el){
     if (!el._isOpen()) el._toggle(false);
     el.scrollIntoView({block: "center"});
   }
   if (st.row != null){
-    const rec = await contextRowFor(view, st.stage, st.row);
-    const s = REG[view].stages.find(x => x.stage === st.stage);
+    // Compare keys are <model>.<key>; per-model views carry the model in the hash root.
+    const model = view === "compare" ? st.key.split(".", 1)[0] : view;
+    const gen = GEN;
+    const rec = REG[model] ? await contextRowFor(model, st.stage, st.row) : null;
+    if (gen !== GEN) return;
+    const s = REG[model] && REG[model].stages.find(x => x.stage === st.stage);
     if (rec && s) openContext(rec, st.stage, s.hf_dataset, s.name, [view, st.stage, st.key, "row-" + st.row]);
   }
 }
