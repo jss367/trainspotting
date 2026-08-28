@@ -196,8 +196,9 @@ does not hold `--docs-per-shard` of them — has its shortfall made up by later
 draws of other shards, which weights the sample by reachable-document density on
 top of size. A head that underfills is retried once at 8x before that happens.
 Every result file records how often it still did (`short_draws`) and the site
-says so when it is non-zero: 0 for the pretrain and midtrain samples, 12 of ~390
-draws for long-context, whose shards hold few reachable documents apiece.
+says so when it is non-zero: 0 for the pretrain and midtrain samples,
+7 of ~318 draws for long-context, whose shards hold few reachable documents
+apiece.
 
 Each batch draws only slightly past the shortfall, because a batch is fetched in
 full before any of it is read — anything drawn beyond the target is wasted
