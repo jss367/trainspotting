@@ -80,15 +80,20 @@ kept = sorted(
 # pass against the old copy and then ship the sample that contradicts it — and
 # updating the README first would fail against output being replaced in the same
 # command. Checking afterwards checks what was actually written.
+flat_readme = readme.replace("\n", " ")
 for docs in out.glob("*.docs.json"):
     d = json.loads(docs.read_text())
+    # Keyed on model as well as stage. Every model samples its own corpora, so a
+    # stage-only match would test a 32B sample against the 7B's figure and fail
+    # the export the first time anyone samples a second model.
+    model = docs.name.rsplit(f".{d['stage']}.docs.json", 1)[0]
     claimed = re.search(
-        rf"(\d+) of ~[\d,]+\s+draws for {re.escape(d['stage'])}\b",
-        readme.replace("\n", " "),
+        rf"`{re.escape(model)}`\s+{re.escape(d['stage'])}\s*\|\s*(\d+) of ~",
+        flat_readme,
     )
     if claimed and int(claimed.group(1)) != d["short_draws"]:
         sys.exit(
-            f"README says {claimed.group(1)} short draws for {d['stage']}, "
+            f"README says {claimed.group(1)} short draws for {model} {d['stage']}, "
             f"but the exported sample records {d['short_draws']}"
         )
 
