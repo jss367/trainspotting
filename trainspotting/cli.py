@@ -49,7 +49,19 @@ def cmd_sources(args):
     for s in registry.post_training_stages(model):
         freqs = hf.column_frequencies(s["hf_dataset"], s["source_columns"])
         total = hf.num_rows(s["hf_dataset"])
-        out[s["stage"]] = {"dataset": s["hf_dataset"], "total": total, "columns": freqs}
+        links = {}
+        for freq in freqs.values():
+            for value in freq:
+                if value not in links:
+                    url = hf.dataset_url(value)
+                    if url:
+                        links[value] = url
+        out[s["stage"]] = {
+            "dataset": s["hf_dataset"],
+            "total": total,
+            "columns": freqs,
+            "links": links,
+        }
         print(f"\n## {s['stage']} — {s['hf_dataset']} ({total:,} examples)")
         for col, freq in freqs.items():
             print(f"\n{col}:")
