@@ -730,7 +730,8 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
 
 // One sampled document: where it came from, what the filters recorded about it,
 // and the text itself. The provenance chips are the point — they are what a
-// search index over the same corpus cannot give you.
+// search index over the same corpus cannot give you. `rec.revision` pins the
+// shard link to the commit the document was sampled at.
 function docBlock(rec){
   const m = rec.metadata || {};
   const tags = [`<span class="prov">${esc(rec.source)}${rec.topic ? " · " + esc(niceGroup(rec.topic)) : ""}</span>`];
@@ -749,7 +750,7 @@ function docBlock(rec){
     <details><summary>${esc(head)}${rec.text.length > 150 ? "…" : ""}</summary>
       ${excerpted ? `<p class="note" style="margin:6px 0 0">Three spans sampled across a ${num(rec.chars)}-character document; <code>[…]</code> marks what is cut. This is also exactly the text the classifier judged.</p>` : ""}
       <pre>${esc(rec.text)}</pre>
-      <a class="shard" href="https://huggingface.co/datasets/${escAttr(rec.dataset)}/blob/main/${escAttr(rec.shard)}" target="_blank" rel="noopener">${esc(rec.shard)} ›</a>
+      <a class="shard" href="https://huggingface.co/datasets/${escAttr(rec.dataset)}/blob/${escAttr(rec.revision || "main")}/${escAttr(rec.shard)}" target="_blank" rel="noopener">${esc(rec.shard)} ›</a>
     </details>
   </div>`;
 }
@@ -964,7 +965,11 @@ async function render(model){
       det.innerHTML = `<summary class="stage-sub" style="cursor:pointer;margin:12px 0 0">
         read the ${d.records.length} sampled documents</summary>`;
       const holder = document.createElement("div");
-      holder.innerHTML = d.records.map(r => docBlock({...r, dataset: d.dataset})).join("");
+      // Same pinned revision as the composition above: main moves, and a link to
+      // a shard that has since changed would not be provenance for this document.
+      holder.innerHTML = d.records
+        .map(r => docBlock({...r, dataset: d.dataset, revision: d.revision}))
+        .join("");
       det.appendChild(holder);
       card.appendChild(det);
     }
