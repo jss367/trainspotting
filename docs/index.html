@@ -650,7 +650,15 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
         if (writeHash && ctx.linkKey) setHash(ctx.view || ctx.model);
         return;
       }
-      if (writeHash && ctx.linkKey) setHash(ctx.view || ctx.model, ctx.stage, ctx.linkKey);
+      if (writeHash && ctx.linkKey){
+        // The hash names at most one open drill-down, and a direct click
+        // suppresses the ensuing route(), so close the others here rather
+        // than relying on route()'s cleanup loop (which only runs on
+        // history navigation).
+        for (const other of document.querySelectorAll("[data-link]"))
+          if (other !== row && other._isOpen()) other._toggle(false);
+        setHash(ctx.view || ctx.model, ctx.stage, ctx.linkKey);
+      }
       panel = document.createElement("div");
       panel.className = "drill";
       panel.style.setProperty("--bar", hueFor(ctx.stage));
@@ -670,9 +678,13 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
           b.className = "ctxbtn";
           b.textContent = "see it in training context ›";
           b.onclick = async () => {
+            const gen = GEN;
             b.disabled = true;
             b.textContent = "loading…";
             let rec = await contextFor(ctx.model, ctx.stage, r.prompt);
+            // A tab switch (gen moved on) or a closed drill-down (button
+            // detached) mid-download makes this modal stale — drop it.
+            if (gen !== GEN || !b.isConnected) return;
             // the labeled record keeps a longer prompt copy than the context record
             if (rec && r.prompt.length > rec.prompt_full.chars)
               rec = {...rec, prompt_full: {text: r.prompt, chars: r.prompt.length}};
