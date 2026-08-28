@@ -49,13 +49,16 @@ def cmd_sources(args):
     for s in registry.post_training_stages(model):
         freqs = hf.column_frequencies(s["hf_dataset"], s["source_columns"])
         total = hf.num_rows(s["hf_dataset"])
+        # One hub request per repo-shaped label, so only pay for it when the
+        # result is being written out — the printed table has nowhere to put a URL.
         links = {}
-        for freq in freqs.values():
-            for value in freq:
-                if value not in links:
-                    url = hf.dataset_url(value)
-                    if url:
-                        links[value] = url
+        if args.json:
+            for freq in freqs.values():
+                for value in freq:
+                    if value not in links:
+                        url = hf.dataset_url(value)
+                        if url:
+                            links[value] = url
         out[s["stage"]] = {
             "dataset": s["hf_dataset"],
             "total": total,
