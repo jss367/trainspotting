@@ -19,13 +19,14 @@ from the front, so ~96 KB over the wire yields whole documents out of a shard
 that may be 400 MB — with one larger retry where a single document runs longer
 than that read, which the long-context mixes are full of.
 
-The bias this leaves is stated plainly in `SAMPLING_CAVEAT` and travels with
+The bias this leaves is stated plainly by `sampling_caveat()` and travels with
 every result file: shards are drawn properly, documents within a shard are not
 — we always see a shard's opening documents. With thousands of shards across
 dozens of source/topic groups, the shard draw carries most of the variance, but
 this is not a uniform sample over documents and nothing here should claim it is.
 """
 
+import hashlib
 import io
 import json
 import random
@@ -57,12 +58,32 @@ LONG_DOC_FACTOR = 8
 # and an honest count rather than an endless loop.
 MAX_BATCHES = 6
 
-SAMPLING_CAVEAT = (
-    "Shards are drawn with probability proportional to size and one document is "
-    "taken uniformly from each, so draws are independent. What is not corrected "
-    "for is position: a range request only reaches the front of a shard, so each "
-    "document comes from its shard's first few hundred, never the tail."
+_POSITION_CAVEAT = (
+    " What is not corrected for is position: a range request only reaches the "
+    "front of a shard, so each document comes from its shard's first few "
+    "hundred, never the tail."
 )
+
+
+def sampling_caveat(docs_per_shard: int = 1) -> str:
+    """How this run was drawn, in the run's own terms.
+
+    The site prints this string verbatim, so it must not describe independent
+    draws when `--docs-per-shard` asked for clustered ones.
+    """
+    if docs_per_shard > 1:
+        return (
+            "Shards are drawn with probability proportional to size and "
+            f"{docs_per_shard} documents are taken from each, so documents "
+            "sharing a shard are correlated — they come from one topic cluster. "
+            "Intervals are computed over shards rather than documents to account "
+            "for it." + _POSITION_CAVEAT
+        )
+    return (
+        "Shards are drawn with probability proportional to size and one document "
+        "is taken uniformly from each, so draws are independent."
+        + _POSITION_CAVEAT
+    )
 
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / ".shard-cache"
@@ -341,8 +362,13 @@ def sample_documents(
                         continue
                     # Belt and braces: independent draws can still collide by
                     # chance, and the same document twice is not a second
-                    # observation.
-                    key = (shard["path"], doc.get("id") or text[:200])
+                    # observation. Hash the whole text rather than a prefix —
+                    # plenty of distinct pages share a boilerplate opening, and
+                    # midtrain rows carry no id to fall back on.
+                    key = (
+                        shard["path"],
+                        doc.get("id") or hashlib.sha1(text.encode()).hexdigest(),
+                    )
                     if key in seen:
                         continue
                     seen.add(key)

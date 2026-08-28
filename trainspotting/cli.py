@@ -202,9 +202,14 @@ def cmd_ask(args):
         ]
         k, n = sum(r["match"] for r in records), len(records)
         # Documents from one shard are not independent observations — they share
-        # a topic cluster — so the interval is computed over shards, which is the
-        # unit actually drawn at random. At the default one document per shard
-        # this is the document count and nothing changes.
+        # a topic cluster — so the interval is computed over shards, the unit the
+        # correlation actually follows. Two separate picks of the same shard
+        # collapse to one deliberately: they are two documents from one cluster,
+        # which is the very thing the adjustment exists to discount, not two
+        # independent draws. That makes n_eff slightly below the document count
+        # even at one document per shard (295 of 300 in the long-context run,
+        # where a 21 GB corpus sits in 55 shards), which is the conservative
+        # direction.
         n_eff = len({r["shard"] for r in records}) or n
         lo, hi = _wilson(round(k * n_eff / n) if n else 0, n_eff)
         path = RESULTS / f"{args.model}.{s['stage']}.ask-{slug}.json"
@@ -313,7 +318,7 @@ def cmd_pretrain(args):
                     "seed": args.seed,
                     "docs_per_shard": args.docs_per_shard,
                     "scope": s.get("sample_scope"),
-                    "caveat": pretrain.SAMPLING_CAVEAT,
+                    "caveat": pretrain.sampling_caveat(args.docs_per_shard),
                     "shards": len(shards),
                     "bytes": total_bytes,
                     "groups": groups,
