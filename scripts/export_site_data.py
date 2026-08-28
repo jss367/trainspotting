@@ -15,20 +15,33 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trainspotting import registry  # noqa: E402
+from trainspotting import languages, registry  # noqa: E402
 
 out = ROOT / "docs" / "data"
 out.mkdir(parents=True, exist_ok=True)
 
 (out / "registry.json").write_text(json.dumps(registry.MODELS, indent=2))
+# The site labels bars with these; keeping the map here means the CLI and the
+# page can never disagree about what "gu" is called.
+(out / "language-names.json").write_text(json.dumps(languages.NAMES, indent=2))
 
-copied, total = [], 0
+copied = []
 for f in sorted((ROOT / "results").glob("*.json")):
     if f.name.endswith(".context.json"):
         (out / f.name).write_text(json.dumps(json.loads(f.read_text()), separators=(",", ":")))
     else:
         shutil.copy(f, out / f.name)
-    total += (out / f.name).stat().st_size
     copied.append(f.name)
-(out / "manifest.json").write_text(json.dumps(copied, indent=2))
-print(f"wrote registry.json + manifest.json and {len(copied)} result files ({total / 1e6:.1f} MB)")
+
+# The manifest lists what is published, not what was just copied. results/ holds
+# the context files only on the machine that generated them (they are gitignored
+# bulk text), so building the manifest from results/ on any other checkout would
+# silently drop every context file and kill the drill-down.
+INDEX = {"registry.json", "manifest.json", "language-names.json"}
+published = sorted(f.name for f in out.glob("*.json") if f.name not in INDEX)
+total = sum((out / f).stat().st_size for f in published)
+(out / "manifest.json").write_text(json.dumps(published, indent=2))
+print(
+    f"wrote registry.json + language-names.json + manifest.json; "
+    f"copied {len(copied)} from results/, {len(published)} published ({total / 1e6:.1f} MB)"
+)

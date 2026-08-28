@@ -3,7 +3,7 @@ name = "trainspotting"
 version = "0.1.0"
 description = "Audit what fully-open models (OLMo 3) were trained on: stage facts, exact source breakdowns, and LLM-classified value content (helpful / honest / harmless)."
 requires-python = ">=3.10"
-dependencies = ["requests>=2.28", "anthropic>=0.100"]
+dependencies = ["requests>=2.28", "anthropic>=0.100", "py3langid>=0.3"]
 
 [project.scripts]
 trainspotting = "trainspotting.cli:main"

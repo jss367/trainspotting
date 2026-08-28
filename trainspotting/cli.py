@@ -5,7 +5,7 @@ import re
 import sys
 from pathlib import Path
 
-from . import classify, context, extract, hf, registry
+from . import classify, context, extract, hf, languages, registry
 
 RESULTS = Path(__file__).resolve().parent.parent / "results"
 
@@ -141,6 +141,67 @@ def cmd_ask(args):
         )
 
 
+def cmd_languages(args):
+    """Detect which natural language each sampled prompt is written in.
+
+    Sampling is deterministic in (sample, seed), so the defaults pull exactly
+    the rows a classify run labeled and the drill-down lines up. Detection is
+    local — no API key, no cost — because the Dolci datasets carry no language
+    column of their own and the only label that comes close is Instruct-SFT's
+    single `Multilingual` domain bucket.
+    """
+    model = registry.get_model(args.model)
+    stages = registry.post_training_stages(model)
+    if args.stage:
+        stages = [s for s in stages if s["stage"] == args.stage]
+        if not stages:
+            sys.exit(f"no post-training stage {args.stage!r} for {args.model}")
+    RESULTS.mkdir(exist_ok=True)
+    for s in stages:
+        sample, seed = args.sample, args.seed
+        if args.from_labels:
+            # The same (sample, seed) draws the same rows, so a committed classify
+            # run already holds the prompts verbatim — no reason to re-fetch them.
+            labels_path = RESULTS / f"{args.model}.{s['stage']}.labels.json"
+            if not labels_path.exists():
+                sys.exit(f"{labels_path} not found — drop --from-labels to sample from HuggingFace")
+            prior = json.loads(labels_path.read_text())
+            prompts = [r["prompt"] for r in prior["records"]]
+            sample, seed = prior["sample"], prior["seed"]
+            print(f"reusing {len(prompts)} prompts from {labels_path.name}", file=sys.stderr)
+        else:
+            print(f"sampling {args.sample} rows from {s['hf_dataset']} ...", file=sys.stderr)
+            rows = hf.sample_rows(s["hf_dataset"], args.sample, seed=args.seed)
+            prompts = [extract.extract_prompt(r, s["prompt_path"]) for r in rows]
+            prompts = [p for p in prompts if p]
+        records = []
+        for p in prompts:
+            code, conf = languages.detect(p)
+            records.append(
+                {"prompt": extract.clip(p), "label": code, "confidence": round(conf, 3)}
+            )
+        path = RESULTS / f"{args.model}.{s['stage']}.languages.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "dataset": s["hf_dataset"],
+                    "sample": sample,
+                    "seed": seed,
+                    "detector": "py3langid",
+                    "records": records,
+                },
+                indent=2,
+            )
+        )
+        counts = {}
+        for r in records:
+            counts[r["label"]] = counts.get(r["label"], 0) + 1
+        n = len(records)
+        top = sorted(counts.items(), key=lambda kv: -kv[1])[:6]
+        summary = ", ".join(f"{languages.name(c)} {k / n * 100:.1f}%" for c, k in top)
+        print(f"{s['stage']}: n={n} — {summary} -> {path}", file=sys.stderr)
+
+
 def cmd_context(args):
     """Re-fetch the sampled rows and store the full training example behind each prompt.
 
@@ -207,6 +268,31 @@ def cmd_report(args):
             print(f"- {label:22s} {k / n * 100 if n else 0:5.1f}%  (95% CI {lo * 100:.1f}–{hi * 100:.1f}%)")
         print()
 
+    print("\n## Language (sampled, detected locally)\n")
+    for s in registry.post_training_stages(model):
+        path = RESULTS / f"{args.model}.{s['stage']}.languages.json"
+        if not path.exists():
+            print(f"- {s['stage']}: no language run yet (`trainspotting languages {args.model} --stage {s['stage']}`)")
+            continue
+        data = json.loads(path.read_text())
+        records = data["records"]
+        n = len(records)
+        counts = {}
+        for r in records:
+            counts[r["label"]] = counts.get(r["label"], 0) + 1
+        non_en = n - counts.get("en", 0) - counts.get(languages.UNDETERMINED, 0)
+        lo, hi = _wilson(non_en, n)
+        print(f"### {s['stage']} — {data['dataset']} (n={n} detected)\n")
+        print(f"- not English: {non_en / n * 100 if n else 0:.1f}%  (95% CI {lo * 100:.1f}–{hi * 100:.1f}%)")
+        for code, k in sorted(counts.items(), key=lambda kv: -kv[1]):
+            if code in ("en", languages.UNDETERMINED):
+                continue
+            print(f"  - {languages.name(code):20s} {k / n * 100:5.1f}%  ({k}/{n})")
+        und = counts.get(languages.UNDETERMINED, 0)
+        if und:
+            print(f"- undetermined: {und / n * 100:.1f}%  ({und}/{n}) — too short, too much code, or too evenly mixed to call")
+        print()
+
 
 def main():
     ap = argparse.ArgumentParser(prog="trainspotting")
@@ -234,6 +320,15 @@ def main():
     p.add_argument("--sample", type=int, default=300)
     p.add_argument("--seed", type=int, default=0)
     p.set_defaults(fn=cmd_context)
+
+    p = sub.add_parser("languages", help="detect the natural language of sampled prompts (local, no API key)")
+    p.add_argument("model")
+    p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
+    p.add_argument("--sample", type=int, default=300)
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--from-labels", action="store_true",
+                   help="read prompts from the committed classify run instead of re-sampling HuggingFace")
+    p.set_defaults(fn=cmd_languages)
 
     p = sub.add_parser("classify")
     p.add_argument("model")
