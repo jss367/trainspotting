@@ -1140,13 +1140,14 @@ async function renderModel(model, gen){
       const key = `${d.question}\u0000${d.classifier}`;
       if (!buckets.has(key)) buckets.set(key, {question: d.question, classifier: d.classifier, rows: []});
       const n = d.records.length, k = d.records.filter(r => r.match).length;
-      // Corpus runs carry n_effective: documents drawn from the same shard share
-      // a topic cluster and are not independent, so the interval is computed
-      // over shards. The point estimate stays the document rate.
+      // Corpus runs ship their own interval: documents from one shard share a
+      // topic cluster, so the CI is widened by the measured design effect of
+      // that clustering. Computing it here too would be a second implementation
+      // free to drift from the CLI's, so use the stored one when it exists.
       const nEff = d.n_effective || n;
       buckets.get(key).rows.push({
         stage, d, n, k, nEff,
-        ci: wilson(Math.round(k * nEff / (n || 1)), nEff),
+        ci: d.ci || wilson(k, n),
       });
     }
     for (const {question, classifier, rows} of buckets.values()){
@@ -1161,8 +1162,11 @@ async function renderModel(model, gen){
         const s = post.find(p => p.stage === r.stage) || {stage: r.stage, hf_dataset: r.d.dataset, name: r.d.dataset};
         const isCorpus = corpusStages.some(c => c.stage === r.stage);
         const unit = isCorpus ? "documents" : "prompts";
-        const ciNote = r.nEff < r.n
-          ? `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])} over ${r.nEff} shards (documents from one shard are correlated)`
+        // Only call out the correction when it actually bit; at one document per
+        // shard the design effect is ~1 and n_eff lands within a hair of n.
+        const clustered = r.nEff < r.n * 0.98;
+        const ciNote = clustered
+          ? `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])} — widened for clustering, effective n ${r.nEff.toFixed(0)} of ${r.n} (documents sharing a shard are correlated)`
           : `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`;
         barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
           `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})${ciNote}<br>click to read them`,

@@ -264,9 +264,13 @@ and records one label per prompt or document in `results/`.
   against the full row count, so a short list that sums well below 100% means
   the column has a long tail the API did not enumerate.
 - Sampled estimates come with Wilson 95% intervals in `report`; 300 samples
-  gives roughly ±5% worst case. Those intervals assume independent draws, which
-  holds for the post-training layers and for `pretrain` at its default one
-  document per shard, but not above it.
+  gives roughly ±5% worst case. Post-training intervals assume independent draws.
+  Corpus intervals do not: they are widened by the measured design effect of
+  clustering by shard, so `--docs-per-shard` runs whose matches bunch inside
+  shards get an honestly wider interval, and runs whose matches are spread
+  evenly are not penalised for the grouping alone. The corrected interval is
+  computed once, in the CLI, and stored in the result file rather than
+  recomputed by the site.
 - The pretraining sampler only sees documents a range request can reach — the
   first few hundred in each shard, one drawn uniformly from those. Shards are
   drawn properly; position within a shard is not corrected for.

@@ -30,14 +30,58 @@ def _fmt_tokens(n: int) -> str:
     return f"{n:,}"
 
 
-def _wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
-    if n == 0:
+def _wilson(k: float, n: float, z: float = 1.96) -> tuple[float, float]:
+    """Wilson score interval. k and n may be non-integer effective counts."""
+    if n <= 0:
         return 0.0, 0.0
     p = k / n
     denom = 1 + z**2 / n
     center = (p + z**2 / (2 * n)) / denom
     half = z * math.sqrt(p * (1 - p) / n + z**2 / (4 * n**2)) / denom
     return max(0.0, center - half), min(1.0, center + half)
+
+
+def _cluster_wilson(records: list[dict], key: str = "shard") -> tuple[float, float, float]:
+    """Wilson interval widened by the design effect of clustering by `key`.
+
+    Documents drawn from one shard share a topic cluster, so they are not
+    independent observations and a binomial interval over the document count is
+    too narrow. Rescaling the match count to the number of distinct shards, which
+    is what this used to do, is not an interval over shards either: a shard
+    contributing five matches and one contributing a single non-match would round
+    to "two successes out of two clusters", hiding the disagreement between them.
+
+    So take the design effect properly, from the Taylor-linearised variance of the
+    ratio estimator over clusters:
+
+        Var(p) = C / ((C - 1) · M²) · Σ (y_c - p·m_c)²
+
+    where cluster c holds m_c documents of which y_c match, and M = Σ m_c. Divide
+    by the binomial variance to get the design effect, and evaluate Wilson at the
+    effective sample size n/deff. Wilson is kept rather than a normal interval
+    because it still behaves at rates near 0 and 1, which several of these are.
+
+    Returns (lo, hi, n_effective). With one document per shard every cluster has
+    size one, the design effect is C/(C-1) ≈ 1, and this is the ordinary interval.
+    """
+    n = len(records)
+    if n == 0:
+        return 0.0, 0.0, 0.0
+    clusters: dict[str, list[int]] = {}
+    for r in records:
+        clusters.setdefault(r.get(key) or "", []).append(1 if r["match"] else 0)
+    C = len(clusters)
+    p = sum(r["match"] for r in records) / n
+    if C < 2 or p in (0.0, 1.0):
+        # No between-cluster variance to estimate (or none to find): fall back to
+        # the document-level interval rather than inventing a design effect.
+        return (*_wilson(p * n, n), float(n))
+    ss = sum((sum(ys) - p * len(ys)) ** 2 for ys in clusters.values())
+    var_cluster = C / ((C - 1) * n**2) * ss
+    var_binomial = p * (1 - p) / n
+    deff = max(1.0, var_cluster / var_binomial) if var_binomial else 1.0
+    n_eff = max(1.0, n / deff)
+    return (*_wilson(p * n_eff, n_eff), n_eff)
 
 
 def cmd_facts(args):
@@ -231,17 +275,7 @@ def cmd_ask(args):
             if lab
         ]
         k, n = sum(r["match"] for r in records), len(records)
-        # Documents from one shard are not independent observations — they share
-        # a topic cluster — so the interval is computed over shards, the unit the
-        # correlation actually follows. Two separate picks of the same shard
-        # collapse to one deliberately: they are two documents from one cluster,
-        # which is the very thing the adjustment exists to discount, not two
-        # independent draws. That makes n_eff slightly below the document count
-        # even at one document per shard (295 of 300 in the long-context run,
-        # where a 21 GB corpus sits in 55 shards), which is the conservative
-        # direction.
-        n_eff = len({r["shard"] for r in records}) or n
-        lo, hi = _wilson(round(k * n_eff / n) if n else 0, n_eff)
+        lo, hi, n_eff = _cluster_wilson(records)
         path = RESULTS / f"{args.model}.{s['stage']}.ask-{slug}.json"
         path.write_text(
             json.dumps(
@@ -255,7 +289,10 @@ def cmd_ask(args):
                     "scope": data.get("scope"),
                     "caveat": data.get("caveat"),
                     "judged_chars": extract.MAX_DOCUMENT_CHARS,
-                    "n_effective": n_eff,
+                    "n_effective": round(n_eff, 2),
+                    # Stored, not recomputed by the site: the cluster correction
+                    # lives in one place so the page and the CLI cannot drift.
+                    "ci": [lo, hi],
                     "records": records,
                 },
                 indent=2,
