@@ -72,10 +72,18 @@ def _cluster_wilson(records: list[dict], key: str = "shard") -> tuple[float, flo
         clusters.setdefault(r.get(key) or "", []).append(1 if r["match"] else 0)
     C = len(clusters)
     p = sum(r["match"] for r in records) / n
-    if C < 2 or p in (0.0, 1.0):
-        # No between-cluster variance to estimate (or none to find): fall back to
-        # the document-level interval rather than inventing a design effect.
+    if C < 2:
         return (*_wilson(p * n, n), float(n))
+    if p in (0.0, 1.0):
+        # Unanimous: every cluster agrees, so the observed between-cluster
+        # variance is zero and the design effect is unestimable — 0/0, not 1.
+        # Falling back to the document count would hand a clustered run the
+        # narrow interval for n independent observations, and "no matches at
+        # all" is a likely answer for a pointed question, so this branch would
+        # be hit exactly when the number matters. Use the cluster count, which
+        # is the conservative reading: assume documents sharing a shard told us
+        # one thing, not m_c things.
+        return (*_wilson(p * C, C), float(C))
     ss = sum((sum(ys) - p * len(ys)) ** 2 for ys in clusters.values())
     var_cluster = C / ((C - 1) * n**2) * ss
     var_binomial = p * (1 - p) / n
@@ -357,7 +365,7 @@ def cmd_pretrain(args):
         def progress(i, n, path):
             print(f"\r  fetching shard {i}/{n} ", end="", file=sys.stderr, flush=True)
 
-        docs, barren = pretrain.sample_documents(
+        docs, short = pretrain.sample_documents(
             dataset,
             args.sample,
             seed=args.seed,
@@ -407,10 +415,10 @@ def cmd_pretrain(args):
                     "requested": args.sample,
                     "seed": args.seed,
                     "docs_per_shard": args.docs_per_shard,
-                    # Shard draws replaced because they yielded nothing usable.
-                    # Non-zero means the sample is weighted by reachable unique
-                    # documents as well as by size.
-                    "barren_draws": barren,
+                    # Shard draws that contributed fewer documents than asked
+                    # for. Non-zero means the sample is weighted by reachable
+                    # document density as well as by size.
+                    "short_draws": short,
                     "scope": s.get("sample_scope"),
                     "caveat": pretrain.sampling_caveat(args.docs_per_shard),
                     "shards": len(shards),
@@ -424,7 +432,7 @@ def cmd_pretrain(args):
         print(
             f"{s['stage']}: {len(records)} documents -> {path}"
             f" ({path.stat().st_size / 1e6:.1f} MB)"
-            + (f", {barren} barren draw(s) replaced" if barren else ""),
+            + (f", {short} short draw(s) made up by others" if short else ""),
             file=sys.stderr,
         )
 

@@ -1088,8 +1088,9 @@ async function renderModel(model, gen){
       // A draw that yields nothing is silently replaced by another, which
       // reweights the sample by reachable-unique-document count on top of size.
       // Say so when it happened; at zero the size weighting is exactly as claimed.
-      const barren = d.barren_draws
-        ? ` ${num(d.barren_draws)} shard draw${d.barren_draws > 1 ? "s" : ""} yielded no usable document and ${d.barren_draws > 1 ? "were" : "was"} replaced, so size weighting is approximate here.`
+      const short = d.short_draws ?? d.barren_draws;
+      const barren = short
+        ? ` ${num(short)} shard draw${short > 1 ? "s" : ""} came up short of ${short > 1 ? "their" : "its"} quota and ${short > 1 ? "were" : "was"} made up by other shards, so size weighting is approximate here.`
         : "";
       if (d.scope || d.caveat || barren){
         const scope = document.createElement("p");

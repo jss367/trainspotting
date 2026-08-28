@@ -322,25 +322,30 @@ def sample_documents(
     Each returned document carries its shard path, so any row on the site can
     link back to the exact file on the Hub.
 
-    Returns the documents and the number of shard draws that yielded nothing —
-    the draws that got silently replaced, and therefore the size of the departure
-    from pure size-weighting.
+    Returns the documents and the number of shard draws that came up short of
+    `docs_per_shard` — the draws whose shortfall other shards made up, and
+    therefore the size of the departure from pure size-weighting.
     """
     if shards is None:
         shards, revision = list_shards(dataset, revision)
     rng = random.Random(seed)
     weights = [s["size"] for s in shards]
 
+    def usable(docs):
+        return sum(1 for d in docs if (d.get("text") or "").strip())
+
     def fetch(pick):
         i, shard = pick
         try:
             docs = read_shard_head(dataset, shard["path"], revision, read_bytes)
-            # A head that decodes to nothing usable means the first document is
-            # longer than the read. Common in the long-context mixes, where
-            # single documents run past 200k characters, and silently dropping
-            # those shards would bias the sample against exactly the documents
-            # the stage exists to train on. Pay for one larger read there only.
-            if not any((d.get("text") or "").strip() for d in docs):
+            # A head that yields fewer documents than this draw wants means the
+            # records are longer than the read. Common in the long-context mixes,
+            # where single documents run past 200k characters, and letting the
+            # draw come up short would bias the sample against exactly the
+            # documents that stage exists to train on — not only when the head
+            # yields nothing, but any time it underfills. Pay for one larger read
+            # in that case.
+            if usable(docs) < docs_per_shard:
                 docs = read_shard_head(
                     dataset, shard["path"], revision, read_bytes * LONG_DOC_FACTOR
                 )
@@ -353,12 +358,15 @@ def sample_documents(
     out: list[dict] = []
     seen: set[tuple[str, str]] = set()
     pick_no = 0
-    # A shard draw that yields no usable document — unreachable, an all-empty
-    # head, or every reachable record already seen — gets silently replaced by
-    # the next batch. That reweights the sample by reachable-unique-document
-    # count on top of size, so count them: at zero the size weighting is exactly
-    # what it claims, and above zero the caller can see how far off it is.
-    barren = 0
+    # A draw that contributes fewer documents than it was asked for — because
+    # the shard was unreachable, its reachable records were already seen, or even
+    # the larger read did not hold `docs_per_shard` of them — has its shortfall
+    # made up by later draws of other shards. That reweights the sample by
+    # reachable-document density on top of size, so count those draws: at zero
+    # the size weighting is exactly what it claims, and above zero the caller can
+    # see how far off it is. At the default of one document per shard this counts
+    # draws that yielded nothing at all.
+    short_draws = 0
 
     # Draw in batches until n documents are in hand rather than betting the whole
     # sample on one over-draw. How many documents a shard head yields varies by
@@ -368,9 +376,9 @@ def sample_documents(
     for _ in range(MAX_BATCHES):
         if len(out) >= n:
             break
-        short = n - len(out)
+        shortfall = n - len(out)
         batch = rng.choices(
-            shards, weights=weights, k=max(1, int(short / docs_per_shard * 1.3) + 1)
+            shards, weights=weights, k=max(1, int(shortfall / docs_per_shard * 1.3) + 1)
         )
         with ThreadPoolExecutor(max_workers=workers) as ex:
             for i, shard, docs in ex.map(
@@ -415,12 +423,12 @@ def sample_documents(
                             "metadata": _metadata(doc),
                         }
                     )
-                if len(out) == before:
-                    barren += 1
+                if len(out) - before < docs_per_shard:
+                    short_draws += 1
         pick_no += len(batch)
 
     rng.shuffle(out)
-    return out[:n], barren
+    return out[:n], short_draws
 
 
 # Dolma 3 keeps its per-document provenance in a JSON string. These are the
