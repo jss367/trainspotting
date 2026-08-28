@@ -2,7 +2,8 @@
   "sft": {
     "dataset": "allenai/Dolci-Think-SFT-32B",
     "total": 2253684,
-    "columns": {}
+    "columns": {},
+    "links": {}
   },
   "dpo": {
     "dataset": "allenai/Dolci-Think-DPO-32B",
@@ -11,7 +12,8 @@
       "preference_type": {
         "delta_learning": 200000
       }
-    }
+    },
+    "links": {}
   },
   "rlvr": {
     "dataset": "allenai/Dolci-Think-RL-32B",
@@ -23,6 +25,10 @@
         "saurabh5/code_rlvr_mixture_dpo": 21289,
         "allenai/rlvr_general_mix-keyword-filtered-topic-chars-char-filt-topic-filtered": 20708
       }
+    },
+    "links": {
+      "hamishivi/math_rlvr_mixture_dpo": "https://huggingface.co/datasets/hamishivi/math_rlvr_mixture_dpo",
+      "saurabh5/code_rlvr_mixture_dpo": "https://huggingface.co/datasets/saurabh5/code_rlvr_mixture_dpo"
     }
   }
 }
