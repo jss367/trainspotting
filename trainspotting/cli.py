@@ -8,6 +8,9 @@ from pathlib import Path
 from . import classify, context, extract, hf, pretrain, registry
 
 RESULTS = Path(__file__).resolve().parent.parent / "results"
+# The committed half of the bulk artifacts: gitignored under results/, shipped
+# here for the site, and so the only copy present in a fresh clone.
+SITE_DATA = Path(__file__).resolve().parent.parent / "docs" / "data"
 
 
 def _fmt_tokens(n: int) -> str:
@@ -123,6 +126,24 @@ def cmd_ask(args):
     slug = args.slug or re.sub(r"[^a-z0-9]+", "-", args.question.lower()).strip("-")[:60]
     RESULTS.mkdir(exist_ok=True)
     print(f"question: {args.question}\n", file=sys.stderr)
+
+    # Warn before spending anything. The post-training stages cost an API call
+    # per batch, and finding out afterwards that the pretraining half has no
+    # sample to score is a slow way to learn it.
+    if args.pretrain:
+        missing = [
+            st["stage"]
+            for st in registry.pretrain_stages(model)
+            if _pretrain_docs_source(args.model, st["stage"]) is None
+        ]
+        if missing:
+            print(
+                f"warning: no document sample for {', '.join(missing)}"
+                f" — run `trainspotting pretrain {args.model}` first;"
+                " scoring the post-training stages anyway\n",
+                file=sys.stderr,
+            )
+
     for s in registry.post_training_stages(model):
         print(f"sampling {args.sample} rows from {s['hf_dataset']} ...", file=sys.stderr)
         rows = hf.sample_rows(s["hf_dataset"], args.sample, seed=args.seed)
@@ -164,8 +185,8 @@ def cmd_ask(args):
     # re-sampled, so asking a second question scores the same documents and
     # costs nothing but the API call.
     for s in registry.pretrain_stages(model):
-        docs_path = _pretrain_docs_path(args.model, s["stage"])
-        if not docs_path.exists():
+        docs_path = _pretrain_docs_source(args.model, s["stage"])
+        if docs_path is None:
             print(
                 f"{s['stage']}: no sample yet"
                 f" (`trainspotting pretrain {args.model} --stage {s['stage']}`)",
@@ -239,7 +260,25 @@ def cmd_ask(args):
 
 
 def _pretrain_docs_path(model_name: str, stage: str) -> Path:
+    """Where `pretrain` writes a document sample."""
     return RESULTS / f"{model_name}.{stage}.docs.json"
+
+
+def _pretrain_docs_source(model_name: str, stage: str) -> Path | None:
+    """Where to read one back, or None if this checkout has neither copy.
+
+    `results/*.docs.json` is gitignored — it is a regenerable cache — so on a
+    fresh clone the only copy of a committed sample is the one under docs/data/
+    that the site serves. Reading only from results/ would tell someone who just
+    cloned the repo that the sample shipped with it does not exist.
+    """
+    for path in (
+        _pretrain_docs_path(model_name, stage),
+        SITE_DATA / f"{model_name}.{stage}.docs.json",
+    ):
+        if path.exists():
+            return path
+    return None
 
 
 def cmd_pretrain(args):

@@ -64,7 +64,9 @@ trainspotting ask olmo-3-7b-think "..." --slug my-question --pretrain
 ```
 
 `ask` judges post-training **prompts**; with `--pretrain` it also judges the
-pretraining **documents** already sampled by `trainspotting pretrain`, using a
+pretraining **documents** already sampled by `trainspotting pretrain` — reading
+the committed copy under `docs/data/` when `results/` has none, so the samples
+shipped with the repo work on a fresh clone — using a
 different rubric (a corpus document is not a request to a model, so it is scored
 on what fitting the text implies rather than on how a model should respond). It
 reads the committed sample rather than re-drawing, so a second question costs one
