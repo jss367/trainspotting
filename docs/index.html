@@ -884,28 +884,36 @@ async function renderModel(model, gen){
   for (const [slug, files] of Object.entries(bySlug)){
     const stageOrder = post.map(s => s.stage);
     files.sort((a,b) => stageOrder.indexOf(a[0]) - stageOrder.indexOf(b[0]));
-    const card = document.createElement("section");
-    card.className = "card";
-    const first = await getData(files[0][1]);
-    if (gen !== GEN) return;
-    card.innerHTML = `<h2>Custom question</h2>
-      <p class="sub">“${esc(first.question)}” — share of sampled prompts judged a match by ${first.classifier}. Click a bar to read the matching prompts verbatim.</p>`;
-    const rows = [];
+    // A slug is not a safe identity: cmd_ask accepts arbitrary --slug values
+    // and truncates generated ones to 60 chars, so files sharing a slug can
+    // belong to different ask runs. Group rows by their stored question +
+    // classifier and render one card per distinct pair — with the usual single
+    // question per slug this is exactly one card, same as before.
+    const buckets = new Map();
     for (const [stage, f] of files){
       const d = await getData(f);
       if (gen !== GEN) return;
+      if (!d) continue;
+      const key = `${d.question}\u0000${d.classifier}`;
+      if (!buckets.has(key)) buckets.set(key, {question: d.question, classifier: d.classifier, rows: []});
       const n = d.records.length, k = d.records.filter(r => r.match).length;
-      rows.push({stage, d, n, k, ci: wilson(k, n)});
+      buckets.get(key).rows.push({stage, d, n, k, ci: wilson(k, n)});
     }
-    const max = Math.max(...rows.map(r => r.ci[1]), 0.01);
-    for (const r of rows){
-      const s = post.find(p => p.stage === r.stage) || {stage: r.stage, hf_dataset: r.d.dataset, name: r.d.dataset};
-      barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
-        `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
-        false,
-        r.d.records.filter(x => x.match), {...ctxFor(s), linkKey: "ask-" + slug});
+    for (const {question, classifier, rows} of buckets.values()){
+      const card = document.createElement("section");
+      card.className = "card";
+      card.innerHTML = `<h2>Custom question</h2>
+        <p class="sub">“${esc(question)}” — share of sampled prompts judged a match by ${classifier}. Click a bar to read the matching prompts verbatim.</p>`;
+      const max = Math.max(...rows.map(r => r.ci[1]), 0.01);
+      for (const r of rows){
+        const s = post.find(p => p.stage === r.stage) || {stage: r.stage, hf_dataset: r.d.dataset, name: r.d.dataset};
+        barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
+          `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
+          false,
+          r.d.records.filter(x => x.match), {...ctxFor(s), linkKey: "ask-" + slug});
+      }
+      main.appendChild(card);
     }
-    main.appendChild(card);
   }
 
   // ---- exact mix composition ----
@@ -1064,38 +1072,45 @@ async function renderCompare(gen){
   const slugs = [...new Set(MANIFEST.filter(f => f.includes(".ask-"))
     .map(f => (f.match(/\.ask-(.+)\.json$/) || [])[1]).filter(Boolean))];
   for (const slug of slugs){
-    let question = null, classifier = null;
-    const rowsByStage = new Map();
+    // Same slug-collision guard as the per-model view: cmd_ask accepts
+    // arbitrary --slug values and truncates generated ones, so different runs
+    // can share a slug. Bucket by the stored question + classifier and render
+    // one card per distinct pair instead of merging everything under whichever
+    // file happened to load first.
+    const buckets = new Map();
     for (const stage of stages){
       for (const m of models){
         const d = await getData(`${m}.${stage}.ask-${slug}.json`);
         if (gen !== GEN) return;
         if (!d) continue;
-        question ||= d.question; classifier ||= d.classifier;
-        if (!rowsByStage.has(stage)) rowsByStage.set(stage, []);
+        const key = `${d.question}\u0000${d.classifier}`;
+        if (!buckets.has(key)) buckets.set(key, {question: d.question, classifier: d.classifier, rowsByStage: new Map()});
+        const b = buckets.get(key);
+        if (!b.rowsByStage.has(stage)) b.rowsByStage.set(stage, []);
         const n = d.records.length, k = d.records.filter(r => r.match).length;
-        rowsByStage.get(stage).push({m, d, n, k, ci: wilson(k, n)});
+        b.rowsByStage.get(stage).push({m, d, n, k, ci: wilson(k, n)});
       }
     }
-    if (!question) continue;
-    const card = document.createElement("section");
-    card.className = "card";
-    card.innerHTML = `<h2>Custom question — model against model</h2>
-      <p class="sub">“${esc(question)}” — share of sampled prompts judged a match by ${classifier}.</p>${legend}`;
-    const max = Math.max(...[...rowsByStage.values()].flat().map(r => r.ci[1]), 0.01);
-    for (const [stage, rows] of rowsByStage){
-      const h = document.createElement("h3");
-      h.className = "stage";
-      h.textContent = stage.toUpperCase();
-      card.appendChild(h);
-      for (const r of rows){
-        barRow(card, shortName(r.m), r.k/r.n, r.ci[0], r.ci[1], max,
-          `<b>${r.m}</b> · ${stage}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
-          false,
-          r.d.records.filter(x => x.match), {...ctxOf(r.m, stage, r.d.dataset), linkKey: `${r.m}.ask-${slug}`}, color(r.m));
+    for (const {question, classifier, rowsByStage} of buckets.values()){
+      const card = document.createElement("section");
+      card.className = "card";
+      card.innerHTML = `<h2>Custom question — model against model</h2>
+        <p class="sub">“${esc(question)}” — share of sampled prompts judged a match by ${classifier}.</p>${legend}`;
+      const max = Math.max(...[...rowsByStage.values()].flat().map(r => r.ci[1]), 0.01);
+      for (const [stage, rows] of rowsByStage){
+        const h = document.createElement("h3");
+        h.className = "stage";
+        h.textContent = stage.toUpperCase();
+        card.appendChild(h);
+        for (const r of rows){
+          barRow(card, shortName(r.m), r.k/r.n, r.ci[0], r.ci[1], max,
+            `<b>${r.m}</b> · ${stage}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
+            false,
+            r.d.records.filter(x => x.match), {...ctxOf(r.m, stage, r.d.dataset), linkKey: `${r.m}.ask-${slug}`}, color(r.m));
+        }
       }
+      main.appendChild(card);
     }
-    main.appendChild(card);
   }
 }
 
