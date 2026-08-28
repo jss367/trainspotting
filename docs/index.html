@@ -925,6 +925,12 @@ async function render(model){
       if (s.composition && s.composition.length){
         const total = s.composition.reduce((a,c) => a + c.tokens, 0);
         const maxf = Math.max(...s.composition.map(c => c.tokens/total));
+        // Some stages train on less than the full published mix (the 32B runs
+        // 5.50T of a recipe whose card counts 5.93T). When the stage's declared
+        // tokens don't match the composition total, the absolute per-source
+        // counts describe the mix, not this run — show only the mix's own
+        // shares, and put a clearly-approximate scaled count in the tooltip.
+        const exact = !s.tokens || Math.abs(total - s.tokens) <= 0.005 * s.tokens;
         for (const c of s.composition){
           const f = c.tokens/total;
           const row = document.createElement("div");
@@ -932,9 +938,10 @@ async function render(model){
           row.innerHTML = `
             <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</div>
             <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
-            <div class="val">${pctc(f)} <small>${fmtTok(c.tokens)}</small></div>`;
-          hover(row.querySelector(".trackbar"),
-            `<b>${escAttr(c.name)}</b><br>${fmtTok(c.tokens)} of ${fmtTok(total)} tokens (${pctc(f)})`);
+            <div class="val">${pctc(f)}${exact ? ` <small>${fmtTok(c.tokens)}</small>` : ""}</div>`;
+          hover(row.querySelector(".trackbar"), exact
+            ? `<b>${escAttr(c.name)}</b><br>${fmtTok(c.tokens)} of ${fmtTok(total)} tokens (${pctc(f)})`
+            : `<b>${escAttr(c.name)}</b><br>${pctc(f)} of the mix recipe — ≈${fmtTok(f*s.tokens)} of this ${fmtTok(s.tokens)}-token run`);
           div.appendChild(row);
         }
       }
