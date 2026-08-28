@@ -1049,7 +1049,12 @@ async function renderCompare(gen){
       for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
       per.push({m, recs, counts, n: recs.length, dataset: d.dataset});
     }
-    if (!per.length) continue;
+    // A stage no registered model has at all contributes neither data nor
+    // missing-run notices — skip it. But a stage where every registered model
+    // lacks a committed labels file must still show its header and notes, so
+    // a wholly unclassified stage can't make the comparison read as complete
+    // (same rule as the ask cards below).
+    if (!per.length && !missing.length) continue;
     const h = document.createElement("h3");
     h.className = "stage";
     h.textContent = stage.toUpperCase();
@@ -1062,6 +1067,7 @@ async function renderCompare(gen){
       p.textContent = `${m} — no classification run committed for this stage`;
       hhh.appendChild(p);
     }
+    if (!per.length) continue;
     const max = Math.max(...per.flatMap(p => LABELS.map(l => wilson(p.counts[l]||0, p.n)[1])), 0.01);
     let lastGrp = null;
     for (const l of LABELS){
