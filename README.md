@@ -2,7 +2,7 @@
 
 Spot what's in a model's training data. Audits what a fully open model was
 trained on — currently the OLMo 3 pipelines (Ai2), whose pretraining (Dolma 3)
-and post-training (Dolci) data are public. The tool answers four kinds of
+and post-training (Dolci) data are public. The tool answers five kinds of
 question, in increasing order of depth:
 
 1. **Facts** — stage sizes for a model's whole training pipeline (pretrain →
@@ -14,7 +14,11 @@ question, in increasing order of depth:
    honest, and harmless** versus pure skill content (math, code, formatting,
    tool use). No such labels exist in the data, so this layer samples prompts
    and classifies them with Claude.
-4. **Context** — the rest of the training example behind any prompt: the
+4. **Language** — which natural language each prompt is written in. The Dolci
+   datasets carry no language column (the closest is Instruct-SFT's single
+   `Multilingual` domain bucket, 4.6% of rows), so this layer detects it
+   locally with py3langid over the sampled prompts. No API key, no cost.
+5. **Context** — the rest of the training example behind any prompt: the
    response the model is fit to (SFT), the pair it is pushed between (DPO), or
    the verifier that scores it (RL). A prompt on its own can read as the
    opposite of what it teaches, so every count clicks through to this.
@@ -56,6 +60,12 @@ trainspotting ask olmo-3-7b-instruct \
 # Store the full training example behind each sampled prompt (no API key needed)
 trainspotting context olmo-3-7b-instruct
 
+# Detect the natural language of each sampled prompt (local, no API key needed)
+trainspotting languages olmo-3-7b-instruct
+
+# Same thing without re-fetching: reuse the prompts a committed classify run already holds
+trainspotting languages olmo-3-7b-instruct --from-labels
+
 # Sample documents from the pretraining, midtraining and long-context corpora
 trainspotting pretrain olmo-3-7b-think --sample 300
 
@@ -78,6 +88,29 @@ prompts and check they mean what you think. The
 [site](https://jss367.github.io/trainspotting/) renders committed ask runs as
 "Custom question" cards, and every bar (taxonomy or ask) clicks open to the
 literal prompts behind the count.
+
+`languages` writes `results/<model>.<stage>.languages.json` in the same shape,
+with an ISO 639-1 code per prompt. Detection runs line by line and is weighted
+by length, because a lot of these prompts are mixed — an English translation or
+judge template wrapped around a question in another language. Code fences,
+LaTeX, and URLs are stripped first. Confidence divides the winning language's
+weight by the prompt's full letter mass, so both ways of being unsure pull it
+down: text split between languages, and text the detector was never sure about.
+Anything at or below half comes back `undetermined` rather than being guessed
+at — which covers bare greetings, mostly-tabular tasks, and code with comments
+in a second language. The
+site renders it as its own card, with English on one scale and every other
+language on its own, and every language clicks open to its prompts.
+
+Because sampling is deterministic, `--from-labels` reads the prompts straight
+out of `results/<model>.<stage>.labels.json` instead of paging HuggingFace
+again. It produces byte-identical output and takes about a second.
+
+py3langid covers 97 languages, so anything outside that set lands on its
+nearest neighbour — Somali prompts in Dolci come back as Afrikaans. It also
+does not separate close pairs: most of what it calls Indonesian in Dolci is
+Malay. Treat the long tail as approximate and read the prompts, which is what
+the drill-down is for.
 
 `context` re-fetches the same rows (sampling is deterministic in `--sample`
 and `--seed`, so it lands on exactly the rows a `classify` or `ask` run

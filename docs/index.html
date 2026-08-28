@@ -18,6 +18,9 @@
     --baseline:  #c3c2b7;
     --border:    rgba(11,11,11,0.10);
     --series-1:  #2a78d6;
+    /* categorical slots 2–3 (one per model in the compare view) */
+    --series-2:  #eb6834;
+    --series-3:  #1baf7a;
     /* stage identity — the first three categorical slots, validated all-pairs */
     --stage-sft:  #2a78d6;
     --stage-dpo:  #eb6834;
@@ -44,6 +47,8 @@
       --baseline:  #383835;
       --border:    rgba(255,255,255,0.10);
       --series-1:  #3987e5;
+      --series-2:  #d95926;
+      --series-3:  #199e70;
       --stage-sft:  #3987e5;
       --stage-dpo:  #d95926;
       --stage-rlvr: #199e70;
@@ -178,6 +183,8 @@
     color: var(--muted); margin: 14px 0 4px;
   }
   .grp::after { content: ""; flex: 1; height: 1px; background: var(--grid); }
+  .cmp-lbl { font-size: 13px; color: var(--text-secondary); margin: 8px 0 1px; }
+  .cmp-lbl.value { font-weight: 600; color: var(--text-primary); }
 
   /* ---- bar rows ---- */
   .row {
@@ -374,6 +381,10 @@
     bar for the prompts behind it, then <em>see it in training context</em> for the
     rest of the training example — the response the model is fit to, the pair it is
     pushed between, or the verifier that scores it.
+    Language is detected locally per prompt, line by line and weighted by length,
+    so a template that wraps a foreign-language question in English instructions
+    counts as English; a prompt split evenly between two languages is left
+    undetermined rather than assigned to one.
     Data: Ai2's <a href="https://allenai.org/blog/olmo3">OLMo 3</a> release
     (Dolma 3 / Dolci). Regenerate with <code>trainspotting classify</code>,
     <code>trainspotting context</code> + <code>scripts/export_site_data.py</code>.
@@ -644,10 +655,30 @@ function renderRLVR(rec, dataset){
 const RENDER = {sft: renderSFT, dpo: renderDPO, rlvr: renderRLVR};
 
 const dlg = document.getElementById("ctx");
-document.getElementById("ctxclose").onclick = () => dlg.close();
-dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); });
+// Closing the modal drops the row-… segment from the hash it wrote on open.
+// Wired on every close path explicitly (not the dialog close event, which some
+// Chrome builds don't deliver); cancel covers Esc.
+function closeCtx(){
+  if (dlg._backLink){
+    // Only rewrite the hash if it still shows the row segment this modal
+    // wrote on open. If navigation has moved the hash anywhere else since
+    // (history nav, manual edit, a new view mid-render), the backlink is
+    // stale and writing it would point the URL at the old view.
+    const prefix = "#" + dlg._backLink.map(encodeURIComponent).join("/") + "/row-";
+    if (location.hash.startsWith(prefix)) setHash(...dlg._backLink);
+    dlg._backLink = null;
+  }
+  if (dlg.open) dlg.close();
+}
+document.getElementById("ctxclose").onclick = closeCtx;
+dlg.addEventListener("click", e => { if (e.target === dlg) closeCtx(); });
+dlg.addEventListener("cancel", closeCtx);
+dlg.addEventListener("close", closeCtx);
 
-function openContext(rec, stage, dataset, stageName){
+// `link` (hash segments incl. row-…) makes the open modal linkable.
+function openContext(rec, stage, dataset, stageName, link){
+  if (link){ setHash(...link); dlg._backLink = link.slice(0, 3); }
+  else dlg._backLink = null;
   document.getElementById("ctxtitle").innerHTML =
     `<i class="sw" style="background:${hueFor(stage)}"></i>${esc(stage.toUpperCase())} — ${esc(stageName)}`;
   document.getElementById("ctxlede").textContent = STAGE_LEDE[stage] || "";
@@ -663,7 +694,8 @@ function openContext(rec, stage, dataset, stageName){
 // One bar row on a shared 0–max% scale. CI whisker in muted ink.
 // With `records`, clicking the row toggles the literal sampled examples behind
 // the count; each one opens the whole training example it came from.
-function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx){
+// A ctx.linkKey makes the drill-down state linkable (mirrored into the URL hash).
+function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx, color){
   const row = document.createElement("div");
   row.className = "row";
   if (ctx) row.style.setProperty("--bar", hueFor(ctx.stage));
@@ -671,7 +703,7 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
   row.innerHTML = `
     <div class="lbl" style="${isValue ? "font-weight:600;color:var(--text-primary)" : ""}">${label}</div>
     <div class="trackbar">
-      <div class="fill ${frac ? "" : "zero"}" style="width:${w(frac)}%"></div>
+      <div class="fill ${frac ? "" : "zero"}" style="width:${w(frac)}%${color ? `;background:${color}` : ""}"></div>
       ${hi > lo ? `<div class="ci" style="left:${w(lo)}%;width:${Math.max(0, w(hi)-w(lo))}%"></div>` : ""}
     </div>
     <div class="val">${pct(frac)} <small>${pct(lo)}–${pct(hi)}</small></div>`;
@@ -680,9 +712,25 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
   if (records && records.length){
     row.classList.add("clickable");
     row.title = "click to see the sampled examples behind this count";
+    // Keep the backing records reachable from the element: row deep links
+    // verify membership against them before opening the context modal.
+    if (ctx.linkKey){ row.dataset.link = `${ctx.stage}/${ctx.linkKey}`; row._records = records; }
     let panel = null;
-    row.addEventListener("click", () => {
-      if (panel){ panel.remove(); panel = null; return; }
+    row._toggle = (writeHash = true) => {
+      if (panel){
+        panel.remove(); panel = null;
+        if (writeHash && ctx.linkKey) setHash(ctx.view || ctx.model);
+        return;
+      }
+      if (writeHash && ctx.linkKey){
+        // The hash names at most one open drill-down, and a direct click
+        // suppresses the ensuing route(), so close the others here rather
+        // than relying on route()'s cleanup loop (which only runs on
+        // history navigation).
+        for (const other of document.querySelectorAll("[data-link]"))
+          if (other !== row && other._isOpen()) other._toggle(false);
+        setHash(ctx.view || ctx.model, ctx.stage, ctx.linkKey);
+      }
       panel = document.createElement("div");
       panel.className = "drill";
       panel.style.setProperty("--bar", hueFor(ctx.stage));
@@ -706,15 +754,20 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
           b.className = "ctxbtn";
           b.textContent = "see it in training context ›";
           b.onclick = async () => {
+            const nav = NAV;
             b.disabled = true;
             b.textContent = "loading…";
             let rec = await contextFor(ctx.model, ctx.stage, r.prompt);
+            // Any hash move (nav moved on) or a closed drill-down (button
+            // detached) mid-download makes this modal stale — drop it.
+            if (nav !== NAV || !b.isConnected) return;
             // the labeled record keeps a longer prompt copy than the context record
             if (rec && r.prompt.length > rec.prompt_full.chars)
               rec = {...rec, prompt_full: {text: r.prompt, chars: r.prompt.length}};
             b.disabled = false;
             b.textContent = "see it in training context ›";
-            if (rec) openContext(rec, ctx.stage, ctx.dataset, ctx.stageName);
+            if (rec) openContext(rec, ctx.stage, ctx.dataset, ctx.stageName,
+              ctx.linkKey && rec.row != null ? [ctx.view || ctx.model, ctx.stage, ctx.linkKey, "row-" + rec.row] : null);
             else b.textContent = "this prompt is not in the committed context run";
           };
           item.appendChild(b);
@@ -722,7 +775,9 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
         panel.appendChild(item);
       }
       row.after(panel);
-    });
+    };
+    row._isOpen = () => !!panel;
+    row.addEventListener("click", () => row._toggle());
   }
 }
 
@@ -781,7 +836,8 @@ function corpusComposition(parent, groups, totalBytes, limit = 14){
   }
 }
 
-let REG, MANIFEST, DATA = {}, CTXMAPS = {};
+let REG, MANIFEST, LANG_NAMES = {}, DATA = {}, CTXMAPS = {};
+const langName = c => LANG_NAMES[c] || c;
 async function fetchJSON(p){ const r = await fetch("data/"+p); if(!r.ok) throw new Error(p); return r.json(); }
 async function getData(name){
   if (!DATA[name] && MANIFEST.includes(name)) DATA[name] = await fetchJSON(name);
@@ -800,9 +856,14 @@ async function contextFor(model, stage, prompt){
   }
   return CTXMAPS[f].get(prompt.slice(0, KEY_CHARS));
 }
+// Deep links address a training example by its HuggingFace row number.
+async function contextRowFor(model, stage, row){
+  const d = await getData(ctxFile(model, stage));
+  return d ? d.records.find(r => r.row === row) : null;
+}
 
-// A tile can be clicked while render() is still awaiting its data files, before the
-// destination section exists. Remember the request and replay it once render finishes.
+// A tile can be clicked while renderModel() is still awaiting its data files, before
+// the destination section exists. Remember the request and replay it once render finishes.
 let pendingJump = null;
 
 // The tab bar is sticky and wraps onto extra rows on narrow viewports, so its height
@@ -821,7 +882,7 @@ function jumpToStage(stage){
   return true;
 }
 
-async function render(model){
+async function renderModel(model, gen){
   const m = REG[model];
   const main = document.getElementById("main");
   main.innerHTML = "";
@@ -829,6 +890,7 @@ async function render(model){
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === model));
 
   const sources = await getData(model + ".sources.json");
+  if (gen !== GEN) return;
   const post = m.stages.filter(s => s.hf_dataset);
   const ctxFor = s => ({
     model, stage: s.stage, dataset: s.hf_dataset, stageName: s.name,
@@ -881,6 +943,7 @@ async function render(model){
   let any = false;
   for (const s of post){
     const d = await getData(`${model}.${s.stage}.labels.json`);
+    if (gen !== GEN) return;
     if (!d) continue;
     any = true;
     const recs = d.records.filter(r => r.label);
@@ -909,11 +972,76 @@ async function render(model){
       barRow(hhh, NICE[l], k/n, lo, hi, max,
         `<b>${NICE[l]}</b><br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
         VALUE_LABELS.has(l),
-        recs.filter(r => r.label === l), ctxFor(s));
+        recs.filter(r => r.label === l), {...ctxFor(s), linkKey: l});
     }
   }
   if (!any) hhh.innerHTML += `<p class="note">No classification runs committed for this model yet — run <code>trainspotting classify ${model}</code>.</p>`;
   main.appendChild(hhh);
+
+  // ---- language breakdown ----
+  // English swamps everything, so the two groups get separate scales: one bar at
+  // full width for English, then the rest against the largest non-English share.
+  // A shared scale would render every other language as an invisible sliver.
+  const langCard = document.createElement("section");
+  langCard.className = "card";
+  langCard.innerHTML = `<h2>What language is post-training written in?</h2>
+    <p class="sub">Detected locally with py3langid over the same sampled prompts — no model is called.
+       The Dolci datasets carry no language column, so this is the only way to get the breakdown.
+       Click any language to read its prompts.</p>`;
+  let anyLang = false;
+  for (const s of post){
+    const d = await getData(`${model}.${s.stage}.languages.json`);
+    if (!d) continue;
+    anyLang = true;
+    const recs = d.records;
+    const n = recs.length;
+    const counts = {};
+    for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
+    const rest = Object.keys(counts).filter(c => c !== "en" && c !== "undetermined")
+      .sort((a,b) => counts[b] - counts[a]);
+    const nonEn = rest.reduce((a,c) => a + counts[c], 0);
+
+    const h = document.createElement("h3");
+    h.className = "stage";
+    h.style.setProperty("--bar", hueFor(s.stage));
+    h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())} <span class="ds">— ${esc(s.name)}</span>`;
+    const sub = document.createElement("p");
+    sub.className = "stage-sub";
+    sub.textContent = `${d.dataset} · n=${n} sampled prompts · ${rest.length} languages other than English`
+      + ` · detector ${d.detector}`;
+    langCard.append(h, sub);
+
+    const g1 = document.createElement("div"); g1.className = "grp"; g1.textContent = "english";
+    langCard.appendChild(g1);
+    const enK = counts.en || 0, enCI = wilson(enK, n);
+    barRow(langCard, "English", enK/n, enCI[0], enCI[1], Math.max(enCI[1], 0.01),
+      `<b>English</b><br>${enK} of ${n} sampled prompts (${pct(enK/n)})<br>95% CI ${pct(enCI[0])}–${pct(enCI[1])}<br>click to see the prompts`,
+      true, recs.filter(r => r.label === "en"), ctxFor(s));
+
+    const g2 = document.createElement("div"); g2.className = "grp";
+    g2.textContent = "every other language — own scale";
+    langCard.appendChild(g2);
+    if (!rest.length){
+      const p = document.createElement("p"); p.className = "note";
+      p.textContent = "no non-English prompts in this sample";
+      langCard.appendChild(p);
+    }
+    const restMax = Math.max(...rest.map(c => wilson(counts[c], n)[1]), 0.005);
+    for (const c of rest){
+      const k = counts[c], [lo, hi] = wilson(k, n);
+      barRow(langCard, esc(langName(c)), k/n, lo, hi, restMax,
+        `<b>${esc(langName(c))}</b> (${esc(c)})<br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
+        false, recs.filter(r => r.label === c), ctxFor(s));
+    }
+    const und = counts.undetermined || 0;
+    const note = document.createElement("p");
+    note.className = "note";
+    note.textContent = `${pct(nonEn/n)} of this sample is not English.`
+      + (und ? ` ${und} prompt${und>1?"s":""} (${pct(und/n)}) ${und>1?"were":"was"} too short, too much code, or too evenly mixed to call, and ${und>1?"are":"is"} counted in neither group.` : "");
+    langCard.appendChild(note);
+  }
+  if (!anyLang) langCard.innerHTML += `<p class="note">No language run committed for this model yet — run <code>trainspotting languages ${model}</code>.</p>`;
+  main.appendChild(langCard);
 
   // ---- pretraining documents ----
   const corpusStages = m.stages.filter(s => s.sample_dataset);
@@ -988,45 +1116,58 @@ async function render(model){
     // --pretrain puts corpus stages in the same card, and they come first.
     const stageOrder = m.stages.map(s => s.stage);
     files.sort((a,b) => stageOrder.indexOf(a[0]) - stageOrder.indexOf(b[0]));
-    const card = document.createElement("section");
-    card.className = "card";
-    const first = await getData(files[0][1]);
-    const kinds = files.map(([stage]) => corpusStages.some(c => c.stage === stage) ? "documents" : "prompts");
-    const unitLabel = [...new Set(kinds)].join(" and ");
-    card.innerHTML = `<h2>Custom question</h2>
-      <p class="sub">“${esc(first.question)}” — share of sampled ${unitLabel} judged a match by ${first.classifier}. Click a bar to read the matches verbatim.</p>`;
-    const rows = [];
+    // A slug is not a safe identity: cmd_ask accepts arbitrary --slug values
+    // and truncates generated ones to 60 chars, so files sharing a slug can
+    // belong to different ask runs. Group rows by their stored question +
+    // classifier and render one card per distinct pair — with the usual single
+    // question per slug this is exactly one card, same as before.
+    const buckets = new Map();
     for (const [stage, f] of files){
       const d = await getData(f);
+      if (gen !== GEN) return;
+      if (!d) continue;
+      const key = `${d.question}\u0000${d.classifier}`;
+      if (!buckets.has(key)) buckets.set(key, {question: d.question, classifier: d.classifier, rows: []});
       const n = d.records.length, k = d.records.filter(r => r.match).length;
       // Corpus runs carry n_effective: documents drawn from the same shard share
       // a topic cluster and are not independent, so the interval is computed
       // over shards. The point estimate stays the document rate.
       const nEff = d.n_effective || n;
-      rows.push({stage, d, n, k, nEff, ci: wilson(Math.round(k * nEff / (n || 1)), nEff)});
+      buckets.get(key).rows.push({
+        stage, d, n, k, nEff,
+        ci: wilson(Math.round(k * nEff / (n || 1)), nEff),
+      });
     }
-    const max = Math.max(...rows.map(r => r.ci[1]), 0.01);
-    for (const r of rows){
-      const s = post.find(p => p.stage === r.stage) || {stage: r.stage, hf_dataset: r.d.dataset, name: r.d.dataset};
-      const isCorpus = corpusStages.some(c => c.stage === r.stage);
-      const unit = isCorpus ? "documents" : "prompts";
-      const ciNote = r.nEff < r.n
-        ? `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])} over ${r.nEff} shards (documents from one shard are correlated)`
-        : `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`;
-      barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
-        `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})${ciNote}<br>click to read them`,
-        false,
-        r.d.records.filter(x => x.match), {...ctxFor(s), isCorpus});
+    for (const {question, classifier, rows} of buckets.values()){
+      const card = document.createElement("section");
+      card.className = "card";
+      const kinds = rows.map(r => corpusStages.some(c => c.stage === r.stage) ? "documents" : "prompts");
+      const unitLabel = [...new Set(kinds)].join(" and ");
+      card.innerHTML = `<h2>Custom question</h2>
+        <p class="sub">“${esc(question)}” — share of sampled ${unitLabel} judged a match by ${classifier}. Click a bar to read the matches verbatim.</p>`;
+      const max = Math.max(...rows.map(r => r.ci[1]), 0.01);
+      for (const r of rows){
+        const s = post.find(p => p.stage === r.stage) || {stage: r.stage, hf_dataset: r.d.dataset, name: r.d.dataset};
+        const isCorpus = corpusStages.some(c => c.stage === r.stage);
+        const unit = isCorpus ? "documents" : "prompts";
+        const ciNote = r.nEff < r.n
+          ? `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])} over ${r.nEff} shards (documents from one shard are correlated)`
+          : `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`;
+        barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
+          `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})${ciNote}<br>click to read them`,
+          false,
+          r.d.records.filter(x => x.match), {...ctxFor(s), isCorpus, linkKey: "ask-" + slug});
+      }
+      if (rows.some(r => corpusStages.some(c => c.stage === r.stage))){
+        const p = document.createElement("p");
+        p.className = "note";
+        p.textContent = "Corpus stages and post-training stages are not on the same footing: "
+          + "the first are documents the model fit, the second are examples built to teach it. "
+          + "A given rate means something different in each.";
+        card.appendChild(p);
+      }
+      main.appendChild(card);
     }
-    if (rows.some(r => corpusStages.some(c => c.stage === r.stage))){
-      const p = document.createElement("p");
-      p.className = "note";
-      p.textContent = "Corpus stages and post-training stages are not on the same footing: "
-        + "the first are documents the model fit, the second are examples built to teach it. "
-        + "A given rate means something different in each.";
-      card.appendChild(p);
-    }
-    main.appendChild(card);
   }
 
   // ---- exact mix composition ----
@@ -1079,26 +1220,55 @@ async function render(model){
     main.appendChild(mix);
   }
 
-  // ---- base training stages (no published label columns, so prose only) ----
-  // Stages the pretraining card already covers own their own anchor; this is
-  // the prose fallback for the rest.
+  // ---- base training stages (facts from the paper and each mix's own dataset
+  // card; the corpus card above measures the same stages by sampling them) ----
   const sampled = new Set(corpusData.map(([s]) => s.stage));
-  const base = m.stages.filter(s => !s.hf_dataset && !sampled.has(s.stage));
+  const base = m.stages.filter(s => !s.hf_dataset);
   if (base.length){
     const card = document.createElement("section");
     card.className = "card";
     card.innerHTML = `<h2>Base training stages</h2>
-      <p class="sub">Token counts from the OLMo 3 paper. These mixes aren't published with
-        per-example label columns on HuggingFace, so there is no classification here — this is what
-        the release documents about each stage. They can still be sampled document by document:
-        run <code>trainspotting pretrain ${esc(model)}</code>.</p>`;
+      <p class="sub">Token counts and mix composition from the OLMo 3 paper (Table 4) and each mix's
+        dataset card — the release's own numbers, not measured here. The corpus card above measures
+        the same mixes independently by sampling their shards, so the two are worth comparing.</p>`;
+    // shares under 0.1% would round to a flat 0.0%
+    const pctc = f => f < 0.001 ? (f*100).toFixed(2)+"%" : pct(f);
     for (const s of base){
       const div = document.createElement("div");
       div.className = "basestage";
-      div.id = "sec-" + s.stage;
+      // One anchor per stage. Where a document sample exists the corpus card
+      // above owns it — it is the richer destination and comes first — so this
+      // section takes a secondary id rather than competing for the jump.
+      div.id = (sampled.has(s.stage) ? "base-" : "sec-") + s.stage;
+      const link = s.hf
+        ? `<span class="chip link"><a href="https://huggingface.co/datasets/${escAttr(s.hf)}"
+             target="_blank" rel="noopener">${esc(s.hf)} ↗</a></span>` : "";
       div.innerHTML = `<h3 class="stage"><i class="sw" style="background:var(--baseline)"></i>${esc(s.stage.toUpperCase())}
-          <span class="ds">— ${esc(s.name)}${s.tokens ? " · " + fmtTok(s.tokens) + " tokens" : ""}</span></h3>
-        <p class="kv" style="margin:2px 0 0">${esc(s.note || "No further details recorded in the registry.")}</p>`;
+          <span class="ds">— ${esc(s.name)}${s.tokens ? " · " + fmtTok(s.tokens) + " tokens" : ""}</span>${link}</h3>
+        <p class="kv" style="margin:2px 0 8px">${esc(s.note || "No further details recorded in the registry.")}</p>`;
+      if (s.composition && s.composition.length){
+        const total = s.composition.reduce((a,c) => a + c.tokens, 0);
+        const maxf = Math.max(...s.composition.map(c => c.tokens/total));
+        // Some stages train on less than the full published mix (the 32B runs
+        // 5.50T of a recipe whose card counts 5.93T). When the stage's declared
+        // tokens don't match the composition total, the absolute per-source
+        // counts describe the mix, not this run — show only the mix's own
+        // shares, and put a clearly-approximate scaled count in the tooltip.
+        const exact = !s.tokens || Math.abs(total - s.tokens) <= 0.005 * s.tokens;
+        for (const c of s.composition){
+          const f = c.tokens/total;
+          const row = document.createElement("div");
+          row.className = "row";
+          row.innerHTML = `
+            <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</div>
+            <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
+            <div class="val">${pctc(f)}${exact ? ` <small>${fmtTok(c.tokens)}</small>` : ""}</div>`;
+          hover(row.querySelector(".trackbar"), exact
+            ? `<b>${escAttr(c.name)}</b><br>${fmtTok(c.tokens)} of ${fmtTok(total)} tokens (${pctc(f)})`
+            : `<b>${escAttr(c.name)}</b><br>${pctc(f)} of the mix recipe — ≈${fmtTok(f*s.tokens)} of this ${fmtTok(s.tokens)}-token run`);
+          div.appendChild(row);
+        }
+      }
       card.appendChild(div);
     }
     main.appendChild(card);
@@ -1112,19 +1282,296 @@ async function render(model){
   }
 }
 
+// ------------------------------------------------------- cross-model compare ---
+// Same classification data as the per-model tabs, but every model on one axis
+// per stage, so "does the think variant's post-training differ?" is one glance.
+const MODEL_COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)"];
+const shortName = m => m.replace(/^olmo-3-/, "");
+
+async function renderCompare(gen){
+  const models = Object.keys(REG);
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === "compare"));
+
+  const color = m => MODEL_COLORS[models.indexOf(m) % MODEL_COLORS.length];
+  // Colors are keyed to the global model list, so a model keeps its color even
+  // in a legend that only names a subset (the per-bucket ask legends below).
+  const legendFor = ms => `<div class="legend" style="margin:0 0 4px">${ms.map(m =>
+    `<span class="k"><i style="background:${color(m)}"></i>${m}</span>`).join("")}</div>`;
+  const legend = legendFor(models);
+  // Order-preserving union across all models, so a stage that only some models
+  // have (heterogeneous pipelines) still gets a section instead of vanishing.
+  const stages = [];
+  for (const m of models)
+    for (const s of REG[m].stages)
+      if (s.hf_dataset && !stages.includes(s.stage)) stages.push(s.stage);
+  const ctxOf = (m, stage, ds) => {
+    const s = REG[m].stages.find(x => x.stage === stage) || {stage, hf_dataset: ds, name: ds};
+    return {model: m, view: "compare", stage: s.stage, dataset: s.hf_dataset, stageName: s.name,
+      hasContext: MANIFEST.includes(ctxFile(m, s.stage))};
+  };
+
+  // ---- HHH shares, all models per stage ----
+  const hhh = document.createElement("section");
+  hhh.className = "card";
+  hhh.innerHTML = `<h2>Helpful, honest, harmless — model against model</h2>
+    <p class="sub">Share of sampled prompts per stage whose primary training signal is each label,
+      all models on one axis. Whiskers: Wilson 95% CI. Click a bar for the prompts behind it.</p>${legend}`;
+  for (const stage of stages){
+    const per = [], missing = [];
+    for (const m of models){
+      const d = await getData(`${m}.${stage}.labels.json`);
+      if (gen !== GEN) return;
+      if (!d){
+        // Only a model whose registry actually has this stage is "missing" —
+        // in a heterogeneous pipeline the absence isn't an uncommitted run.
+        if (REG[m].stages.some(x => x.stage === stage && x.hf_dataset)) missing.push(m);
+        continue;
+      }
+      const recs = d.records.filter(r => r.label);
+      const counts = {};
+      for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
+      per.push({m, recs, counts, n: recs.length, dataset: d.dataset});
+    }
+    // A stage no registered model has at all contributes neither data nor
+    // missing-run notices — skip it. But a stage where every registered model
+    // lacks a committed labels file must still show its header and notes, so
+    // a wholly unclassified stage can't make the comparison read as complete
+    // (same rule as the ask cards below).
+    if (!per.length && !missing.length) continue;
+    const h = document.createElement("h3");
+    h.className = "stage";
+    h.textContent = stage.toUpperCase();
+    hhh.appendChild(h);
+    // Say so when a legend model has no committed run for this stage, so a
+    // partial experiment doesn't silently read as a complete comparison.
+    for (const m of missing){
+      const p = document.createElement("p");
+      p.className = "note";
+      p.textContent = `${m} — no classification run committed for this stage`;
+      hhh.appendChild(p);
+    }
+    if (!per.length) continue;
+    const max = Math.max(...per.flatMap(p => LABELS.map(l => wilson(p.counts[l]||0, p.n)[1])), 0.01);
+    let lastGrp = null;
+    for (const l of LABELS){
+      const grp = VALUE_LABELS.has(l) ? "values" : "skills";
+      if (grp !== lastGrp){
+        const g = document.createElement("div"); g.className = "grp"; g.textContent = grp;
+        hhh.appendChild(g); lastGrp = grp;
+      }
+      const lbl = document.createElement("div");
+      lbl.className = "cmp-lbl" + (VALUE_LABELS.has(l) ? " value" : "");
+      lbl.textContent = NICE[l];
+      hhh.appendChild(lbl);
+      for (const p of per){
+        const k = p.counts[l] || 0;
+        const [lo, hi] = wilson(k, p.n);
+        barRow(hhh, shortName(p.m), k/p.n, lo, hi, max,
+          `<b>${p.m}</b> · ${NICE[l]}<br>${k} of ${p.n} sampled prompts (${pct(k/p.n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
+          false,
+          p.recs.filter(r => r.label === l), {...ctxOf(p.m, stage, p.dataset), linkKey: `${p.m}.${l}`}, color(p.m));
+      }
+    }
+  }
+  main.appendChild(hhh);
+
+  // ---- custom questions across models ----
+  const slugs = [...new Set(MANIFEST.filter(f => f.includes(".ask-"))
+    .map(f => (f.match(/\.ask-(.+)\.json$/) || [])[1]).filter(Boolean))];
+  for (const slug of slugs){
+    // Same slug-collision guard as the per-model view: cmd_ask accepts
+    // arbitrary --slug values and truncates generated ones, so different runs
+    // can share a slug. Bucket by the stored question + classifier and render
+    // one card per distinct pair instead of merging everything under whichever
+    // file happened to load first.
+    const buckets = new Map();
+    // Models with no ask file at all for a stage (as opposed to one that
+    // landed in a different question bucket) are missing from EVERY bucket
+    // of this slug, so the note below is accurate in each.
+    const missingByStage = new Map();
+    for (const stage of stages){
+      for (const m of models){
+        const d = await getData(`${m}.${stage}.ask-${slug}.json`);
+        if (gen !== GEN) return;
+        if (!d){
+          if (REG[m].stages.some(x => x.stage === stage && x.hf_dataset)){
+            if (!missingByStage.has(stage)) missingByStage.set(stage, []);
+            missingByStage.get(stage).push(m);
+          }
+          continue;
+        }
+        const key = `${d.question}\u0000${d.classifier}`;
+        if (!buckets.has(key)) buckets.set(key, {question: d.question, classifier: d.classifier, rowsByStage: new Map()});
+        const b = buckets.get(key);
+        if (!b.rowsByStage.has(stage)) b.rowsByStage.set(stage, []);
+        const n = d.records.length, k = d.records.filter(r => r.match).length;
+        b.rowsByStage.get(stage).push({m, d, n, k, ci: wilson(k, n)});
+      }
+    }
+    for (const {question, classifier, rowsByStage} of buckets.values()){
+      // The legend names only this bucket's models: a model whose run for this
+      // slug answers a different question belongs to another card, and listing
+      // it here would advertise a row (or a missing-run note) that never comes.
+      const bucketModels = models.filter(m =>
+        [...rowsByStage.values()].some(rows => rows.some(r => r.m === m)));
+      const card = document.createElement("section");
+      card.className = "card";
+      card.innerHTML = `<h2>Custom question — model against model</h2>
+        <p class="sub">“${esc(question)}” — share of sampled prompts judged a match by ${classifier}.</p>${legendFor(bucketModels)}`;
+      const max = Math.max(...[...rowsByStage.values()].flat().map(r => r.ci[1]), 0.01);
+      // Iterate the registered stage union, not just the stages with loaded
+      // rows: a stage where NO model has a file for this question still gets
+      // its header and missing-run notes, so a partially committed ask
+      // experiment can't read as a complete one.
+      for (const stage of stages){
+        const rows = rowsByStage.get(stage) || [];
+        const missing = missingByStage.get(stage) || [];
+        if (!rows.length && !missing.length) continue;
+        const h = document.createElement("h3");
+        h.className = "stage";
+        h.textContent = stage.toUpperCase();
+        card.appendChild(h);
+        for (const m of missing){
+          const p = document.createElement("p");
+          p.className = "note";
+          p.textContent = `${m} — no ask run committed for this stage`;
+          card.appendChild(p);
+        }
+        for (const r of rows){
+          barRow(card, shortName(r.m), r.k/r.n, r.ci[0], r.ci[1], max,
+            `<b>${r.m}</b> · ${stage}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
+            false,
+            r.d.records.filter(x => x.match), {...ctxOf(r.m, stage, r.d.dataset), linkKey: `${r.m}.ask-${slug}`}, color(r.m));
+        }
+      }
+      main.appendChild(card);
+    }
+  }
+}
+
+// ------------------------------------------------------------------ routing ---
+// The hash mirrors what is open, so every view is a link:
+//   #<model> | #compare                a tab
+//   #<model>/<stage>/<key>             an open drill-down (key = label or ask-<slug>)
+//   #<model>/<stage>/<key>/row-<n>     one training example, in the context modal
+// In the compare view the key is <model>.<label-or-ask-slug>, so the same two
+// hash forms work with "compare" in the first segment.
+// GEN discards a render that a newer *view* superseded mid-await; NAV moves on
+// EVERY hash change (even within a view, even app-written ones) and discards
+// any in-flight continuation that would touch the DOM or the hash, so a stale
+// await can't reopen a modal or drill-down the user navigated away from.
+// RENDERED is the generation of the last render that ran to completion: while
+// GEN !== RENDERED the view's DOM is incomplete, so routes must not apply
+// drill-down/modal state to it — the rendering route applies the latest hash
+// when it finishes. Invariant: the end state always matches the latest hash.
+let VIEW = null, suppress = 0, GEN = 0, RENDERED = 0, NAV = 0;
+
+function setHash(...parts){
+  const h = "#" + parts.map(encodeURIComponent).join("/");
+  if (location.hash === h) return;
+  suppress++;
+  location.hash = h;
+}
+
+// A truncated or hand-edited link can hold a malformed escape ("%E0", "%"),
+// which makes decodeURIComponent throw. Fall back to the raw segment: it just
+// won't match any model/stage/label, so route() lands on the default view and
+// skips the drill-down — and the VALID segments of the hash still apply.
+function decodeSeg(s){
+  try { return decodeURIComponent(s); } catch { return s; }
+}
+
+function parseHash(){
+  const seg = location.hash.replace(/^#/, "").split("/").filter(Boolean).map(decodeSeg);
+  const row = seg[3] && /^row-\d+$/.test(seg[3]) ? +seg[3].slice(4) : null;
+  return {view: seg[0] || null, stage: seg[1], key: seg[2], row};
+}
+
+async function route(){
+  const nav = ++NAV;   // invalidate in-flight work on every hash move, same-view included
+  if (suppress){ suppress--; return; }
+  const st = parseHash();
+  const v = st.view;
+  const view = v && (REG[v] || v === "compare") ? v : Object.keys(REG)[0];
+  // An open modal this hash does not keep (no row segment, or a different
+  // view) belongs to the outgoing state: clear its backlink and close it
+  // BEFORE any await, so closing the still-visible dialog mid-render can't
+  // write a stale backlink over the new hash.
+  if (dlg.open && (st.row == null || view !== VIEW)){ dlg._backLink = null; dlg.close(); }
+  if (view !== VIEW){
+    VIEW = view;
+    const gen = ++GEN;
+    await (view === "compare" ? renderCompare(gen) : renderModel(view, gen));
+    if (gen !== GEN) return;   // a newer view render took over mid-await
+    RENDERED = gen;
+    // The hash may have moved within this view while the render was in
+    // flight (those routes bailed on GEN !== RENDERED below), so apply the
+    // NEWEST hash's state, not this route's own — never a stale one.
+    return applyHashState(NAV);
+  }
+  // Same view, but its render is still awaiting data: the DOM is incomplete,
+  // so don't touch it — the rendering route applies this hash on completion.
+  if (GEN !== RENDERED) return;
+  return applyHashState(nav);
+}
+
+// Apply the CURRENT hash's drill-down/modal state to a fully rendered view.
+// Runs synchronously up to the one await, whose continuation re-validates
+// `nav` so a newer hash move discards it.
+async function applyHashState(nav){
+  const st = parseHash();
+  if (st.row == null && dlg.open){ dlg._backLink = null; dlg.close(); }
+  // Back/Forward restores a hash; close any panel that hash does not name.
+  const want = st.stage && st.key ? st.stage + "/" + st.key : null;
+  for (const open of document.querySelectorAll("[data-link]"))
+    if (open.dataset.link !== want && open._isOpen()) open._toggle(false);
+  if (!want) return;
+  const el = document.querySelector(`[data-link="${CSS.escape(want)}"]`);
+  if (el){
+    if (!el._isOpen()) el._toggle(false);
+    el.scrollIntoView({block: "center"});
+  }
+  if (st.row != null){
+    // Compare keys are <model>.<key>; per-model views carry the model in the hash root.
+    const model = VIEW === "compare" ? st.key.split(".", 1)[0] : VIEW;
+    // Only honor the row when the stage/key named a real drill-down (`el`
+    // resolved above): a hash whose key names no bar would otherwise claim a
+    // nonexistent label/ask result while a modal lends it false credibility.
+    let rec = el && REG[model] ? await contextRowFor(model, st.stage, st.row) : null;
+    if (nav !== NAV) return;   // any newer hash move makes this modal stale
+    // A context file covers the whole stage, so a stale/edited row number can
+    // resolve to a record behind a DIFFERENT bar (e.g. a capability record
+    // under a helpfulness link). Only honor rows that belong to the bar this
+    // hash names: its records carry the prompts, and context records are
+    // keyed by the same KEY_CHARS prompt prefix (see contextFor).
+    if (rec && !el._records.some(r => r.prompt.slice(0, KEY_CHARS) === rec.key)) rec = null;
+    const s = REG[model] && REG[model].stages.find(x => x.stage === st.stage);
+    if (rec && s) openContext(rec, st.stage, s.hf_dataset, s.name, [VIEW, st.stage, st.key, "row-" + st.row]);
+    // Lookup failed (stale/edited hash naming a row that no longer exists):
+    // an open dialog would keep showing the previous record under a hash
+    // that doesn't name it — clear its backlink and close it.
+    else if (dlg.open){ dlg._backLink = null; dlg.close(); }
+  }
+}
+
 (async () => {
-  [REG, MANIFEST] = await Promise.all([fetchJSON("registry.json"), fetchJSON("manifest.json")]);
+  [REG, MANIFEST, LANG_NAMES] = await Promise.all([
+    fetchJSON("registry.json"), fetchJSON("manifest.json"), fetchJSON("language-names.json")]);
   const tabs = document.getElementById("tabs");
-  for (const name of Object.keys(REG)){
+  for (const name of [...Object.keys(REG), "compare"]){
     const b = document.createElement("button");
-    b.textContent = name; b.dataset.m = name;
-    b.onclick = () => render(name);
+    b.textContent = name === "compare" ? "compare models" : name;
+    b.dataset.m = name;
+    b.onclick = () => { if (name !== VIEW) location.hash = "#" + name; };
     tabs.appendChild(b);
   }
   syncStickyHeight();
   if (window.ResizeObserver) new ResizeObserver(syncStickyHeight).observe(tabs);
   window.addEventListener("resize", syncStickyHeight);
-  render(Object.keys(REG)[0]);
+  addEventListener("hashchange", route);
+  route();
 })();
 </script>
 </body>
