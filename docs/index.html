@@ -678,13 +678,13 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
           b.className = "ctxbtn";
           b.textContent = "see it in training context ›";
           b.onclick = async () => {
-            const gen = GEN;
+            const nav = NAV;
             b.disabled = true;
             b.textContent = "loading…";
             let rec = await contextFor(ctx.model, ctx.stage, r.prompt);
-            // A tab switch (gen moved on) or a closed drill-down (button
+            // Any hash move (nav moved on) or a closed drill-down (button
             // detached) mid-download makes this modal stale — drop it.
-            if (gen !== GEN || !b.isConnected) return;
+            if (nav !== NAV || !b.isConnected) return;
             // the labeled record keeps a longer prompt copy than the context record
             if (rec && r.prompt.length > rec.prompt_full.chars)
               rec = {...rec, prompt_full: {text: r.prompt, chars: r.prompt.length}};
@@ -1009,8 +1009,11 @@ async function renderCompare(gen){
 //   #<model>/<stage>/<key>/row-<n>     one training example, in the context modal
 // In the compare view the key is <model>.<label-or-ask-slug>, so the same two
 // hash forms work with "compare" in the first segment.
-// GEN discards a render that a newer navigation superseded mid-await.
-let VIEW = null, suppress = 0, GEN = 0;
+// GEN discards a render that a newer *view* superseded mid-await; NAV moves on
+// EVERY hash change (even within a view, even app-written ones) and discards
+// in-flight row-context loads so a stale fetch can't reopen a modal the user
+// navigated away from.
+let VIEW = null, suppress = 0, GEN = 0, NAV = 0;
 
 function setHash(...parts){
   const h = "#" + parts.map(encodeURIComponent).join("/");
@@ -1026,6 +1029,7 @@ function parseHash(){
 }
 
 async function route(){
+  const nav = ++NAV;   // invalidate row loads on every hash move, same-view included
   if (suppress){ suppress--; return; }
   const st = parseHash();
   const view = st.view && (REG[st.view] || st.view === "compare") ? st.view : Object.keys(REG)[0];
@@ -1049,9 +1053,8 @@ async function route(){
   if (st.row != null){
     // Compare keys are <model>.<key>; per-model views carry the model in the hash root.
     const model = view === "compare" ? st.key.split(".", 1)[0] : view;
-    const gen = GEN;
     const rec = REG[model] ? await contextRowFor(model, st.stage, st.row) : null;
-    if (gen !== GEN) return;
+    if (nav !== NAV) return;   // any newer hash move makes this modal stale
     const s = REG[model] && REG[model].stages.find(x => x.stage === st.stage);
     if (rec && s) openContext(rec, st.stage, s.hf_dataset, s.name, [view, st.stage, st.key, "row-" + st.row]);
   }
