@@ -72,17 +72,17 @@ def _cluster_wilson(records: list[dict], key: str = "shard") -> tuple[float, flo
         clusters.setdefault(r.get(key) or "", []).append(1 if r["match"] else 0)
     C = len(clusters)
     p = sum(r["match"] for r in records) / n
-    if C < 2:
-        return (*_wilson(p * n, n), float(n))
-    if p in (0.0, 1.0):
-        # Unanimous: every cluster agrees, so the observed between-cluster
-        # variance is zero and the design effect is unestimable — 0/0, not 1.
-        # Falling back to the document count would hand a clustered run the
-        # narrow interval for n independent observations, and "no matches at
-        # all" is a likely answer for a pointed question, so this branch would
-        # be hit exactly when the number matters. Use the cluster count, which
-        # is the conservative reading: assume documents sharing a shard told us
-        # one thing, not m_c things.
+    if C < 2 or p in (0.0, 1.0):
+        # The design effect is unestimable here, not 1. With a single cluster
+        # there is nothing to compare it against; with a unanimous outcome the
+        # observed between-cluster variance is zero, which is 0/0 rather than
+        # evidence of independence. Either way, falling back to the document
+        # count would hand a clustered run the narrow interval for n independent
+        # observations — and "no matches at all" is a likely answer to a pointed
+        # question, so that branch fires exactly when the number matters. Use the
+        # cluster count instead: assume documents sharing a shard told us one
+        # thing, not m_c things. At one document per shard C is n and nothing
+        # changes.
         return (*_wilson(p * C, C), float(C))
     ss = sum((sum(ys) - p * len(ys)) ** 2 for ys in clusters.values())
     var_cluster = C / ((C - 1) * n**2) * ss
