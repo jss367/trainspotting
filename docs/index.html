@@ -125,7 +125,9 @@
   .parrow { align-self: center; flex: none; color: var(--baseline); font-size: 16px; user-select: none; }
   .ptile.link { cursor: pointer; transition: border-color .15s, background .15s; }
   .ptile.link:hover { border-color: var(--baseline); background: var(--track); }
-  h3.stage, .basestage { scroll-margin-top: 66px; }
+  /* --stickyh tracks the real height of the sticky tab bar, which grows when the
+     tabs wrap onto extra rows on narrow viewports. */
+  h3.stage, .basestage { scroll-margin-top: calc(var(--stickyh, 54px) + 12px); }
   .flash { animation: flashbg 1.6s ease-out both; border-radius: 8px; }
   @keyframes flashbg { 0%, 100% { background: transparent; } 20% { background: var(--track); } }
 
@@ -689,10 +691,31 @@ async function contextFor(model, stage, prompt){
   return CTXMAPS[f].get(prompt.slice(0, KEY_CHARS));
 }
 
+// A tile can be clicked while render() is still awaiting its data files, before the
+// destination section exists. Remember the request and replay it once render finishes.
+let pendingJump = null;
+
+// The tab bar is sticky and wraps onto extra rows on narrow viewports, so its height
+// is not a constant. Publish it as --stickyh, which the scroll-margin rules read.
+function syncStickyHeight(){
+  const tabs = document.getElementById("tabs");
+  if (tabs) document.documentElement.style.setProperty("--stickyh", tabs.offsetHeight + "px");
+}
+
+function jumpToStage(stage){
+  const el = document.getElementById("sec-" + stage) || document.getElementById("mix-" + stage);
+  if (!el) return false;
+  syncStickyHeight();
+  el.scrollIntoView({behavior: "smooth", block: "start"});
+  el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+  return true;
+}
+
 async function render(model){
   const m = REG[model];
   const main = document.getElementById("main");
   main.innerHTML = "";
+  pendingJump = null;
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === model));
 
   const sources = await getData(model + ".sources.json");
@@ -730,10 +753,7 @@ async function render(model){
     t.setAttribute("role", "button");
     t.tabIndex = 0;
     const jump = () => {
-      const el = document.getElementById("sec-" + s.stage) || document.getElementById("mix-" + s.stage);
-      if (!el) return;
-      el.scrollIntoView({behavior: "smooth", block: "start"});
-      el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+      if (!jumpToStage(s.stage)) pendingJump = {model, stage: s.stage};
     };
     t.addEventListener("click", jump);
     t.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); jump(); } });
@@ -884,6 +904,13 @@ async function render(model){
     }
     main.appendChild(card);
   }
+
+  // Every destination is mounted now, so honor a tile clicked while data was loading.
+  if (pendingJump && pendingJump.model === model){
+    const {stage} = pendingJump;
+    pendingJump = null;
+    jumpToStage(stage);
+  }
 }
 
 (async () => {
@@ -895,6 +922,9 @@ async function render(model){
     b.onclick = () => render(name);
     tabs.appendChild(b);
   }
+  syncStickyHeight();
+  if (window.ResizeObserver) new ResizeObserver(syncStickyHeight).observe(tabs);
+  window.addEventListener("resize", syncStickyHeight);
   render(Object.keys(REG)[0]);
 })();
 </script>
