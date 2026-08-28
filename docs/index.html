@@ -123,6 +123,11 @@
   .ptile .v { font-size: 21px; font-weight: 650; margin: 3px 0 1px; white-space: nowrap; }
   .ptile .d { font-size: 12px; color: var(--text-secondary); }
   .parrow { align-self: center; flex: none; color: var(--baseline); font-size: 16px; user-select: none; }
+  .ptile.link { cursor: pointer; transition: border-color .15s, background .15s; }
+  .ptile.link:hover { border-color: var(--baseline); background: var(--track); }
+  h3.stage, .basestage { scroll-margin-top: 66px; }
+  .flash { animation: flashbg 1.6s ease-out both; border-radius: 8px; }
+  @keyframes flashbg { 0%, 100% { background: transparent; } 20% { background: var(--track); } }
 
   /* ---- stage sections ---- */
   h3.stage { font-size: 14px; margin: 26px 0 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -716,9 +721,22 @@ async function render(model){
     const size = s.tokens ? fmtTok(s.tokens) + " tok"
       : (sources && sources[s.stage] ? fmtEx(sources[s.stage].total) + " ex" : "—");
     t.innerHTML = `<div class="k">${s.stage}</div><div class="v">${size}</div><div class="d">${s.name}</div>`;
-    if (sources && sources[s.stage] && !s.tokens)
-      hover(t, `${sources[s.stage].total.toLocaleString()} examples${s.note ? "<br>" + s.note : ""}`);
-    else if (s.note) hover(t, s.note);
+    const tipParts = [];
+    if (sources && sources[s.stage] && !s.tokens) tipParts.push(`${sources[s.stage].total.toLocaleString()} examples`);
+    if (s.note) tipParts.push(esc(s.note));
+    tipParts.push(`<span style="color:var(--muted)">click to jump to this stage ↓</span>`);
+    hover(t, tipParts.join("<br>"));
+    t.classList.add("link");
+    t.setAttribute("role", "button");
+    t.tabIndex = 0;
+    const jump = () => {
+      const el = document.getElementById("sec-" + s.stage) || document.getElementById("mix-" + s.stage);
+      if (!el) return;
+      el.scrollIntoView({behavior: "smooth", block: "start"});
+      el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+    };
+    t.addEventListener("click", jump);
+    t.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); jump(); } });
     pipe.appendChild(t);
   });
   main.appendChild(facts);
@@ -739,6 +757,7 @@ async function render(model){
     for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
     const h = document.createElement("h3");
     h.className = "stage";
+    h.id = "sec-" + s.stage;
     h.style.setProperty("--bar", hueFor(s.stage));
     h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())} <span class="ds">— ${esc(s.name)}</span>`;
     const sub = document.createElement("p");
@@ -807,6 +826,7 @@ async function render(model){
       if (!st) continue;
       const h = document.createElement("h3");
       h.className = "stage";
+      h.id = "mix-" + s.stage;
       h.style.setProperty("--bar", hueFor(s.stage));
       h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())}
         <span class="ds">— ${esc(st.dataset)} (${st.total.toLocaleString()} examples)</span>`;
@@ -842,6 +862,27 @@ async function render(model){
       }
     }
     main.appendChild(mix);
+  }
+
+  // ---- base training stages (no published label columns, so prose only) ----
+  const base = m.stages.filter(s => !s.hf_dataset);
+  if (base.length){
+    const card = document.createElement("section");
+    card.className = "card";
+    card.innerHTML = `<h2>Base training stages</h2>
+      <p class="sub">Token counts from the OLMo 3 paper. Unlike the Dolci post-training sets, these
+        mixes aren't published with per-example label columns on HuggingFace, so there is no sampling
+        or classification here — this is what the release documents about each stage.</p>`;
+    for (const s of base){
+      const div = document.createElement("div");
+      div.className = "basestage";
+      div.id = "sec-" + s.stage;
+      div.innerHTML = `<h3 class="stage"><i class="sw" style="background:var(--baseline)"></i>${esc(s.stage.toUpperCase())}
+          <span class="ds">— ${esc(s.name)}${s.tokens ? " · " + fmtTok(s.tokens) + " tokens" : ""}</span></h3>
+        <p class="kv" style="margin:2px 0 0">${esc(s.note || "No further details recorded in the registry.")}</p>`;
+      card.appendChild(div);
+    }
+    main.appendChild(card);
   }
 }
 
