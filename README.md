@@ -189,6 +189,13 @@ faster and returns correlated documents — neighbours in a shard share a topic
 cluster — so an interval computed over the document count understates the true
 one by about that factor.
 
+A shard draw that yields no usable document — unreachable, an all-empty head, or
+every reachable record already seen — is replaced by another draw, which weights
+the sample by reachable-unique-document count on top of size. Every result file
+records how often that happened (`barren_draws`) and the site says so when it is
+non-zero: 0 for the pretrain and midtrain samples, 12 of ~390 draws for
+long-context, whose shards hold few reachable documents apiece.
+
 Shards are drawn with replacement, so the same shard can come up twice; the
 per-document RNG is seeded on the pick index as well as the shard path so a
 repeat draw yields a different document, and an explicit dedupe catches the

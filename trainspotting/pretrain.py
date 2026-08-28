@@ -81,8 +81,10 @@ def sampling_caveat(docs_per_shard: int = 1) -> str:
         )
     return (
         "Shards are drawn with probability proportional to size and one document "
-        "is taken uniformly from each, so draws are independent."
-        + _POSITION_CAVEAT
+        "is taken uniformly from each. Draws are near-independent rather than "
+        "independent: shards are drawn with replacement, so a shard picked twice "
+        "contributes two documents from one topic cluster. Intervals are computed "
+        "over distinct shards to account for it." + _POSITION_CAVEAT
     )
 
 
@@ -319,6 +321,10 @@ def sample_documents(
 
     Each returned document carries its shard path, so any row on the site can
     link back to the exact file on the Hub.
+
+    Returns the documents and the number of shard draws that yielded nothing —
+    the draws that got silently replaced, and therefore the size of the departure
+    from pure size-weighting.
     """
     if shards is None:
         shards, revision = list_shards(dataset, revision)
@@ -347,6 +353,12 @@ def sample_documents(
     out: list[dict] = []
     seen: set[tuple[str, str]] = set()
     pick_no = 0
+    # A shard draw that yields no usable document — unreachable, an all-empty
+    # head, or every reachable record already seen — gets silently replaced by
+    # the next batch. That reweights the sample by reachable-unique-document
+    # count on top of size, so count them: at zero the size weighting is exactly
+    # what it claims, and above zero the caller can see how far off it is.
+    barren = 0
 
     # Draw in batches until n documents are in hand rather than betting the whole
     # sample on one over-draw. How many documents a shard head yields varies by
@@ -373,6 +385,7 @@ def sample_documents(
                 # document each time instead of the same one twice.
                 random.Random(f"{seed}:{i}:{shard['path']}").shuffle(docs)
                 kept = 0
+                before = len(out)
                 for doc in docs:
                     if kept >= docs_per_shard:
                         break
@@ -402,10 +415,12 @@ def sample_documents(
                             "metadata": _metadata(doc),
                         }
                     )
+                if len(out) == before:
+                    barren += 1
         pick_no += len(batch)
 
     rng.shuffle(out)
-    return out[:n]
+    return out[:n], barren
 
 
 # Dolma 3 keeps its per-document provenance in a JSON string. These are the

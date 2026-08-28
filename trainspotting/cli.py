@@ -320,7 +320,7 @@ def cmd_pretrain(args):
         def progress(i, n, path):
             print(f"\r  fetching shard {i}/{n} ", end="", file=sys.stderr, flush=True)
 
-        docs = pretrain.sample_documents(
+        docs, barren = pretrain.sample_documents(
             dataset,
             args.sample,
             seed=args.seed,
@@ -370,6 +370,10 @@ def cmd_pretrain(args):
                     "requested": args.sample,
                     "seed": args.seed,
                     "docs_per_shard": args.docs_per_shard,
+                    # Shard draws replaced because they yielded nothing usable.
+                    # Non-zero means the sample is weighted by reachable unique
+                    # documents as well as by size.
+                    "barren_draws": barren,
                     "scope": s.get("sample_scope"),
                     "caveat": pretrain.sampling_caveat(args.docs_per_shard),
                     "shards": len(shards),
@@ -382,7 +386,8 @@ def cmd_pretrain(args):
         )
         print(
             f"{s['stage']}: {len(records)} documents -> {path}"
-            f" ({path.stat().st_size / 1e6:.1f} MB)",
+            f" ({path.stat().st_size / 1e6:.1f} MB)"
+            + (f", {barren} barren draw(s) replaced" if barren else ""),
             file=sys.stderr,
         )
 
