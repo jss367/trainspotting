@@ -5,7 +5,8 @@ Run after adding a model or committing new classify/ask/context/pretrain runs:
 
 Context and pretraining-document records are copied minified (they are bulk text
 the site fetches on click); everything else is copied verbatim so its diffs stay
-readable.
+readable. Each document sample also gets a `.corpus.json` summary — the same file
+without its records — so the site can draw the card without pulling megabytes.
 """
 
 import json
@@ -62,6 +63,19 @@ for f in sorted((ROOT / "results").glob("*.json")):
     total += (out / f.name).stat().st_size
     copied.append(f.name)
 
+    # A document sample is a few megabytes, nearly all of it the documents
+    # themselves, but the card above them needs only the counts. Split the
+    # summary out so opening the model tab costs kilobytes and the documents
+    # load when someone actually asks to read them.
+    if f.name.endswith(".docs.json"):
+        d = json.loads(f.read_text())
+        summary = {k: v for k, v in d.items() if k != "records"}
+        summary["records"] = len(d["records"])
+        name = f.name.replace(".docs.json", ".corpus.json")
+        (out / name).write_text(json.dumps(summary, separators=(",", ":")))
+        total += (out / name).stat().st_size
+        copied.append(name)
+
 # The manifest is what this run copied, plus the bulk files already sitting in
 # docs/data. Those are gitignored under results/, so a fresh checkout copies none
 # of them, and listing only the copied files would drop every committed context
@@ -88,7 +102,7 @@ for docs in out.glob("*.docs.json"):
     # the export the first time anyone samples a second model.
     model = docs.name.rsplit(f".{d['stage']}.docs.json", 1)[0]
     claimed = re.search(
-        rf"`{re.escape(model)}`\s+{re.escape(d['stage'])}\s*\|\s*(\d+) of ~",
+        rf"`{re.escape(model)}`\s+{re.escape(d['stage'])}\s*\|\s*(\d+)\s*\|",
         flat_readme,
     )
     if claimed and int(claimed.group(1)) != d["short_draws"]:

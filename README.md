@@ -200,9 +200,9 @@ says so when it is non-zero. For the committed samples:
 
 | Sample | Short draws |
 |---|---|
-| `olmo-3-7b-think` pretrain | 0 of ~318 |
-| `olmo-3-7b-think` midtrain | 0 of ~317 |
-| `olmo-3-7b-think` long-context | 7 of ~354 |
+| `olmo-3-7b-think` pretrain | 0 |
+| `olmo-3-7b-think` midtrain | 0 |
+| `olmo-3-7b-think` long-context | 7 |
 
 Long-context is the outlier because its shards hold few reachable documents
 apiece. Each model samples its own corpora, so these are per model, not global.

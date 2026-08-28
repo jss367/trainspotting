@@ -1047,11 +1047,11 @@ async function renderModel(model, gen){
   const corpusStages = m.stages.filter(s => s.sample_dataset);
   const corpusData = [];
   for (const s of corpusStages){
-    const d = await getData(`${model}.${s.stage}.docs.json`);
-    // These are the largest fetches on the page — multiple megabytes each — so
-    // they are the likeliest to still be in flight when a tab switch starts a
-    // newer render. Without this the old model's corpus, question and base cards
-    // get appended into the new model's <main>.
+    // Summaries only — kilobytes. The documents themselves are several megabytes
+    // and most visitors never open them, so they load on demand below.
+    const d = await getData(`${model}.${s.stage}.corpus.json`);
+    // Still guard: a tab switch during even a small fetch would otherwise append
+    // the old model's corpus, question and base cards into the new model's <main>.
     if (gen !== GEN) return;
     if (d) corpusData.push([s, d]);
   }
@@ -1082,7 +1082,7 @@ async function renderModel(model, gen){
       facts.innerHTML = `<span><b>${num(d.shards)}</b> shards</span>
         <span><b>${fmtBytes(d.bytes)}</b> compressed</span>
         <span><b>${Object.keys(d.groups).length}</b> source/topic groups</span>
-        <span><b>${num(d.records.length)}</b> documents sampled</span>${rev}`;
+        <span><b>${num(d.records)}</b> documents sampled</span>${rev}`;
       card.appendChild(facts);
 
       // A draw that yields nothing is silently replaced by another, which
@@ -1103,14 +1103,27 @@ async function renderModel(model, gen){
 
       const det = document.createElement("details");
       det.innerHTML = `<summary class="stage-sub" style="cursor:pointer;margin:12px 0 0">
-        read the ${d.records.length} sampled documents</summary>`;
+        read the ${num(d.records)} sampled documents</summary>`;
       const holder = document.createElement("div");
-      // Same pinned revision as the composition above: main moves, and a link to
-      // a shard that has since changed would not be provenance for this document.
-      holder.innerHTML = d.records
-        .map(r => docBlock({...r, dataset: d.dataset, revision: d.revision}))
-        .join("");
+      holder.innerHTML = `<p class="note">loading…</p>`;
       det.appendChild(holder);
+      // Fetch and build only once someone opens the list: the payload is a few
+      // megabytes and the blocks are hundreds of DOM nodes, and neither is worth
+      // anything to a visitor who came for the charts.
+      let loaded = false;
+      const stage = s.stage;
+      det.addEventListener("toggle", async () => {
+        if (!det.open || loaded) return;
+        loaded = true;
+        const full = await getData(`${model}.${stage}.docs.json`);
+        if (!full){ holder.innerHTML = `<p class="note">sample not available</p>`; return; }
+        // Same pinned revision as the composition above: main moves, and a link
+        // to a shard that has since changed would not be provenance for this
+        // document.
+        holder.innerHTML = full.records
+          .map(r => docBlock({...r, dataset: full.dataset, revision: full.revision}))
+          .join("");
+      });
       card.appendChild(det);
     }
     main.appendChild(card);
