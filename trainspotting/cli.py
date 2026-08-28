@@ -308,12 +308,12 @@ def cmd_pretrain(args):
     for s in stages:
         dataset = s["sample_dataset"]
         print(f"listing shards in {dataset} ...", file=sys.stderr)
-        shards = pretrain.list_shards(dataset)
+        shards, revision = pretrain.list_shards(dataset)
         groups = pretrain.group_sizes(shards)
         total_bytes = sum(x["size"] for x in shards)
         print(
             f"  {len(shards):,} shards, {total_bytes / 1e9:.0f} GB compressed,"
-            f" {len(groups)} source/topic groups",
+            f" {len(groups)} source/topic groups at {revision[:7]}",
             file=sys.stderr,
         )
 
@@ -324,6 +324,7 @@ def cmd_pretrain(args):
             dataset,
             args.sample,
             seed=args.seed,
+            revision=revision,
             shards=shards,
             docs_per_shard=args.docs_per_shard,
             progress=progress,
@@ -359,6 +360,10 @@ def cmd_pretrain(args):
             json.dumps(
                 {
                     "dataset": dataset,
+                    # The exact commit the composition and documents came from.
+                    # "main" moves; a result file that cites exact byte shares
+                    # has to say which revision it counted.
+                    "revision": revision,
                     "stage": s["stage"],
                     "name": s["name"],
                     "sample": len(records),

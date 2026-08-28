@@ -120,7 +120,9 @@ data/olmocr_science_pdfs-health/shard_00000044.jsonl.zst
 data/stack_edu-Python-0001/shard_00000009.jsonl.zst
 ```
 
-The sampler lists every shard once (cached in `.shard-cache/`), draws shards with
+The sampler resolves the dataset ref to a commit SHA, lists every shard once at
+that revision (cached in `.shard-cache/`, keyed on the SHA so an upstream
+republish invalidates it rather than serving stale paths), draws shards with
 probability proportional to compressed size, and pulls each pick's head with an
 HTTP range request — a zstd stream decodes from the front, so ~96 KB over the
 wire yields a document out of a shard that may be 400 MB. Nothing is downloaded.
@@ -132,7 +134,8 @@ otherwise drop out silently — biasing the sample against exactly the long
 documents that stage exists to train on.
 
 That makes the composition **exact**: it comes from the full file listing, not a
-sample. For `allenai/dolma3_mix-6T-1025-7B` — the actual mix Olmo 3 7B was
+sample, and every result file records the revision it was listed at so the count
+is checkable against a specific tree rather than a moving `main`. For `allenai/dolma3_mix-6T-1025-7B` — the actual mix Olmo 3 7B was
 pretrained on — that is 65,718 shards, 3.9 TB compressed, 49 source/topic groups.
 Only the documents are sampled.
 

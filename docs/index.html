@@ -940,10 +940,15 @@ async function render(model){
 
       const facts = document.createElement("p");
       facts.className = "corpusfacts";
+      // The revision is what makes "exact composition" checkable: main moves, so
+      // the link pins the counts to the tree they were taken from.
+      const rev = d.revision
+        ? ` <span>at <a href="https://huggingface.co/datasets/${escAttr(d.dataset)}/tree/${escAttr(d.revision)}" target="_blank" rel="noopener"><code>${esc(d.revision.slice(0,7))}</code></a></span>`
+        : "";
       facts.innerHTML = `<span><b>${num(d.shards)}</b> shards</span>
         <span><b>${fmtBytes(d.bytes)}</b> compressed</span>
         <span><b>${Object.keys(d.groups).length}</b> source/topic groups</span>
-        <span><b>${num(d.records.length)}</b> documents sampled</span>`;
+        <span><b>${num(d.records.length)}</b> documents sampled</span>${rev}`;
       card.appendChild(facts);
 
       if (d.scope || d.caveat){

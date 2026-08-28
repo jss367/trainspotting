@@ -197,14 +197,32 @@ def split_group(directory: str) -> tuple[str, str]:
     return name, ""
 
 
-def list_shards(dataset: str, revision: str = "main", cache: bool = True) -> list[dict]:
+def resolve_revision(dataset: str, revision: str = "main") -> str:
+    """The commit SHA a ref currently points at.
+
+    `main` moves. Everything downstream — the cache key, the tree walk, the
+    composition numbers a result file calls exact — is pinned to the SHA this
+    returns, so a republish upstream produces a different answer rather than
+    silently reusing the old one.
+    """
+    return _get(f"{HF_API}/{dataset}/revision/{revision}").json()["sha"]
+
+
+def list_shards(
+    dataset: str, revision: str = "main", cache: bool = True
+) -> tuple[list[dict], str]:
     """Every data shard in the repo, with its size and provenance labels.
 
-    A paginated walk of the Hub tree API — 6,081 shards over seven pages for the
-    150B mix, far more for the full 6T one. The listing only changes when Ai2
-    republishes the dataset, so it is cached on disk and every sample of the same
-    mix reuses it.
+    Returns the shards and the commit SHA they were listed at. A paginated walk
+    of the Hub tree API — 6,081 shards over seven pages for the 150B mix, far
+    more for the full 6T one — so it is cached on disk and every sample of the
+    same revision reuses it.
+
+    The cache is keyed on the resolved SHA rather than the ref, because a ref is
+    mutable: keying on "main" would serve obsolete paths and sizes forever after
+    Ai2 republished, while the output still described the composition as exact.
     """
+    revision = resolve_revision(dataset, revision)
     cached = _cache_path(dataset, revision)
     if cache and cached.exists():
         raw = json.loads(cached.read_text())
@@ -233,7 +251,7 @@ def list_shards(dataset: str, revision: str = "main", cache: bool = True) -> lis
     for path, size in raw:
         source, topic = split_group(path.split("/")[-2])
         shards.append({"path": path, "size": size, "source": source, "topic": topic})
-    return shards
+    return shards, revision
 
 
 def group_sizes(shards: list[dict]) -> dict[str, dict]:
@@ -302,7 +320,8 @@ def sample_documents(
     Each returned document carries its shard path, so any row on the site can
     link back to the exact file on the Hub.
     """
-    shards = shards if shards is not None else list_shards(dataset, revision)
+    if shards is None:
+        shards, revision = list_shards(dataset, revision)
     rng = random.Random(seed)
     weights = [s["size"] for s in shards]
 
