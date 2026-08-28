@@ -1031,14 +1031,18 @@ async function renderModel(model, gen){
     const rest = Object.keys(counts).filter(c => c !== "en" && c !== "undetermined")
       .sort((a,b) => counts[b] - counts[a]);
     const nonEn = rest.reduce((a,c) => a + counts[c], 0);
+    const undet = counts.undetermined || 0;
 
     const det = document.createElement("details");
     det.className = "langstage";
     det.style.setProperty("--bar", hueFor(s.stage));
+    // "detected", and the undetermined share beside it: the headline counts only
+    // prompts the detector called, and every sample has some it would not.
     det.innerHTML = `<summary>
       <i class="sw"></i><b>${esc(s.stage.toUpperCase())}</b>
       <span class="ds">— ${esc(s.name)}</span>
-      <span class="lsum"><em>${pct(nonEn/n)}</em> not English ·
+      <span class="lsum"><em>${pct(nonEn/n)}</em> detected non-English ·
+        ${undet ? `${pct(undet/n)} undetermined · ` : ""}
         ${rest.length} other language${rest.length === 1 ? "" : "s"} · n=${n}</span>
       <span class="caret">›</span></summary>`;
     const body = document.createElement("div");
@@ -1084,11 +1088,10 @@ async function renderModel(model, gen){
           `<b>${esc(langName(c))}</b> (${esc(c)})<br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
           false, recs.filter(r => r.label === c), ctxFor(s));
       }
-      const und = counts.undetermined || 0;
       const note = document.createElement("p");
       note.className = "note";
-      note.textContent = `${pct(nonEn/n)} of this sample is not English.`
-        + (und ? ` ${und} prompt${und>1?"s":""} (${pct(und/n)}) ${und>1?"were":"was"} too short, too much code, or too evenly mixed to call, and ${und>1?"are":"is"} counted in neither group.` : "");
+      note.textContent = `${pct(nonEn/n)} of this sample was detected as not English.`
+        + (undet ? ` ${undet} prompt${undet>1?"s":""} (${pct(undet/n)}) ${undet>1?"were":"was"} too short, too much code, or too evenly mixed to call, and ${undet>1?"are":"is"} counted in neither group.` : "");
       body.appendChild(note);
     });
   }
