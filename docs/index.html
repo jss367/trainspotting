@@ -670,7 +670,9 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
   if (records && records.length){
     row.classList.add("clickable");
     row.title = "click to see the sampled examples behind this count";
-    if (ctx.linkKey) row.dataset.link = `${ctx.stage}/${ctx.linkKey}`;
+    // Keep the backing records reachable from the element: row deep links
+    // verify membership against them before opening the context modal.
+    if (ctx.linkKey){ row.dataset.link = `${ctx.stage}/${ctx.linkKey}`; row._records = records; }
     let panel = null;
     row._toggle = (writeHash = true) => {
       if (panel){
@@ -1128,12 +1130,19 @@ async function renderCompare(gen){
       card.innerHTML = `<h2>Custom question — model against model</h2>
         <p class="sub">“${esc(question)}” — share of sampled prompts judged a match by ${classifier}.</p>${legendFor(bucketModels)}`;
       const max = Math.max(...[...rowsByStage.values()].flat().map(r => r.ci[1]), 0.01);
-      for (const [stage, rows] of rowsByStage){
+      // Iterate the registered stage union, not just the stages with loaded
+      // rows: a stage where NO model has a file for this question still gets
+      // its header and missing-run notes, so a partially committed ask
+      // experiment can't read as a complete one.
+      for (const stage of stages){
+        const rows = rowsByStage.get(stage) || [];
+        const missing = missingByStage.get(stage) || [];
+        if (!rows.length && !missing.length) continue;
         const h = document.createElement("h3");
         h.className = "stage";
         h.textContent = stage.toUpperCase();
         card.appendChild(h);
-        for (const m of missingByStage.get(stage) || []){
+        for (const m of missing){
           const p = document.createElement("p");
           p.className = "note";
           p.textContent = `${m} — no ask run committed for this stage`;
@@ -1239,8 +1248,14 @@ async function applyHashState(nav){
     // Only honor the row when the stage/key named a real drill-down (`el`
     // resolved above): a hash whose key names no bar would otherwise claim a
     // nonexistent label/ask result while a modal lends it false credibility.
-    const rec = el && REG[model] ? await contextRowFor(model, st.stage, st.row) : null;
+    let rec = el && REG[model] ? await contextRowFor(model, st.stage, st.row) : null;
     if (nav !== NAV) return;   // any newer hash move makes this modal stale
+    // A context file covers the whole stage, so a stale/edited row number can
+    // resolve to a record behind a DIFFERENT bar (e.g. a capability record
+    // under a helpfulness link). Only honor rows that belong to the bar this
+    // hash names: its records carry the prompts, and context records are
+    // keyed by the same KEY_CHARS prompt prefix (see contextFor).
+    if (rec && !el._records.some(r => r.prompt.slice(0, KEY_CHARS) === rec.key)) rec = null;
     const s = REG[model] && REG[model].stages.find(x => x.stage === st.stage);
     if (rec && s) openContext(rec, st.stage, s.hf_dataset, s.name, [VIEW, st.stage, st.key, "row-" + st.row]);
     // Lookup failed (stale/edited hash naming a row that no longer exists):
