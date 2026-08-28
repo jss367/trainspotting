@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Spot what's in a model's training data — stage sizes, exact mix composition, and how much of post-training is about being helpful, honest, and harmless.">
 <title>trainspotting — what was this model trained on?</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232a78d6' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M9 21 11.3 3M15 21 12.7 3M8.4 17h7.2M9.4 11h5.2M10.3 6h3.4'/%3E%3C/svg%3E">
 <style>
   :root {
     color-scheme: light;
@@ -16,6 +18,10 @@
     --baseline:  #c3c2b7;
     --border:    rgba(11,11,11,0.10);
     --series-1:  #2a78d6;
+    /* stage identity — the first three categorical slots, validated all-pairs */
+    --stage-sft:  #2a78d6;
+    --stage-dpo:  #eb6834;
+    --stage-rlvr: #1baf7a;
     --track:     #f0efec;
     /* diverging pole for "trained away from" (blue ↔ red, gray midpoint) */
     --neg:       #e34948;
@@ -23,7 +29,8 @@
     --ramp-lo:   #86b6ef;
     --ramp-hi:   #2a78d6;
     --meter-track: #cde2fb;
-    --scrim:     rgba(11,11,11,0.35);
+    --scrim:     rgba(11,11,11,0.4);
+    --shadow-card: 0 1px 2px rgba(11,11,11,.03), 0 8px 24px rgba(11,11,11,.04);
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -37,58 +44,122 @@
       --baseline:  #383835;
       --border:    rgba(255,255,255,0.10);
       --series-1:  #3987e5;
+      --stage-sft:  #3987e5;
+      --stage-dpo:  #d95926;
+      --stage-rlvr: #199e70;
       --track:     #262624;
       --neg:       #e66767;
       --ramp-lo:   #184f95;
       --ramp-hi:   #3987e5;
       --meter-track: #0d366b;
       --scrim:     rgba(0,0,0,0.6);
+      --shadow-card: none;
     }
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--page); color: var(--text-primary);
     font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 920px; margin: 0 auto; padding: 32px 20px 64px; }
-  header h1 { font-size: 26px; margin: 0 0 2px; }
-  header p  { margin: 0 0 20px; color: var(--text-secondary); }
-  header a  { color: inherit; }
-  .tabs { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+  :focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 36px 20px 64px; }
+
+  /* ---- masthead ---- */
+  .masthead { display: flex; align-items: flex-start; gap: 14px; margin: 0 0 20px; }
+  .masthead .mark { flex: none; color: var(--series-1); margin-top: 3px; }
+  header h1 { font-size: 28px; letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
+  header .tagline { margin: 4px 0 0; color: var(--text-secondary); font-size: 14px; max-width: 62ch; }
+  header a { color: inherit; }
+  .ghlink {
+    margin-left: auto; flex: none; align-self: center;
+    font-size: 13px; color: var(--text-secondary); text-decoration: none;
+    border: 1px solid var(--border); border-radius: 999px; padding: 5px 13px;
+    background: var(--surface-1); transition: color .15s, border-color .15s;
+  }
+  .ghlink:hover { color: var(--text-primary); border-color: var(--baseline); }
+  @media (max-width: 640px) { .ghlink { display: none; } }
+
+  /* ---- model tabs ---- */
+  .tabs {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; gap: 8px; flex-wrap: wrap;
+    padding: 10px 0 12px; margin: 0 0 14px;
+    background: color-mix(in srgb, var(--page) 86%, transparent);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
   .tabs button {
-    font: inherit; padding: 6px 14px; border-radius: 999px; cursor: pointer;
+    font: inherit; font-size: 13px; font-weight: 550; padding: 7px 15px;
+    border-radius: 999px; cursor: pointer;
     border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary);
+    transition: color .15s, border-color .15s, background .15s;
   }
+  .tabs button:hover { color: var(--text-primary); border-color: var(--baseline); }
   .tabs button[aria-pressed="true"] {
-    color: var(--text-primary); border-color: var(--series-1);
-    box-shadow: inset 0 0 0 1px var(--series-1);
+    background: var(--text-primary); border-color: var(--text-primary); color: var(--page);
   }
+
+  /* ---- cards ---- */
   .card {
     background: var(--surface-1); border: 1px solid var(--border);
-    border-radius: 10px; padding: 20px 22px; margin-bottom: 20px;
+    border-radius: 14px; padding: 22px 24px 24px; margin-bottom: 18px;
+    box-shadow: var(--shadow-card);
+    animation: rise .35s ease both;
   }
-  .card h2 { font-size: 16px; margin: 0 0 4px; }
+  .card h2 { font-size: 17px; letter-spacing: -0.01em; margin: 0 0 4px; }
   .card > p.sub { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
-  .tiles { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-  .tile { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
-  .tile .v { font-size: 22px; font-weight: 650; }
-  .tile .k { font-size: 12px; color: var(--text-secondary); }
-  .tile .d { font-size: 12px; color: var(--muted); }
-  h3.stage { font-size: 14px; margin: 22px 0 2px; }
-  h3.stage:first-of-type { margin-top: 8px; }
+
+  /* ---- pipeline flow ---- */
+  .pipe { display: flex; align-items: stretch; gap: 6px; overflow-x: auto; padding: 4px 0 6px; }
+  .ptile {
+    flex: 1 1 0; min-width: 118px;
+    border: 1px solid var(--border); border-top: 3px solid var(--bar, var(--baseline));
+    border-radius: 10px; padding: 11px 13px 12px;
+  }
+  .ptile .k {
+    font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; white-space: nowrap;
+  }
+  .ptile .v { font-size: 21px; font-weight: 650; margin: 3px 0 1px; white-space: nowrap; }
+  .ptile .d { font-size: 12px; color: var(--text-secondary); }
+  .parrow { align-self: center; flex: none; color: var(--baseline); font-size: 16px; user-select: none; }
+
+  /* ---- stage sections ---- */
+  h3.stage { font-size: 14px; margin: 26px 0 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  h3.stage:first-of-type { margin-top: 10px; }
+  h3.stage i.sw, .ctxhead i.sw {
+    width: 10px; height: 10px; border-radius: 3px; flex: none;
+    background: var(--bar, var(--series-1)); display: inline-block;
+  }
+  h3.stage .ds { font-weight: 400; color: var(--muted); font-size: 12px; }
   .stage-sub { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
-  .grp { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 10px 0 4px; }
-  .row { display: grid; grid-template-columns: 170px 1fr 130px; gap: 10px; align-items: center; padding: 3px 0; }
+  .grp {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); margin: 14px 0 4px;
+  }
+  .grp::after { content: ""; flex: 1; height: 1px; background: var(--grid); }
+
+  /* ---- bar rows ---- */
+  .row {
+    display: grid; grid-template-columns: 170px 1fr 130px; gap: 10px; align-items: center;
+    padding: 3px 6px; margin: 0 -6px; border-radius: 7px;
+  }
   .row .val { white-space: nowrap; }
   .row .lbl { font-size: 13px; color: var(--text-secondary); text-align: right; }
   .row .val { font-size: 13px; font-variant-numeric: tabular-nums; }
   .row .val small { color: var(--muted); }
+  @media (max-width: 640px) {
+    .row { grid-template-columns: 110px 1fr 86px; }
+    .row .val small { display: none; }
+  }
   .trackbar { position: relative; height: 12px; background: var(--track); border-radius: 4px; }
   .fill {
     position: absolute; left: 0; top: 1px; bottom: 1px;
-    background: var(--series-1); border-radius: 0 4px 4px 0; min-width: 1px;
+    background: var(--bar, var(--series-1)); border-radius: 0 4px 4px 0; min-width: 1px;
+    animation: grow .5s cubic-bezier(.2,.7,.3,1) both;
   }
-  .fill.zero { background: transparent; }
+  .fill.zero { background: transparent; animation: none; }
   .ci {
     position: absolute; top: 50%; height: 0; border-top: 1.5px solid var(--muted); opacity: .9;
   }
@@ -97,10 +168,10 @@
   }
   .ci::before { left: 0; } .ci::after { right: 0; }
   .note { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
-  .row.clickable { cursor: pointer; border-radius: 6px; }
+  .row.clickable { cursor: pointer; transition: background .12s; }
   .row.clickable:hover { background: var(--track); }
   .drill {
-    border-left: 2px solid var(--grid); margin: 4px 0 10px 12px; padding: 4px 0 4px 12px;
+    border-left: 2px solid var(--bar, var(--grid)); margin: 4px 0 12px 12px; padding: 4px 0 4px 14px;
   }
   .drill .dnote { font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
   .pitem { margin: 0 0 6px; }
@@ -120,11 +191,15 @@
   .ctxtext { max-height: 280px; overflow: auto; }
   .ctxbtn {
     font: inherit; font-size: 12px; cursor: pointer; margin: 2px 0 2px;
-    padding: 3px 10px; border-radius: 999px; background: transparent;
-    border: 1px solid var(--series-1); color: var(--text-primary);
+    padding: 4px 11px; border-radius: 999px; background: transparent;
+    border: 1px solid var(--bar, var(--series-1)); color: var(--text-primary);
+    transition: background .12s;
   }
   .ctxbtn:hover { background: var(--track); }
-  footer { color: var(--muted); font-size: 13px; margin-top: 28px; }
+  footer {
+    color: var(--muted); font-size: 13px; margin-top: 32px;
+    padding-top: 18px; border-top: 1px solid var(--grid);
+  }
   footer a { color: inherit; }
   #tip {
     position: fixed; pointer-events: none; z-index: 20; display: none; max-width: 300px;
@@ -136,21 +211,23 @@
   /* ---- training-context dialog ---- */
   dialog#ctx {
     width: min(1040px, 94vw); max-height: 88vh; overflow: auto; padding: 0; border: 1px solid var(--border);
-    border-radius: 12px; background: var(--surface-1); color: var(--text-primary);
-    box-shadow: 0 12px 40px rgba(0,0,0,.28);
+    border-radius: 16px; background: var(--surface-1); color: var(--text-primary);
+    box-shadow: 0 24px 80px rgba(0,0,0,.32);
   }
-  dialog#ctx::backdrop { background: var(--scrim); }
+  dialog#ctx::backdrop { background: var(--scrim); backdrop-filter: blur(3px); }
   .ctxhead {
     position: sticky; top: 0; z-index: 2; display: flex; gap: 12px; align-items: baseline;
     justify-content: space-between; padding: 16px 20px 12px;
     background: var(--surface-1); border-bottom: 1px solid var(--border);
   }
-  .ctxhead h2 { font-size: 15px; margin: 0 0 3px; }
+  .ctxhead h2 { font-size: 15px; margin: 0 0 3px; display: flex; align-items: center; gap: 8px; }
   .ctxhead p { margin: 0; font-size: 13px; color: var(--text-secondary); max-width: 720px; }
   .ctxclose {
     font: inherit; cursor: pointer; border: 1px solid var(--border); border-radius: 8px;
     background: transparent; color: var(--text-secondary); padding: 4px 10px;
+    transition: color .15s, border-color .15s;
   }
+  .ctxclose:hover { color: var(--text-primary); border-color: var(--baseline); }
   .ctxbody { padding: 14px 20px 24px; }
   .ctxsec { margin: 0 0 20px; }
   .ctxsec > h3 {
@@ -217,15 +294,30 @@
   .turn .role b { color: var(--text-primary); font-weight: 600; letter-spacing: 0; text-transform: none; font-size: 12px; }
   .kv { font-size: 13px; color: var(--text-secondary); margin: 0 0 8px; }
   .kv b { color: var(--text-primary); }
+
+  .lenbar, .meter > div { animation: grow .5s cubic-bezier(.2,.7,.3,1) both; }
+  @keyframes grow { from { width: 0; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001s !important; transition-duration: .001s !important; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>trainspotting</h1>
-    <p>Spot what's in a model's training data — stage sizes, exact mix composition,
-       and how much of post-training is about being helpful, honest, and harmless.
-       <a href="https://github.com/jss367/trainspotting">GitHub</a></p>
+    <div class="masthead">
+      <svg class="mark" width="30" height="30" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M9 21 11.3 3M15 21 12.7 3M8.4 17h7.2M9.4 11h5.2M10.3 6h3.4"/>
+      </svg>
+      <div>
+        <h1>trainspotting</h1>
+        <p class="tagline">Spot what's in a model's training data — stage sizes, exact mix
+           composition, and how much of post-training is about being helpful, honest, and harmless.</p>
+      </div>
+      <a class="ghlink" href="https://github.com/jss367/trainspotting">GitHub&nbsp;↗</a>
+    </div>
   </header>
   <nav class="tabs" id="tabs" aria-label="model"></nav>
   <main id="main"></main>
@@ -260,7 +352,11 @@ const VALUE_LABELS = new Set(["helpfulness","honesty","harmlessness"]);
 const NICE = {helpfulness:"helpful", honesty:"honest", harmlessness:"harmless",
   capability:"capability (math/code/science)", instruction_following:"precise instruction following",
   tool_use:"tool use", other:"other"};
+// Each post-training stage keeps one hue everywhere it appears (tiles, headers, bars).
+const STAGE_HUE = {sft: "var(--stage-sft)", dpo: "var(--stage-dpo)", rlvr: "var(--stage-rlvr)"};
+const hueFor = stage => STAGE_HUE[stage] || "var(--series-1)";
 const fmtTok = n => n >= 1e12 ? (n/1e12).toFixed(1)+"T" : n >= 1e9 ? Math.round(n/1e9)+"B" : n.toLocaleString();
+const fmtEx = n => n >= 1e6 ? (n/1e6).toFixed(2)+"M" : n >= 1e3 ? Math.round(n/1e3)+"K" : String(n);
 const pct = x => (x*100).toFixed(1)+"%";
 const num = n => (n ?? 0).toLocaleString();
 
@@ -494,7 +590,8 @@ document.getElementById("ctxclose").onclick = () => dlg.close();
 dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); });
 
 function openContext(rec, stage, dataset, stageName){
-  document.getElementById("ctxtitle").textContent = `${stage.toUpperCase()} — ${stageName}`;
+  document.getElementById("ctxtitle").innerHTML =
+    `<i class="sw" style="background:${hueFor(stage)}"></i>${esc(stage.toUpperCase())} — ${esc(stageName)}`;
   document.getElementById("ctxlede").textContent = STAGE_LEDE[stage] || "";
   const body = document.getElementById("ctxbody");
   body.innerHTML = (RENDER[stage] || RENDER.sft)(rec, dataset);
@@ -511,6 +608,7 @@ function openContext(rec, stage, dataset, stageName){
 function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx){
   const row = document.createElement("div");
   row.className = "row";
+  if (ctx) row.style.setProperty("--bar", hueFor(ctx.stage));
   const w = f => Math.min(100, f/max*100);
   row.innerHTML = `
     <div class="lbl" style="${isValue ? "font-weight:600;color:var(--text-primary)" : ""}">${label}</div>
@@ -529,6 +627,7 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
       if (panel){ panel.remove(); panel = null; return; }
       panel = document.createElement("div");
       panel.className = "drill";
+      panel.style.setProperty("--bar", hueFor(ctx.stage));
       const dpoNote = ctx.stage === "dpo"
         ? " These prompts are often deliberately harmful: the training signal is the preference between the two responses, not the prompt."
         : "";
@@ -603,17 +702,25 @@ async function render(model){
   facts.className = "card";
   facts.innerHTML = `<h2>Training pipeline</h2>
     <p class="sub">${m.hf_model} — token counts from the OLMo 3 paper; example counts from the datasets themselves.</p>
-    <div class="tiles"></div>`;
-  const tiles = facts.querySelector(".tiles");
-  for (const s of m.stages){
+    <div class="pipe"></div>`;
+  const pipe = facts.querySelector(".pipe");
+  m.stages.forEach((s, i) => {
+    if (i){
+      const a = document.createElement("div");
+      a.className = "parrow"; a.textContent = "→"; a.setAttribute("aria-hidden", "true");
+      pipe.appendChild(a);
+    }
     const t = document.createElement("div");
-    t.className = "tile";
+    t.className = "ptile";
+    if (STAGE_HUE[s.stage]) t.style.setProperty("--bar", STAGE_HUE[s.stage]);
     const size = s.tokens ? fmtTok(s.tokens) + " tok"
-      : (sources && sources[s.stage] ? sources[s.stage].total.toLocaleString() + " ex" : "—");
-    t.innerHTML = `<div class="v">${size}</div><div class="k">${s.stage}</div><div class="d">${s.name}</div>`;
-    if (s.note) hover(t, s.note);
-    tiles.appendChild(t);
-  }
+      : (sources && sources[s.stage] ? fmtEx(sources[s.stage].total) + " ex" : "—");
+    t.innerHTML = `<div class="k">${s.stage}</div><div class="v">${size}</div><div class="d">${s.name}</div>`;
+    if (sources && sources[s.stage] && !s.tokens)
+      hover(t, `${sources[s.stage].total.toLocaleString()} examples${s.note ? "<br>" + s.note : ""}`);
+    else if (s.note) hover(t, s.note);
+    pipe.appendChild(t);
+  });
   main.appendChild(facts);
 
   // ---- HHH classification ----
@@ -632,7 +739,8 @@ async function render(model){
     for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
     const h = document.createElement("h3");
     h.className = "stage";
-    h.textContent = s.stage.toUpperCase() + " — " + s.name;
+    h.style.setProperty("--bar", hueFor(s.stage));
+    h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())} <span class="ds">— ${esc(s.name)}</span>`;
     const sub = document.createElement("p");
     sub.className = "stage-sub";
     sub.textContent = `${d.dataset} · n=${n} sampled prompts labeled by ${d.classifier}`;
@@ -699,7 +807,9 @@ async function render(model){
       if (!st) continue;
       const h = document.createElement("h3");
       h.className = "stage";
-      h.textContent = s.stage.toUpperCase() + " — " + st.dataset + ` (${st.total.toLocaleString()} examples)`;
+      h.style.setProperty("--bar", hueFor(s.stage));
+      h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())}
+        <span class="ds">— ${esc(st.dataset)} (${st.total.toLocaleString()} examples)</span>`;
       mix.appendChild(h);
       for (const [col, freq] of Object.entries(st.columns)){
         const sub = document.createElement("p");
@@ -712,6 +822,7 @@ async function render(model){
           const f = c/st.total;
           const row = document.createElement("div");
           row.className = "row";
+          row.style.setProperty("--bar", hueFor(s.stage));
           row.innerHTML = `
             <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v}</div>
             <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
