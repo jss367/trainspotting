@@ -58,6 +58,11 @@ LONG_DOC_FACTOR = 8
 # and an honest count rather than an endless loop.
 MAX_BATCHES = 6
 
+# How far past the shortfall each batch draws. Small: the whole batch is fetched
+# before any of it is read, so the excess is pure wasted network, and the top-up
+# loop already handles a batch that falls short.
+OVERDRAW = 1.05
+
 _POSITION_CAVEAT = (
     " What is not corrected for is position: a range request only reaches the "
     "front of a shard, so each document comes from its shard's first few "
@@ -373,12 +378,20 @@ def sample_documents(
     # two orders of magnitude — hundreds for stack_edu, one for a long-context
     # shard whose first document is 200k characters — so a picks count derived
     # from docs_per_shard alone can fall far short of what was asked for.
+    #
+    # The margin above the shortfall is deliberately small. A batch is fetched in
+    # full before any of it is read, so anything drawn beyond n is wasted network
+    # — at the old 1.3x that was ~91 needless shard reads per default run. The
+    # top-up loop already covers a batch that comes up short, which makes a large
+    # first batch insurance against a risk that is already insured. Membership
+    # stays keyed to the pick index rather than to arrival order, so shrinking the
+    # batch does not make the sample depend on which request returns first.
     for _ in range(MAX_BATCHES):
         if len(out) >= n:
             break
         shortfall = n - len(out)
         batch = rng.choices(
-            shards, weights=weights, k=max(1, int(shortfall / docs_per_shard * 1.3) + 1)
+            shards, weights=weights, k=max(1, int(shortfall / docs_per_shard * OVERDRAW) + 2)
         )
         with ThreadPoolExecutor(max_workers=workers) as ex:
             for i, shard, docs in ex.map(

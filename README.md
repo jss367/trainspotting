@@ -199,6 +199,11 @@ Every result file records how often it still did (`short_draws`) and the site
 says so when it is non-zero: 0 for the pretrain and midtrain samples, 12 of ~390
 draws for long-context, whose shards hold few reachable documents apiece.
 
+Each batch draws only slightly past the shortfall, because a batch is fetched in
+full before any of it is read — anything drawn beyond the target is wasted
+network. A default 300-document run costs about 318 shard reads rather than the
+391 a larger over-draw would schedule up front.
+
 Shards are drawn with replacement, so the same shard can come up twice; the
 per-document RNG is seeded on the pick index as well as the shard path so a
 repeat draw yields a different document, and an explicit dedupe catches the
