@@ -752,8 +752,10 @@ async function render(model){
     t.classList.add("link");
     t.setAttribute("role", "button");
     t.tabIndex = 0;
+    // Always overwrite the queue: the newest click wins, so a jump that lands now
+    // discards an earlier one still waiting on its section to mount.
     const jump = () => {
-      if (!jumpToStage(s.stage)) pendingJump = {model, stage: s.stage};
+      pendingJump = jumpToStage(s.stage) ? null : {model, stage: s.stage};
     };
     t.addEventListener("click", jump);
     t.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); jump(); } });
