@@ -33,7 +33,11 @@ def excerpt(text: str, budget: int = MAX_DOCUMENT_CHARS, parts: int = 3) -> str:
     text = str(text)
     if len(text) <= budget:
         return text
-    span = budget // parts
+    # The markers count against the budget. Leaving them out overflowed it by 14
+    # characters, which the classifier then truncated away — so the site showed
+    # 14 characters more than was judged, breaking the one property this budget
+    # exists to guarantee.
+    span = (budget - len(EXCERPT_MARKER) * (parts - 1)) // parts
     step = (len(text) - span) // (parts - 1)
     return EXCERPT_MARKER.join(text[i * step : i * step + span] for i in range(parts))
 
