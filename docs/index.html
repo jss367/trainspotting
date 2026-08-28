@@ -617,7 +617,15 @@ const dlg = document.getElementById("ctx");
 // Wired on every close path explicitly (not the dialog close event, which some
 // Chrome builds don't deliver); cancel covers Esc.
 function closeCtx(){
-  if (dlg._backLink){ setHash(...dlg._backLink); dlg._backLink = null; }
+  if (dlg._backLink){
+    // Only rewrite the hash if it still shows the row segment this modal
+    // wrote on open. If navigation has moved the hash anywhere else since
+    // (history nav, manual edit, a new view mid-render), the backlink is
+    // stale and writing it would point the URL at the old view.
+    const prefix = "#" + dlg._backLink.map(encodeURIComponent).join("/") + "/row-";
+    if (location.hash.startsWith(prefix)) setHash(...dlg._backLink);
+    dlg._backLink = null;
+  }
   if (dlg.open) dlg.close();
 }
 document.getElementById("ctxclose").onclick = closeCtx;
@@ -1124,8 +1132,14 @@ function parseHash(){
 async function route(){
   const nav = ++NAV;   // invalidate in-flight work on every hash move, same-view included
   if (suppress){ suppress--; return; }
-  const v = parseHash().view;
+  const st = parseHash();
+  const v = st.view;
   const view = v && (REG[v] || v === "compare") ? v : Object.keys(REG)[0];
+  // An open modal this hash does not keep (no row segment, or a different
+  // view) belongs to the outgoing state: clear its backlink and close it
+  // BEFORE any await, so closing the still-visible dialog mid-render can't
+  // write a stale backlink over the new hash.
+  if (dlg.open && (st.row == null || view !== VIEW)){ dlg._backLink = null; dlg.close(); }
   if (view !== VIEW){
     VIEW = view;
     const gen = ++GEN;
