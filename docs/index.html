@@ -1203,6 +1203,10 @@ async function applyHashState(nav){
     if (nav !== NAV) return;   // any newer hash move makes this modal stale
     const s = REG[model] && REG[model].stages.find(x => x.stage === st.stage);
     if (rec && s) openContext(rec, st.stage, s.hf_dataset, s.name, [VIEW, st.stage, st.key, "row-" + st.row]);
+    // Lookup failed (stale/edited hash naming a row that no longer exists):
+    // an open dialog would keep showing the previous record under a hash
+    // that doesn't name it — clear its backlink and close it.
+    else if (dlg.open){ dlg._backLink = null; dlg.close(); }
   }
 }
 
