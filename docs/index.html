@@ -970,22 +970,51 @@ async function render(model){
     main.appendChild(mix);
   }
 
-  // ---- base training stages (no published label columns, so prose only) ----
+  // ---- base training stages (corpora are terabytes; facts come from the
+  // paper and each mix's own dataset card, not from sampling) ----
   const base = m.stages.filter(s => !s.hf_dataset);
   if (base.length){
     const card = document.createElement("section");
     card.className = "card";
     card.innerHTML = `<h2>Base training stages</h2>
-      <p class="sub">Token counts from the OLMo 3 paper. Unlike the Dolci post-training sets, these
-        mixes aren't published with per-example label columns on HuggingFace, so there is no sampling
-        or classification here — this is what the release documents about each stage.</p>`;
+      <p class="sub">Token counts and mix composition from the OLMo 3 paper (Table 4) and each mix's
+        dataset card. These corpora are terabytes, so unlike the Dolci sets there is no prompt
+        sampling or classification here — the numbers are the release's own.</p>`;
+    // shares under 0.1% would round to a flat 0.0%
+    const pctc = f => f < 0.001 ? (f*100).toFixed(2)+"%" : pct(f);
     for (const s of base){
       const div = document.createElement("div");
       div.className = "basestage";
       div.id = "sec-" + s.stage;
+      const link = s.hf
+        ? `<span class="chip link"><a href="https://huggingface.co/datasets/${escAttr(s.hf)}"
+             target="_blank" rel="noopener">${esc(s.hf)} ↗</a></span>` : "";
       div.innerHTML = `<h3 class="stage"><i class="sw" style="background:var(--baseline)"></i>${esc(s.stage.toUpperCase())}
-          <span class="ds">— ${esc(s.name)}${s.tokens ? " · " + fmtTok(s.tokens) + " tokens" : ""}</span></h3>
-        <p class="kv" style="margin:2px 0 0">${esc(s.note || "No further details recorded in the registry.")}</p>`;
+          <span class="ds">— ${esc(s.name)}${s.tokens ? " · " + fmtTok(s.tokens) + " tokens" : ""}</span>${link}</h3>
+        <p class="kv" style="margin:2px 0 8px">${esc(s.note || "No further details recorded in the registry.")}</p>`;
+      if (s.composition && s.composition.length){
+        const total = s.composition.reduce((a,c) => a + c.tokens, 0);
+        const maxf = Math.max(...s.composition.map(c => c.tokens/total));
+        // Some stages train on less than the full published mix (the 32B runs
+        // 5.50T of a recipe whose card counts 5.93T). When the stage's declared
+        // tokens don't match the composition total, the absolute per-source
+        // counts describe the mix, not this run — show only the mix's own
+        // shares, and put a clearly-approximate scaled count in the tooltip.
+        const exact = !s.tokens || Math.abs(total - s.tokens) <= 0.005 * s.tokens;
+        for (const c of s.composition){
+          const f = c.tokens/total;
+          const row = document.createElement("div");
+          row.className = "row";
+          row.innerHTML = `
+            <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</div>
+            <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
+            <div class="val">${pctc(f)}${exact ? ` <small>${fmtTok(c.tokens)}</small>` : ""}</div>`;
+          hover(row.querySelector(".trackbar"), exact
+            ? `<b>${escAttr(c.name)}</b><br>${fmtTok(c.tokens)} of ${fmtTok(total)} tokens (${pctc(f)})`
+            : `<b>${escAttr(c.name)}</b><br>${pctc(f)} of the mix recipe — ≈${fmtTok(f*s.tokens)} of this ${fmtTok(s.tokens)}-token run`);
+          div.appendChild(row);
+        }
+      }
       card.appendChild(div);
     }
     main.appendChild(card);
