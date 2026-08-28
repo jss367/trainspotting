@@ -128,6 +128,13 @@
   .ptile .v { font-size: 21px; font-weight: 650; margin: 3px 0 1px; white-space: nowrap; }
   .ptile .d { font-size: 12px; color: var(--text-secondary); }
   .parrow { align-self: center; flex: none; color: var(--baseline); font-size: 16px; user-select: none; }
+  .ptile.link { cursor: pointer; transition: border-color .15s, background .15s; }
+  .ptile.link:hover { border-color: var(--baseline); background: var(--track); }
+  /* --stickyh tracks the real height of the sticky tab bar, which grows when the
+     tabs wrap onto extra rows on narrow viewports. */
+  h3.stage, .basestage { scroll-margin-top: calc(var(--stickyh, 54px) + 12px); }
+  .flash { animation: flashbg 1.6s ease-out both; border-radius: 8px; }
+  @keyframes flashbg { 0%, 100% { background: transparent; } 20% { background: var(--track); } }
 
   /* ---- stage sections ---- */
   h3.stage { font-size: 14px; margin: 26px 0 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -154,6 +161,13 @@
   }
   .row .val { white-space: nowrap; }
   .row .lbl { font-size: 13px; color: var(--text-secondary); text-align: right; }
+  .row .lbl a, h3.stage .ds a {
+    color: inherit; text-decoration: underline; text-decoration-style: dotted;
+    text-underline-offset: 2px; text-decoration-color: var(--border);
+  }
+  .row .lbl a:hover, h3.stage .ds a:hover {
+    color: var(--text-primary); text-decoration-style: solid;
+  }
   .row .val { font-size: 13px; font-variant-numeric: tabular-nums; }
   .row .val small { color: var(--muted); }
   @media (max-width: 640px) {
@@ -391,6 +405,12 @@ function wireTips(root){
 
 const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;");
 const escAttr = s => esc(s).replace(/"/g,"&quot;");
+
+// Mix labels are a mix of real HuggingFace dataset ids and bare internal names.
+// Only the ones checked as publicly reachable when the data was built get a link.
+const srcLabel = (v, links) => (links && links[v])
+  ? `<a href="${escAttr(links[v])}" target="_blank" rel="noopener">${esc(v)}</a>`
+  : esc(v);
 
 // ---------------------------------------------------------------- context ---
 // One training example, rendered the way its stage actually trains: SFT fits a
@@ -730,10 +750,31 @@ async function contextRowFor(model, stage, row){
   return d ? d.records.find(r => r.row === row) : null;
 }
 
+// A tile can be clicked while renderModel() is still awaiting its data files, before
+// the destination section exists. Remember the request and replay it once render finishes.
+let pendingJump = null;
+
+// The tab bar is sticky and wraps onto extra rows on narrow viewports, so its height
+// is not a constant. Publish it as --stickyh, which the scroll-margin rules read.
+function syncStickyHeight(){
+  const tabs = document.getElementById("tabs");
+  if (tabs) document.documentElement.style.setProperty("--stickyh", tabs.offsetHeight + "px");
+}
+
+function jumpToStage(stage){
+  const el = document.getElementById("sec-" + stage) || document.getElementById("mix-" + stage);
+  if (!el) return false;
+  syncStickyHeight();
+  el.scrollIntoView({behavior: "smooth", block: "start"});
+  el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+  return true;
+}
+
 async function renderModel(model, gen){
   const m = REG[model];
   const main = document.getElementById("main");
   main.innerHTML = "";
+  pendingJump = null;
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === model));
 
   const sources = await getData(model + ".sources.json");
@@ -763,9 +804,21 @@ async function renderModel(model, gen){
     const size = s.tokens ? fmtTok(s.tokens) + " tok"
       : (sources && sources[s.stage] ? fmtEx(sources[s.stage].total) + " ex" : "—");
     t.innerHTML = `<div class="k">${s.stage}</div><div class="v">${size}</div><div class="d">${s.name}</div>`;
-    if (sources && sources[s.stage] && !s.tokens)
-      hover(t, `${sources[s.stage].total.toLocaleString()} examples${s.note ? "<br>" + s.note : ""}`);
-    else if (s.note) hover(t, s.note);
+    const tipParts = [];
+    if (sources && sources[s.stage] && !s.tokens) tipParts.push(`${sources[s.stage].total.toLocaleString()} examples`);
+    if (s.note) tipParts.push(esc(s.note));
+    tipParts.push(`<span style="color:var(--muted)">click to jump to this stage ↓</span>`);
+    hover(t, tipParts.join("<br>"));
+    t.classList.add("link");
+    t.setAttribute("role", "button");
+    t.tabIndex = 0;
+    // Always overwrite the queue: the newest click wins, so a jump that lands now
+    // discards an earlier one still waiting on its section to mount.
+    const jump = () => {
+      pendingJump = jumpToStage(s.stage) ? null : {model, stage: s.stage};
+    };
+    t.addEventListener("click", jump);
+    t.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); jump(); } });
     pipe.appendChild(t);
   });
   main.appendChild(facts);
@@ -787,6 +840,7 @@ async function renderModel(model, gen){
     for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
     const h = document.createElement("h3");
     h.className = "stage";
+    h.id = "sec-" + s.stage;
     h.style.setProperty("--bar", hueFor(s.stage));
     h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())} <span class="ds">— ${esc(s.name)}</span>`;
     const sub = document.createElement("p");
@@ -857,9 +911,11 @@ async function renderModel(model, gen){
       if (!st) continue;
       const h = document.createElement("h3");
       h.className = "stage";
+      h.id = "mix-" + s.stage;
       h.style.setProperty("--bar", hueFor(s.stage));
       h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())}
-        <span class="ds">— ${esc(st.dataset)} (${st.total.toLocaleString()} examples)</span>`;
+        <span class="ds">— <a href="https://huggingface.co/datasets/${escAttr(st.dataset)}"
+          target="_blank" rel="noopener">${esc(st.dataset)} ↗</a> (${st.total.toLocaleString()} examples)</span>`;
       mix.appendChild(h);
       for (const [col, freq] of Object.entries(st.columns)){
         const sub = document.createElement("p");
@@ -874,7 +930,7 @@ async function renderModel(model, gen){
           row.className = "row";
           row.style.setProperty("--bar", hueFor(s.stage));
           row.innerHTML = `
-            <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v}</div>
+            <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${srcLabel(v, st.links)}</div>
             <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
             <div class="val">${pct(f)} <small>${c.toLocaleString()}</small></div>`;
           hover(row.querySelector(".trackbar"), `<b>${v}</b><br>${c.toLocaleString()} of ${st.total.toLocaleString()} (${pct(f)})`);
@@ -892,6 +948,34 @@ async function renderModel(model, gen){
       }
     }
     main.appendChild(mix);
+  }
+
+  // ---- base training stages (no published label columns, so prose only) ----
+  const base = m.stages.filter(s => !s.hf_dataset);
+  if (base.length){
+    const card = document.createElement("section");
+    card.className = "card";
+    card.innerHTML = `<h2>Base training stages</h2>
+      <p class="sub">Token counts from the OLMo 3 paper. Unlike the Dolci post-training sets, these
+        mixes aren't published with per-example label columns on HuggingFace, so there is no sampling
+        or classification here — this is what the release documents about each stage.</p>`;
+    for (const s of base){
+      const div = document.createElement("div");
+      div.className = "basestage";
+      div.id = "sec-" + s.stage;
+      div.innerHTML = `<h3 class="stage"><i class="sw" style="background:var(--baseline)"></i>${esc(s.stage.toUpperCase())}
+          <span class="ds">— ${esc(s.name)}${s.tokens ? " · " + fmtTok(s.tokens) + " tokens" : ""}</span></h3>
+        <p class="kv" style="margin:2px 0 0">${esc(s.note || "No further details recorded in the registry.")}</p>`;
+      card.appendChild(div);
+    }
+    main.appendChild(card);
+  }
+
+  // Every destination is mounted now, so honor a tile clicked while data was loading.
+  if (pendingJump && pendingJump.model === model){
+    const {stage} = pendingJump;
+    pendingJump = null;
+    jumpToStage(stage);
   }
 }
 
@@ -1090,6 +1174,9 @@ async function applyHashState(nav){
     b.onclick = () => { if (name !== VIEW) location.hash = "#" + name; };
     tabs.appendChild(b);
   }
+  syncStickyHeight();
+  if (window.ResizeObserver) new ResizeObserver(syncStickyHeight).observe(tabs);
+  window.addEventListener("resize", syncStickyHeight);
   addEventListener("hashchange", route);
   route();
 })();
