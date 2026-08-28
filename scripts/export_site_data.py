@@ -47,20 +47,6 @@ if missing:
         + ", ".join(missing)
     )
 
-# The same drift, one class over: the README quotes measured figures from the
-# committed samples, and re-sampling moves them. Checking dataset ids alone let
-# "12 of ~390 draws" survive two re-samples that made it "7 of ~318".
-for docs in out.glob("*.docs.json"):
-    d = json.loads(docs.read_text())
-    claimed = re.search(
-        rf"(\d+) of ~[\d,]+\s+draws for {re.escape(d['stage'])}\b",
-        readme.replace("\n", " "),
-    )
-    if claimed and int(claimed.group(1)) != d["short_draws"]:
-        sys.exit(
-            f"README says {claimed.group(1)} short draws for {d['stage']}, "
-            f"but the committed sample records {d['short_draws']}"
-        )
 
 (out / "registry.json").write_text(json.dumps(registry.MODELS, indent=2))
 # The site labels language bars with these; keeping the map here means the CLI
@@ -85,6 +71,27 @@ for f in sorted((ROOT / "results").glob("*.json")):
 kept = sorted(
     f.name for f in out.glob("*.json") if f.name.endswith(BULK) and f.name not in set(copied)
 )
+# The same drift, one class over: the README quotes measured figures from the
+# committed samples, and re-sampling moves them. Checking dataset ids alone let
+# "12 of ~390 draws" survive two re-samples that made it "7 of ~318".
+#
+# This runs after the copy loop deliberately. Reading docs/data/ beforehand
+# validates the *previous* export, so a re-sample that moved the figure would
+# pass against the old copy and then ship the sample that contradicts it — and
+# updating the README first would fail against output being replaced in the same
+# command. Checking afterwards checks what was actually written.
+for docs in out.glob("*.docs.json"):
+    d = json.loads(docs.read_text())
+    claimed = re.search(
+        rf"(\d+) of ~[\d,]+\s+draws for {re.escape(d['stage'])}\b",
+        readme.replace("\n", " "),
+    )
+    if claimed and int(claimed.group(1)) != d["short_draws"]:
+        sys.exit(
+            f"README says {claimed.group(1)} short draws for {d['stage']}, "
+            f"but the exported sample records {d['short_draws']}"
+        )
+
 (out / "manifest.json").write_text(json.dumps(sorted(copied + kept), indent=2))
 print(
     f"wrote registry.json + language-names.json + manifest.json and {len(copied)} result files ({total / 1e6:.1f} MB)"
