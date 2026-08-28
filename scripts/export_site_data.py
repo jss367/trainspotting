@@ -25,6 +25,16 @@ from trainspotting import languages, registry  # noqa: E402
 # data, so both are gitignored under results/ and committed under docs/data/.
 BULK = (".context.json", ".docs.json")
 
+# Derived from a bulk file rather than copied from results/, so a checkout
+# without the gitignored sources produces none of these — but the committed
+# copies are still what the site reads.
+DERIVED = (".corpus.json",)
+
+# Everything the manifest must keep listing even when this run did not produce
+# it. Getting this set wrong is silent: the files stay on disk, drop out of the
+# manifest, and the site stops asking for them.
+COMMITTED = BULK + DERIVED
+
 out = ROOT / "docs" / "data"
 out.mkdir(parents=True, exist_ok=True)
 
@@ -83,7 +93,9 @@ for f in sorted((ROOT / "results").glob("*.json")):
 # pretraining sample". Everything else still comes from results/ alone, so
 # deleting a labels or ask run there drops it from the site as before.
 kept = sorted(
-    f.name for f in out.glob("*.json") if f.name.endswith(BULK) and f.name not in set(copied)
+    f.name
+    for f in out.glob("*.json")
+    if f.name.endswith(COMMITTED) and f.name not in set(copied)
 )
 # The same drift, one class over: the README quotes measured figures from the
 # committed samples, and re-sampling moves them. Checking dataset ids alone let
@@ -114,5 +126,5 @@ for docs in out.glob("*.docs.json"):
 (out / "manifest.json").write_text(json.dumps(sorted(copied + kept), indent=2))
 print(
     f"wrote registry.json + language-names.json + manifest.json and {len(copied)} result files ({total / 1e6:.1f} MB)"
-    + (f"; manifest also lists {len(kept)} committed bulk file(s)" if kept else "")
+    + (f"; manifest also lists {len(kept)} committed file(s) this run did not build" if kept else "")
 )

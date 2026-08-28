@@ -1114,9 +1114,23 @@ async function renderModel(model, gen){
       const stage = s.stage;
       det.addEventListener("toggle", async () => {
         if (!det.open || loaded) return;
+        // Claim the load, but only keep the claim if it succeeds — a transient
+        // failure would otherwise pin the panel on "loading…" and make every
+        // reopen a no-op until the whole page is reloaded.
         loaded = true;
-        const full = await getData(`${model}.${stage}.docs.json`);
-        if (!full){ holder.innerHTML = `<p class="note">sample not available</p>`; return; }
+        let full;
+        try {
+          full = await getData(`${model}.${stage}.docs.json`);
+        } catch (e) {
+          loaded = false;
+          holder.innerHTML = `<p class="note">could not load the documents — close and reopen to try again</p>`;
+          return;
+        }
+        if (!full){
+          loaded = false;
+          holder.innerHTML = `<p class="note">sample not available — close and reopen to try again</p>`;
+          return;
+        }
         // Same pinned revision as the composition above: main moves, and a link
         // to a shard that has since changed would not be provenance for this
         // document.
