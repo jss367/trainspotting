@@ -1011,9 +1011,13 @@ async function renderCompare(gen){
 // hash forms work with "compare" in the first segment.
 // GEN discards a render that a newer *view* superseded mid-await; NAV moves on
 // EVERY hash change (even within a view, even app-written ones) and discards
-// in-flight row-context loads so a stale fetch can't reopen a modal the user
-// navigated away from.
-let VIEW = null, suppress = 0, GEN = 0, NAV = 0;
+// any in-flight continuation that would touch the DOM or the hash, so a stale
+// await can't reopen a modal or drill-down the user navigated away from.
+// RENDERED is the generation of the last render that ran to completion: while
+// GEN !== RENDERED the view's DOM is incomplete, so routes must not apply
+// drill-down/modal state to it — the rendering route applies the latest hash
+// when it finishes. Invariant: the end state always matches the latest hash.
+let VIEW = null, suppress = 0, GEN = 0, RENDERED = 0, NAV = 0;
 
 function setHash(...parts){
   const h = "#" + parts.map(encodeURIComponent).join("/");
@@ -1029,16 +1033,32 @@ function parseHash(){
 }
 
 async function route(){
-  const nav = ++NAV;   // invalidate row loads on every hash move, same-view included
+  const nav = ++NAV;   // invalidate in-flight work on every hash move, same-view included
   if (suppress){ suppress--; return; }
-  const st = parseHash();
-  const view = st.view && (REG[st.view] || st.view === "compare") ? st.view : Object.keys(REG)[0];
+  const v = parseHash().view;
+  const view = v && (REG[v] || v === "compare") ? v : Object.keys(REG)[0];
   if (view !== VIEW){
     VIEW = view;
     const gen = ++GEN;
     await (view === "compare" ? renderCompare(gen) : renderModel(view, gen));
-    if (gen !== GEN) return;   // a newer navigation took over mid-render
+    if (gen !== GEN) return;   // a newer view render took over mid-await
+    RENDERED = gen;
+    // The hash may have moved within this view while the render was in
+    // flight (those routes bailed on GEN !== RENDERED below), so apply the
+    // NEWEST hash's state, not this route's own — never a stale one.
+    return applyHashState(NAV);
   }
+  // Same view, but its render is still awaiting data: the DOM is incomplete,
+  // so don't touch it — the rendering route applies this hash on completion.
+  if (GEN !== RENDERED) return;
+  return applyHashState(nav);
+}
+
+// Apply the CURRENT hash's drill-down/modal state to a fully rendered view.
+// Runs synchronously up to the one await, whose continuation re-validates
+// `nav` so a newer hash move discards it.
+async function applyHashState(nav){
+  const st = parseHash();
   if (st.row == null && dlg.open){ dlg._backLink = null; dlg.close(); }
   // Back/Forward restores a hash; close any panel that hash does not name.
   const want = st.stage && st.key ? st.stage + "/" + st.key : null;
@@ -1052,11 +1072,11 @@ async function route(){
   }
   if (st.row != null){
     // Compare keys are <model>.<key>; per-model views carry the model in the hash root.
-    const model = view === "compare" ? st.key.split(".", 1)[0] : view;
+    const model = VIEW === "compare" ? st.key.split(".", 1)[0] : VIEW;
     const rec = REG[model] ? await contextRowFor(model, st.stage, st.row) : null;
     if (nav !== NAV) return;   // any newer hash move makes this modal stale
     const s = REG[model] && REG[model].stages.find(x => x.stage === st.stage);
-    if (rec && s) openContext(rec, st.stage, s.hf_dataset, s.name, [view, st.stage, st.key, "row-" + st.row]);
+    if (rec && s) openContext(rec, st.stage, s.hf_dataset, s.name, [VIEW, st.stage, st.key, "row-" + st.row]);
   }
 }
 
