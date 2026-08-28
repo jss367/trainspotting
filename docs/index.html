@@ -342,6 +342,10 @@
     bar for the prompts behind it, then <em>see it in training context</em> for the
     rest of the training example — the response the model is fit to, the pair it is
     pushed between, or the verifier that scores it.
+    Language is detected locally per prompt, line by line and weighted by length,
+    so a template that wraps a foreign-language question in English instructions
+    counts as English; a prompt split evenly between two languages is left
+    undetermined rather than assigned to one.
     Data: Ai2's <a href="https://allenai.org/blog/olmo3">OLMo 3</a> release
     (Dolma 3 / Dolci). Regenerate with <code>trainspotting classify</code>,
     <code>trainspotting context</code> + <code>scripts/export_site_data.py</code>.
@@ -684,7 +688,8 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
   }
 }
 
-let REG, MANIFEST, DATA = {}, CTXMAPS = {};
+let REG, MANIFEST, LANG_NAMES = {}, DATA = {}, CTXMAPS = {};
+const langName = c => LANG_NAMES[c] || c;
 async function fetchJSON(p){ const r = await fetch("data/"+p); if(!r.ok) throw new Error(p); return r.json(); }
 async function getData(name){
   if (!DATA[name] && MANIFEST.includes(name)) DATA[name] = await fetchJSON(name);
@@ -818,6 +823,71 @@ async function render(model){
   if (!any) hhh.innerHTML += `<p class="note">No classification runs committed for this model yet — run <code>trainspotting classify ${model}</code>.</p>`;
   main.appendChild(hhh);
 
+  // ---- language breakdown ----
+  // English swamps everything, so the two groups get separate scales: one bar at
+  // full width for English, then the rest against the largest non-English share.
+  // A shared scale would render every other language as an invisible sliver.
+  const langCard = document.createElement("section");
+  langCard.className = "card";
+  langCard.innerHTML = `<h2>What language is post-training written in?</h2>
+    <p class="sub">Detected locally with py3langid over the same sampled prompts — no model is called.
+       The Dolci datasets carry no language column, so this is the only way to get the breakdown.
+       Click any language to read its prompts.</p>`;
+  let anyLang = false;
+  for (const s of post){
+    const d = await getData(`${model}.${s.stage}.languages.json`);
+    if (!d) continue;
+    anyLang = true;
+    const recs = d.records;
+    const n = recs.length;
+    const counts = {};
+    for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
+    const rest = Object.keys(counts).filter(c => c !== "en" && c !== "undetermined")
+      .sort((a,b) => counts[b] - counts[a]);
+    const nonEn = rest.reduce((a,c) => a + counts[c], 0);
+
+    const h = document.createElement("h3");
+    h.className = "stage";
+    h.style.setProperty("--bar", hueFor(s.stage));
+    h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())} <span class="ds">— ${esc(s.name)}</span>`;
+    const sub = document.createElement("p");
+    sub.className = "stage-sub";
+    sub.textContent = `${d.dataset} · n=${n} sampled prompts · ${rest.length} languages other than English`
+      + ` · detector ${d.detector}`;
+    langCard.append(h, sub);
+
+    const g1 = document.createElement("div"); g1.className = "grp"; g1.textContent = "english";
+    langCard.appendChild(g1);
+    const enK = counts.en || 0, enCI = wilson(enK, n);
+    barRow(langCard, "English", enK/n, enCI[0], enCI[1], Math.max(enCI[1], 0.01),
+      `<b>English</b><br>${enK} of ${n} sampled prompts (${pct(enK/n)})<br>95% CI ${pct(enCI[0])}–${pct(enCI[1])}<br>click to see the prompts`,
+      true, recs.filter(r => r.label === "en"), ctxFor(s));
+
+    const g2 = document.createElement("div"); g2.className = "grp";
+    g2.textContent = "every other language — own scale";
+    langCard.appendChild(g2);
+    if (!rest.length){
+      const p = document.createElement("p"); p.className = "note";
+      p.textContent = "no non-English prompts in this sample";
+      langCard.appendChild(p);
+    }
+    const restMax = Math.max(...rest.map(c => wilson(counts[c], n)[1]), 0.005);
+    for (const c of rest){
+      const k = counts[c], [lo, hi] = wilson(k, n);
+      barRow(langCard, esc(langName(c)), k/n, lo, hi, restMax,
+        `<b>${esc(langName(c))}</b> (${esc(c)})<br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
+        false, recs.filter(r => r.label === c), ctxFor(s));
+    }
+    const und = counts.undetermined || 0;
+    const note = document.createElement("p");
+    note.className = "note";
+    note.textContent = `${pct(nonEn/n)} of this sample is not English.`
+      + (und ? ` ${und} prompt${und>1?"s":""} (${pct(und/n)}) ${und>1?"were":"was"} too short, too much code, or too evenly mixed to call, and ${und>1?"are":"is"} counted in neither group.` : "");
+    langCard.appendChild(note);
+  }
+  if (!anyLang) langCard.innerHTML += `<p class="note">No language run committed for this model yet — run <code>trainspotting languages ${model}</code>.</p>`;
+  main.appendChild(langCard);
+
   // ---- custom questions (trainspotting ask) ----
   const askFiles = MANIFEST.filter(f => f.startsWith(model + ".") && f.includes(".ask-"));
   const bySlug = {};
@@ -930,7 +1000,8 @@ async function render(model){
 }
 
 (async () => {
-  [REG, MANIFEST] = await Promise.all([fetchJSON("registry.json"), fetchJSON("manifest.json")]);
+  [REG, MANIFEST, LANG_NAMES] = await Promise.all([
+    fetchJSON("registry.json"), fetchJSON("manifest.json"), fetchJSON("language-names.json")]);
   const tabs = document.getElementById("tabs");
   for (const name of Object.keys(REG)){
     const b = document.createElement("button");

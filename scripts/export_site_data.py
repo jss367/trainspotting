@@ -15,12 +15,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trainspotting import registry  # noqa: E402
+from trainspotting import languages, registry  # noqa: E402
 
 out = ROOT / "docs" / "data"
 out.mkdir(parents=True, exist_ok=True)
 
 (out / "registry.json").write_text(json.dumps(registry.MODELS, indent=2))
+# The site labels language bars with these; keeping the map here means the CLI
+# and the page can never disagree about what "gu" is called.
+(out / "language-names.json").write_text(json.dumps(languages.NAMES, indent=2))
 
 copied, total = [], 0
 for f in sorted((ROOT / "results").glob("*.json")):
@@ -42,6 +45,6 @@ kept = sorted(
 )
 (out / "manifest.json").write_text(json.dumps(sorted(copied + kept), indent=2))
 print(
-    f"wrote registry.json + manifest.json and {len(copied)} result files ({total / 1e6:.1f} MB)"
+    f"wrote registry.json + language-names.json + manifest.json and {len(copied)} result files ({total / 1e6:.1f} MB)"
     + (f"; manifest also lists {len(kept)} committed context file(s)" if kept else "")
 )
