@@ -3,12 +3,39 @@
 MAX_CLASSIFY_CHARS = 1500   # what the classifier sees — enough to judge intent
 MAX_STORE_CHARS = 12000     # what results/ keeps for drill-down display
 
+# Corpus documents get a far bigger budget than prompts. A prompt states its
+# intent in its opening line; a web page or a paper does not, and the
+# long-context mixes hold documents past 200k characters, so judging the first
+# 1,500 would be judging the nav bar and the abstract.
+#
+# Deliberately equal to MAX_STORE_CHARS: the classifier must judge exactly the
+# text the site displays, or "read the matched documents and check they mean
+# what you think" stops being true.
+MAX_DOCUMENT_CHARS = MAX_STORE_CHARS
+EXCERPT_MARKER = "\n\n[…]\n\n"
+
 
 def clip(text: str) -> str:
     text = str(text)
     if len(text) <= MAX_STORE_CHARS:
         return text
     return text[:MAX_STORE_CHARS] + "\n…[truncated]"
+
+
+def excerpt(text: str, budget: int = MAX_DOCUMENT_CHARS, parts: int = 3) -> str:
+    """A document reduced to `budget` characters, sampled across its whole length.
+
+    Truncation would judge every long document by its opening boilerplate, which
+    for a corpus document is the least representative part of it. Taking evenly
+    spaced spans instead means the middle and end get a vote, and the elisions
+    are marked so the classifier can see it is reading an excerpt.
+    """
+    text = str(text)
+    if len(text) <= budget:
+        return text
+    span = budget // parts
+    step = (len(text) - span) // (parts - 1)
+    return EXCERPT_MARKER.join(text[i * step : i * step + span] for i in range(parts))
 
 
 def _first(messages, role: str) -> str | None:

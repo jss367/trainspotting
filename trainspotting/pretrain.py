@@ -51,6 +51,12 @@ READ_BYTES = 96_000
 # at 96 KB; those get one retry at this multiple.
 LONG_DOC_FACTOR = 8
 
+# Shards are drawn in batches until the sample is full. This bounds the retries
+# when a corpus simply cannot supply the request — a mix of 55 shards cannot
+# yield 300 documents at one per shard, and the caller should get a short sample
+# and an honest count rather than an endless loop.
+MAX_BATCHES = 6
+
 SAMPLING_CAVEAT = (
     "Shards are drawn with probability proportional to size and one document is "
     "taken uniformly from each, so draws are independent. What is not corrected "
@@ -278,11 +284,6 @@ def sample_documents(
     shards = shards if shards is not None else list_shards(dataset, revision)
     rng = random.Random(seed)
     weights = [s["size"] for s in shards]
-    # Over-draw shards so the sample still reaches n when some shards yield few
-    # usable documents (a 12 KB shard holds only a handful, and olmOCR pages
-    # redacted to "[REMOVED]" drop out).
-    n_shards = (n + docs_per_shard - 1) // docs_per_shard
-    picks = rng.choices(shards, weights=weights, k=int(n_shards * 1.3) + 1)
 
     def fetch(pick):
         i, shard = pick
@@ -300,47 +301,64 @@ def sample_documents(
             return i, shard, docs
         except requests.RequestException:
             # One unreachable shard out of hundreds should cost a document, not
-            # the whole run — the over-draw above covers the shortfall.
+            # the whole run — the next batch covers the shortfall.
             return i, shard, []
 
     out: list[dict] = []
     seen: set[tuple[str, str]] = set()
-    done = 0
-    with ThreadPoolExecutor(max_workers=workers) as ex:
-        for i, shard, docs in ex.map(fetch, enumerate(picks)):
-            done += 1
-            if progress:
-                progress(done, len(picks), shard["path"])
-            # Seeded on the pick index as well as the shard, so the draw stays
-            # deterministic regardless of thread completion order AND a shard
-            # drawn twice — which byte-weighting makes common, a 21 GB mix like
-            # lc_synth-rex_s2pdf spreads over only 55 shards — yields a different
-            # document each time instead of the same one twice.
-            random.Random(f"{seed}:{i}:{shard['path']}").shuffle(docs)
-            kept = 0
-            for doc in docs:
-                if kept >= docs_per_shard:
-                    break
-                text = (doc.get("text") or "").strip()
-                if not text:
-                    continue
-                # Belt and braces: independent draws can still collide by chance,
-                # and the same document twice is not a second observation.
-                key = (shard["path"], doc.get("id") or text[:200])
-                if key in seen:
-                    continue
-                seen.add(key)
-                kept += 1
-                out.append(
-                    {
-                        "id": doc.get("id"),
-                        "text": text,
-                        "source": shard["source"],
-                        "topic": shard["topic"],
-                        "shard": shard["path"],
-                        "metadata": _metadata(doc),
-                    }
-                )
+    pick_no = 0
+
+    # Draw in batches until n documents are in hand rather than betting the whole
+    # sample on one over-draw. How many documents a shard head yields varies by
+    # two orders of magnitude — hundreds for stack_edu, one for a long-context
+    # shard whose first document is 200k characters — so a picks count derived
+    # from docs_per_shard alone can fall far short of what was asked for.
+    for _ in range(MAX_BATCHES):
+        if len(out) >= n:
+            break
+        short = n - len(out)
+        batch = rng.choices(
+            shards, weights=weights, k=max(1, int(short / docs_per_shard * 1.3) + 1)
+        )
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            for i, shard, docs in ex.map(
+                fetch, ((pick_no + j, s) for j, s in enumerate(batch))
+            ):
+                if progress:
+                    progress(len(out), n, shard["path"])
+                # Seeded on the pick index as well as the shard, so the draw stays
+                # deterministic regardless of thread completion order AND a shard
+                # drawn twice — which byte-weighting makes common, a 21 GB mix like
+                # lc_synth-rex_s2pdf spreads over only 55 shards — yields a different
+                # document each time instead of the same one twice.
+                random.Random(f"{seed}:{i}:{shard['path']}").shuffle(docs)
+                kept = 0
+                for doc in docs:
+                    if kept >= docs_per_shard:
+                        break
+                    text = (doc.get("text") or "").strip()
+                    if not text:
+                        continue
+                    # Belt and braces: independent draws can still collide by
+                    # chance, and the same document twice is not a second
+                    # observation.
+                    key = (shard["path"], doc.get("id") or text[:200])
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    kept += 1
+                    out.append(
+                        {
+                            "id": doc.get("id"),
+                            "text": text,
+                            "source": shard["source"],
+                            "topic": shard["topic"],
+                            "shard": shard["path"],
+                            "metadata": _metadata(doc),
+                        }
+                    )
+        pick_no += len(batch)
+
     rng.shuffle(out)
     return out[:n]
 

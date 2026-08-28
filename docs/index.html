@@ -739,10 +739,15 @@ function docBlock(rec){
   if (m.lang) tags.push(`<span>${esc(m.lang)}${m.lang_score ? " " + m.lang_score.toFixed(2) : ""}</span>`);
   if (m.word_count) tags.push(`<span>${num(m.word_count)} words</span>`);
   if (m.exact_duplicates) tags.push(`<span>${num(m.exact_duplicates)} exact dupes</span>`);
+  // Long documents are stored as spans taken across their whole length, so say
+  // what fraction is on screen rather than letting an excerpt read as the file.
+  const excerpted = rec.chars && rec.chars > rec.text.length;
+  if (excerpted) tags.push(`<span>excerpt of ${num(rec.chars)} chars</span>`);
   const head = rec.text.slice(0, 150).replace(/\s+/g, " ").trim() || "(empty)";
   return `<div class="doc">
     <div class="doctags">${tags.join("")}</div>
     <details><summary>${esc(head)}${rec.text.length > 150 ? "…" : ""}</summary>
+      ${excerpted ? `<p class="note" style="margin:6px 0 0">Three spans sampled across a ${num(rec.chars)}-character document; <code>[…]</code> marks what is cut. This is also exactly the text the classifier judged.</p>` : ""}
       <pre>${esc(rec.text)}</pre>
       <a class="shard" href="https://huggingface.co/datasets/${escAttr(rec.dataset)}/blob/main/${escAttr(rec.shard)}" target="_blank" rel="noopener">${esc(rec.shard)} ›</a>
     </details>
@@ -984,15 +989,22 @@ async function render(model){
     for (const [stage, f] of files){
       const d = await getData(f);
       const n = d.records.length, k = d.records.filter(r => r.match).length;
-      rows.push({stage, d, n, k, ci: wilson(k, n)});
+      // Corpus runs carry n_effective: documents drawn from the same shard share
+      // a topic cluster and are not independent, so the interval is computed
+      // over shards. The point estimate stays the document rate.
+      const nEff = d.n_effective || n;
+      rows.push({stage, d, n, k, nEff, ci: wilson(Math.round(k * nEff / (n || 1)), nEff)});
     }
     const max = Math.max(...rows.map(r => r.ci[1]), 0.01);
     for (const r of rows){
       const s = post.find(p => p.stage === r.stage) || {stage: r.stage, hf_dataset: r.d.dataset, name: r.d.dataset};
       const isCorpus = corpusStages.some(c => c.stage === r.stage);
       const unit = isCorpus ? "documents" : "prompts";
+      const ciNote = r.nEff < r.n
+        ? `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])} over ${r.nEff} shards (documents from one shard are correlated)`
+        : `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`;
       barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
-        `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
+        `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})${ciNote}<br>click to read them`,
         false,
         r.d.records.filter(x => x.match), {...ctxFor(s), isCorpus});
     }

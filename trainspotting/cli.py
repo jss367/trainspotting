@@ -174,11 +174,20 @@ def cmd_ask(args):
             continue
         data = json.loads(docs_path.read_text())
         docs = data["records"]
+        # Judge an excerpt spanning the whole document, not its first 1,500
+        # characters. A corpus document does not announce itself the way a
+        # prompt does, and the long-context mixes run past 200k characters, so
+        # truncating would report a rate over opening boilerplate. Bigger inputs
+        # mean fewer per request.
         labels = classify.classify_prompts(
+            # Already stored as an excerpt spanning the whole document, so this
+            # judges precisely the text the site shows.
             [d["text"] for d in docs],
             model=args.classifier,
             question=args.question,
             system=classify.ASK_DOC_SYSTEM,
+            max_chars=extract.MAX_DOCUMENT_CHARS,
+            batch_size=5,
         )
         records = [
             {
@@ -192,7 +201,12 @@ def cmd_ask(args):
             if lab
         ]
         k, n = sum(r["match"] for r in records), len(records)
-        lo, hi = _wilson(k, n)
+        # Documents from one shard are not independent observations — they share
+        # a topic cluster — so the interval is computed over shards, which is the
+        # unit actually drawn at random. At the default one document per shard
+        # this is the document count and nothing changes.
+        n_eff = len({r["shard"] for r in records}) or n
+        lo, hi = _wilson(round(k * n_eff / n) if n else 0, n_eff)
         path = RESULTS / f"{args.model}.{s['stage']}.ask-{slug}.json"
         path.write_text(
             json.dumps(
@@ -205,6 +219,8 @@ def cmd_ask(args):
                     "classifier": args.classifier,
                     "scope": data.get("scope"),
                     "caveat": data.get("caveat"),
+                    "judged_chars": extract.MAX_DOCUMENT_CHARS,
+                    "n_effective": n_eff,
                     "records": records,
                 },
                 indent=2,
@@ -263,7 +279,13 @@ def cmd_pretrain(args):
         records = [
             {
                 "id": d["id"],
-                "text": extract.clip(d["text"]),
+                # An excerpt spanning the document, not its first 12k characters.
+                # These run past 200k in the long-context mixes, and a prefix
+                # would be the nav bar and the abstract — unrepresentative both
+                # to read on the site and to classify. `chars` keeps the true
+                # length so nothing pretends the excerpt is the whole document.
+                "text": extract.excerpt(d["text"]),
+                "chars": len(d["text"]),
                 "source": d["source"],
                 "topic": d["topic"],
                 "shard": d["shard"],
@@ -272,13 +294,22 @@ def cmd_pretrain(args):
             for d in docs
         ]
         path = _pretrain_docs_path(args.model, s["stage"])
+        if len(records) < args.sample:
+            # A corpus can genuinely fail to fill the request — 55 huge shards
+            # cannot yield 300 documents at one apiece — so say so rather than
+            # letting "sample" claim a size the file does not have.
+            print(
+                f"  note: asked for {args.sample}, corpus yielded {len(records)}",
+                file=sys.stderr,
+            )
         path.write_text(
             json.dumps(
                 {
                     "dataset": dataset,
                     "stage": s["stage"],
                     "name": s["name"],
-                    "sample": args.sample,
+                    "sample": len(records),
+                    "requested": args.sample,
                     "seed": args.seed,
                     "docs_per_shard": args.docs_per_shard,
                     "scope": s.get("sample_scope"),

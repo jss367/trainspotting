@@ -87,12 +87,15 @@ def classify_prompts(
     workers: int = 4,
     question: str | None = None,
     system: str | None = None,
+    max_chars: int = extract.MAX_CLASSIFY_CHARS,
 ) -> list[str | None]:
     """Return one label (or None) per prompt, preserving order.
 
     With `question` set, labels are "yes"/"no" judgments of that question
     instead of the fixed taxonomy. `system` overrides the prompt entirely, which
     is how pretraining documents get judged as documents rather than as requests.
+    `max_chars` is how much of each input the model sees; corpus documents need
+    far more of it than prompts do, so callers raise it and shrink the batch.
     """
     if system:
         system = system.format(question=question) if question else system
@@ -108,7 +111,7 @@ def classify_prompts(
     def run(batch):
         start, items = batch
         numbered = "\n\n".join(
-            f"### {i}\n{p[:extract.MAX_CLASSIFY_CHARS]}" for i, p in enumerate(items)
+            f"### {i}\n{p[:max_chars]}" for i, p in enumerate(items)
         )
         try:
             # Server-side refusal fallback: some prompts are raw jailbreak text,
