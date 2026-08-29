@@ -104,6 +104,18 @@
     background: var(--text-primary); border-color: var(--text-primary); color: var(--page);
   }
 
+  /* ---- part dividers: the two halves of the pipeline ---- */
+  .part {
+    display: flex; align-items: baseline; gap: 10px;
+    margin: 30px 2px 12px; font-size: 12px; font-weight: 650;
+    letter-spacing: .09em; text-transform: uppercase; color: var(--text-secondary);
+  }
+  .part span {
+    font-size: 12px; font-weight: 400; letter-spacing: 0;
+    text-transform: none; color: var(--muted);
+  }
+  .part::after { content: ""; flex: 1; height: 1px; background: var(--grid); }
+
   /* ---- cards ---- */
   .card {
     background: var(--surface-1); border: 1px solid var(--border);
@@ -902,13 +914,27 @@ function syncStickyHeight(){
   if (tabs) document.documentElement.style.setProperty("--stickyh", tabs.offsetHeight + "px");
 }
 
+// Each stage's first card owns "sec-": the published mix for a base stage, the
+// exact composition for a post-training one. The fallbacks cover a stage whose
+// first card didn't render because its data file isn't committed.
 function jumpToStage(stage){
-  const el = document.getElementById("sec-" + stage) || document.getElementById("mix-" + stage);
+  const el = document.getElementById("sec-" + stage)
+    || document.getElementById("hhh-" + stage)
+    || document.getElementById("docs-" + stage);
   if (!el) return false;
   syncStickyHeight();
   el.scrollIntoView({behavior: "smooth", block: "start"});
   el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
   return true;
+}
+
+// A divider between the two halves of the pipeline, so the page reads top to
+// bottom in the same order as the tiles at the top of it.
+function part(title, note){
+  const h = document.createElement("h2");
+  h.className = "part";
+  h.innerHTML = `${esc(title)}<span>${esc(note)}</span>`;
+  return h;
 }
 
 async function renderModel(model, gen){
@@ -964,6 +990,216 @@ async function renderModel(model, gen){
   });
   main.appendChild(facts);
 
+  // ---- pretraining documents ----
+  const corpusStages = m.stages.filter(s => s.sample_dataset);
+  const corpusData = [];
+  for (const s of corpusStages){
+    // Summaries only — kilobytes. The documents themselves are several megabytes
+    // and most visitors never open them, so they load on demand below.
+    const d = await getData(`${model}.${s.stage}.corpus.json`);
+    // Still guard: a tab switch during even a small fetch would otherwise append
+    // the old model's corpus, question and base cards into the new model's <main>.
+    if (gen !== GEN) return;
+    if (d) corpusData.push([s, d]);
+  }
+
+  const base = m.stages.filter(s => !s.hf_dataset);
+  if (base.length || corpusData.length)
+    main.appendChild(part("Pretraining", "what the base model read, before any instruction tuning"));
+
+  // ---- base training stages (facts from the paper and each mix's own dataset
+  // card; the corpus card below measures the same stages by sampling them) ----
+  if (base.length){
+    const card = document.createElement("section");
+    card.className = "card";
+    card.innerHTML = `<h2>What the base model was trained on</h2>
+      <p class="sub">Token counts and mix composition from the OLMo 3 paper (Table 4) and each mix's
+        dataset card — the release's own numbers, not measured here. The card below measures the
+        same mixes independently by sampling their shards, so the two are worth comparing.</p>`;
+    // shares under 0.1% would round to a flat 0.0%
+    const pctc = f => f < 0.001 ? (f*100).toFixed(2)+"%" : pct(f);
+    for (const s of base){
+      const div = document.createElement("div");
+      div.className = "basestage";
+      // One anchor per stage, and this card owns it: a tile click lands on the
+      // stage's published facts, with the sampled documents for the same stage
+      // in the next card down.
+      div.id = "sec-" + s.stage;
+      const link = s.hf
+        ? `<span class="chip link"><a href="https://huggingface.co/datasets/${escAttr(s.hf)}"
+             target="_blank" rel="noopener">${esc(s.hf)} ↗</a></span>` : "";
+      div.innerHTML = `<h3 class="stage"><i class="sw" style="background:var(--baseline)"></i>${esc(s.stage.toUpperCase())}
+          <span class="ds">— ${esc(s.name)}${s.tokens ? " · " + fmtTok(s.tokens) + " tokens" : ""}</span>${link}</h3>
+        <p class="kv" style="margin:2px 0 8px">${esc(s.note || "No further details recorded in the registry.")}</p>`;
+      if (s.composition && s.composition.length){
+        const total = s.composition.reduce((a,c) => a + c.tokens, 0);
+        const maxf = Math.max(...s.composition.map(c => c.tokens/total));
+        // Some stages train on less than the full published mix (the 32B runs
+        // 5.50T of a recipe whose card counts 5.93T). When the stage's declared
+        // tokens don't match the composition total, the absolute per-source
+        // counts describe the mix, not this run — show only the mix's own
+        // shares, and put a clearly-approximate scaled count in the tooltip.
+        const exact = !s.tokens || Math.abs(total - s.tokens) <= 0.005 * s.tokens;
+        for (const c of s.composition){
+          const f = c.tokens/total;
+          const row = document.createElement("div");
+          row.className = "row";
+          row.innerHTML = `
+            <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</div>
+            <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
+            <div class="val">${pctc(f)}${exact ? ` <small>${fmtTok(c.tokens)}</small>` : ""}</div>`;
+          hover(row.querySelector(".trackbar"), exact
+            ? `<b>${escAttr(c.name)}</b><br>${fmtTok(c.tokens)} of ${fmtTok(total)} tokens (${pctc(f)})`
+            : `<b>${escAttr(c.name)}</b><br>${pctc(f)} of the mix recipe — ≈${fmtTok(f*s.tokens)} of this ${fmtTok(s.tokens)}-token run`);
+          div.appendChild(row);
+        }
+      }
+      card.appendChild(div);
+    }
+    main.appendChild(card);
+  }
+
+  if (corpusData.length){
+    const card = document.createElement("section");
+    card.className = "card corpus";
+    card.innerHTML = `<h2>What's actually in the pretraining data</h2>
+      <p class="sub">The dataset viewer indexes only the first few GB of these corpora and the
+        shards are ordered by topic, so sampling it returns one cluster at a time. These documents
+        come from the shard files directly: shards drawn in proportion to their size, each one's
+        head pulled with a range request. Composition below is exact — it is the whole file
+        listing, not a sample.</p>`;
+    for (const [s, d] of corpusData){
+      const h = document.createElement("h3");
+      h.className = "stage";
+      h.id = "docs-" + s.stage;
+      h.innerHTML = `<i class="sw" style="background:var(--baseline)"></i>${esc(s.stage.toUpperCase())}
+        <span class="ds">— ${esc(d.dataset)} · ${fmtTok(s.tokens)} tokens</span>`;
+      card.appendChild(h);
+
+      const facts = document.createElement("p");
+      facts.className = "corpusfacts";
+      // The revision is what makes "exact composition" checkable: main moves, so
+      // the link pins the counts to the tree they were taken from.
+      const rev = d.revision
+        ? ` <span>at <a href="https://huggingface.co/datasets/${escAttr(d.dataset)}/tree/${escAttr(d.revision)}" target="_blank" rel="noopener"><code>${esc(d.revision.slice(0,7))}</code></a></span>`
+        : "";
+      facts.innerHTML = `<span><b>${num(d.shards)}</b> shards</span>
+        <span><b>${fmtBytes(d.bytes)}</b> compressed</span>
+        <span><b>${Object.keys(d.groups).length}</b> source/topic groups</span>
+        <span><b>${num(d.records)}</b> documents sampled</span>${rev}`;
+      card.appendChild(facts);
+
+      // A draw that yields nothing is silently replaced by another, which
+      // reweights the sample by reachable-unique-document count on top of size.
+      // Say so when it happened; at zero the size weighting is exactly as claimed.
+      const short = d.short_draws ?? d.barren_draws;
+      const barren = short
+        ? ` ${num(short)} shard draw${short > 1 ? "s" : ""} came up short of ${short > 1 ? "their" : "its"} quota and ${short > 1 ? "were" : "was"} made up by other shards, so size weighting is approximate here.`
+        : "";
+      if (d.scope || d.caveat || barren){
+        const scope = document.createElement("p");
+        scope.className = "scope";
+        scope.textContent = [d.scope, d.caveat].filter(Boolean).join(" ") + barren;
+        card.appendChild(scope);
+      }
+
+      corpusComposition(card, d.groups, d.bytes);
+
+      const det = document.createElement("details");
+      det.innerHTML = `<summary class="stage-sub" style="cursor:pointer;margin:12px 0 0">
+        read the ${num(d.records)} sampled documents</summary>`;
+      const holder = document.createElement("div");
+      holder.innerHTML = `<p class="note">loading…</p>`;
+      det.appendChild(holder);
+      // Fetch and build only once someone opens the list: the payload is a few
+      // megabytes and the blocks are hundreds of DOM nodes, and neither is worth
+      // anything to a visitor who came for the charts.
+      let loaded = false;
+      const stage = s.stage;
+      det.addEventListener("toggle", async () => {
+        if (!det.open || loaded) return;
+        // Claim the load, but only keep the claim if it succeeds — a transient
+        // failure would otherwise pin the panel on "loading…" and make every
+        // reopen a no-op until the whole page is reloaded.
+        loaded = true;
+        let full;
+        try {
+          full = await getData(`${model}.${stage}.docs.json`);
+        } catch (e) {
+          loaded = false;
+          holder.innerHTML = `<p class="note">could not load the documents — close and reopen to try again</p>`;
+          return;
+        }
+        if (!full){
+          loaded = false;
+          holder.innerHTML = `<p class="note">sample not available — close and reopen to try again</p>`;
+          return;
+        }
+        // Same pinned revision as the composition above: main moves, and a link
+        // to a shard that has since changed would not be provenance for this
+        // document.
+        holder.innerHTML = full.records
+          .map(r => docBlock({...r, dataset: full.dataset, revision: full.revision}))
+          .join("");
+      });
+      card.appendChild(det);
+    }
+    main.appendChild(card);
+  }
+
+  if (post.length)
+    main.appendChild(part("Post-training", "the examples that turned the base model into an assistant"));
+
+  // ---- exact mix composition ----
+  if (sources){
+    const mix = document.createElement("section");
+    mix.className = "card";
+    mix.innerHTML = `<h2>Exact mix composition</h2>
+      <p class="sub">From each dataset's own label columns — exact counts, not samples.</p>`;
+    for (const s of post){
+      const st = sources[s.stage];
+      if (!st) continue;
+      const h = document.createElement("h3");
+      h.className = "stage";
+      h.id = "sec-" + s.stage;
+      h.style.setProperty("--bar", hueFor(s.stage));
+      h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())}
+        <span class="ds">— <a href="https://huggingface.co/datasets/${escAttr(st.dataset)}"
+          target="_blank" rel="noopener">${esc(st.dataset)} ↗</a> (${st.total.toLocaleString()} examples)</span>`;
+      mix.appendChild(h);
+      for (const [col, freq] of Object.entries(st.columns)){
+        const sub = document.createElement("p");
+        sub.className = "stage-sub"; sub.textContent = col;
+        mix.appendChild(sub);
+        const entries = Object.entries(freq);
+        const shown = entries.slice(0, 12);
+        const maxf = Math.max(...entries.map(([,c]) => c/st.total));
+        for (const [v, c] of shown){
+          const f = c/st.total;
+          const row = document.createElement("div");
+          row.className = "row";
+          row.style.setProperty("--bar", hueFor(s.stage));
+          row.innerHTML = `
+            <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${srcLabel(v, st.links)}</div>
+            <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
+            <div class="val">${pct(f)} <small>${c.toLocaleString()}</small></div>`;
+          hover(row.querySelector(".trackbar"), `<b>${v}</b><br>${c.toLocaleString()} of ${st.total.toLocaleString()} (${pct(f)})`);
+          mix.appendChild(row);
+        }
+        const restN = entries.length - shown.length;
+        const sum = entries.reduce((a,[,c]) => a+c, 0);
+        const notes = [];
+        if (restN > 0) notes.push(`+${restN} more values (${pct((sum - shown.reduce((a,[,c])=>a+c,0))/st.total)})`);
+        if (sum < st.total * 0.95) notes.push(`values shown cover ${pct(sum/st.total)} of rows — the rest are null or not enumerated by the stats API`);
+        if (notes.length){
+          const p = document.createElement("p"); p.className = "note"; p.textContent = notes.join(" · ");
+          mix.appendChild(p);
+        }
+      }
+    }
+    main.appendChild(mix);
+  }
+
   // ---- HHH classification ----
   const hhh = document.createElement("section");
   hhh.className = "card";
@@ -981,7 +1217,7 @@ async function renderModel(model, gen){
     for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
     const h = document.createElement("h3");
     h.className = "stage";
-    h.id = "sec-" + s.stage;
+    h.id = "hhh-" + s.stage;
     h.style.setProperty("--bar", hueFor(s.stage));
     h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())} <span class="ds">— ${esc(s.name)}</span>`;
     const sub = document.createElement("p");
@@ -1098,106 +1334,6 @@ async function renderModel(model, gen){
   if (!anyLang) langCard.innerHTML += `<p class="note">No language run committed for this model yet — run <code>trainspotting languages ${model}</code>.</p>`;
   main.appendChild(langCard);
 
-  // ---- pretraining documents ----
-  const corpusStages = m.stages.filter(s => s.sample_dataset);
-  const corpusData = [];
-  for (const s of corpusStages){
-    // Summaries only — kilobytes. The documents themselves are several megabytes
-    // and most visitors never open them, so they load on demand below.
-    const d = await getData(`${model}.${s.stage}.corpus.json`);
-    // Still guard: a tab switch during even a small fetch would otherwise append
-    // the old model's corpus, question and base cards into the new model's <main>.
-    if (gen !== GEN) return;
-    if (d) corpusData.push([s, d]);
-  }
-  if (corpusData.length){
-    const card = document.createElement("section");
-    card.className = "card corpus";
-    card.innerHTML = `<h2>What's actually in the pretraining data</h2>
-      <p class="sub">The dataset viewer indexes only the first few GB of these corpora and the
-        shards are ordered by topic, so sampling it returns one cluster at a time. These documents
-        come from the shard files directly: shards drawn in proportion to their size, each one's
-        head pulled with a range request. Composition below is exact — it is the whole file
-        listing, not a sample.</p>`;
-    for (const [s, d] of corpusData){
-      const h = document.createElement("h3");
-      h.className = "stage";
-      h.id = "sec-" + s.stage;
-      h.innerHTML = `<i class="sw" style="background:var(--baseline)"></i>${esc(s.stage.toUpperCase())}
-        <span class="ds">— ${esc(d.dataset)} · ${fmtTok(s.tokens)} tokens</span>`;
-      card.appendChild(h);
-
-      const facts = document.createElement("p");
-      facts.className = "corpusfacts";
-      // The revision is what makes "exact composition" checkable: main moves, so
-      // the link pins the counts to the tree they were taken from.
-      const rev = d.revision
-        ? ` <span>at <a href="https://huggingface.co/datasets/${escAttr(d.dataset)}/tree/${escAttr(d.revision)}" target="_blank" rel="noopener"><code>${esc(d.revision.slice(0,7))}</code></a></span>`
-        : "";
-      facts.innerHTML = `<span><b>${num(d.shards)}</b> shards</span>
-        <span><b>${fmtBytes(d.bytes)}</b> compressed</span>
-        <span><b>${Object.keys(d.groups).length}</b> source/topic groups</span>
-        <span><b>${num(d.records)}</b> documents sampled</span>${rev}`;
-      card.appendChild(facts);
-
-      // A draw that yields nothing is silently replaced by another, which
-      // reweights the sample by reachable-unique-document count on top of size.
-      // Say so when it happened; at zero the size weighting is exactly as claimed.
-      const short = d.short_draws ?? d.barren_draws;
-      const barren = short
-        ? ` ${num(short)} shard draw${short > 1 ? "s" : ""} came up short of ${short > 1 ? "their" : "its"} quota and ${short > 1 ? "were" : "was"} made up by other shards, so size weighting is approximate here.`
-        : "";
-      if (d.scope || d.caveat || barren){
-        const scope = document.createElement("p");
-        scope.className = "scope";
-        scope.textContent = [d.scope, d.caveat].filter(Boolean).join(" ") + barren;
-        card.appendChild(scope);
-      }
-
-      corpusComposition(card, d.groups, d.bytes);
-
-      const det = document.createElement("details");
-      det.innerHTML = `<summary class="stage-sub" style="cursor:pointer;margin:12px 0 0">
-        read the ${num(d.records)} sampled documents</summary>`;
-      const holder = document.createElement("div");
-      holder.innerHTML = `<p class="note">loading…</p>`;
-      det.appendChild(holder);
-      // Fetch and build only once someone opens the list: the payload is a few
-      // megabytes and the blocks are hundreds of DOM nodes, and neither is worth
-      // anything to a visitor who came for the charts.
-      let loaded = false;
-      const stage = s.stage;
-      det.addEventListener("toggle", async () => {
-        if (!det.open || loaded) return;
-        // Claim the load, but only keep the claim if it succeeds — a transient
-        // failure would otherwise pin the panel on "loading…" and make every
-        // reopen a no-op until the whole page is reloaded.
-        loaded = true;
-        let full;
-        try {
-          full = await getData(`${model}.${stage}.docs.json`);
-        } catch (e) {
-          loaded = false;
-          holder.innerHTML = `<p class="note">could not load the documents — close and reopen to try again</p>`;
-          return;
-        }
-        if (!full){
-          loaded = false;
-          holder.innerHTML = `<p class="note">sample not available — close and reopen to try again</p>`;
-          return;
-        }
-        // Same pinned revision as the composition above: main moves, and a link
-        // to a shard that has since changed would not be provenance for this
-        // document.
-        holder.innerHTML = full.records
-          .map(r => docBlock({...r, dataset: full.dataset, revision: full.revision}))
-          .join("");
-      });
-      card.appendChild(det);
-    }
-    main.appendChild(card);
-  }
-
   // ---- custom questions (trainspotting ask) ----
   const askFiles = MANIFEST.filter(f => f.startsWith(model + ".") && f.includes(".ask-"));
   const bySlug = {};
@@ -1205,6 +1341,7 @@ async function renderModel(model, gen){
     const [, stage, rest] = f.match(/^[^.]+\.([^.]+)\.ask-(.+)\.json$/) || [];
     if (stage) (bySlug[rest] ||= []).push([stage, f]);
   }
+  let askDivider = false;   // only if a card actually renders — the files may all fail to load
   for (const [slug, files] of Object.entries(bySlug)){
     // Pipeline order, not just post-training order — a question asked with
     // --pretrain puts corpus stages in the same card, and they come first.
@@ -1238,8 +1375,8 @@ async function renderModel(model, gen){
       card.className = "card";
       const kinds = rows.map(r => corpusStages.some(c => c.stage === r.stage) ? "documents" : "prompts");
       const unitLabel = [...new Set(kinds)].join(" and ");
-      card.innerHTML = `<h2>Custom question</h2>
-        <p class="sub">“${esc(question)}” — share of sampled ${unitLabel} judged a match by ${classifier}. Click a bar to read the matches verbatim.</p>`;
+      card.innerHTML = `<h2>“${esc(question)}”</h2>
+        <p class="sub">Share of sampled ${unitLabel} judged a match by ${classifier}. Click a bar to read the matches verbatim.</p>`;
       const max = Math.max(...rows.map(r => r.ci[1]), 0.01);
       for (const r of rows){
         const s = post.find(p => p.stage === r.stage) || {stage: r.stage, hf_dataset: r.d.dataset, name: r.d.dataset};
@@ -1264,112 +1401,12 @@ async function renderModel(model, gen){
           + "A given rate means something different in each.";
         card.appendChild(p);
       }
+      if (!askDivider){
+        main.appendChild(part("Custom questions", "asked of whichever stages you ran them against"));
+        askDivider = true;
+      }
       main.appendChild(card);
     }
-  }
-
-  // ---- exact mix composition ----
-  if (sources){
-    const mix = document.createElement("section");
-    mix.className = "card";
-    mix.innerHTML = `<h2>Exact mix composition</h2>
-      <p class="sub">From each dataset's own label columns — exact counts, not samples.</p>`;
-    for (const s of post){
-      const st = sources[s.stage];
-      if (!st) continue;
-      const h = document.createElement("h3");
-      h.className = "stage";
-      h.id = "mix-" + s.stage;
-      h.style.setProperty("--bar", hueFor(s.stage));
-      h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())}
-        <span class="ds">— <a href="https://huggingface.co/datasets/${escAttr(st.dataset)}"
-          target="_blank" rel="noopener">${esc(st.dataset)} ↗</a> (${st.total.toLocaleString()} examples)</span>`;
-      mix.appendChild(h);
-      for (const [col, freq] of Object.entries(st.columns)){
-        const sub = document.createElement("p");
-        sub.className = "stage-sub"; sub.textContent = col;
-        mix.appendChild(sub);
-        const entries = Object.entries(freq);
-        const shown = entries.slice(0, 12);
-        const maxf = Math.max(...entries.map(([,c]) => c/st.total));
-        for (const [v, c] of shown){
-          const f = c/st.total;
-          const row = document.createElement("div");
-          row.className = "row";
-          row.style.setProperty("--bar", hueFor(s.stage));
-          row.innerHTML = `
-            <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${srcLabel(v, st.links)}</div>
-            <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
-            <div class="val">${pct(f)} <small>${c.toLocaleString()}</small></div>`;
-          hover(row.querySelector(".trackbar"), `<b>${v}</b><br>${c.toLocaleString()} of ${st.total.toLocaleString()} (${pct(f)})`);
-          mix.appendChild(row);
-        }
-        const restN = entries.length - shown.length;
-        const sum = entries.reduce((a,[,c]) => a+c, 0);
-        const notes = [];
-        if (restN > 0) notes.push(`+${restN} more values (${pct((sum - shown.reduce((a,[,c])=>a+c,0))/st.total)})`);
-        if (sum < st.total * 0.95) notes.push(`values shown cover ${pct(sum/st.total)} of rows — the rest are null or not enumerated by the stats API`);
-        if (notes.length){
-          const p = document.createElement("p"); p.className = "note"; p.textContent = notes.join(" · ");
-          mix.appendChild(p);
-        }
-      }
-    }
-    main.appendChild(mix);
-  }
-
-  // ---- base training stages (facts from the paper and each mix's own dataset
-  // card; the corpus card above measures the same stages by sampling them) ----
-  const sampled = new Set(corpusData.map(([s]) => s.stage));
-  const base = m.stages.filter(s => !s.hf_dataset);
-  if (base.length){
-    const card = document.createElement("section");
-    card.className = "card";
-    card.innerHTML = `<h2>Base training stages</h2>
-      <p class="sub">Token counts and mix composition from the OLMo 3 paper (Table 4) and each mix's
-        dataset card — the release's own numbers, not measured here. The corpus card above measures
-        the same mixes independently by sampling their shards, so the two are worth comparing.</p>`;
-    // shares under 0.1% would round to a flat 0.0%
-    const pctc = f => f < 0.001 ? (f*100).toFixed(2)+"%" : pct(f);
-    for (const s of base){
-      const div = document.createElement("div");
-      div.className = "basestage";
-      // One anchor per stage. Where a document sample exists the corpus card
-      // above owns it — it is the richer destination and comes first — so this
-      // section takes a secondary id rather than competing for the jump.
-      div.id = (sampled.has(s.stage) ? "base-" : "sec-") + s.stage;
-      const link = s.hf
-        ? `<span class="chip link"><a href="https://huggingface.co/datasets/${escAttr(s.hf)}"
-             target="_blank" rel="noopener">${esc(s.hf)} ↗</a></span>` : "";
-      div.innerHTML = `<h3 class="stage"><i class="sw" style="background:var(--baseline)"></i>${esc(s.stage.toUpperCase())}
-          <span class="ds">— ${esc(s.name)}${s.tokens ? " · " + fmtTok(s.tokens) + " tokens" : ""}</span>${link}</h3>
-        <p class="kv" style="margin:2px 0 8px">${esc(s.note || "No further details recorded in the registry.")}</p>`;
-      if (s.composition && s.composition.length){
-        const total = s.composition.reduce((a,c) => a + c.tokens, 0);
-        const maxf = Math.max(...s.composition.map(c => c.tokens/total));
-        // Some stages train on less than the full published mix (the 32B runs
-        // 5.50T of a recipe whose card counts 5.93T). When the stage's declared
-        // tokens don't match the composition total, the absolute per-source
-        // counts describe the mix, not this run — show only the mix's own
-        // shares, and put a clearly-approximate scaled count in the tooltip.
-        const exact = !s.tokens || Math.abs(total - s.tokens) <= 0.005 * s.tokens;
-        for (const c of s.composition){
-          const f = c.tokens/total;
-          const row = document.createElement("div");
-          row.className = "row";
-          row.innerHTML = `
-            <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</div>
-            <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
-            <div class="val">${pctc(f)}${exact ? ` <small>${fmtTok(c.tokens)}</small>` : ""}</div>`;
-          hover(row.querySelector(".trackbar"), exact
-            ? `<b>${escAttr(c.name)}</b><br>${fmtTok(c.tokens)} of ${fmtTok(total)} tokens (${pctc(f)})`
-            : `<b>${escAttr(c.name)}</b><br>${pctc(f)} of the mix recipe — ≈${fmtTok(f*s.tokens)} of this ${fmtTok(s.tokens)}-token run`);
-          div.appendChild(row);
-        }
-      }
-      card.appendChild(div);
-    }
-    main.appendChild(card);
   }
 
   // Every destination is mounted now, so honor a tile clicked while data was loading.
