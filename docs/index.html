@@ -1174,9 +1174,14 @@ async function renderModel(model, gen){
       // one verifier, so when every value in a mix-name column is in the
       // mix→verifier table the reward-type shares are exact — the same counts,
       // grouped by what scores the response instead of where the prompt came from.
+      // Column stats can be sparse (nulls / long tails), so also require the
+      // counts to cover every row — otherwise "exact" would be a lie.
       if (s.stage === "rlvr"){
-        const mapped = Object.values(st.columns).find(freq =>
-          Object.keys(freq).length && Object.keys(freq).every(v => REWARDS.mixes[v]));
+        const mapped = Object.values(st.columns).find(freq => {
+          const vals = Object.keys(freq);
+          return vals.length && vals.every(v => REWARDS.mixes[v]) &&
+            vals.reduce((sum, v) => sum + freq[v], 0) === st.total;
+        });
         if (mapped){
           const agg = {};
           for (const [v, c] of Object.entries(mapped)){
