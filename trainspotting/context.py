@@ -12,6 +12,8 @@ Records are keyed by the same prompt text the classifier saw, so the site can
 join them onto committed label and ask results without re-running any model.
 """
 
+from trainspotting import rewards
+
 MAX_TEXT = 4000  # per field; the full row stays one click away on HuggingFace
 KEY_CHARS = 400  # prompt prefix that joins a context record to a labeled prompt
 
@@ -54,46 +56,13 @@ def _meta(row: dict, keys: list[str]) -> dict:
     return {k: row[k] for k in keys if row.get(k) not in (None, "", [], {})}
 
 
-# What the reward actually checks, by which mix the prompt came from. The raw
-# dataset_source travels with the record so the inference stays checkable.
-REWARD_KINDS = [
-    (
-        ("if_multi_constraints", "constraint"),
-        "constraint checker",
-        "A program checks the response against the constraints listed below. "
-        "Reward 1 when every constraint holds, 0 otherwise.",
-    ),
-    (
-        ("acecoder", "code_rlvr", "python"),
-        "unit tests",
-        "The response's code is executed against test cases. Reward is the fraction "
-        "of tests that pass.",
-    ),
-    (
-        ("math", "omega", "polaris", "orz", "dapo", "gsm"),
-        "exact answer match",
-        "The final answer is extracted from the response and compared to the ground "
-        "truth below. Reward 1 on a match, 0 otherwise.",
-    ),
-    (
-        ("general_mix", "general-mix", "wildchat", "chat"),
-        "LLM judge",
-        "A judge model scores the response. The rubric it uses is not published with "
-        "the dataset, so the prompt text is all this tool can show you.",
-    ),
-]
-
-
 def _reward(row: dict) -> dict:
-    tags = " ".join(
-        str(row.get(k) or "").lower()
-        for k in ("dataset_source", "data_source", "original_dataset", "ability", "constraint_type")
-    )
-    kind, explain = "unknown", "This mix's reward function isn't identifiable from the row's own fields."
-    for needles, k, e in REWARD_KINDS:
-        if any(n in tags for n in needles):
-            kind, explain = k, e
-            break
+    # What the reward checks comes from the mix→verifier table in rewards.py.
+    # The raw dataset_source travels with the record so the inference stays
+    # checkable; the site re-derives the explanation from the kind, so the
+    # baked text here only serves offline readers of the JSON.
+    kind = rewards.kind_for(row)
+    explain = rewards.KINDS[kind]["explain"]
     rm = row.get("reward_model") or {}
     gt = row.get("ground_truth")
     if isinstance(gt, list):
