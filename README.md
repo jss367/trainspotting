@@ -85,9 +85,9 @@ API call and scores exactly the same documents.
 `ask` writes `results/<model>.<stage>.ask-<slug>.json` with every sampled
 prompt and its yes/no judgment, so the estimate is auditable: read the matched
 prompts and check they mean what you think. The
-[site](https://jss367.github.io/trainspotting/) renders committed ask runs as
-"Custom question" cards, and every bar (taxonomy or ask) clicks open to the
-literal prompts behind the count.
+[site](https://jss367.github.io/trainspotting/) renders committed ask runs under
+a **Custom questions** heading, one card per question, and every bar (taxonomy
+or ask) clicks open to the literal prompts behind the count.
 
 `languages` writes `results/<model>.<stage>.languages.json` in the same shape,
 with an ISO 639-1 code per prompt. Detection runs line by line and is weighted
