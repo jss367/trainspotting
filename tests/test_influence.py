@@ -659,3 +659,84 @@ def test_a_source_holding_most_of_the_produce_side_evidence_still_counts():
                 by_source_group={"big": {"prompt": 0, "response": 90},
                                  "rest": {"prompt": 0, "response": 10}})]
     assert influence.compare(runs, THINK)["best"]["concentration"]["name"] == "big"
+
+
+# --- a zero over some stages is not a zero over the pipeline ---------------
+
+
+def test_an_unscanned_stage_is_the_first_explanation_for_a_zero():
+    # `grep --stage dpo` finding nothing does not make distillation the
+    # leading theory while SFT sits unread.
+    runs = [run("dpo", hits=0, rows=150_000, groups={"prompt": 0, "response": 0})]
+    text = " ".join(influence.render(influence.compare(runs, THINK), "olmo-3-7b-think"))
+    assert "It may simply be in sft, rlvr, which no run has read" in text
+    assert text.index("may simply be in sft") < text.index("distilled")
+
+
+def test_a_complete_sweep_says_the_reachable_stages_are_exhausted():
+    runs = [run(s, hits=0, rows=1_000, groups={"prompt": 0, "response": 0})
+            for s in ("sft", "dpo", "rlvr")]
+    t = influence.compare(runs, THINK)
+    assert t["unsearched"] == []
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "Every stage this layer can reach has now been read" in text
+    assert "may simply be in" not in text
+
+
+# --- the produce-side union, bounded as tightly as the counts allow --------
+
+
+def test_disjoint_response_and_reference_sources_prove_a_bigger_union():
+    # 50 response rows in one source, 45 reference rows in another: the stage
+    # bound is max(50, 45) = 50, but a row sits in one source, so the per-source
+    # lower bounds add to 95. Against 50 the 10% floor is five rows and the
+    # five-row source clears it; against 95 it does not.
+    runs = [run(
+        "rlvr", hits=95, rows=1_000_000,
+        groups={"prompt": 0, "response": 50, "reference": 45},
+        sources={"a": 50, "b": 45, "tiny": 5},
+        totals={"a": 50_000, "b": 45_000, "tiny": 50},
+        by_source_group={"a": {"response": 50, "reference": 0},
+                         "b": {"response": 0, "reference": 45},
+                         "tiny": {"response": 5, "reference": 0}},
+    )]
+    srcs = influence.stage_trace(runs[0])["sources"]
+    assert influence.produced_evidence(srcs, (50, 95)) == 100
+    # The stage bound alone would have named the five-row source.
+    assert influence.concentration(srcs, 50, side="produced")["name"] == "tiny"
+    assert influence.compare(runs, THINK)["best"]["concentration"]["name"] != "tiny"
+
+
+def test_the_stage_bound_still_wins_where_it_is_the_larger_one():
+    # Every match in one source and in both groups: the per-source lower bounds
+    # add to 60, the stage's largest group is 60, and neither overstates.
+    runs = [run("rlvr", hits=60, rows=100_000,
+                groups={"prompt": 0, "response": 60, "reference": 60},
+                sources={"only": 60}, totals={"only": 1_000},
+                by_source_group={"only": {"response": 60, "reference": 60}})]
+    srcs = influence.stage_trace(runs[0])["sources"]
+    assert influence.produced_evidence(srcs, (60, 120)) == 60
+    assert influence.compare(runs, THINK)["best"]["concentration"]["name"] == "only"
+
+
+# --- the suggested command is shell ----------------------------------------
+
+
+def test_a_pattern_with_shell_syntax_is_quoted_not_interpolated():
+    runs = [run("rlvr", hits=5, rows=100, groups={"prompt": 5},
+                pattern='say "$HOME" `id`', slug="risky")]
+    text = " ".join(influence.render(influence.compare(runs, THINK), "olmo-3-7b-think"))
+    assert """trainspotting grep olmo-3-7b-think 'say "$HOME" `id`' --slug risky""" in text
+    assert 'grep olmo-3-7b-think "say "$HOME"' not in text
+
+
+def test_a_pattern_with_a_single_quote_is_still_one_argument():
+    runs = [run("rlvr", hits=5, rows=100, groups={"prompt": 5}, pattern="it's me", slug="q")]
+    text = " ".join(influence.render(influence.compare(runs, THINK), "olmo-3-7b-think"))
+    assert """'it'"'"'s me'""" in text
+
+
+def test_an_ordinary_pattern_is_not_dressed_up():
+    runs = [run("rlvr", hits=5, rows=100, groups={"prompt": 5}, pattern="ChatGPT", slug="chatgpt")]
+    text = " ".join(influence.render(influence.compare(runs, THINK), "olmo-3-7b-think"))
+    assert "trainspotting grep olmo-3-7b-think ChatGPT --slug chatgpt" in text

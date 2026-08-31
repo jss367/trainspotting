@@ -29,6 +29,8 @@ is what turns "we did not look" into "it is not there", so they are counted and
 named apart.
 """
 
+import shlex
+
 # The groups holding text the training objective pushes the model toward, as
 # opposed to text it only conditions on. `reference` belongs here for RL: it is
 # the ground truth a verifier scores against, so the gradient points at it even
@@ -110,6 +112,23 @@ MIN_SHARE = 0.1
 # ...and its rate has to beat the stage's by this much to be a concentration
 # rather than the source's size showing through.
 MIN_LIFT = 2.0
+
+
+def produced_evidence(sources: list[dict], bounds: tuple[int, int] | None) -> int:
+    """A lower bound on the rows matching on the produce side, as tight as the
+    counts allow.
+
+    Two independent bounds. The stage's largest produce-side group is one; a
+    row matching in both `response` and `reference` is counted once there. The
+    per-source lower bounds are the other, and they add — a row belongs to one
+    source, so no double counting across them — which proves a bigger union
+    whenever the response and reference matches sit in different sources. 50
+    response rows and 45 disjoint reference rows give `bounds = (50, 95)` and a
+    per-source total of 95, and taking the 50 would set the share floor at five
+    rows.
+    """
+    per_source = sum(s["produced_hits"] or 0 for s in sources)
+    return max(bounds[0] if bounds else 0, per_source)
 
 
 def concentration(sources: list[dict], total: int, side: str = "all") -> dict | None:
@@ -197,11 +216,15 @@ def stage_trace(result) -> dict:
         # Both readings are kept; `compare` picks the one matching the basis it
         # ends up ranking on, so the verdict explains the number it printed.
         "concentration_all": concentration(sources, hits),
-        # The stage's own produce-side lower bound, which is the count the
-        # produce-side ranking runs on and so the evidence a source's share is
-        # a share of.
+        # The evidence a source's share is a share of: the produce-side union,
+        # known only to a bound. `bounds[0]` is the largest single group, and
+        # the per-source lower bounds sum to a second, independent bound —
+        # every row sits in exactly one source, so their total cannot exceed
+        # the union either. Take whichever is larger, because a denominator
+        # that is too small sets the floor too low and lets a handful of rows
+        # be named as a concentration.
         "concentration_produced": concentration(
-            sources, bounds[0] if bounds else 0, side="produced"),
+            sources, produced_evidence(sources, bounds), side="produced"),
         "concentration": concentration(sources, hits),
         "conc_side": "all",
         "revision": result.get("revision"),
@@ -523,14 +546,25 @@ def _verdict(t: dict) -> list[str]:
         them = "they are" if len(t["inconclusive"]) > 1 else "it is"
         caveat = (f" {loose} matched nothing either, but was not read end to end, so {them} "
                   "outside this claim.") if loose else ""
+        # The explanations are only the exotic ones once every reachable stage
+        # has been read. Until then the ordinary one is that it is sitting in a
+        # stage nobody scanned, and leading with distillation over that would
+        # be a conclusion drawn from the stages that happened to be cheap.
+        left = ", ".join(r["stage"] for r in t["unsearched"])
+        if left:
+            where = (f" It may simply be in {left}, which no run has read; beyond that it "
+                     "points at a stage this layer cannot reach, at text distilled from "
+                     "another model rather than carried across literally, or at generalisation.")
+        else:
+            where = (" Every stage this layer can reach has now been read, so that points at a "
+                     "stage it cannot, at text distilled from another model rather than carried "
+                     "across literally, or at generalisation.")
         return [
             f"**Not in any stage searched.** 0 of {rows:,} rows across {names}, exact over "
             f"every one of them.{caveat} A model that produces this string anyway did not take "
-            "it from the data we can see: that points at a stage this layer cannot reach, at "
-            "text distilled from another model rather than carried across literally, or at "
-            "generalisation. It is also only a lower bound on the concept — a spelling, "
-            "casing or Unicode variant of the same phrase is a different pattern and was "
-            "not counted."
+            f"it from those stages.{where} It is also only a lower bound on the concept — a "
+            "spelling, casing or Unicode variant of the same phrase is a different pattern and "
+            "was not counted."
         ]
 
     key = "produced_rate" if t["basis"] == "produced" else "rate"
@@ -624,9 +658,12 @@ def render(t: dict, model: str, note: bool = False) -> list[str]:
         " --case-sensitive" if t["case_sensitive"] else "",
         # Without the slug a re-run derives its own from the pattern and lands
         # in a different group, which is how a trace ends up split in two.
-        f' --slug {t["slug"]}' if t.get("slug") else "",
+        f" --slug {shlex.quote(t['slug'])}" if t.get("slug") else "",
     ])
-    cmd = f'trainspotting grep {model} "{t["pattern"]}"{flags}'
+    # Quoted as the shell will read it. A pattern is arbitrary text and these
+    # are regexes: `$`, a backtick or a quote inside naive double quotes either
+    # searches for something else or runs a command when the line is pasted.
+    cmd = f"trainspotting grep {model} {shlex.quote(t['pattern'] or '')}{flags}"
     out = [f"### `{t['pattern']}` — where it most plausibly comes from", ""]
     if note:
         out += [BASIS_NOTE, ""]

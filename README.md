@@ -311,9 +311,12 @@ was read* — and keeps it out of the stage-wide claim. A run written before res
 files recorded which sides the mix has cannot demonstrate it read all of them, so
 it lands there too. A pattern absent from every stage read end to end does get
 said outright: 0 of N rows, exact over all of them, so a model that produces the
-string anyway did not take it from the data we can see — which points at a stage
-out of reach, at text distilled from another model rather than carried across
-literally, or at generalisation.
+string anyway did not take it from those stages. What that points at depends on
+what is left. While a reachable stage sits unscanned the ordinary explanation is
+that the string is in it, and the verdict says so first; only once every
+reachable stage has been read does it reach for a stage out of reach, text
+distilled from another model rather than carried across literally, or
+generalisation.
 
 The same rule governs the ranking, because a rate only ranks against another
 rate when both measure the same thing over the same population. A stage whose
@@ -535,9 +538,12 @@ adding overlapping group counts as if they were a union, ordering two stages
 whose intervals overlap, naming the largest source as the origin when it holds
 the mix rate, crediting a prompt-only source for produce-side evidence, ranking
 an unread produce side or a partial conversion's subset rate against a stage
-rate, reporting a zero for a stage that matched but could not be ranked, and
-reading "nothing matched" as a zero when the scan was narrowed, incomplete, or
-cannot show what it covered.
+rate, reporting a zero for a stage that matched but could not be ranked, reading
+"nothing matched" as a zero when the scan was narrowed, incomplete, or cannot
+show what it covered, and reaching past an unscanned stage for a more
+interesting explanation of a zero. The suggested rerun commands are built with
+shell quoting, which is also pinned: these patterns are regexes, and one holding
+a `$` or a backtick would otherwise run something else when pasted.
 `tests/test_report_traces.py` covers the grouping the report does before any of
 that: one search's stages together, two searches under one slug apart.
 
