@@ -270,6 +270,30 @@
   .lenrow .val { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
   .lenbar { height: 12px; border-radius: 0 4px 4px 0; }
 
+  /* gradient panel — how a preference pair updates the model */
+  .grad { border-top: 1px dashed var(--border); margin-top: 12px; padding-top: 14px; }
+  .grad > h4 {
+    font-size: 12px; margin: 16px 0 6px; font-weight: 600; color: var(--text-primary);
+  }
+  .grad > h4:first-child { margin-top: 0; }
+  .formula {
+    font: 12px/1.8 ui-monospace, Menlo, monospace; color: var(--text-primary);
+    background: var(--track); border-radius: 6px; padding: 10px 12px; margin: 6px 0 10px;
+    white-space: pre; overflow-x: auto;
+  }
+  /* the two responses, with the spans they share dimmed out */
+  .ctxtext .dim { color: var(--muted); }
+  .ctxtext mark { background: transparent; color: inherit; border-radius: 2px; padding: 0 1px; }
+  .ctxtext mark.up {
+    background: color-mix(in srgb, var(--series-1) 20%, transparent);
+    box-shadow: inset 0 -2px 0 var(--series-1);
+  }
+  .ctxtext mark.down {
+    background: color-mix(in srgb, var(--neg) 20%, transparent);
+    box-shadow: inset 0 -2px 0 var(--neg);
+  }
+  .splitrow .strip { margin: 0; }
+
   /* rl reward flow */
   .flow { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
   .flow .step {
@@ -478,6 +502,230 @@ function renderSFT(rec, dataset){
     </section>`;
 }
 
+// ---- how a preference pair updates the model -------------------------------
+// Opt-in panel under the pair. Everything it *displays* is computable from the
+// stored row — which spans the two responses share and which they do not. The
+// loss itself is explained symbolically: no log-probs are stored anywhere, so
+// showing a number for one would mean inventing it.
+
+const WORDS = s => s.match(/\S+\s*/g) || [];
+const LINES = s => s.match(/[^\n]*\n|[^\n]+/g) || [];
+const DIFF_CELLS = 4e6;  // LCS table cap; bigger pairs drop to line granularity
+const MIN_SAME = 24;     // characters; shorter matches are coincidence, not shared text
+
+// Longest-common-subsequence diff over raw chunks, compared on their trimmed
+// form so a newline-vs-space difference does not split an otherwise equal word.
+function lcsOps(a, b){
+  const ak = a.map(w => w.trim()), bk = b.map(w => w.trim());
+  const n = a.length, m = b.length, W = m + 1;
+  const dp = new Uint32Array((n + 1) * W);
+  for (let i = n - 1; i >= 0; i--){
+    for (let j = m - 1; j >= 0; j--){
+      dp[i * W + j] = ak[i] === bk[j]
+        ? dp[(i + 1) * W + j + 1] + 1
+        : Math.max(dp[(i + 1) * W + j], dp[i * W + j + 1]);
+    }
+  }
+  const ops = [];
+  const push = (t, text) => {
+    const last = ops[ops.length - 1];
+    if (last && last.t === t) last.text += text; else ops.push({t, text});
+  };
+  let i = 0, j = 0;
+  while (i < n && j < m){
+    if (ak[i] === bk[j]){ push("same", a[i]); i++; j++; }
+    else if (dp[(i + 1) * W + j] >= dp[i * W + j + 1]){ push("chosen", a[i]); i++; }
+    else { push("rejected", b[j]); j++; }
+  }
+  while (i < n) push("chosen", a[i++]);
+  while (j < m) push("rejected", b[j++]);
+  return ops;
+}
+
+function diffPair(aRaw, bRaw){
+  if (!aRaw && !bRaw) return [];
+  const a = WORDS(aRaw), b = WORDS(bRaw);
+  // Identical head and tail come off first — cheap, and the shared opening is
+  // the one span whose two contributions cancel exactly.
+  let lo = 0;
+  while (lo < a.length && lo < b.length && a[lo].trim() === b[lo].trim()) lo++;
+  let hi = 0;
+  while (hi < a.length - lo && hi < b.length - lo &&
+         a[a.length - 1 - hi].trim() === b[b.length - 1 - hi].trim()) hi++;
+  const head = a.slice(0, lo).join(""), tail = hi ? a.slice(a.length - hi).join("") : "";
+  const am = a.slice(lo, a.length - hi), bm = b.slice(lo, b.length - hi);
+  let mid;
+  if (am.length * bm.length <= DIFF_CELLS) mid = lcsOps(am, bm);
+  else {
+    const al = LINES(am.join("")), bl = LINES(bm.join(""));
+    mid = al.length * bl.length <= DIFF_CELLS ? lcsOps(al, bl)
+      : [{t: "chosen", text: am.join("")}, {t: "rejected", text: bm.join("")}].filter(o => o.text);
+  }
+  return coalesce([...(head ? [{t: "same", text: head}] : []), ...mid,
+                   ...(tail ? [{t: "same", text: tail}] : [])]);
+}
+
+// Two responses that share only "the" and "is" do not really share text, and a
+// word-level LCS finds hundreds of such matches in unrelated prose. Folding the
+// short ones back into both sides makes the highlight read as blocks, and keeps
+// the shared-character count from being flattered by function words.
+function coalesce(ops){
+  if (ops.length === 1) return ops;   // one span either way: nothing to coalesce
+  const out = [];
+  const push = (t, text) => {
+    const last = out[out.length - 1];
+    if (last && last.t === t) last.text += text; else out.push({t, text});
+  };
+  for (const o of ops){
+    if (o.t === "same" && o.text.trim().length < MIN_SAME){
+      push("chosen", o.text); push("rejected", o.text);
+    } else push(o.t, o.text);
+  }
+  return out;
+}
+
+const opChars = (ops, t) => ops.reduce((a, o) => a + (o.t === t ? o.text.length : 0), 0);
+
+// Assistant text on one side of the pair: `part` picks the answer or the
+// thinking span, both of which DPO scores.
+const sideText = (side, part) => (side.turns || [])
+  .filter(t => t.role === "assistant")
+  .map(t => part === "reasoning" ? (t.reasoning ? t.reasoning.text : "") : t.text)
+  .filter(Boolean).join("\n\n");
+const sideCut = side => (side.turns || []).some(t =>
+  t.chars > t.text.length || (t.reasoning && t.reasoning.chars > t.reasoning.text.length));
+
+function diffPanel(ops){
+  const sides = [
+    {key: "chosen", cls: "pos", mark: "✓", head: "pushed toward this", cmark: "up", color: "var(--series-1)"},
+    {key: "rejected", cls: "neg", mark: "✗", head: "pushed away from this", cmark: "down", color: "var(--neg)"},
+  ];
+  const shared = opChars(ops, "same");
+  const totals = {chosen: shared + opChars(ops, "chosen"), rejected: shared + opChars(ops, "rejected")};
+  const maxTotal = Math.max(totals.chosen, totals.rejected, 1);
+
+  const bars = sides.map(s => {
+    const uniq = totals[s.key] - shared;
+    const seg = (n, c, k, why) => n <= 0 ? "" :
+      `<div style="flex:${n};background:${c}" data-tip="<b>${escAttr(k)}</b><br>${num(n)} characters<br>${escAttr(why)}"></div>`;
+    return `<div class="lenrow splitrow">
+      <div class="lbl">${s.mark} ${s.key}</div>
+      <div><div class="strip" style="width:${totals[s.key] / maxTotal * 100}%">
+        ${seg(shared, "var(--baseline)", "shared with the other side", "appears in both responses, so its two contributions largely cancel")}
+        ${seg(uniq, s.color, "only on the " + s.key + " side", "the text the update actually acts on")}
+      </div></div>
+      <div class="val">${pct(uniq / (totals[s.key] || 1))} differs</div>
+    </div>`;
+  }).join("");
+
+  const panels = sides.map(s => {
+    const html = ops.filter(o => o.t === "same" || o.t === s.key).map(o => o.t === "same"
+      ? `<span class="dim">${esc(o.text)}</span>`
+      : `<mark class="${s.cmark}">${esc(o.text)}</mark>`).join("");
+    return `<div class="side ${s.cls}">
+      <div class="sh"><div class="verdict"><i style="background:${s.color}"></i>${s.mark} ${s.head}</div>
+        <div class="who">highlighted: only on this side</div></div>
+      <div class="body">${html
+        ? `<div class="ctxtext">${html}</div>`
+        : '<p class="note">nothing stored on this side</p>'}</div>
+    </div>`;
+  }).join("");
+
+  return `<div class="legend" style="margin-bottom:8px">
+      <span class="k"><i style="background:var(--baseline)"></i>in both responses <em>${num(shared)} ch</em></span>
+      <span class="k"><i style="background:var(--series-1)"></i>only chosen <em>${num(totals.chosen - shared)} ch</em></span>
+      <span class="k"><i style="background:var(--neg)"></i>only rejected <em>${num(totals.rejected - shared)} ch</em></span>
+    </div>
+    ${bars}
+    <div class="pair" style="margin-top:12px">${panels}</div>`;
+}
+
+// Reading of the diff for this particular pair. Dolci's pairs are mostly two
+// independent generations rather than an edit of one response, so the low-share
+// case is the common one and gets its own sentence.
+function sharedNote(shared, total, rec, dead){
+  const f = shared / (total || 1);
+  if (dead) return `As stored, the two responses are identical — same text, so the same log-probability under
+    both copies of the model, a margin of exactly zero, and a gradient of exactly zero. This pair moves the
+    model not at all.${(rec.meta && rec.meta.preference_type) === "delta_learning"
+      ? " Delta learning marks the larger model's response as chosen without comparing the two, so a prompt where both models answered identically still ends up in the mix as a preference pair."
+      : ""}`;
+  const counts = `${num(shared)} of the chosen response's ${num(total)} characters (${pct(f)}) also appear in the rejected one.`;
+  const why = (rec.meta && rec.meta.preference_type) === "delta_learning"
+    ? " That is what delta learning produces: two independent generations from two different-sized models, not an edit of one response into the other."
+    : "";
+  if (f < 0.1) return `These two responses share almost no wording — ${counts.replace(/^./, c => c.toLowerCase())}
+    Nothing substantial cancels, so the update pushes up nearly every token of the chosen response and pushes
+    down nearly every token of the rejected one. A pair like this teaches a preference over whole responses
+    rather than a local fix.${why}`;
+  if (f > 0.5) return `The two responses are mostly the same text: ${counts} Only the highlighted spans
+    carry the signal, so this pair teaches a narrow edit rather than a wholesale preference.`;
+  return `${counts} That shared part largely cancels, so the update concentrates on the highlighted spans.${why}`;
+}
+
+function gradientSection(rec){
+  const answers = diffPair(sideText(rec.chosen, "answer"), sideText(rec.rejected, "answer"));
+  const hasThink = sideText(rec.chosen, "reasoning") || sideText(rec.rejected, "reasoning");
+  const thinking = hasThink
+    ? diffPair(sideText(rec.chosen, "reasoning"), sideText(rec.rejected, "reasoning")) : null;
+  // Nothing unique on either side, answer or thinking: the two sequences are the
+  // same, so the pair carries no gradient. Rare, but it happens in Dolci.
+  const deadPair = !opChars(answers, "chosen") && !opChars(answers, "rejected") &&
+    (!thinking || (!opChars(thinking, "chosen") && !opChars(thinking, "rejected")));
+  const sharedHead = answers.length && answers[0].t === "same" ? answers[0].text.length : 0;
+  const sharedAll = opChars(answers, "same");
+  const chosenTotal = sharedAll + opChars(answers, "chosen");
+  const cut = sideCut(rec.chosen) || sideCut(rec.rejected);
+
+  const flow = `<div class="flow">
+    <div class="step"><div class="t">1 · score</div><div class="v">sum the log-probability of each response's tokens</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="t">2 · compare</div><div class="v">against a frozen copy of the SFT checkpoint</div></div>
+    <div class="arrow">→</div>
+    <div class="step accent"><div class="t">3 · margin</div><div class="v">how much further the chosen one has moved</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="t">4 · update</div><div class="v">chosen tokens up, rejected tokens down</div></div>
+  </div>`;
+
+  return `<div class="grad" id="gradpanel" hidden>
+    <h4>the update</h4>
+    ${flow}
+    <div class="formula">margin = β · [ (log π(chosen) − log π_ref(chosen)) − (log π(rejected) − log π_ref(rejected)) ]
+loss   = − log σ(margin)
+update ∝ σ(−margin) · [ ∇ log π(chosen) − ∇ log π(rejected) ]</div>
+    <p class="kv">Two copies of the model are involved: the one being trained (π) and a frozen copy of the
+      SFT checkpoint it started from (π_ref). At the first step the two are identical, so the margin is zero
+      and every pair contributes the same loss, log 2. Training drives the margin positive.</p>
+    <p class="kv">The update is ordinary next-token cross-entropy on the chosen response, plus the same thing
+      with its sign flipped on the rejected one: every chosen token is made more likely, every rejected token
+      less likely. The scale factor σ(−margin) shrinks as the model gets the pair right, so a pair it already
+      ranks correctly contributes almost nothing and a pair it ranks backwards gets nearly the whole gradient.
+      That is why DPO needs no separately trained reward model — the ranking error is the reward error.
+      β sets how far π may drift from π_ref; it is a setting of the training run, not part of this dataset.</p>
+    <h4>how much of this pair the update acts on</h4>
+    <p class="kv">Add a constant to both log-probabilities and the margin does not move. The loss can only
+      see the gap between the two responses, so wording they share carries little of the signal and wording
+      that differs carries almost all of it.</p>
+    ${diffPanel(answers)}
+    <p class="kv">${sharedNote(sharedAll, chosenTotal, rec, deadPair)}</p>
+    ${thinking ? `<h4>the thinking spans</h4>
+      <p class="kv">Both responses carry a thinking span, and DPO scores those tokens too.</p>
+      <details><summary>diff the two thinking spans</summary>
+        <div style="margin-top:8px">${diffPanel(thinking)}</div></details>` : ""}
+    <h4>what this view approximates</h4>
+    <p class="note">The diff is over words; the model is scored over tokens, so the shared spans are an
+      approximation of what cancels, and matches shorter than ${MIN_SAME} characters are counted as
+      coincidence rather than shared text. ${deadPair
+        ? "These two responses never diverge, so here the cancellation is exact all the way through."
+        : `The cancellation is exact only for a shared opening (${sharedHead
+            ? "the two answers here share " + num(sharedHead) + " characters"
+            : "the two answers here share none — they diverge at the first word"}): once the responses diverge,
+          identical text later on sits in a different context on each side and contributes differently.`} No log-probabilities, gradients or β values are stored in the dataset, so the
+      numbers above are all character counts and the loss above is symbolic.
+      ${cut ? "One side of this pair is cut at 4,000 characters, so the diff covers only the stored prefix — the HuggingFace row has the rest." : ""}</p>
+  </div>`;
+}
+
 // DPO: the pair, side by side, plus the length gap between the two responses.
 function renderDPO(rec, dataset){
   const sides = [
@@ -519,6 +767,13 @@ function renderDPO(rec, dataset){
     <section class="ctxsec">
       <h3>the pair</h3>
       <div class="pair">${panels}</div>
+    </section>
+    <section class="ctxsec">
+      <h3>how this pair updates the model</h3>
+      <button class="ctxbtn" data-toggle="gradpanel"
+        data-more="show how this pair updates the model ›"
+        data-less="hide the update ⌄">show how this pair updates the model ›</button>
+      ${gradientSection(rec)}
     </section>`;
 }
 
@@ -588,6 +843,16 @@ const RENDER = {sft: renderSFT, dpo: renderDPO, rlvr: renderRLVR};
 const dlg = document.getElementById("ctx");
 document.getElementById("ctxclose").onclick = () => dlg.close();
 dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); });
+
+// Sections built as strings ask for a disclosure button with data-toggle.
+document.getElementById("ctxbody").addEventListener("click", e => {
+  const b = e.target.closest("button[data-toggle]");
+  if (!b) return;
+  const t = document.getElementById(b.dataset.toggle);
+  if (!t) return;
+  t.hidden = !t.hidden;
+  b.textContent = t.hidden ? b.dataset.more : b.dataset.less;
+});
 
 function openContext(rec, stage, dataset, stageName){
   document.getElementById("ctxtitle").innerHTML =

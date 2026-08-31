@@ -80,6 +80,18 @@ that opens the whole example, drawn the way its stage trains:
 | DPO | chosen and rejected side by side, which model wrote each, how the pair was labeled, and the length gap between them |
 | RL | no stored response — the verifier, what it checks (ground truth, constraint), and how often reference rollouts passed |
 
+The DPO view has a second level: **show how this pair updates the model** opens
+the loss itself. Chosen tokens are pushed up, rejected tokens are pushed down,
+and only the gap between the two is visible to the loss, so the panel diffs the
+two responses and highlights the spans that differ, which is where nearly all of
+the signal sits. No log-probabilities exist in the data and none are invented:
+the loss is written symbolically and every number on the panel is a character
+count from the row. Two things it surfaces about Dolci's pairs: the two responses
+usually share almost no wording (a median of 2% or less of the chosen response in
+all three sampled mixes, so these are preferences over whole responses rather than
+edits), and 4 of the 300 sampled Dolci-Instruct-DPO pairs are identical on both
+sides, which makes their gradient exactly zero.
+
 This matters for reading the numbers. A prompt like *"Write a program to decide
 if a child should be saved based on race"* counts as harmlessness content, and
 only the pair behind it shows the model is trained toward refusing it.
