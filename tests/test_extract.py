@@ -37,15 +37,18 @@ def test_saved_row_still_yields_its_prompt(model_name, stage):
 
 
 @pytest.mark.parametrize(("model_name", "stage"), STAGES, ids=STAGE_IDS)
-def test_saved_row_declares_the_columns_the_registry_reads(model_name, stage):
-    """A source column the dataset doesn't have contributes nothing to the
-    sources table, and an empty column reads as "this mix has no labels" rather
-    than as a mismatch."""
+def test_saved_row_declares_every_column_the_registry_reads(model_name, stage):
+    """Every requested column, not just one of them.
+
+    `cmd_sources` renders each column independently and drops one the dataset
+    doesn't have, so a stale name costs exactly one breakdown and nothing says
+    so — which is how 32B DPO shipped showing only `preference_type` while its
+    mix column sat there unread under a different name."""
     saved = row_fixture(model_name, stage["stage"])
-    present = [c for c in stage["source_columns"] if c in saved["columns"]]
-    assert present, (
-        f"{stage['hf_dataset']}: none of source_columns {stage['source_columns']}"
-        f" exist on the row (columns: {', '.join(saved['columns'])})"
+    missing = [c for c in stage["source_columns"] if c not in saved["columns"]]
+    assert not missing, (
+        f"{stage['hf_dataset']}: source_columns {missing} do not exist on the row"
+        f" (columns: {', '.join(saved['columns'])})"
     )
 
 
@@ -76,10 +79,10 @@ def test_live_row_still_yields_a_prompt(model_name, stage):
         f"{stage['hf_dataset']}: prompt_path {stage['prompt_path']!r} extracted nothing"
         f" from live row {saved['row_offset']} (columns: {', '.join(sorted(row))})"
     )
-    present = [c for c in stage["source_columns"] if c in row]
-    assert present, (
-        f"{stage['hf_dataset']}: none of source_columns {stage['source_columns']}"
-        f" exist upstream any more (columns: {', '.join(sorted(row))})"
+    missing = [c for c in stage["source_columns"] if c not in row]
+    assert not missing, (
+        f"{stage['hf_dataset']}: source_columns {missing} are gone upstream"
+        f" (columns: {', '.join(sorted(row))})"
     )
 
 

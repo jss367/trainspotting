@@ -332,7 +332,7 @@
         "hf_dataset": "allenai/Dolci-Think-SFT-32B",
         "prompt_path": "messages",
         "source_columns": [
-          "dataset_source"
+          "source"
         ]
       },
       {
@@ -341,7 +341,7 @@
         "hf_dataset": "allenai/Dolci-Think-DPO-32B",
         "prompt_path": "prompt",
         "source_columns": [
-          "dataset_source",
+          "dataset",
           "preference_type"
         ]
       },
