@@ -69,15 +69,20 @@ def column_frequencies(
 MAX_SAMPLE_ROUNDS = 6
 
 
-def sample_rows_with_index(
+def sample_rows_with_truncation(
     dataset: str,
     n: int,
     seed: int = 0,
     config: str = "default",
     split: str = "train",
-) -> list[tuple[int, dict]]:
+) -> list[tuple[int, dict, list[str]]]:
     """Sample ~n *distinct* rows via random pages of the /rows endpoint, keeping
-    row indices.
+    row indices and the names of any cells the server shortened to fit its
+    response limit.
+
+    A truncated cell only matters to a caller reading the text itself — a search
+    cannot find a string in the part the server cut — so it travels alongside the
+    row rather than in it.
 
     Rows within a page are correlated (adjacent on disk), so we draw many small
     chunks from uniformly random offsets rather than a few full pages. The index
@@ -115,7 +120,7 @@ def sample_rows_with_index(
         # permanently short of its own 11 rows.
         return sorted(rng.randrange(max(1, total - chunk + 1)) for _ in range(pages))
 
-    seen: dict[int, dict] = {}
+    seen: dict[int, tuple[dict, list[str]]] = {}
     offsets = draw((n + chunk - 1) // chunk)
     for _ in range(MAX_SAMPLE_ROUNDS):
         for off in offsets:
@@ -130,7 +135,7 @@ def sample_rows_with_index(
                 "rows", dataset=dataset, config=config, split=split, offset=off, length=chunk
             )
             for i, r in enumerate(j["rows"]):
-                seen.setdefault(off + i, r["row"])
+                seen.setdefault(off + i, (r["row"], r.get("truncated_cells") or []))
         if len(seen) >= min(n, total):
             break
         shortfall = n - len(seen)
@@ -170,11 +175,25 @@ def sample_rows_with_index(
                 "rows", dataset=dataset, config=config, split=split, offset=off, length=chunk
             )
             for i, r in enumerate(j["rows"]):
-                seen.setdefault(off + i, r["row"])
+                seen.setdefault(off + i, (r["row"], r.get("truncated_cells") or []))
 
-    rows = sorted(seen.items())
+    rows = [(index, row, truncated) for index, (row, truncated) in sorted(seen.items())]
     rng.shuffle(rows)
     return rows[:n]
+
+
+def sample_rows_with_index(
+    dataset: str,
+    n: int,
+    seed: int = 0,
+    config: str = "default",
+    split: str = "train",
+) -> list[tuple[int, dict]]:
+    """The same sample, without the truncation report."""
+    return [
+        (index, row)
+        for index, row, _ in sample_rows_with_truncation(dataset, n, seed, config, split)
+    ]
 
 
 def sample_rows(

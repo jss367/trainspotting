@@ -3,8 +3,8 @@
 Spot what's in a model's training data. Audits what a fully open model was
 trained on — currently the OLMo 3 pipelines (Ai2), whose pretraining (Dolma 3)
 and post-training (Dolci) data are public — and, with the same layers, any
-dataset on its own. The tool answers five kinds of question, in increasing order
-of depth:
+dataset on its own. The tool answers six kinds of question. The first five go in
+increasing order of depth; the sixth is a lookup rather than an estimate:
 
 1. **Facts** — stage sizes for a model's whole training pipeline (pretrain →
    midtrain → long-context → SFT → DPO → RLVR), hardcoded in a registry.
@@ -25,6 +25,12 @@ of depth:
    response the model is fit to (SFT), the pair it is pushed between (DPO), or
    the verifier that scores it (RL). A prompt on its own can read as the
    opposite of what it teaches, so every count clicks through to this.
+6. **Strings** — where a given string or regex appears in the sampled examples,
+   and on which side. A behaviour like claiming to be ChatGPT is in none of the
+   prompts: it is in what the model is fit to. So this layer searches the
+   response columns as well, and for a DPO pair says whether the hit is in the
+   chosen or the rejected completion — the same string in each teaches opposite
+   things. See [Searching a whole example](#searching-a-whole-example).
 
 The pretraining corpora get their own path, because the datasets-server cannot
 sample them: exact composition from the shard listing, readable random documents,
@@ -91,6 +97,10 @@ trainspotting ask olmo-3-7b-instruct \
 
 # Store the full training example behind each sampled prompt (no API key needed)
 trainspotting context olmo-3-7b-instruct
+
+# Find a regex anywhere in the sampled examples — responses included, DPO side
+# reported (no API key needed)
+trainspotting search olmo-3-7b-instruct "I am ChatGPT"
 
 # Detect the natural language of each sampled prompt (local, no API key needed)
 trainspotting languages olmo-3-7b-instruct
@@ -186,6 +196,67 @@ if a child should be saved based on race"* counts as harmlessness content, and
 only the pair behind it shows the model is trained toward refusing it.
 
 Registered models: `olmo-3-7b-instruct`, `olmo-3-7b-think`, `olmo-3-32b-think`.
+
+## Searching a whole example
+
+`classify`, `ask` and `languages` all read the prompt, which is the half of an
+example a behaviour is least likely to be in. A model that claims to be ChatGPT
+does it in a response; no prompt in the mix says it, so a prompt-only search
+reports zero. `search` takes a Python regex (case-insensitive unless
+`--case-sensitive`), scans every text field of each sampled row, and writes
+`results/<model>.<stage>.search-<slug>.json` with a snippet, a match count, the
+column it was read from and a side per hit:
+
+| Stage | Sides |
+|---|---|
+| SFT | `prompt` (user and system turns), `response` (assistant turns) |
+| DPO | `prompt` (everything before the pair branches, counted once), `chosen`, `rejected` |
+| RLVR | `prompt`, `verifier` (ground truth, solution, constraint), `rollout` (stored reference generations) |
+| chat (a dataset like WildChat-1M) | `prompt`, `reply` — a log, so nothing was fit to either |
+
+The side is the finding, not a detail of it. "I am ChatGPT" in a rejected
+completion trains the model away from saying it, so a count that adds it to the
+chosen hits points the wrong way; DPO stages also get a `chosen only` /
+`rejected only` / `both` split, because a string in both completions says nothing
+about which way the pair pushes. A pair matching on one completion while the
+server shortened the other is `side unknown` rather than exclusive — the text
+nobody read could hold the string too. A multi-turn pair shares a conversation before
+it branches, assistant turns included, and all of it is prompt text: a string in
+the shared history is not a hit on either completion. RL rows store no response at all, so their
+non-prompt sides are the answer key and the reference rollouts the verifier
+scored — neither is text the model was fit to.
+
+```
+$ trainspotting search olmo-3-7b-instruct "I cannot" --sample 200 --stage dpo
+dpo: 6/200 match = 3.0% (95% CI 1.4–6.4%) -> results/olmo-3-7b-instruct.dpo.search-i-cannot-382cdff9.json
+  rows by side: prompt 1, chosen 5, rejected 0 (chosen only 5, rejected only 0, both 0)
+```
+
+Refusals in this mix are what the pair prefers, five times out of five. Read off
+the prompts alone that number does not exist. The same holds for a chat log:
+"as an AI language model" is in 6 of 200 sampled WildChat-1M conversations, all
+six in the reply and none in the prompt.
+
+Reasoning spans stay inside the response they are part of, unlike the context
+view which folds them away: a model that says it while thinking still said it.
+A turn is also more than its `content`: `reasoning_content`, `tool_calls`,
+`function_call`, `function_calls` and `refusal` are separate columns in these
+schemas, and each is searched as its own entry named after the column it came
+from, so a tool name is findable and a hit in a call reads differently from a
+hit in the prose. `functions` is searched as prompt text whatever turn it hangs
+off — it is the menu of tools the model was offered, not anything it said.
+
+A default result file is named after the pattern, with a hash of the pattern and
+its case mode appended unless the pattern is already exactly its own slug and
+the search was case-insensitive. Punctuation in a regex is syntax, so `a.b` and
+`a+b` are different searches that both reduce to `a-b`, and `--case-sensitive`
+makes a third; one silently overwriting another is not a naming problem but a
+lost result. `--slug` gives a run a readable name instead.
+
+The default `--sample 300 --seed 0` is the draw every other layer uses, so a hit
+is a row those runs already labeled and its whole example is in the committed
+context file. A larger `--sample` is a wider net over a different set of rows,
+which no longer lines up with them.
 
 ## Pretraining data
 
@@ -392,7 +463,9 @@ The offline suite covers the pure code: the clustered Wilson interval and its
 degenerate branches, language detection on mixed-language prompts, the
 classifier's reply parser, and prompt extraction against one saved row per
 registry stage (`tests/fixtures/rows/`, re-captured by
-`scripts/capture_row_fixtures.py`).
+`scripts/capture_row_fixtures.py`). Search is checked against those same saved
+rows: every registry stage has to yield more than its prompt, or a search of it
+is the prompt-only search the layer exists to replace.
 
 `--live` re-runs the extraction checks against rows fetched right now. That is
 the canary for an upstream schema change, which otherwise shows up only as a
@@ -412,7 +485,25 @@ sampling run that quietly labels nothing.
   LLM judge). The raw source tag travels with every record, so the inference is
   checkable, and RL rows carry no judge rubric at all.
 - Context fields are cut at 4,000 characters. Every view links to the exact row
-  on HuggingFace, which is where the untruncated example lives.
+  on HuggingFace, which is where the untruncated example lives. `search` reads
+  the row, not the stored context record, so it is not limited to that cut.
+- `search` reads a sample like everything else here, so it bounds a rate rather
+  than proving absence: no hits in 300 rows means under roughly 1% of rows, not
+  that the string is absent from the mix. For "is this exact string anywhere in
+  the training data", use OLMoTrace / infini-gram, which indexes the whole thing.
+- The datasets-server shortens a very large cell to fit its response limit, and a
+  hit past the cut cannot be found. Each search result file records how many
+  sampled rows had *searched* text shortened (`truncated_rows`) and how many of
+  those showed no hit at all (`censored`). A row cut only in a column the stage
+  never reads — an RL row's token arrays are the longest cells on it — is
+  unaffected and counts as the confirmed non-match it is. The per-side counts
+  are lower bounds for the same reason, so `sides_unknown` says how many
+  matching rows had that side's text cut: a zero beside a non-zero there means
+  "not seen", not "not there". A hit read out of a shortened cell is marked
+  `partial`, because its `count` and `chars` describe the text that arrived. A censored row is unknown rather than a
+  non-match, so it is not counted as evidence against the string: `matched` is a
+  lower bound, and the interval's upper end is computed as if every censored row
+  had been a hit. With nothing censored that is the ordinary Wilson interval.
 - `/statistics` truncates frequencies for very high-cardinality columns (e.g.
   `dataset_source` in Dolci-Think-SFT, thousands of values): the returned
   counts are exact but not exhaustive. A short list that sums well below 100%
