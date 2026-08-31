@@ -73,6 +73,17 @@ def test_phrase_slug_distinctness():
     assert _phrase_slug("气候变化")  # nonempty
 
 
+def test_filename_part_stays_in_results():
+    """--slug and --index are user input headed into a filename; separators
+    and dot-runs must not survive into path components."""
+    from trainspotting.cli import _filename_part
+
+    assert _filename_part("../../report") == "report"
+    assert _filename_part("v4_olmo-2-0325-32b-instruct_llama") == "v4_olmo-2-0325-32b-instruct_llama"
+    assert "/" not in _filename_part("a/b\\c")
+    assert _filename_part("///") == "x"
+
+
 def test_snippet_marks_matched_spans():
     doc = {
         "spans": [

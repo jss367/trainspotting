@@ -698,6 +698,17 @@ def _phrase_slug(phrase: str) -> str:
     return f"{norm}-{digest[:8]}" if norm else digest[:12]
 
 
+def _filename_part(part: str) -> str:
+    """One user-supplied component of a result filename, made separator-free.
+
+    Not a security boundary — it is the user's own results/ directory — but a
+    stray "/" in --slug or --index would scatter files outside it, away from
+    where the user and the site look for results. Squash anything that is not
+    a plain filename character.
+    """
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", part).strip("._-") or "x"
+
+
 def cmd_find(args):
     """Exact-string search over an open training corpus, via infini-gram.
 
@@ -790,7 +801,7 @@ def cmd_find(args):
         # different count in every corpus — so it belongs in the filename,
         # or comparing indexes would overwrite one result with the next.
         path = _write_json(
-            RESULTS / f"find.{args.index}.{slug}.json",
+            RESULTS / f"find.{_filename_part(args.index)}.{_filename_part(slug)}.json",
             {
                 # The index name plays the role `dataset`+`revision` play in
                 # the other result files: infini-gram indexes are immutable
