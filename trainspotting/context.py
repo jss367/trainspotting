@@ -14,7 +14,7 @@ Records are keyed by the same prompt text the classifier saw, so the site can
 join them onto committed label and ask results without re-running any model.
 """
 
-from trainspotting import rewards
+from trainspotting import rewards, search
 
 MAX_TEXT = 4000  # per field; the full row stays one click away on HuggingFace
 KEY_CHARS = 400  # prompt prefix that joins a context record to a labeled prompt
@@ -51,14 +51,18 @@ def _turns(messages) -> list[dict]:
         turn = {"role": m.get("role", "?"), **_text(answer)}
         if reasoning:
             turn["reasoning"] = _text(reasoning)
-        # Whether what is stored is the content itself. Splitting a thinking span
-        # out drops the <think> markers and the whitespace around them, and long
-        # fields are cut, so a turn that went through either can no longer be
-        # compared byte for byte with the sequence the model was scored on. The
-        # absence of a reasoning field does not say this on its own: a turn whose
-        # thinking span was empty loses its markers and keeps no field to show it.
+        # Whether what is stored is the turn as it was written. Splitting a
+        # thinking span out drops the <think> markers and the whitespace around
+        # them, and long fields are cut, so a turn that went through either can no
+        # longer be compared byte for byte with the sequence the model was scored
+        # on. The absence of a reasoning field does not say this on its own: a
+        # turn whose thinking span was empty loses its markers and keeps no field
+        # to show it. Nor does `content` alone — a message can carry output beside
+        # it, a separate reasoning field or tool calls or a refusal, which
+        # `search` reads as part of the turn and this record does not keep.
         # Anything claiming two turns are identical needs this, not a guess.
-        if turn["text"] == content:
+        beside_content = ("reasoning_content",) + search.STRUCTURED_TURN_FIELDS + search.INPUT_TURN_FIELDS
+        if turn["text"] == content and not any(m.get(k) for k in beside_content):
             turn["raw"] = True
         out.append(turn)
     return out
