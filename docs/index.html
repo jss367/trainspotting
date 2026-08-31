@@ -513,6 +513,17 @@ const unlabeledOf = (d, labeled) => {
   return n ? {n, why, text: `${n} of ${n + labeled} sampled prompts unlabeled${why ? ` (${why})` : ""} and excluded`} : null;
 };
 
+// A run whose every request failed writes a real file: an unlabeled count and
+// no records. There is no share to draw from zero labels — 0/0 is NaN, which
+// renders as "NaN%" behind a bar of undefined width — so each chart says what
+// happened instead of drawing it.
+const noLabels = (parent, text) => {
+  const p = document.createElement("p");
+  p.className = "note";
+  p.textContent = text;
+  parent.appendChild(p);
+};
+
 // Mix labels are a mix of real HuggingFace dataset ids and bare internal names.
 // Only the ones checked as publicly reachable when the data was built get a link.
 const srcLabel = (v, links) => (links && links[v])
@@ -1190,9 +1201,11 @@ async function renderModel(model, gen){
       h.className = "stage";
       h.id = "sec-" + s.stage;
       h.style.setProperty("--bar", hueFor(s.stage));
+      // Link the tree these counts were taken from, not just the dataset root:
+      // "exact composition" is a claim about one revision, and `main` moves.
       h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())}
         <span class="ds">— <a href="https://huggingface.co/datasets/${escAttr(st.dataset)}"
-          target="_blank" rel="noopener">${esc(st.dataset)} ↗</a> (${st.total.toLocaleString()} examples)</span>`;
+          target="_blank" rel="noopener">${esc(st.dataset)} ↗</a>${revLink(st)} (${st.total.toLocaleString()} examples)</span>`;
       mix.appendChild(h);
       // RL mixes don't label their reward functions, but each mix has exactly
       // one verifier, so when every value in a mix-name column is in the
@@ -1310,6 +1323,10 @@ async function renderModel(model, gen){
     sub.innerHTML = `${esc(d.dataset)}${revLink(d)} · ${who}`
       + (skipped ? ` · <b>${skipped}</b> unlabeled${why ? ` (${esc(why)})` : ""} and excluded` : "");
     hhh.append(h, sub);
+    if (!n){
+      noLabels(hhh, `every sampled prompt went unlabeled — no shares to show for this stage`);
+      continue;
+    }
     const max = Math.max(...LABELS.map(l => wilson(counts[l]||0, n)[1]), 0.01);
     let lastGrp = null;
     for (const l of LABELS){
@@ -1465,6 +1482,10 @@ async function renderModel(model, gen){
         <p class="sub">Share of sampled ${unitLabel} judged a match by ${classifier}. Click a bar to read the matches verbatim.</p>`;
       const max = Math.max(...rows.map(r => r.ci[1]), 0.01);
       for (const r of rows){
+        if (!r.n){
+          noLabels(card, `${r.stage.toUpperCase()} — every sampled item went unjudged, so there is no rate to show`);
+          continue;
+        }
         const s = post.find(p => p.stage === r.stage) || {stage: r.stage, hf_dataset: r.d.dataset, name: r.d.dataset};
         const isCorpus = corpusStages.some(c => c.stage === r.stage);
         const unit = isCorpus ? "documents" : "prompts";
@@ -1580,6 +1601,9 @@ async function renderCompare(gen){
       hhh.appendChild(p);
     }
     if (!per.length) continue;
+    for (const p of per.filter(x => !x.n)){
+      noLabels(hhh, `${p.m} — every sampled prompt went unlabeled, so this model has no bars here`);
+    }
     // Same accounting as the per-model page, per model rather than per stage.
     for (const p of per.filter(x => x.skipped)){
       const note = document.createElement("p");
@@ -1587,7 +1611,7 @@ async function renderCompare(gen){
       note.textContent = `${p.m} — ${p.skipped.text} from the bars below`;
       hhh.appendChild(note);
     }
-    const max = Math.max(...per.flatMap(p => LABELS.map(l => wilson(p.counts[l]||0, p.n)[1])), 0.01);
+    const max = Math.max(...per.filter(p => p.n).flatMap(p => LABELS.map(l => wilson(p.counts[l]||0, p.n)[1])), 0.01);
     let lastGrp = null;
     for (const l of LABELS){
       const grp = VALUE_LABELS.has(l) ? "values" : "skills";
@@ -1599,7 +1623,7 @@ async function renderCompare(gen){
       lbl.className = "cmp-lbl" + (VALUE_LABELS.has(l) ? " value" : "");
       lbl.textContent = NICE[l];
       hhh.appendChild(lbl);
-      for (const p of per){
+      for (const p of per.filter(x => x.n)){
         const k = p.counts[l] || 0;
         const [lo, hi] = wilson(k, p.n);
         barRow(hhh, shortName(p.m), k/p.n, lo, hi, max,
@@ -1681,6 +1705,10 @@ async function renderCompare(gen){
           card.appendChild(note);
         }
         for (const r of rows){
+          if (!r.n){
+            noLabels(card, `${r.m} — every sampled item went unjudged, so there is no rate to show`);
+            continue;
+          }
           barRow(card, shortName(r.m), r.k/r.n, r.ci[0], r.ci[1], max,
             `<b>${r.m}</b> · ${stage}${revLink(r.d)}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`
             + (r.skipped ? `<br>${esc(r.skipped.text)}` : "") + `<br>click to read them`,
