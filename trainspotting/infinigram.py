@@ -64,6 +64,18 @@ NO_OLMO3_CAVEAT = (
 )
 
 
+def caveat_for(index: str) -> str | None:
+    """The corpus caveat that is true of `index`, or None.
+
+    Every index in INDEXES predates Dolma 3, so the no-OLMo-3 caveat holds for
+    all of them. An index this module does not know — including the Dolma 3
+    one this file hopes Ai2 publishes — must not be characterized: asserting
+    "closest available, not what the model saw" about an arbitrary index would
+    be exactly wrong the day someone passes the real thing.
+    """
+    return NO_OLMO3_CAVEAT if index in INDEXES else None
+
+
 def _post(payload: dict, timeout: int = 90) -> dict:
     """POST with backoff. The API asks callers to expect transient failures,
     and reports its own errors as 200s with an `error` body — surface those as

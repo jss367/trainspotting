@@ -714,7 +714,10 @@ def cmd_find(args):
     """
     covers = infinigram.INDEXES.get(args.index, "not in the known-index list; passed through as-is")
     print(f"index: {args.index} — {covers}", file=sys.stderr)
-    print(f"note: {infinigram.NO_OLMO3_CAVEAT}\n", file=sys.stderr)
+    caveat = infinigram.caveat_for(args.index)
+    if caveat:
+        print(f"note: {caveat}", file=sys.stderr)
+    print(file=sys.stderr)
 
     found = infinigram.find(args.index, args.phrase)
     count = found["cnt"]
@@ -749,12 +752,16 @@ def cmd_find(args):
                 break
             tried.add((s, rank))
             doc = infinigram.get_doc(args.index, args.phrase, s, rank, args.maxlen)
-            if doc.get("doc_ix") in seen:
+            # doc_ix numbers a document within its suffix-array shard, so the
+            # shard belongs in the identity — two documents in different
+            # shards may share a doc_ix without being the same document.
+            if (s, doc.get("doc_ix")) in seen:
                 continue
-            seen.add(doc.get("doc_ix"))
+            seen.add((s, doc.get("doc_ix")))
             prov = infinigram.doc_provenance(doc)
             docs.append(
                 {
+                    "index_shard": s,
                     "doc_ix": doc.get("doc_ix"),
                     "doc_len": doc.get("doc_len"),
                     "blocked": doc.get("blocked", False),
@@ -789,7 +796,7 @@ def cmd_find(args):
                 "phrase": args.phrase,
                 "index": args.index,
                 "covers": covers,
-                "caveat": infinigram.NO_OLMO3_CAVEAT,
+                "caveat": caveat,
                 "tokens": found["tokens"],
                 "count": count,
                 "docs": docs,
