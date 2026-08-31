@@ -16,12 +16,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 ROWS = Path(__file__).resolve().parent / "fixtures" / "rows"
 
 
-def row_fixture(model: str, stage: str) -> dict:
+def row_fixture(target: str, stage: str) -> dict:
     """The saved row for one registry stage, captured by
     scripts/capture_row_fixtures.py."""
-    path = ROWS / f"{model}.{stage}.json"
+    path = ROWS / f"{target}.{stage}.json"
     assert path.exists(), (
-        f"no saved row for {model}/{stage} — run scripts/capture_row_fixtures.py"
+        f"no saved row for {target}/{stage} — run scripts/capture_row_fixtures.py"
     )
     return json.loads(path.read_text())
 

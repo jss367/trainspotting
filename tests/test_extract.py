@@ -1,9 +1,10 @@
-"""Pulling a prompt out of a Dolci row, for every schema the registry claims.
+"""Pulling a prompt out of a row, for every schema the registry claims.
 
-The saved rows under fixtures/rows/ are one real row per (model, stage), so a
-`prompt_path` that stops addressing anything fails here instead of quietly
-producing an empty sample. `--live` re-runs the same checks against a freshly
-fetched row, which is what catches an upstream schema change.
+The saved rows under fixtures/rows/ are one real row per (target, stage) —
+models and standalone datasets alike — so a `prompt_path` that stops addressing
+anything fails here instead of quietly producing an empty sample. `--live`
+re-runs the same checks against a freshly fetched row, which is what catches an
+upstream schema change.
 """
 
 import pytest
@@ -12,16 +13,16 @@ from conftest import row_fixture
 from trainspotting import extract, hf, registry
 
 STAGES = [
-    (model_name, stage)
-    for model_name, model in registry.MODELS.items()
-    for stage in registry.post_training_stages(model)
+    (target_name, stage)
+    for target_name in registry.targets()
+    for stage in registry.post_training_stages(registry.resolve(target_name))
 ]
-STAGE_IDS = [f"{m}.{s['stage']}" for m, s in STAGES]
+STAGE_IDS = [f"{t}.{s['stage']}" for t, s in STAGES]
 
 
-@pytest.mark.parametrize(("model_name", "stage"), STAGES, ids=STAGE_IDS)
-def test_saved_row_still_yields_its_prompt(model_name, stage):
-    saved = row_fixture(model_name, stage["stage"])
+@pytest.mark.parametrize(("target_name", "stage"), STAGES, ids=STAGE_IDS)
+def test_saved_row_still_yields_its_prompt(target_name, stage):
+    saved = row_fixture(target_name, stage["stage"])
     # The fixture records the dataset and path it was captured under; a registry
     # edit that repoints a stage has to re-capture rather than silently compare
     # against the old schema.
@@ -36,15 +37,15 @@ def test_saved_row_still_yields_its_prompt(model_name, stage):
     assert prompt.endswith(saved["prompt_tail"])
 
 
-@pytest.mark.parametrize(("model_name", "stage"), STAGES, ids=STAGE_IDS)
-def test_saved_row_declares_every_column_the_registry_reads(model_name, stage):
+@pytest.mark.parametrize(("target_name", "stage"), STAGES, ids=STAGE_IDS)
+def test_saved_row_declares_every_column_the_registry_reads(target_name, stage):
     """Every requested column, not just one of them.
 
     `cmd_sources` renders each column independently and drops one the dataset
     doesn't have, so a stale name costs exactly one breakdown and nothing says
     so — which is how 32B DPO shipped showing only `preference_type` while its
     mix column sat there unread under a different name."""
-    saved = row_fixture(model_name, stage["stage"])
+    saved = row_fixture(target_name, stage["stage"])
     missing = [c for c in stage["source_columns"] if c not in saved["columns"]]
     assert not missing, (
         f"{stage['hf_dataset']}: source_columns {missing} do not exist on the row"
@@ -53,18 +54,18 @@ def test_saved_row_declares_every_column_the_registry_reads(model_name, stage):
 
 
 def test_every_registry_prompt_path_is_covered():
-    """Pinned to the three shapes extract.py implements and the module docstring
-    documents, so a fourth has to arrive with a case here rather than as an
+    """Pinned to the four shapes extract.py implements and the module docstring
+    documents, so a fifth has to arrive with a case here rather than as an
     untested path."""
     covered = {stage["prompt_path"] for _, stage in STAGES}
-    assert covered == {"messages", "chosen_messages", "prompt"}
+    assert covered == {"messages", "chosen_messages", "prompt", "conversation"}
 
 
 @pytest.mark.live
-@pytest.mark.parametrize(("model_name", "stage"), STAGES, ids=STAGE_IDS)
-def test_live_row_still_yields_a_prompt(model_name, stage):
+@pytest.mark.parametrize(("target_name", "stage"), STAGES, ids=STAGE_IDS)
+def test_live_row_still_yields_a_prompt(target_name, stage):
     """The upstream canary: extraction against a row fetched right now."""
-    saved = row_fixture(model_name, stage["stage"])
+    saved = row_fixture(target_name, stage["stage"])
     j = hf._get(
         "rows",
         dataset=stage["hf_dataset"],
@@ -126,6 +127,19 @@ def test_chosen_messages_reads_the_chosen_side():
         "rejected": [{"role": "user", "content": "should be ignored"}],
     }
     assert extract.extract_prompt(row, "chosen_messages") == "shared question"
+
+
+def test_conversation_reads_the_first_user_turn():
+    """Chat logs interleave both sides under one column; only the opening user
+    turn is the prompt."""
+    row = {
+        "conversation": [
+            {"role": "user", "content": "what did you mean?"},
+            {"role": "assistant", "content": "I meant this."},
+            {"role": "user", "content": "a follow-up, not the prompt"},
+        ]
+    }
+    assert extract.extract_prompt(row, "conversation") == "what did you mean?"
 
 
 def test_prompt_as_string():

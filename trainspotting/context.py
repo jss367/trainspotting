@@ -1,12 +1,14 @@
 """Pull the full training context out of a sampled row.
 
 A prompt is half of a training example. What the model is actually trained
-toward differs by stage, so each stage yields a different record:
+toward differs by the kind of example, so each kind yields a different record:
 
     sft   the target conversation — the model is fit to the assistant turns
     dpo   a preferred and a dispreferred response, plus where each came from
     rlvr  no stored response at all — a verifier, what it checks, and how often
           rollouts from the reference model passed it
+    chat  a conversation log, where nothing was trained on anything — the other
+          side of the exchange is what was said, not a target
 
 Records are keyed by the same prompt text the classifier saw, so the site can
 join them onto committed label and ask results without re-running any model.
@@ -78,12 +80,18 @@ def _reward(row: dict) -> dict:
     }
 
 
-def build(row: dict, stage: str, prompt: str, row_index: int) -> dict:
-    """One stage-appropriate context record for an already-sampled row.
+def build(row: dict, kind: str, prompt: str, row_index: int) -> dict:
+    """One kind-appropriate context record for an already-sampled row.
 
-    `key` is the prompt prefix that joins this record to a labeled prompt in a
-    classify or ask run. Two rows sharing a 400-character opening join to the
-    first of them, which is close enough for a drill-down.
+    `kind` is `registry.stage_kind` of the stage the row came from — the shape
+    of the training example, which for a model stage is its pipeline position
+    and for a standalone dataset is what the registry declares it to be.
+
+    `row` is the join: a result record stores the same index, and the site looks
+    the context up by it. `key` is the older prompt-prefix join, kept for runs
+    committed before result records carried a row — two rows sharing a
+    400-character opening collapse to the first of them under it, which a
+    curated mix mostly gets away with and a chat log does not.
     """
     rec = {
         "key": prompt[:KEY_CHARS],
@@ -91,11 +99,19 @@ def build(row: dict, stage: str, prompt: str, row_index: int) -> dict:
         "row": row_index,
         "id": row.get("id") or row.get("prompt_id") or row.get("custom_id"),
     }
-    if stage == "sft":
+    if kind == "sft":
         rec["kind"] = "sft"
         rec["turns"] = _turns(row.get("messages"))
         rec["meta"] = _meta(row, ["source_dataset", "domain", "dataset_source"])
-    elif stage == "dpo":
+    elif kind == "chat":
+        # A log, not a training example: no turn here is a target, so the record
+        # is the exchange and the metadata the collector recorded around it.
+        rec["kind"] = "chat"
+        rec["turns"] = _turns(row.get("conversation"))
+        rec["meta"] = _meta(
+            row, ["model", "language", "country", "state", "turn", "toxic", "redacted"]
+        )
+    elif kind == "dpo":
         rec["kind"] = "dpo"
         rec["chosen"] = {"model": row.get("chosen_model"), "turns": _turns(row.get("chosen"))}
         rec["rejected"] = {"model": row.get("rejected_model"), "turns": _turns(row.get("rejected"))}

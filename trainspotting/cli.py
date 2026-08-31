@@ -13,6 +13,11 @@ RESULTS = Path(__file__).resolve().parent.parent / "results"
 # here for the site, and so the only copy present in a fresh clone.
 SITE_DATA = Path(__file__).resolve().parent.parent / "docs" / "data"
 
+# Every command takes one of these. A model walks its whole pipeline; a dataset
+# is a single samplable dataset with no pipeline around it, and the layers that
+# read rows cannot tell the difference (see registry.resolve).
+TARGET_HELP = "model or dataset: " + ", ".join(registry.targets())
+
 
 def _positive_int(value: str) -> int:
     """argparse type for counts. Zero divides by zero deep inside the sampler and
@@ -130,38 +135,55 @@ def _unlabeled_note(labels: list, reasons: dict[str, int]) -> str:
     return f"  [{n} unlabeled ({detail or 'reason unrecorded'})]"
 
 
-def _select_stages(args, stages_of, kind):
-    """The stages a command runs over: every one of `kind`, narrowed by `--stage`.
+def _select_stages(args, stages_of, family):
+    """The stages a command runs over: every one of `family`, narrowed by `--stage`.
 
-    `kind` names the family in the error message, so asking for a pretraining
+    `family` names the group in the error message, so asking for a pretraining
     stage by a post-training name fails with the right suggestion.
+
+    A target with none of the family at all is an error too, not an empty loop:
+    a dataset has no pretraining corpora behind it, and `pretrain wildchat-1m`
+    exiting silently having written nothing reads exactly like a sample that
+    came back empty.
     """
-    model = registry.get_model(args.model)
-    stages = stages_of(model)
+    target = registry.resolve(args.target)
+    stages = stages_of(target)
+    if not stages:
+        sys.exit(f"{args.target} has no {family} stages")
     if getattr(args, "stage", None):
         stages = [s for s in stages if s["stage"] == args.stage]
         if not stages:
-            sys.exit(f"no {kind} stage {args.stage!r} for {args.model}")
+            sys.exit(f"no {family} stage {args.stage!r} for {args.target}")
     return stages
 
 
 def _sample_rows(stage, sample, seed):
-    """(row, prompt) for each row of a deterministic (sample, seed) draw that has one.
+    """(index, row, prompt) for each row of a deterministic (sample, seed) draw
+    that has one.
 
     Rows carrying no user prompt drop out here, so the result is usually shorter
     than `sample`. The row travels with its prompt because part of what an
     example teaches is in the row rather than the text — an RL row's verifier
     settles its taxonomy label outright.
+
+    The index is the row's absolute position in the split, and it is what every
+    result record stores to address its training example. Joining on the prompt
+    instead cannot tell two rows apart that open with the same 400 characters,
+    which is rare in a curated mix and routine in a chat log: 64 of WildChat's
+    299 sampled prompts share an opening with another, 39 of them the same
+    Midjourney prompt-generator preamble in front of 39 different conversations.
     """
     print(f"sampling {sample} rows from {stage['hf_dataset']} ...", file=sys.stderr)
-    rows = hf.sample_rows(stage["hf_dataset"], sample, seed=seed)
-    pairs = ((r, extract.extract_prompt(r, stage["prompt_path"])) for r in rows)
-    return [(r, p) for r, p in pairs if p]
+    rows = hf.sample_rows_with_index(stage["hf_dataset"], sample, seed=seed)
+    triples = (
+        (i, r, extract.extract_prompt(r, stage["prompt_path"])) for i, r in rows
+    )
+    return [(i, r, p) for i, r, p in triples if p]
 
 
 def _sample_prompts(stage, sample, seed):
-    """Just the prompts, for the callers with no use for the row."""
-    return [p for _, p in _sample_rows(stage, sample, seed)]
+    """(index, prompt), for the callers with no use for the row itself."""
+    return [(i, p) for i, _, p in _sample_rows(stage, sample, seed)]
 
 
 def _write_json(path, payload):
@@ -187,9 +209,9 @@ def _print_match_rate(stage, k, n, lo, hi, path, note=""):
 
 
 def cmd_facts(args):
-    model = registry.get_model(args.model)
-    print(f"# {args.model} ({model['hf_model']})\n")
-    for s in model["stages"]:
+    target = registry.resolve(args.target)
+    print(f"# {args.target} ({target['hf_model'] or target['name']})\n")
+    for s in target["stages"]:
         line = f"- {s['stage']:12s} {s['name']}"
         if s.get("tokens"):
             line += f" — {_fmt_tokens(s['tokens'])} tokens"
@@ -204,12 +226,17 @@ def cmd_facts(args):
 
 
 def cmd_sources(args):
-    model = registry.get_model(args.model)
+    target = registry.resolve(args.target)
     out = {}
-    for s in registry.post_training_stages(model):
+    for s in registry.post_training_stages(target):
         revision = hf.dataset_revision(s["hf_dataset"])
-        freqs = hf.column_frequencies(s["hf_dataset"], s["source_columns"])
+        freqs, counted, partial = hf.column_frequencies(
+            s["hf_dataset"], s["source_columns"]
+        )
         total = hf.num_rows(s["hf_dataset"])
+        # Shares are over the rows the stats API actually scanned, which on a
+        # big dataset is not all of them.
+        counted = counted or total
         # /statistics and /info are two requests, and this layer is the one that
         # calls its numbers exact — so a republish between them would leave
         # frequencies and a row count describing different trees.
@@ -229,16 +256,23 @@ def cmd_sources(args):
             **_stamp(s["hf_dataset"], revision=revision),
             **({"revision_moved_to": moved} if revision and moved and moved != revision else {}),
             "total": total,
+            "counted": counted,
+            "partial": partial,
             "columns": freqs,
             "links": links,
         }
         print(f"\n## {s['stage']} — {s['hf_dataset']} ({total:,} examples)")
+        if partial:
+            print(
+                f"   shares are over the {counted:,} rows"
+                f" ({counted / total * 100:.0f}%) HuggingFace's stats API scanned"
+            )
         for col, freq in freqs.items():
             print(f"\n{col}:")
             for value, count in freq.items():
-                print(f"  {count / total * 100:5.1f}%  {value} ({count:,})")
+                print(f"  {count / counted * 100:5.1f}%  {value} ({count:,})")
     if args.json:
-        path = _write_json(RESULTS / f"{args.model}.sources.json", out)
+        path = _write_json(RESULTS / f"{args.target}.sources.json", out)
         print(f"\nwrote {path}", file=sys.stderr)
 
 
@@ -247,8 +281,8 @@ def _label_post_training(args, question=None, slug=None):
 
     `question` selects the label mode. Without one, each prompt gets a single
     label from the fixed HHH taxonomy and the run lands in
-    <model>.<stage>.labels.json. With one, each prompt gets a yes/no judgment of
-    that question and the run lands in <model>.<stage>.ask-<slug>.json with the
+    <target>.<stage>.labels.json. With one, each prompt gets a yes/no judgment of
+    that question and the run lands in <target>.<stage>.ask-<slug>.json with the
     match rate and its interval. Everything else — which rows are drawn, which
     prompts survive extraction, what the envelope records about the run — is the
     same in both modes, and `classify` and `ask` sharing this loop is what keeps
@@ -264,10 +298,11 @@ def _label_post_training(args, question=None, slug=None):
         # revision resolved at the end could name a tree published while it ran.
         revision = hf.dataset_revision(s["hf_dataset"])
         rows = _sample_rows(s, args.sample, args.seed)
-        prompts = [p for _, p in rows]
+        indices = [i for i, _, _ in rows]
+        prompts = [p for _, _, p in rows]
         fixed = [
-            classify.verifier_label(row, s["stage"]) if question is None else None
-            for row, _ in rows
+            classify.verifier_label(row, registry.stage_kind(s)) if question is None else None
+            for _, row, _ in rows
         ]
         ask = [p for p, f in zip(prompts, fixed) if not f]
         settled = len(prompts) - len(ask)
@@ -277,8 +312,11 @@ def _label_post_training(args, question=None, slug=None):
             + " ...",
             file=sys.stderr,
         )
+        # A chat log is not a training example, so it is not judged as one.
+        # Every model stage gets None here and takes the default rubric.
+        system = classify.system_for(registry.stage_kind(s), question)
         asked_labels, reasons = classify.classify_prompts(
-            ask, model=args.classifier, question=question
+            ask, model=args.classifier, question=question, system=system
         )
         # The datasets-server takes no revision — /rows serves its own build of
         # whatever the dataset is now — so the stamp can only be the tree the
@@ -302,7 +340,7 @@ def _label_post_training(args, question=None, slug=None):
             # The taxonomy (or the question) is the instrument: rewording a
             # label moves every share under it, so the file says which wording
             # produced these labels.
-            "system_sha": classify.system_id(classify.build_system(question)),
+            "system_sha": classify.system_id(classify.build_system(question, system)),
             # Prompts the classifier never labeled, and why. Every rate here is
             # over the labeled ones, so this is the part of the sample those
             # rates do not describe.
@@ -322,24 +360,26 @@ def _label_post_training(args, question=None, slug=None):
             )
         if question is None:
             records = []
-            for p, lab, f in zip(prompts, labels, fixed):
-                rec = {"prompt": extract.clip(p), "label": lab}
+            for i, p, lab, f in zip(indices, prompts, labels, fixed):
+                # `row` is what the site joins to the context record. See
+                # _sample_rows: the prompt text is not a key.
+                rec = {"row": i, "prompt": extract.clip(p), "label": lab}
                 if f:
                     rec["by"] = "verifier"
                 records.append(rec)
             path = _write_json(
-                RESULTS / f"{args.model}.{s['stage']}.labels.json",
+                RESULTS / f"{args.target}.{s['stage']}.labels.json",
                 {**run, "records": records},
             )
             print(f"{s['stage']}: {_counts(records)}  -> {path}{note}", file=sys.stderr)
         else:
             records = [
-                {"prompt": extract.clip(p), "match": lab == "yes"}
-                for p, lab in zip(prompts, labels)
+                {"row": i, "prompt": extract.clip(p), "match": lab == "yes"}
+                for i, p, lab in zip(indices, prompts, labels)
                 if lab
             ]
             path = _write_json(
-                RESULTS / f"{args.model}.{s['stage']}.ask-{slug}.json",
+                RESULTS / f"{args.target}.{s['stage']}.ask-{slug}.json",
                 {"question": question, **run, "records": records},
             )
             k, n = sum(r["match"] for r in records), len(records)
@@ -352,12 +392,12 @@ def _label_pretrain_docs(args, question, slug):
     Judged from that file rather than re-sampled, so asking a second question
     scores the same documents and costs nothing but the API call.
     """
-    for s in registry.pretrain_stages(registry.get_model(args.model)):
-        docs_path = _pretrain_docs_source(args.model, s["stage"])
+    for s in registry.pretrain_stages(registry.resolve(args.target)):
+        docs_path = _pretrain_docs_source(args.target, s["stage"])
         if docs_path is None:
             print(
                 f"{s['stage']}: no sample yet"
-                f" (`trainspotting pretrain {args.model} --stage {s['stage']}`)",
+                f" (`trainspotting pretrain {args.target} --stage {s['stage']}`)",
                 file=sys.stderr,
             )
             continue
@@ -391,7 +431,7 @@ def _label_pretrain_docs(args, question, slug):
         k, n = sum(r["match"] for r in records), len(records)
         lo, hi, n_eff = _cluster_wilson(records)
         path = _write_json(
-            RESULTS / f"{args.model}.{s['stage']}.ask-{slug}.json",
+            RESULTS / f"{args.target}.{s['stage']}.ask-{slug}.json",
             {
                 "question": question,
                 "dataset": data["dataset"],
@@ -431,13 +471,13 @@ def _warn_missing_pretrain_samples(args):
     """
     missing = [
         s["stage"]
-        for s in registry.pretrain_stages(registry.get_model(args.model))
-        if _pretrain_docs_source(args.model, s["stage"]) is None
+        for s in registry.pretrain_stages(registry.resolve(args.target))
+        if _pretrain_docs_source(args.target, s["stage"]) is None
     ]
     if missing:
         print(
             f"warning: no document sample for {', '.join(missing)}"
-            f" — run `trainspotting pretrain {args.model}` first;"
+            f" — run `trainspotting pretrain {args.target}` first;"
             " scoring the post-training stages anyway\n",
             file=sys.stderr,
         )
@@ -454,18 +494,22 @@ def cmd_ask(args):
     slug = args.slug or re.sub(r"[^a-z0-9]+", "-", args.question.lower()).strip("-")[:60]
     print(f"question: {args.question}\n", file=sys.stderr)
     if args.pretrain:
+        # A dataset has no corpora to score. Accepting the flag and quietly
+        # scoring only the prompts would answer half the question asked.
+        if not registry.pretrain_stages(registry.resolve(args.target)):
+            sys.exit(f"--pretrain: {args.target} has no pretraining stages")
         _warn_missing_pretrain_samples(args)
     _label_post_training(args, question=args.question, slug=slug)
     if args.pretrain:
         _label_pretrain_docs(args, args.question, slug)
 
 
-def _pretrain_docs_path(model_name: str, stage: str) -> Path:
+def _pretrain_docs_path(target_name: str, stage: str) -> Path:
     """Where `pretrain` writes a document sample."""
-    return RESULTS / f"{model_name}.{stage}.docs.json"
+    return RESULTS / f"{target_name}.{stage}.docs.json"
 
 
-def _pretrain_docs_source(model_name: str, stage: str) -> Path | None:
+def _pretrain_docs_source(target_name: str, stage: str) -> Path | None:
     """Where to read one back, or None if this checkout has neither copy.
 
     `results/*.docs.json` is gitignored — it is a regenerable cache — so on a
@@ -474,8 +518,8 @@ def _pretrain_docs_source(model_name: str, stage: str) -> Path | None:
     cloned the repo that the sample shipped with it does not exist.
     """
     for path in (
-        _pretrain_docs_path(model_name, stage),
-        SITE_DATA / f"{model_name}.{stage}.docs.json",
+        _pretrain_docs_path(target_name, stage),
+        SITE_DATA / f"{target_name}.{stage}.docs.json",
     ):
         if path.exists():
             return path
@@ -541,7 +585,7 @@ def cmd_pretrain(args):
                 file=sys.stderr,
             )
         path = _write_json(
-            _pretrain_docs_path(args.model, s["stage"]),
+            _pretrain_docs_path(args.target, s["stage"]),
             {
                 "dataset": dataset,
                 # The exact commit the composition and documents came from.
@@ -589,11 +633,14 @@ def cmd_languages(args):
         if args.from_labels:
             # The same (sample, seed) draws the same rows, so a committed classify
             # run already holds the prompts verbatim — no reason to re-fetch them.
-            labels_path = RESULTS / f"{args.model}.{s['stage']}.labels.json"
+            labels_path = RESULTS / f"{args.target}.{s['stage']}.labels.json"
             if not labels_path.exists():
                 sys.exit(f"{labels_path} not found — drop --from-labels to sample from HuggingFace")
             prior = json.loads(labels_path.read_text())
-            prompts = [r["prompt"] for r in prior["records"]]
+            # A classify run written before result records carried their row
+            # index has no row to reuse; those records keep joining to their
+            # context by prompt text, as they did before.
+            pairs = [(r.get("row"), r["prompt"]) for r in prior["records"]]
             sample, seed = prior["sample"], prior["seed"]
             # Reusing a run's prompts means reusing its revision: those rows came
             # from that tree. A file written before the field existed has none,
@@ -604,24 +651,28 @@ def cmd_languages(args):
             # language file that named only the first tree would state as settled
             # what the classification run recorded as unresolved.
             moved = prior.get("revision_moved_to")
-            print(f"reusing {len(prompts)} prompts from {labels_path.name}", file=sys.stderr)
+            print(f"reusing {len(pairs)} prompts from {labels_path.name}", file=sys.stderr)
         else:
             revision = hf.dataset_revision(s["hf_dataset"])
             # Clip before detecting, not after. A classify run stores the clipped
             # prompt, so detecting the full text here would make --from-labels
             # disagree with this path on the handful of prompts past the cutoff.
-            prompts = [extract.clip(p) for p in _sample_prompts(s, args.sample, args.seed)]
+            pairs = [
+                (i, extract.clip(p))
+                for i, p in _sample_prompts(s, args.sample, args.seed)
+            ]
             # Detection is local, but the draw feeding it is thirty paged
             # requests, so this path has the same republish window as `context`.
             moved = hf.dataset_revision(s["hf_dataset"])
         records = []
-        for p in prompts:
+        for i, p in pairs:
             code, conf = languages.detect(p)
-            records.append(
-                {"prompt": p, "label": code, "confidence": round(conf, 3)}
-            )
+            rec = {"prompt": p, "label": code, "confidence": round(conf, 3)}
+            if i is not None:
+                rec = {"row": i, **rec}
+            records.append(rec)
         path = _write_json(
-            RESULTS / f"{args.model}.{s['stage']}.languages.json",
+            RESULTS / f"{args.target}.{s['stage']}.languages.json",
             {
                 "dataset": s["hf_dataset"],
                 **_stamp(s["hf_dataset"], revision=revision),
@@ -664,9 +715,11 @@ def cmd_context(args):
         for row_index, row in rows:
             prompt = extract.extract_prompt(row, s["prompt_path"])
             if prompt:
-                records.append(context.build(row, s["stage"], prompt, row_index))
+                records.append(
+                    context.build(row, registry.stage_kind(s), prompt, row_index)
+                )
         path = _write_json(
-            RESULTS / f"{args.model}.{s['stage']}.context.json",
+            RESULTS / f"{args.target}.{s['stage']}.context.json",
             {
                 "dataset": s["hf_dataset"],
                 **_stamp(s["hf_dataset"], revision=revision),
@@ -681,19 +734,29 @@ def cmd_context(args):
 
 
 def cmd_report(args):
-    model = registry.get_model(args.model)
-    print(f"# Training-data audit: {args.model}\n")
-    print("## Stage sizes\n")
-    for s in model["stages"]:
-        if s.get("tokens"):
-            print(f"- {s['stage']}: {s['name']}, {_fmt_tokens(s['tokens'])} tokens")
-        else:
-            print(f"- {s['stage']}: {s['name']} ({s['hf_dataset']})")
-    print("\n## HHH classification (sampled)\n")
-    for s in registry.post_training_stages(model):
-        path = RESULTS / f"{args.model}.{s['stage']}.labels.json"
+    target = registry.resolve(args.target)
+    kind = "Training-data audit" if target["is_model"] else "Dataset audit"
+    print(f"# {kind}: {args.target}\n")
+    if target["is_model"]:
+        print("## Stage sizes\n")
+        for s in target["stages"]:
+            if s.get("tokens"):
+                print(f"- {s['stage']}: {s['name']}, {_fmt_tokens(s['tokens'])} tokens")
+            else:
+                print(f"- {s['stage']}: {s['name']} ({s['hf_dataset']})")
+    elif target.get("note"):
+        print(target["note"])
+    # The same seven labels mean different things by kind, and the heading is
+    # the only place the report says which.
+    print(
+        "\n## HHH classification (sampled)\n"
+        if target["is_model"]
+        else "\n## What the prompts ask for (sampled)\n"
+    )
+    for s in registry.post_training_stages(target):
+        path = RESULTS / f"{args.target}.{s['stage']}.labels.json"
         if not path.exists():
-            print(f"- {s['stage']}: no classification run yet (`trainspotting classify {args.model} --stage {s['stage']}`)")
+            print(f"- {s['stage']}: no classification run yet (`trainspotting classify {args.target} --stage {s['stage']}`)")
             continue
         data = json.loads(path.read_text())
         records = [r for r in data["records"] if r["label"]]
@@ -723,10 +786,10 @@ def cmd_report(args):
         print()
 
     print("\n## Language (sampled, detected locally)\n")
-    for s in registry.post_training_stages(model):
-        path = RESULTS / f"{args.model}.{s['stage']}.languages.json"
+    for s in registry.post_training_stages(target):
+        path = RESULTS / f"{args.target}.{s['stage']}.languages.json"
         if not path.exists():
-            print(f"- {s['stage']}: no language run yet (`trainspotting languages {args.model} --stage {s['stage']}`)")
+            print(f"- {s['stage']}: no language run yet (`trainspotting languages {args.target} --stage {s['stage']}`)")
             continue
         data = json.loads(path.read_text())
         records = data["records"]
@@ -752,13 +815,13 @@ def main():
 
     for name, fn in [("facts", cmd_facts), ("sources", cmd_sources), ("report", cmd_report)]:
         p = sub.add_parser(name)
-        p.add_argument("model", help=f"one of: {', '.join(sorted(registry.MODELS))}")
+        p.add_argument("target", help=TARGET_HELP)
         p.set_defaults(fn=fn)
         if name == "sources":
-            p.add_argument("--json", action="store_true", help="also write results/<model>.sources.json")
+            p.add_argument("--json", action="store_true", help="also write results/<target>.sources.json")
 
     p = sub.add_parser("ask", help="score sampled prompts against a free-form yes/no question")
-    p.add_argument("model")
+    p.add_argument("target", help=TARGET_HELP)
     p.add_argument("question")
     p.add_argument("--sample", type=_positive_int, default=300)
     p.add_argument("--seed", type=int, default=0)
@@ -772,7 +835,7 @@ def main():
     p.set_defaults(fn=cmd_ask)
 
     p = sub.add_parser("pretrain", help="sample documents from the Dolma 3 pretraining shards")
-    p.add_argument("model")
+    p.add_argument("target", help=TARGET_HELP)
     p.add_argument("--stage", help="only this stage (pretrain/midtrain/long-context)")
     p.add_argument("--sample", type=_positive_int, default=300)
     p.add_argument("--seed", type=int, default=0)
@@ -786,15 +849,15 @@ def main():
     p.set_defaults(fn=cmd_pretrain)
 
     p = sub.add_parser("context", help="store the full training example behind each sampled prompt")
-    p.add_argument("model")
-    p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
+    p.add_argument("target", help=TARGET_HELP)
+    p.add_argument("--stage", help="only this stage (sft/dpo/rlvr for a model; a dataset has one)")
     p.add_argument("--sample", type=_positive_int, default=300)
     p.add_argument("--seed", type=int, default=0)
     p.set_defaults(fn=cmd_context)
 
     p = sub.add_parser("languages", help="detect the natural language of sampled prompts (local, no API key)")
-    p.add_argument("model")
-    p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
+    p.add_argument("target", help=TARGET_HELP)
+    p.add_argument("--stage", help="only this stage (sft/dpo/rlvr for a model; a dataset has one)")
     p.add_argument("--sample", type=int, default=300)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--from-labels", action="store_true",
@@ -802,14 +865,23 @@ def main():
     p.set_defaults(fn=cmd_languages)
 
     p = sub.add_parser("classify")
-    p.add_argument("model")
-    p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
+    p.add_argument("target", help=TARGET_HELP)
+    p.add_argument("--stage", help="only this stage (sft/dpo/rlvr for a model; a dataset has one)")
     p.add_argument("--sample", type=_positive_int, default=300)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--classifier", default="claude-opus-5")
     p.set_defaults(fn=cmd_classify)
 
     args = ap.parse_args()
+    # Canonicalize once, here, so every result path and every lookup downstream
+    # agrees. `resolve` accepts case variants; writing the raw argument into the
+    # filename meant `classify WildChat-1M` produced a file the site — which
+    # indexes the registry key — never asks for, and the run silently didn't
+    # exist.
+    try:
+        args.target = registry.resolve(args.target)["target"]
+    except KeyError as e:
+        sys.exit(e.args[0])
     args.fn(args)
 
 
