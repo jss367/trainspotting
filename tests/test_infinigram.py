@@ -54,12 +54,15 @@ def test_spread_picks_clamped_draw_is_all_matches_in_order():
 
 
 def test_phrase_slug_distinctness():
-    """The slug names the result file, so two phrases must never share one:
-    not when they normalize to nothing, and not when they agree on their
-    first 60 characters — which long pasted passages invite."""
+    """The slug names the result file, so two phrases must never share one.
+    Normalization is lossy every which way — case and punctuation fold,
+    non-ASCII drops, length truncates — so distinct phrases on either side of
+    any of those folds must still get distinct slugs."""
     from trainspotting.cli import _phrase_slug
 
-    assert _phrase_slug("climate change") == "climate-change"
+    # Case matters to an exact-match search: different tokens, different count.
+    assert _phrase_slug("Climate change") != _phrase_slug("climate-change")
+    assert _phrase_slug("climate change").startswith("climate-change-")
 
     long_a = "the quick brown fox jumps over the lazy dog near the river bank at dawn"
     long_b = "the quick brown fox jumps over the lazy dog near the river bank at dusk"

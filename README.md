@@ -247,7 +247,10 @@ prints how the phrase tokenized (matches align to token boundaries, so a
 surprising count is sometimes a surprising tokenization), the exact count, and
 example documents spread evenly across the index, each with its source, shard
 path, and URL where the corpus recorded one. `--json` writes the run to
-`results/find.<slug>.json`.
+`results/find.<index>.<slug>.json` — the index is in the name because the same
+phrase has a different count in every corpus, and the derived slug carries a
+hash of the exact phrase because normalization folds distinct phrases together
+(`--slug` picks a readable name instead).
 
 The honest limitation: the public API has **no Dolma 3 / OLMo 3 index** yet.
 The default index (`v4_olmo-2-0325-32b-instruct_llama`) is the closest

@@ -685,21 +685,17 @@ def _phrase_slug(phrase: str) -> str:
     """A filename-safe slug that two different phrases cannot share.
 
     Distinctness is the requirement, because the slug names the result file
-    and a collision silently overwrites an earlier search. Two phrases can
-    collide two ways: normalizing to nothing at all (no ASCII word characters
-    — Chinese, Arabic, emoji), or agreeing on their first 60 characters, which
-    long phrases invite — a memorization check pastes a whole passage. Both
-    get a hash of the exact phrase: alone when there is nothing readable to
-    attach it to, appended when the readable part was truncated. `--slug` is
-    there to pick a fully readable name instead.
+    and a collision silently overwrites an earlier search — and an exact-match
+    search distinguishes phrases the normalization folds together ("Climate
+    change" and "climate change" tokenize differently and have different
+    counts). Normalization is lossy several ways at once: case and punctuation
+    fold, non-ASCII drops entirely, length truncates at 60. Rather than
+    enumerating which lossy path applied, every derived slug carries a hash of
+    the exact phrase; `--slug` is there to pick a fully readable name instead.
     """
     digest = hashlib.sha1(phrase.encode()).hexdigest()
-    norm = re.sub(r"[^a-z0-9]+", "-", phrase.lower()).strip("-")
-    if not norm:
-        return digest[:12]
-    if len(norm) > 60:
-        return f"{norm[:60].rstrip('-')}-{digest[:8]}"
-    return norm
+    norm = re.sub(r"[^a-z0-9]+", "-", phrase.lower()).strip("-")[:60].rstrip("-")
+    return f"{norm}-{digest[:8]}" if norm else digest[:12]
 
 
 def cmd_find(args):
@@ -790,8 +786,11 @@ def cmd_find(args):
 
     if args.json:
         slug = args.slug or _phrase_slug(args.phrase)
+        # The index is part of what was measured — the same phrase has a
+        # different count in every corpus — so it belongs in the filename,
+        # or comparing indexes would overwrite one result with the next.
         path = _write_json(
-            RESULTS / f"find.{slug}.json",
+            RESULTS / f"find.{args.index}.{slug}.json",
             {
                 # The index name plays the role `dataset`+`revision` play in
                 # the other result files: infini-gram indexes are immutable
@@ -919,7 +918,7 @@ def main():
         default=200,
         help="tokens of each document to display around the match",
     )
-    p.add_argument("--json", action="store_true", help="also write results/find.<slug>.json")
+    p.add_argument("--json", action="store_true", help="also write results/find.<index>.<slug>.json")
     p.add_argument("--slug", help="short name for the result file (default: derived from the phrase)")
     p.set_defaults(fn=cmd_find)
 
