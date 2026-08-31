@@ -595,9 +595,16 @@ def cmd_languages(args):
             # and null is the honest answer — not today's `main`, which is a
             # different tree from the one nobody recorded.
             revision = prior.get("revision")
+            # And its ambiguity, if it had any. These are that run's rows, so a
+            # language file that named only the first tree would state as settled
+            # what the classification run recorded as unresolved.
+            moved = prior.get("revision_moved_to")
             print(f"reusing {len(prompts)} prompts from {labels_path.name}", file=sys.stderr)
         else:
             revision = hf.dataset_revision(s["hf_dataset"])
+            # Detection takes seconds, so there is no window for the tree to move
+            # under a fresh draw the way there is under a classification run.
+            moved = None
             # Clip before detecting, not after. A classify run stores the clipped
             # prompt, so detecting the full text here would make --from-labels
             # disagree with this path on the handful of prompts past the cutoff.
@@ -613,6 +620,7 @@ def cmd_languages(args):
             {
                 "dataset": s["hf_dataset"],
                 **_stamp(s["hf_dataset"], revision=revision),
+                **({"revision_moved_to": moved} if moved else {}),
                 "sample": sample,
                 "seed": seed,
                 "detector": "py3langid",
