@@ -123,6 +123,19 @@ for docs in out.glob("*.docs.json"):
             f"but the exported sample records {d['short_draws']}"
         )
 
+# The third class of the same drift, and the one most likely to happen: a lookup
+# study runs against a live index with no revision to pin, so every re-run moves
+# its numbers and the README paragraph quoting them goes stale silently. The date
+# is the cheap proxy — nobody re-runs the study and updates the figures while
+# leaving the date alone, and nobody updates the date without looking at them.
+for study in out.glob("case-study.*.json"):
+    d = json.loads(study.read_text())
+    if f"As of {d['run_on']}" not in flat_readme:
+        sys.exit(
+            f"{study.name} was run on {d['run_on']}, which the README does not "
+            f"claim ('As of {d['run_on']}'); re-check the figures it quotes"
+        )
+
 (out / "manifest.json").write_text(json.dumps(sorted(copied + kept), indent=2))
 print(
     f"wrote registry.json + language-names.json + manifest.json and {len(copied)} result files ({total / 1e6:.1f} MB)"

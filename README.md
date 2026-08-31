@@ -29,6 +29,12 @@ and the same free-form questions. There is no context layer there — a corpus
 document has no surrounding training example, it *is* the example. See
 [Pretraining data](#pretraining-data).
 
+All six of those layers sample. None of them can answer a question about one
+particular text, because a whole blog is a rounding error in a mix of trillions
+of tokens and no sample will ever land on it. That question gets its own path
+too — an exact-substring index rather than a sample. See
+[Looking one text up](#looking-one-text-up).
+
 ## Install
 
 ```bash
@@ -68,6 +74,12 @@ trainspotting languages olmo-3-7b-instruct --from-labels
 
 # Sample documents from the pretraining, midtraining and long-context corpora
 trainspotting pretrain olmo-3-7b-think --sample 300
+
+# Is one exact string in the corpora that have a public index?
+trainspotting lookup "a sentence only you would have written" --docs 10
+
+# Re-run the committed lookup study behind the site's "is my writing in here?" tab
+trainspotting case-study marginal-revolution
 
 # Score those documents against the same question as the post-training stages
 trainspotting ask olmo-3-7b-think "..." --slug my-question --pretrain
@@ -226,16 +238,99 @@ documents show a placeholder where the model saw real text. The 32B mix
 ### What this does and doesn't answer
 
 Sampling answers "what is in here" — the unconditional question, with a rate and
-a confidence interval. [OLMoTrace](https://allenai.org/blog/olmotrace) /
-infini-gram answers "is this specific string in here", which needs a query you
-already have. They are complements; for "did this exact document train the
-model", use OLMoTrace.
+a confidence interval. It cannot answer "is *this* in here", which needs a query
+you already have. `trainspotting lookup` does, against a different set of
+corpora; see [Looking one text up](#looking-one-text-up). For the reverse
+direction — take something a model wrote and find the training documents behind
+it — use [OLMoTrace](https://allenai.org/blog/olmotrace).
 
 The bias sampling leaves is positional. A range request only reaches the front of
 a shard, so each sampled document comes from its shard's first few hundred (one
 picked uniformly from them), never the tail. Shard draws are proper; position
 within a shard is not corrected for. That caveat
 travels in every result file and is printed on the site.
+
+## Looking one text up
+
+Every layer above samples, and sampling has a floor: one blog is a rounding
+error in a 6T-token mix, so a 300-document draw will never contain it no matter
+how carefully the draw is done. Asking whether one particular text is in a
+corpus needs an index, not a sample.
+
+`trainspotting lookup` queries [infini-gram](https://infini-gram.io), a suffix
+array over five public corpora, and prints the count per corpus with the
+documents behind it:
+
+```bash
+trainspotting lookup "For the pointer I thank" --docs 10
+```
+
+| Corpus | What it is |
+|---|---|
+| `v4_dolma-v1_7_llama` | Dolma 1.7 — Ai2's open corpus, the OLMo 2 generation |
+| `v4_dclm-baseline_llama` | DCLM-baseline — a heavily model-filtered Common Crawl derivative |
+| `v4_rpj_llama_s4` | RedPajama v1 |
+| `v4_c4train_llama` | C4 |
+| `v4_piletrain_llama` | The Pile |
+
+**None of these is Dolma 3.** No public index covers it, so nothing this
+command returns describes what OLMo 3 read. That is why the site puts it in its
+own tab rather than under a model.
+
+Two properties of the index decide how a result may be read, and both are easy
+to get backwards:
+
+- **The count is occurrences, not documents.** A page that repeats a phrase
+  three times contributes three. Reading a count as "copies in the training
+  data" inflates it.
+- **Documents are exhaustive only at or under ten.** That is the API's
+  per-call cap. Above it the index draws occurrences uniformly at random and a
+  re-run returns different ones, so a committed result is a snapshot. Result
+  files carry `exhaustive` per pull and a `run_on` date instead of a revision,
+  because a live index has nothing to pin.
+
+### The committed study
+
+`trainspotting case-study marginal-revolution` runs a fixed set of queries
+against a blog that has published daily since 2003, and writes
+`results/case-study.marginal-revolution.json` — what the site's *is my writing
+in here?* tab reads. As of 2026-08-31:
+
+- **`"For the pointer I thank"`, the blog's standard credit for a reader-submitted
+  link: 333 occurrences in Dolma 1.7**, 883 in DCLM-baseline, 12 in the Pile. Each
+  occurrence is one post's use of it, so that is a ceiling on how many such posts
+  are present at all — far below how many were written.
+- **One post is there twice, in two documents**, and the count is under the cap so
+  that is all of them: its own permalink page, cut to 105 tokens with 7 of its 76
+  lines surviving the line filter, and the month archive page it also appears on,
+  which kept 87 of 270. Whole posts do not become whole documents.
+- **Of 60 occurrences of the blog's own name drawn at random, 0 are on the blog.**
+  They are on bookmark mirrors, aggregators and SEO scrapers. The blog's own pages
+  are in the corpus — the post above is one — but a site heading is a nav line and
+  line-level filtering drops nav lines, so the name survives mainly where somebody
+  else typed it into their own prose. What looks like heavy duplication of a writer
+  is mostly other people's copies.
+
+The study labels every query group with how it was chosen. Queries picked from
+knowing the blog can measure coverage; queries found by reading documents that
+were already sampled out of the corpus are present by construction and can only
+show what a present post looks like. Mixing the two silently would report a
+hit rate of 100% as a finding.
+
+Measuring the rate properly needs a list of the blog's posts drawn independently
+of any corpus. There is no committed one: `marginalrevolution.com` serves a
+Cloudflare challenge to automated requests, and Common Crawl's CDX index and the
+Wayback CDX API were both unreachable when this was built. Adding one is the
+obvious next step, and `selection` in the result file is where it would land.
+
+### Why the site has no search box
+
+infini-gram's API sends no `Access-Control-Allow-Origin` header and answers
+`OPTIONS` with a 403, so a browser cannot call it from a page on another origin.
+A live box would need a proxy server; the site is static files served from
+`docs/` with nothing behind them. The CLI runs the same queries locally, and
+[infini-gram's own Space](https://huggingface.co/spaces/liujch1998/infini-gram)
+is the hosted equivalent.
 
 ## Taxonomy
 
