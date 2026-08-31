@@ -3,6 +3,7 @@ import json
 import math
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import classify, context, extract, hf, languages, pretrain, registry
@@ -20,6 +21,35 @@ def _positive_int(value: str) -> int:
     if n < 1:
         raise argparse.ArgumentTypeError(f"must be a positive integer, got {n}")
     return n
+
+
+def _stamp(dataset: str | None = None, revision: str | None = None) -> dict:
+    """Provenance every result file carries: when it was written, and which
+    commit of the dataset it was computed over.
+
+    A dataset id alone does not identify what was counted. `main` moves — Ai2
+    has republished these mixes — so a file that reports "8.1% harmlessness, n=300"
+    without a revision cannot be checked later, or told apart from the same
+    figure over different rows. `revision` is passed in where the caller already
+    resolved one (the pretraining sampler pins a SHA to read shards at all) and
+    looked up otherwise; a lookup that fails records null rather than failing a
+    run whose API calls are already paid for.
+    """
+    out = {"generated": datetime.now(timezone.utc).replace(microsecond=0).isoformat()}
+    if revision is None and dataset:
+        revision = hf.dataset_revision(dataset)
+    if dataset:
+        out["revision"] = revision
+    return out
+
+
+def _unlabeled_note(labels: list, reasons: dict[str, int]) -> str:
+    """One line naming what the classifier never labeled, for stderr."""
+    n = sum(1 for label in labels if label is None)
+    if not n:
+        return ""
+    detail = ", ".join(f"{k} {v}" for k, v in sorted(reasons.items()))
+    return f"{n} unlabeled ({detail or 'reason unrecorded'})"
 
 
 def _fmt_tokens(n: int) -> str:
@@ -127,6 +157,7 @@ def cmd_sources(args):
                             links[value] = url
         out[s["stage"]] = {
             "dataset": s["hf_dataset"],
+            **_stamp(s["hf_dataset"]),
             "total": total,
             "columns": freqs,
             "links": links,
@@ -157,7 +188,9 @@ def cmd_classify(args):
         prompts = [extract.extract_prompt(r, s["prompt_path"]) for r in rows]
         keep = [(rows[i], p) for i, p in enumerate(prompts) if p]
         print(f"classifying {len(keep)} prompts with {args.classifier} ...", file=sys.stderr)
-        labels = classify.classify_prompts([p for _, p in keep], model=args.classifier)
+        labels, reasons = classify.classify_prompts(
+            [p for _, p in keep], model=args.classifier
+        )
         records = [
             {"prompt": extract.clip(p), "label": label}
             for (_, p), label in zip(keep, labels)
@@ -167,9 +200,18 @@ def cmd_classify(args):
             json.dumps(
                 {
                     "dataset": s["hf_dataset"],
+                    **_stamp(s["hf_dataset"]),
                     "sample": args.sample,
                     "seed": args.seed,
                     "classifier": args.classifier,
+                    # The taxonomy is the instrument: rewording a label moves
+                    # every share below it, so the file says which wording it was.
+                    "system_sha": classify.system_id(classify.build_system()),
+                    # Prompts the classifier never labeled, and why. Every rate
+                    # here is over the labeled ones, so this is the part of the
+                    # sample those rates do not describe.
+                    "unlabeled": sum(1 for label in labels if label is None),
+                    "unlabeled_reasons": reasons,
                     "records": records,
                 },
                 indent=2,
@@ -178,7 +220,11 @@ def cmd_classify(args):
         counts = {}
         for r in records:
             counts[r["label"]] = counts.get(r["label"], 0) + 1
-        print(f"{s['stage']}: {counts}  -> {path}", file=sys.stderr)
+        note = _unlabeled_note(labels, reasons)
+        print(
+            f"{s['stage']}: {counts}  -> {path}" + (f"  [{note}]" if note else ""),
+            file=sys.stderr,
+        )
 
 
 def cmd_ask(args):
@@ -210,7 +256,7 @@ def cmd_ask(args):
         rows = hf.sample_rows(s["hf_dataset"], args.sample, seed=args.seed)
         prompts = [extract.extract_prompt(r, s["prompt_path"]) for r in rows]
         keep = [(rows[i], p) for i, p in enumerate(prompts) if p]
-        labels = classify.classify_prompts(
+        labels, reasons = classify.classify_prompts(
             [p for _, p in keep], model=args.classifier, question=args.question
         )
         records = [
@@ -225,17 +271,28 @@ def cmd_ask(args):
                 {
                     "question": args.question,
                     "dataset": s["hf_dataset"],
+                    **_stamp(s["hf_dataset"]),
                     "sample": args.sample,
                     "seed": args.seed,
                     "classifier": args.classifier,
+                    "system_sha": classify.system_id(
+                        classify.build_system(args.question)
+                    ),
+                    # Unjudged prompts are absent from `records`, so they are
+                    # absent from the denominator too. Counting them here keeps
+                    # the rate honest about how much of the sample it covers.
+                    "unlabeled": sum(1 for label in labels if label is None),
+                    "unlabeled_reasons": reasons,
                     "records": records,
                 },
                 indent=2,
             )
         )
+        note = _unlabeled_note(labels, reasons)
         print(
             f"{s['stage']}: {k}/{n} match = {k / n * 100 if n else 0:.1f}%"
-            f" (95% CI {lo * 100:.1f}–{hi * 100:.1f}%) -> {path}",
+            f" (95% CI {lo * 100:.1f}–{hi * 100:.1f}%) -> {path}"
+            + (f"  [{note}]" if note else ""),
             file=sys.stderr,
         )
 
@@ -261,7 +318,7 @@ def cmd_ask(args):
         # prompt does, and the long-context mixes run past 200k characters, so
         # truncating would report a rate over opening boilerplate. Bigger inputs
         # mean fewer per request.
-        labels = classify.classify_prompts(
+        labels, reasons = classify.classify_prompts(
             # Already stored as an excerpt spanning the whole document, so this
             # judges precisely the text the site shows.
             [d["text"] for d in docs],
@@ -290,10 +347,19 @@ def cmd_ask(args):
                 {
                     "question": args.question,
                     "dataset": data["dataset"],
+                    # The revision the documents were sampled at, carried over
+                    # from the sample rather than looked up now: these documents
+                    # came from that tree, whatever `main` points at today.
+                    **_stamp(data["dataset"], revision=data.get("revision")),
                     "stage": s["stage"],
                     "sample": data["sample"],
                     "seed": data["seed"],
                     "classifier": args.classifier,
+                    "system_sha": classify.system_id(
+                        classify.build_system(args.question, classify.ASK_DOC_SYSTEM)
+                    ),
+                    "unlabeled": sum(1 for label in labels if label is None),
+                    "unlabeled_reasons": reasons,
                     "scope": data.get("scope"),
                     "caveat": data.get("caveat"),
                     "judged_chars": extract.MAX_DOCUMENT_CHARS,
@@ -306,9 +372,11 @@ def cmd_ask(args):
                 indent=2,
             )
         )
+        note = _unlabeled_note(labels, reasons)
         print(
             f"{s['stage']}: {k}/{n} match = {k / n * 100 if n else 0:.1f}%"
-            f" (95% CI {lo * 100:.1f}–{hi * 100:.1f}%) -> {path}",
+            f" (95% CI {lo * 100:.1f}–{hi * 100:.1f}%) -> {path}"
+            + (f"  [{note}]" if note else ""),
             file=sys.stderr,
         )
 
@@ -408,7 +476,7 @@ def cmd_pretrain(args):
                     # The exact commit the composition and documents came from.
                     # "main" moves; a result file that cites exact byte shares
                     # has to say which revision it counted.
-                    "revision": revision,
+                    **_stamp(dataset, revision=revision),
                     "stage": s["stage"],
                     "name": s["name"],
                     "sample": len(records),
@@ -454,7 +522,7 @@ def cmd_languages(args):
             sys.exit(f"no post-training stage {args.stage!r} for {args.model}")
     RESULTS.mkdir(exist_ok=True)
     for s in stages:
-        sample, seed = args.sample, args.seed
+        sample, seed, revision = args.sample, args.seed, None
         if args.from_labels:
             # The same (sample, seed) draws the same rows, so a committed classify
             # run already holds the prompts verbatim — no reason to re-fetch them.
@@ -464,6 +532,7 @@ def cmd_languages(args):
             prior = json.loads(labels_path.read_text())
             prompts = [r["prompt"] for r in prior["records"]]
             sample, seed = prior["sample"], prior["seed"]
+            revision = prior.get("revision")
             print(f"reusing {len(prompts)} prompts from {labels_path.name}", file=sys.stderr)
         else:
             print(f"sampling {args.sample} rows from {s['hf_dataset']} ...", file=sys.stderr)
@@ -484,6 +553,10 @@ def cmd_languages(args):
             json.dumps(
                 {
                     "dataset": s["hf_dataset"],
+                    # Reusing a classify run's prompts means reusing its
+                    # revision: those rows came from that tree, not from
+                    # whatever `main` points at now.
+                    **_stamp(s["hf_dataset"], revision=revision),
                     "sample": sample,
                     "seed": seed,
                     "detector": "py3langid",
@@ -528,6 +601,7 @@ def cmd_context(args):
             json.dumps(
                 {
                     "dataset": s["hf_dataset"],
+                    **_stamp(s["hf_dataset"]),
                     "stage": s["stage"],
                     "sample": args.sample,
                     "seed": args.seed,
@@ -558,6 +632,18 @@ def cmd_report(args):
         records = [r for r in data["records"] if r["label"]]
         n = len(records)
         print(f"### {s['stage']} — {data['dataset']} (n={n} labeled)\n")
+        # Every share below is over the labeled prompts. Refusals fall on
+        # jailbreak-style content, so an unreported gap here reads as a smaller
+        # harmlessness share rather than as missing data.
+        unlabeled = data.get("unlabeled", len(data["records"]) - n)
+        if unlabeled:
+            reasons = data.get("unlabeled_reasons") or {}
+            detail = ", ".join(f"{k} {v}" for k, v in sorted(reasons.items()))
+            print(
+                f"- {unlabeled} of {n + unlabeled} sampled prompts went unlabeled"
+                + (f" ({detail})" if detail else "")
+                + " — excluded from every share below\n"
+            )
         counts = {}
         for r in records:
             counts[r["label"]] = counts.get(r["label"], 0) + 1

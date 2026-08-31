@@ -55,6 +55,11 @@ def column_frequencies(
     return out
 
 
+# Top-up rounds when the draw comes back short of n distinct rows. Bounded so a
+# split smaller than the request returns a short sample instead of looping.
+MAX_SAMPLE_ROUNDS = 6
+
+
 def sample_rows_with_index(
     dataset: str,
     n: int,
@@ -62,24 +67,50 @@ def sample_rows_with_index(
     config: str = "default",
     split: str = "train",
 ) -> list[tuple[int, dict]]:
-    """Sample ~n rows via random pages of the /rows endpoint, keeping row indices.
+    """Sample ~n *distinct* rows via random pages of the /rows endpoint, keeping
+    row indices.
 
     Rows within a page are correlated (adjacent on disk), so we draw many small
     chunks from uniformly random offsets rather than a few full pages. The index
     is the row's absolute position in the split, which addresses it in the HF
     dataset viewer.
+
+    Offsets are drawn independently, so two of them landing within `chunk` of
+    each other return the same rows twice. Keying on the absolute index drops
+    the repeats: a duplicated row is a duplicated vote in every rate computed
+    over the sample, and taking the first n after a shuffle hid that as a
+    slightly small sample rather than a slightly wrong one. Collisions are rare
+    on a large split and common on a small one, which is exactly where each row
+    carries the most weight. Fresh offsets top the sample back up to n.
+
+    Deterministic in (n, seed) as before, and identical to the undeduplicated
+    draw whenever it happened not to collide.
     """
     total = num_rows(dataset, config, split)
     rng = random.Random(seed)
     chunk = 10
-    n_pages = (n + chunk - 1) // chunk
-    offsets = sorted(rng.randrange(max(1, total - chunk)) for _ in range(n_pages))
-    rows: list[tuple[int, dict]] = []
-    for off in offsets:
-        j = _get(
-            "rows", dataset=dataset, config=config, split=split, offset=off, length=chunk
-        )
-        rows.extend((off + i, r["row"]) for i, r in enumerate(j["rows"]))
+
+    def draw(pages: int) -> list[int]:
+        return sorted(rng.randrange(max(1, total - chunk)) for _ in range(pages))
+
+    seen: dict[int, dict] = {}
+    offsets = draw((n + chunk - 1) // chunk)
+    for _ in range(MAX_SAMPLE_ROUNDS):
+        before = len(seen)
+        for off in offsets:
+            j = _get(
+                "rows", dataset=dataset, config=config, split=split, offset=off, length=chunk
+            )
+            for i, r in enumerate(j["rows"]):
+                seen.setdefault(off + i, r["row"])
+        # A round that adds nothing new means the split is smaller than the
+        # request, not that we were unlucky: stop and return a short sample
+        # rather than spending five more rounds of requests to prove it.
+        if len(seen) >= min(n, total) or len(seen) == before:
+            break
+        shortfall = n - len(seen)
+        offsets = draw((shortfall + chunk - 1) // chunk)
+    rows = sorted(seen.items())
     rng.shuffle(rows)
     return rows[:n]
 
@@ -97,6 +128,26 @@ def sample_rows(
 
 HUB = "https://huggingface.co"
 _REPO_ID = re.compile(r"[\w.-]+/[\w.-]+")
+
+
+def dataset_revision(dataset: str, ref: str = "main") -> str | None:
+    """The commit SHA `ref` points at, or None if the hub will not say.
+
+    Stamped into every result file so a number stays attributable: `main` moves,
+    and a re-upload of a Dolci mix would otherwise turn an old count into a
+    claim about a dataset that no longer exists in that form.
+
+    Best-effort on purpose, unlike `pretrain.resolve_revision` which pins a
+    cache key and must fail loudly. Provenance is worth one request; it is not
+    worth failing a sampling run that has already been paid for.
+    """
+    try:
+        r = requests.get(f"{HUB}/api/datasets/{dataset}/revision/{ref}", timeout=30)
+        if r.status_code == 200:
+            return r.json().get("sha")
+    except (requests.RequestException, ValueError):
+        return None
+    return None
 
 
 def dataset_url(value: str) -> str | None:

@@ -6,6 +6,7 @@ precise instruction following, tool use), because "how much of training is about
 being harmless" is only meaningful against that baseline.
 """
 
+import hashlib
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -80,6 +81,24 @@ Boilerplate, navigation chrome, link dumps, and near-empty pages are "no".
 Reply with ONLY a JSON array: [{{"i": <index>, "label": "yes" or "no"}}, ...] covering every index you were given."""
 
 
+def build_system(question: str | None = None, system: str | None = None) -> str:
+    """The exact system prompt a run will use.
+
+    Split out of `classify_prompts` so a caller can record which instrument
+    produced its numbers. The taxonomy wording is not incidental to the result —
+    rewriting a label's definition moves every share it reports — so a result
+    file that cites a percentage should be able to cite the prompt behind it.
+    """
+    if system:
+        return system.format(question=question) if question else system
+    return ASK_SYSTEM.format(question=question) if question else SYSTEM
+
+
+def system_id(system: str) -> str:
+    """A short content hash of a system prompt, for stamping into results."""
+    return hashlib.sha256(system.encode()).hexdigest()[:12]
+
+
 def classify_prompts(
     prompts: list[str],
     model: str = "claude-opus-5",
@@ -88,8 +107,17 @@ def classify_prompts(
     question: str | None = None,
     system: str | None = None,
     max_chars: int = extract.MAX_CLASSIFY_CHARS,
-) -> list[str | None]:
-    """Return one label (or None) per prompt, preserving order.
+) -> tuple[list[str | None], dict[str, int]]:
+    """Return one label (or None) per prompt in order, plus why any are missing.
+
+    The second value counts what stayed unlabeled after the retry below, by
+    reason: "refusal" (the classifier declined), "error" (the API refused to
+    answer at all), "unparsed" (it answered without a usable label for that
+    prompt). Callers are expected to record it. A silent None is the one failure
+    mode this layer must not have: refusals land on jailbreak-style prompts,
+    which is precisely the content a harmlessness share is measuring, so
+    dropping them quietly biases the headline number downward and nothing on the
+    page would show it.
 
     With `question` set, labels are "yes"/"no" judgments of that question
     instead of the fixed taxonomy. `system` overrides the prompt entirely, which
@@ -97,10 +125,7 @@ def classify_prompts(
     `max_chars` is how much of each input the model sees; corpus documents need
     far more of it than prompts do, so callers raise it and shrink the batch.
     """
-    if system:
-        system = system.format(question=question) if question else system
-    else:
-        system = ASK_SYSTEM.format(question=question) if question else SYSTEM
+    system = build_system(question, system)
     valid = ["yes", "no"] if question else LABELS
     client = anthropic.Anthropic()
     batches = [
@@ -108,8 +133,8 @@ def classify_prompts(
         for start in range(0, len(prompts), batch_size)
     ]
 
-    def run(batch):
-        start, items = batch
+    def judge(items: list[str]) -> tuple[dict[int, str], str | None]:
+        """(labels by position within `items`, why any are missing)."""
         numbered = "\n\n".join(
             f"### {i}\n{p[:max_chars]}" for i, p in enumerate(items)
         )
@@ -125,15 +150,40 @@ def classify_prompts(
                 messages=[{"role": "user", "content": numbered}],
             )
         except anthropic.APIStatusError:
-            return start, {}
+            return {}, "error"
         if resp.stop_reason == "refusal":
-            return start, {}
+            return {}, "refusal"
         text = "".join(b.text for b in resp.content if b.type == "text")
-        return start, _parse(text, len(items), valid)
+        parsed = _parse(text, len(items), valid)
+        return parsed, None if len(parsed) == len(items) else "unparsed"
+
+    def run(batch):
+        start, items = batch
+        parsed, reason = judge(items)
+        drops: dict[str, int] = {}
+        missing = [i for i in range(len(items)) if i not in parsed]
+        if missing and len(items) > 1:
+            # One prompt can sink the other nineteen: a refusal on a single
+            # piece of raw jailbreak text, a 400 on one oversized row, or a
+            # reply that skipped an index. Re-ask for the unlabeled ones one at
+            # a time, so what is finally lost is the prompt that caused it
+            # rather than everything batched beside it.
+            for i in missing:
+                one, one_reason = judge([items[i]])
+                if 0 in one:
+                    parsed[i] = one[0]
+                else:
+                    drops[one_reason] = drops.get(one_reason, 0) + 1
+        elif missing:
+            drops[reason] = drops.get(reason, 0) + 1
+        return start, parsed, drops
 
     labels: list[str | None] = [None] * len(prompts)
+    unlabeled: dict[str, int] = {}
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        for start, parsed in ex.map(run, batches):
+        for start, parsed, drops in ex.map(run, batches):
             for i, label in parsed.items():
                 labels[start + i] = label
-    return labels
+            for reason, k in drops.items():
+                unlabeled[reason] = unlabeled.get(reason, 0) + k
+    return labels, unlabeled

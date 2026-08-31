@@ -488,6 +488,12 @@ function wireTips(root){
 
 const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;");
 const escAttr = s => esc(s).replace(/"/g,"&quot;");
+// A dataset id does not say which version was counted: `main` moves. Result
+// files written since the sampler was fixed carry the commit they read, so link
+// it where the count is shown; older files simply have nothing to link.
+const revLink = d => d.revision
+  ? ` <a href="https://huggingface.co/datasets/${escAttr(d.dataset)}/tree/${escAttr(d.revision)}" target="_blank" rel="noopener"><code>${esc(String(d.revision).slice(0,7))}</code></a>`
+  : "";
 
 // Mix labels are a mix of real HuggingFace dataset ids and bare internal names.
 // Only the ones checked as publicly reachable when the data was built get a link.
@@ -1269,7 +1275,15 @@ async function renderModel(model, gen){
     h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())} <span class="ds">— ${esc(s.name)}</span>`;
     const sub = document.createElement("p");
     sub.className = "stage-sub";
-    sub.textContent = `${d.dataset} · n=${n} sampled prompts labeled by ${d.classifier}`;
+    // Prompts the classifier never labeled are excluded from every bar below,
+    // so the header says how many. Refusals land on jailbreak-style prompts —
+    // the content the harmlessness bar is about — so an unreported gap reads as
+    // a smaller share rather than as missing data. Older files carry no count;
+    // for those the unlabeled records are still in `records`, so count them.
+    const skipped = d.unlabeled ?? (d.records.length - n);
+    const why = Object.entries(d.unlabeled_reasons || {}).map(([k, v]) => `${v} ${k}`).join(", ");
+    sub.innerHTML = `${esc(d.dataset)}${revLink(d)} · n=${n} sampled prompts labeled by ${esc(d.classifier)}`
+      + (skipped ? ` · <b>${skipped}</b> unlabeled${why ? ` (${esc(why)})` : ""} and excluded` : "");
     hhh.append(h, sub);
     const max = Math.max(...LABELS.map(l => wilson(counts[l]||0, n)[1]), 0.01);
     let lastGrp = null;
@@ -1432,11 +1446,17 @@ async function renderModel(model, gen){
         // Only call out the correction when it actually bit; at one document per
         // shard the design effect is ~1 and n_eff lands within a hair of n.
         const clustered = r.nEff < r.n * 0.98;
+        // Same accounting as the HHH card: whatever the classifier never
+        // judged is missing from n, not counted as a non-match.
+        const skipped = r.d.unlabeled || 0;
+        const skipNote = skipped
+          ? `<br>${skipped} sampled ${unit} went unjudged (${esc(Object.entries(r.d.unlabeled_reasons || {}).map(([k, v]) => `${v} ${k}`).join(", ") || "no reason recorded")}) and are excluded from n`
+          : "";
         const ciNote = clustered
           ? `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])} — widened for clustering, effective n ${r.nEff.toFixed(0)} of ${r.n} (documents sharing a shard are correlated)`
           : `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`;
         barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
-          `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})${ciNote}<br>click to read them`,
+          `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})${ciNote}${skipNote}<br>click to read them`,
           false,
           r.d.records.filter(x => x.match), {...ctxFor(s), isCorpus, linkKey: "ask-" + slug});
       }
