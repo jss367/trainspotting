@@ -1,6 +1,8 @@
 {
   "sft": {
     "dataset": "allenai/Dolci-Instruct-SFT",
+    "generated": "2026-08-31T19:23:04+00:00",
+    "revision": "bd3c8f3a9b2cc5a9682e44b96ddd0bb2ff027221",
     "total": 2152112,
     "counted": 2152112,
     "partial": false,
@@ -47,6 +49,8 @@
   },
   "dpo": {
     "dataset": "allenai/Dolci-Instruct-DPO",
+    "generated": "2026-08-31T19:23:04+00:00",
+    "revision": "aed155cf32e809b590490b6c3577ee4b0d0a5019",
     "total": 259922,
     "counted": 259922,
     "partial": false,
@@ -62,6 +66,8 @@
   },
   "rlvr": {
     "dataset": "allenai/Dolci-Instruct-RL",
+    "generated": "2026-08-31T19:23:08+00:00",
+    "revision": "1a8d79b1012d77e4bb1fd7f699c5c7eb33ef931e",
     "total": 169964,
     "counted": 169964,
     "partial": false,

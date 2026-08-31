@@ -1,8 +1,15 @@
 """Upgrade the 1500-character prompts in old results/ files to full prompts.
 
-Sampling is deterministic (same dataset size + seed), so this re-fetches the
-same rows and rewrites each record's prompt without re-classifying. Responses
-live in the context files that `trainspotting context` writes, not here.
+Re-fetches the stage's draw and rewrites each record's prompt without
+re-classifying. Responses live in the context files that `trainspotting context`
+writes, not here.
+
+Records are matched to re-fetched prompts by their stored prefix, not by
+position. Position was never a safe join: rows carrying no user prompt drop out
+of the draw, and the sampler has since learned to deduplicate overlapping pages
+and top the sample back up, which changes both membership and order for the same
+(sample, seed). Matching on content means a record is upgraded when its row is
+still in the draw and left alone when it is not, whichever sampler wrote it.
 
     python3 scripts/backfill_prompts.py
 """
@@ -35,16 +42,33 @@ for path in sorted((ROOT / "results").glob("*.json")):
     data = json.loads(path.read_text())
     rows = hf.sample_rows(stage["hf_dataset"], data["sample"], seed=data["seed"])
     prompts = [extract.extract_prompt(r, stage["prompt_path"]) for r in rows]
-    keep = [(rows[i], p) for i, p in enumerate(prompts) if p]
-    if len(keep) < len(data["records"]):
-        print(f"SKIP {path.name}: resample gave {len(keep)} prompts for {len(data['records'])} records")
-        continue
-    mismatches = 0
-    for rec, (_, full) in zip(data["records"], keep):
-        if rec["prompt"][:200] != full[:200]:
-            mismatches += 1
-            continue
-        rec["prompt"] = extract.clip(full)
-    path.write_text(json.dumps(data, indent=2))
-    status = f"{mismatches} mismatched rows left untouched" if mismatches else "all rows matched"
-    print(f"backfilled {path.name}: {status}")
+    # Keyed on the prefix the records store, so a record finds its own row
+    # wherever the draw put it. Ambiguity is about the text, not the rows: a
+    # prompt appearing in several rows still upgrades to one answer, while two
+    # rows agreeing for 200 characters and diverging after have no single
+    # answer, so drop those rather than guess.
+    by_prefix = {}
+    for full in prompts:
+        if full:
+            by_prefix.setdefault(full[:200], set()).add(full)
+    unique = {k: next(iter(v)) for k, v in by_prefix.items() if len(v) == 1}
+
+    upgraded = ambiguous = 0
+    missing = []
+    for rec in data["records"]:
+        prefix = rec["prompt"][:200]
+        if prefix in unique:
+            rec["prompt"] = extract.clip(unique[prefix])
+            upgraded += 1
+        elif prefix in by_prefix:
+            ambiguous += 1
+        else:
+            missing.append(prefix)
+    if upgraded:
+        path.write_text(json.dumps(data, indent=2))
+    parts = [f"{upgraded} upgraded"]
+    if missing:
+        parts.append(f"{len(missing)} not in this draw")
+    if ambiguous:
+        parts.append(f"{ambiguous} ambiguous prefix")
+    print(f"backfilled {path.name}: {', '.join(parts)} of {len(data['records'])}")

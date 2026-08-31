@@ -6,6 +6,7 @@ precise instruction following, tool use), because "how much of training is about
 being harmless" is only meaningful against that baseline.
 """
 
+import hashlib
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -152,6 +153,31 @@ def system_for(kind: str, question: str | None = None) -> str | None:
     return pair[1] if question else pair[0]
 
 
+# HTTP statuses a single prompt can plausibly cause: the request was malformed
+# or too large for this batch. Everything else — auth, quota, rate limits,
+# overload, server errors — is a property of the run, and re-asking one prompt
+# at a time would only multiply it.
+PER_PROMPT_STATUSES = {400, 413, 422}
+
+
+def build_system(question: str | None = None, system: str | None = None) -> str:
+    """The exact system prompt a run will use.
+
+    Split out of `classify_prompts` so a caller can record which instrument
+    produced its numbers. The taxonomy wording is not incidental to the result —
+    rewriting a label's definition moves every share it reports — so a result
+    file that cites a percentage should be able to cite the prompt behind it.
+    """
+    if system:
+        return system.format(question=question) if question else system
+    return ASK_SYSTEM.format(question=question) if question else SYSTEM
+
+
+def system_id(system: str) -> str:
+    """A short content hash of a system prompt, for stamping into results."""
+    return hashlib.sha256(system.encode()).hexdigest()[:12]
+
+
 def classify_prompts(
     prompts: list[str],
     model: str = "claude-opus-5",
@@ -160,8 +186,17 @@ def classify_prompts(
     question: str | None = None,
     system: str | None = None,
     max_chars: int = extract.MAX_CLASSIFY_CHARS,
-) -> list[str | None]:
-    """Return one label (or None) per prompt, preserving order.
+) -> tuple[list[str | None], dict[str, int]]:
+    """Return one label (or None) per prompt in order, plus why any are missing.
+
+    The second value counts what stayed unlabeled after the retry below, by
+    reason: "refusal" (the classifier declined), "error" (the API refused to
+    answer at all), "unparsed" (it answered without a usable label for that
+    prompt). Callers are expected to record it. A silent None is the one failure
+    mode this layer must not have: refusals land on jailbreak-style prompts,
+    which is precisely the content a harmlessness share is measuring, so
+    dropping them quietly biases the headline number downward and nothing on the
+    page would show it.
 
     With `question` set, labels are "yes"/"no" judgments of that question
     instead of the fixed taxonomy. `system` overrides the prompt entirely, which
@@ -170,11 +205,8 @@ def classify_prompts(
     far more of it than prompts do, so callers raise it and shrink the batch.
     """
     if not prompts:
-        return []  # nothing to ask about; don't demand a key to say so
-    if system:
-        system = system.format(question=question) if question else system
-    else:
-        system = ASK_SYSTEM.format(question=question) if question else SYSTEM
+        return [], {}  # nothing to ask about; don't demand a key to say so
+    system = build_system(question, system)
     valid = ["yes", "no"] if question else LABELS
     client = anthropic.Anthropic()
     batches = [
@@ -182,8 +214,13 @@ def classify_prompts(
         for start in range(0, len(prompts), batch_size)
     ]
 
-    def run(batch):
-        start, items = batch
+    def judge(items: list[str]) -> tuple[dict[int, str], str | None, bool]:
+        """(labels by position within `items`, why any are missing, retry singly?).
+
+        The third value says whether one prompt in the batch could plausibly be
+        the cause. A refusal or a skipped index could be; a 401, an exhausted
+        quota, or a persistent 429 could not — those are about the run.
+        """
         numbered = "\n\n".join(
             f"### {i}\n{p[:max_chars]}" for i, p in enumerate(items)
         )
@@ -198,16 +235,54 @@ def classify_prompts(
                 system=system,
                 messages=[{"role": "user", "content": numbered}],
             )
-        except anthropic.APIStatusError:
-            return start, {}
+        except anthropic.APIStatusError as exc:
+            return {}, "error", getattr(exc, "status_code", None) in PER_PROMPT_STATUSES
         if resp.stop_reason == "refusal":
-            return start, {}
+            return {}, "refusal", True
         text = "".join(b.text for b in resp.content if b.type == "text")
-        return start, _parse(text, len(items), valid)
+        parsed = _parse(text, len(items), valid)
+        return parsed, None if len(parsed) == len(items) else "unparsed", True
+
+    def run(batch):
+        start, items = batch
+        parsed, reason, per_prompt = judge(items)
+        drops: dict[str, int] = {}
+        missing = [i for i in range(len(items)) if i not in parsed]
+        if missing and len(items) > 1 and per_prompt:
+            # One prompt can sink the other nineteen: a refusal on a single
+            # piece of raw jailbreak text, a 400 on one oversized row, or a
+            # reply that skipped an index. Re-ask for the unlabeled ones one at
+            # a time, so what is finally lost is the prompt that caused it
+            # rather than everything batched beside it.
+            for done, i in enumerate(missing):
+                one, one_reason, one_per_prompt = judge([items[i]])
+                if 0 in one:
+                    parsed[i] = one[0]
+                    continue
+                drops[one_reason] = drops.get(one_reason, 0) + 1
+                if not one_per_prompt:
+                    # The run started failing partway through the retry — a 401,
+                    # a quota, a rate limit. Asking about the remaining prompts
+                    # individually would get the same answer, slower, while
+                    # deepening the limit that caused it. Count them and stop.
+                    rest = len(missing) - done - 1
+                    if rest:
+                        drops[one_reason] += rest
+                    break
+        elif missing:
+            # Either a one-item batch, or a failure no single prompt could have
+            # caused. Fanning out the second kind turns one doomed request into
+            # twenty, across every worker, which delays the failure and deepens
+            # the rate limit that caused it without recovering a single label.
+            drops[reason] = drops.get(reason, 0) + len(missing)
+        return start, parsed, drops
 
     labels: list[str | None] = [None] * len(prompts)
+    unlabeled: dict[str, int] = {}
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        for start, parsed in ex.map(run, batches):
+        for start, parsed, drops in ex.map(run, batches):
             for i, label in parsed.items():
                 labels[start + i] = label
-    return labels
+            for reason, k in drops.items():
+                unlabeled[reason] = unlabeled.get(reason, 0) + k
+    return labels, unlabeled

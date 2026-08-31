@@ -3,6 +3,7 @@ import json
 import math
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import classify, context, extract, hf, languages, pretrain, registry
@@ -97,6 +98,43 @@ def _cluster_wilson(records: list[dict], key: str = "shard") -> tuple[float, flo
     return (*_wilson(p * n_eff, n_eff), n_eff)
 
 
+# Sentinel for "look the revision up now". Distinct from None, which is a
+# caller saying it knows the revision and the answer is "unknown" — reusing an
+# old result file that predates this field, say. Collapsing the two would stamp
+# today's `main` onto rows drawn from a revision nobody recorded.
+_RESOLVE = object()
+
+
+def _stamp(dataset: str | None = None, revision=_RESOLVE) -> dict:
+    """Provenance every result file carries: when it was written, and which
+    commit of the dataset it was computed over.
+
+    A dataset id alone does not identify what was counted. `main` moves — Ai2
+    has republished these mixes — so a file reporting "8.1% harmlessness, n=300"
+    without a revision cannot be checked later, or told apart from the same
+    figure over different rows.
+
+    Callers that draw rows resolve the revision *before* the draw and pass it
+    here, so the stamp names the tree the rows actually came from; a lookup
+    after a long labeling run could name a revision published while it ran. A
+    lookup that fails records null rather than failing a run whose API calls are
+    already paid for.
+    """
+    out = {"generated": datetime.now(timezone.utc).replace(microsecond=0).isoformat()}
+    if dataset:
+        out["revision"] = hf.dataset_revision(dataset) if revision is _RESOLVE else revision
+    return out
+
+
+def _unlabeled_note(labels: list, reasons: dict[str, int]) -> str:
+    """One line naming what the classifier never labeled, for stderr."""
+    n = sum(1 for label in labels if label is None)
+    if not n:
+        return ""
+    detail = ", ".join(f"{k} {v}" for k, v in sorted(reasons.items()))
+    return f"  [{n} unlabeled ({detail or 'reason unrecorded'})]"
+
+
 def _select_stages(args, stages_of, family):
     """The stages a command runs over: every one of `family`, narrowed by `--stage`.
 
@@ -162,10 +200,10 @@ def _counts(records):
     return counts
 
 
-def _print_match_rate(stage, k, n, lo, hi, path):
+def _print_match_rate(stage, k, n, lo, hi, path, note=""):
     print(
         f"{stage}: {k}/{n} match = {k / n * 100 if n else 0:.1f}%"
-        f" (95% CI {lo * 100:.1f}–{hi * 100:.1f}%) -> {path}",
+        f" (95% CI {lo * 100:.1f}–{hi * 100:.1f}%) -> {path}{note}",
         file=sys.stderr,
     )
 
@@ -191,6 +229,7 @@ def cmd_sources(args):
     target = registry.resolve(args.target)
     out = {}
     for s in registry.post_training_stages(target):
+        revision = hf.dataset_revision(s["hf_dataset"])
         freqs, counted, partial = hf.column_frequencies(
             s["hf_dataset"], s["source_columns"]
         )
@@ -198,6 +237,10 @@ def cmd_sources(args):
         # Shares are over the rows the stats API actually scanned, which on a
         # big dataset is not all of them.
         counted = counted or total
+        # /statistics and /info are two requests, and this layer is the one that
+        # calls its numbers exact — so a republish between them would leave
+        # frequencies and a row count describing different trees.
+        moved = hf.dataset_revision(s["hf_dataset"])
         # One hub request per repo-shaped label, so only pay for it when the
         # result is being written out — the printed table has nowhere to put a URL.
         links = {}
@@ -210,6 +253,8 @@ def cmd_sources(args):
                             links[value] = url
         out[s["stage"]] = {
             "dataset": s["hf_dataset"],
+            **_stamp(s["hf_dataset"], revision=revision),
+            **({"revision_moved_to": moved} if revision and moved and moved != revision else {}),
             "total": total,
             "counted": counted,
             "partial": partial,
@@ -249,6 +294,9 @@ def _label_post_training(args, question=None, slug=None):
     reward checks does not answer it.
     """
     for s in _select_stages(args, registry.post_training_stages, "post-training"):
+        # Before the draw, not after: labeling 300 prompts takes minutes, and a
+        # revision resolved at the end could name a tree published while it ran.
+        revision = hf.dataset_revision(s["hf_dataset"])
         rows = _sample_rows(s, args.sample, args.seed)
         indices = [i for i, _, _ in rows]
         prompts = [p for _, _, p in rows]
@@ -264,23 +312,52 @@ def _label_post_training(args, question=None, slug=None):
             + " ...",
             file=sys.stderr,
         )
-        asked = iter(
-            classify.classify_prompts(
-                ask,
-                model=args.classifier,
-                question=question,
-                # A chat log is not a training example, so it is not judged as
-                # one. Every model stage gets None here and takes the default.
-                system=classify.system_for(registry.stage_kind(s), question),
-            )
+        # A chat log is not a training example, so it is not judged as one.
+        # Every model stage gets None here and takes the default rubric.
+        system = classify.system_for(registry.stage_kind(s), question)
+        asked_labels, reasons = classify.classify_prompts(
+            ask, model=args.classifier, question=question, system=system
         )
+        # The datasets-server takes no revision — /rows serves its own build of
+        # whatever the dataset is now — so the stamp can only be the tree the
+        # hub pointed at when the draw started. Read it again now that the slow
+        # part is over: if it moved while this ran, the rows may straddle two
+        # trees, and the file should say so rather than name one of them and
+        # sound certain. Only this path checks, because only this path is slow
+        # enough for the window to matter.
+        moved = hf.dataset_revision(s["hf_dataset"])
+        asked = iter(asked_labels)
+        # A verifier-settled row is never None, so what stays unlabeled is what
+        # the classifier was asked about and did not answer.
         labels = [f or next(asked) for f in fixed]
+        note = _unlabeled_note(labels, reasons)
         run = {
             "dataset": s["hf_dataset"],
+            **_stamp(s["hf_dataset"], revision=revision),
             "sample": args.sample,
             "seed": args.seed,
             "classifier": args.classifier,
+            # The taxonomy (or the question) is the instrument: rewording a
+            # label moves every share under it, so the file says which wording
+            # produced these labels.
+            "system_sha": classify.system_id(classify.build_system(question, system)),
+            # Prompts the classifier never labeled, and why. Every rate here is
+            # over the labeled ones, so this is the part of the sample those
+            # rates do not describe.
+            "unlabeled": sum(1 for label in labels if label is None),
+            "unlabeled_reasons": reasons,
         }
+        # `revision` is None when the pre-draw lookup failed, and a SHA now is
+        # not evidence the tree moved — it is the first reading we got. Saying
+        # so would also crash on revision[:7] and throw away a run that has
+        # already been paid for.
+        if revision and moved and moved != revision:
+            run["revision_moved_to"] = moved
+            print(
+                f"  note: {s['hf_dataset']} moved from {revision[:7]} to"
+                f" {moved[:7]} while this ran; rows may straddle both",
+                file=sys.stderr,
+            )
         if question is None:
             records = []
             for i, p, lab, f in zip(indices, prompts, labels, fixed):
@@ -294,7 +371,7 @@ def _label_post_training(args, question=None, slug=None):
                 RESULTS / f"{args.target}.{s['stage']}.labels.json",
                 {**run, "records": records},
             )
-            print(f"{s['stage']}: {_counts(records)}  -> {path}", file=sys.stderr)
+            print(f"{s['stage']}: {_counts(records)}  -> {path}{note}", file=sys.stderr)
         else:
             records = [
                 {"row": i, "prompt": extract.clip(p), "match": lab == "yes"}
@@ -306,7 +383,7 @@ def _label_post_training(args, question=None, slug=None):
                 {"question": question, **run, "records": records},
             )
             k, n = sum(r["match"] for r in records), len(records)
-            _print_match_rate(s["stage"], k, n, *_wilson(k, n), path)
+            _print_match_rate(s["stage"], k, n, *_wilson(k, n), path, note)
 
 
 def _label_pretrain_docs(args, question, slug):
@@ -326,7 +403,7 @@ def _label_pretrain_docs(args, question, slug):
             continue
         data = json.loads(docs_path.read_text())
         docs = data["records"]
-        labels = classify.classify_prompts(
+        labels, reasons = classify.classify_prompts(
             # Stored as an excerpt spanning the whole document, so this judges
             # precisely the text the site shows. A corpus document does not
             # announce itself the way a prompt does, and the long-context mixes
@@ -358,10 +435,20 @@ def _label_pretrain_docs(args, question, slug):
             {
                 "question": question,
                 "dataset": data["dataset"],
+                # The revision the documents were sampled at, carried over from
+                # the sample rather than looked up now: these documents came
+                # from that tree, whatever `main` points at today. A sample
+                # written before this field existed records null, not today's.
+                **_stamp(data["dataset"], revision=data.get("revision")),
                 "stage": s["stage"],
                 "sample": data["sample"],
                 "seed": data["seed"],
                 "classifier": args.classifier,
+                "system_sha": classify.system_id(
+                    classify.build_system(question, classify.ASK_DOC_SYSTEM)
+                ),
+                "unlabeled": sum(1 for label in labels if label is None),
+                "unlabeled_reasons": reasons,
                 "scope": data.get("scope"),
                 "caveat": data.get("caveat"),
                 "judged_chars": extract.MAX_DOCUMENT_CHARS,
@@ -372,7 +459,7 @@ def _label_pretrain_docs(args, question, slug):
                 "records": records,
             },
         )
-        _print_match_rate(s["stage"], k, n, lo, hi, path)
+        _print_match_rate(s["stage"], k, n, lo, hi, path, _unlabeled_note(labels, reasons))
 
 
 def _warn_missing_pretrain_samples(args):
@@ -504,7 +591,7 @@ def cmd_pretrain(args):
                 # The exact commit the composition and documents came from.
                 # "main" moves; a result file that cites exact byte shares
                 # has to say which revision it counted.
-                "revision": revision,
+                **_stamp(dataset, revision=revision),
                 "stage": s["stage"],
                 "name": s["name"],
                 "sample": len(records),
@@ -555,8 +642,18 @@ def cmd_languages(args):
             # context by prompt text, as they did before.
             pairs = [(r.get("row"), r["prompt"]) for r in prior["records"]]
             sample, seed = prior["sample"], prior["seed"]
+            # Reusing a run's prompts means reusing its revision: those rows came
+            # from that tree. A file written before the field existed has none,
+            # and null is the honest answer — not today's `main`, which is a
+            # different tree from the one nobody recorded.
+            revision = prior.get("revision")
+            # And its ambiguity, if it had any. These are that run's rows, so a
+            # language file that named only the first tree would state as settled
+            # what the classification run recorded as unresolved.
+            moved = prior.get("revision_moved_to")
             print(f"reusing {len(pairs)} prompts from {labels_path.name}", file=sys.stderr)
         else:
+            revision = hf.dataset_revision(s["hf_dataset"])
             # Clip before detecting, not after. A classify run stores the clipped
             # prompt, so detecting the full text here would make --from-labels
             # disagree with this path on the handful of prompts past the cutoff.
@@ -564,6 +661,9 @@ def cmd_languages(args):
                 (i, extract.clip(p))
                 for i, p in _sample_prompts(s, args.sample, args.seed)
             ]
+            # Detection is local, but the draw feeding it is thirty paged
+            # requests, so this path has the same republish window as `context`.
+            moved = hf.dataset_revision(s["hf_dataset"])
         records = []
         for i, p in pairs:
             code, conf = languages.detect(p)
@@ -575,6 +675,13 @@ def cmd_languages(args):
             RESULTS / f"{args.target}.{s['stage']}.languages.json",
             {
                 "dataset": s["hf_dataset"],
+                **_stamp(s["hf_dataset"], revision=revision),
+                # From a reused run, this is the ambiguity it recorded; from a
+                # fresh draw, movement observed across that draw. Either way it
+                # takes two known and different readings: a first lookup that
+                # failed leaves the tree unknown, and a SHA read afterwards is
+                # the first answer we got, not evidence of a republish.
+                **({"revision_moved_to": moved} if revision and moved and moved != revision else {}),
                 "sample": sample,
                 "seed": seed,
                 "detector": "py3langid",
@@ -596,8 +703,14 @@ def cmd_context(args):
     called here — this is the deterministic half of the drill-down.
     """
     for s in _select_stages(args, registry.post_training_stages, "post-training"):
+        revision = hf.dataset_revision(s["hf_dataset"])
         print(f"re-fetching {args.sample} sampled rows from {s['hf_dataset']} ...", file=sys.stderr)
         rows = hf.sample_rows_with_index(s["hf_dataset"], args.sample, seed=args.seed)
+        # Thirty-odd paged requests, so the same republish window the labeling
+        # path checks for applies here — smaller, but not absent, and these
+        # records are what the site shows when someone clicks through to a
+        # training example.
+        moved = hf.dataset_revision(s["hf_dataset"])
         records = []
         for row_index, row in rows:
             prompt = extract.extract_prompt(row, s["prompt_path"])
@@ -609,6 +722,8 @@ def cmd_context(args):
             RESULTS / f"{args.target}.{s['stage']}.context.json",
             {
                 "dataset": s["hf_dataset"],
+                **_stamp(s["hf_dataset"], revision=revision),
+                **({"revision_moved_to": moved} if revision and moved and moved != revision else {}),
                 "stage": s["stage"],
                 "sample": args.sample,
                 "seed": args.seed,
@@ -651,6 +766,18 @@ def cmd_report(args):
         v = sum(1 for r in records if r.get("by") == "verifier")
         by = f", {v} by their verifier" if v else ""
         print(f"### {s['stage']} — {data['dataset']} (n={n} labeled{by})\n")
+        # Every share below is over the labeled prompts. Refusals fall on
+        # jailbreak-style content, so an unreported gap reads as a smaller
+        # harmlessness share rather than as missing data.
+        unlabeled = data.get("unlabeled", len(data["records"]) - n)
+        if unlabeled:
+            reasons = data.get("unlabeled_reasons") or {}
+            detail = ", ".join(f"{k} {v}" for k, v in sorted(reasons.items()))
+            print(
+                f"- {unlabeled} of {n + unlabeled} sampled prompts went unlabeled"
+                + (f" ({detail})" if detail else "")
+                + " — excluded from every share below\n"
+            )
         counts = _counts(records)
         for label in classify.LABELS:
             k = counts.get(label, 0)

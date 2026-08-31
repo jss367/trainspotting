@@ -1,6 +1,8 @@
 {
   "chat": {
     "dataset": "allenai/WildChat-1M",
+    "generated": "2026-08-31T19:23:17+00:00",
+    "revision": "7d6490e462285cf85d91eabea0f9a954fbddcd1f",
     "total": 837989,
     "counted": 778133,
     "partial": true,
