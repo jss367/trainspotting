@@ -107,16 +107,23 @@ def _select_stages(args, stages_of, kind):
     return stages
 
 
-def _sample_prompts(stage, sample, seed):
-    """The non-empty prompts of a deterministic (sample, seed) draw from a stage.
+def _sample_rows(stage, sample, seed):
+    """(row, prompt) for each row of a deterministic (sample, seed) draw that has one.
 
     Rows carrying no user prompt drop out here, so the result is usually shorter
-    than `sample`.
+    than `sample`. The row travels with its prompt because part of what an
+    example teaches is in the row rather than the text — an RL row's verifier
+    settles its taxonomy label outright.
     """
     print(f"sampling {sample} rows from {stage['hf_dataset']} ...", file=sys.stderr)
     rows = hf.sample_rows(stage["hf_dataset"], sample, seed=seed)
-    prompts = (extract.extract_prompt(r, stage["prompt_path"]) for r in rows)
-    return [p for p in prompts if p]
+    pairs = ((r, extract.extract_prompt(r, stage["prompt_path"])) for r in rows)
+    return [(r, p) for r, p in pairs if p]
+
+
+def _sample_prompts(stage, sample, seed):
+    """Just the prompts, for the callers with no use for the row."""
+    return [p for _, p in _sample_rows(stage, sample, seed)]
 
 
 def _write_json(path, payload):
@@ -201,11 +208,29 @@ def _label_post_training(args, question=None, slug=None):
     prompts survive extraction, what the envelope records about the run — is the
     same in both modes, and `classify` and `ask` sharing this loop is what keeps
     it that way.
+
+    Taxonomy mode has one shortcut: a row whose verifier already settles its
+    label is never sent to the model, which would answer about the prompt's
+    topic instead. A free-form question gets no such shortcut — knowing what the
+    reward checks does not answer it.
     """
     for s in _select_stages(args, registry.post_training_stages, "post-training"):
-        prompts = _sample_prompts(s, args.sample, args.seed)
-        print(f"classifying {len(prompts)} prompts with {args.classifier} ...", file=sys.stderr)
-        labels = classify.classify_prompts(prompts, model=args.classifier, question=question)
+        rows = _sample_rows(s, args.sample, args.seed)
+        prompts = [p for _, p in rows]
+        fixed = [
+            classify.verifier_label(row, s["stage"]) if question is None else None
+            for row, _ in rows
+        ]
+        ask = [p for p, f in zip(prompts, fixed) if not f]
+        settled = len(prompts) - len(ask)
+        print(
+            f"classifying {len(ask)} prompts with {args.classifier}"
+            + (f" ({settled} labeled by their verifier)" if settled else "")
+            + " ...",
+            file=sys.stderr,
+        )
+        asked = iter(classify.classify_prompts(ask, model=args.classifier, question=question))
+        labels = [f or next(asked) for f in fixed]
         run = {
             "dataset": s["hf_dataset"],
             "sample": args.sample,
@@ -213,10 +238,12 @@ def _label_post_training(args, question=None, slug=None):
             "classifier": args.classifier,
         }
         if question is None:
-            records = [
-                {"prompt": extract.clip(p), "label": lab}
-                for p, lab in zip(prompts, labels)
-            ]
+            records = []
+            for p, lab, f in zip(prompts, labels, fixed):
+                rec = {"prompt": extract.clip(p), "label": lab}
+                if f:
+                    rec["by"] = "verifier"
+                records.append(rec)
             path = _write_json(
                 RESULTS / f"{args.model}.{s['stage']}.labels.json",
                 {**run, "records": records},
@@ -541,7 +568,7 @@ def cmd_report(args):
             print(f"- {s['stage']}: {s['name']}, {_fmt_tokens(s['tokens'])} tokens")
         else:
             print(f"- {s['stage']}: {s['name']} ({s['hf_dataset']})")
-    print("\n## HHH classification (sampled, LLM-labeled)\n")
+    print("\n## HHH classification (sampled)\n")
     for s in registry.post_training_stages(model):
         path = RESULTS / f"{args.model}.{s['stage']}.labels.json"
         if not path.exists():
@@ -550,7 +577,11 @@ def cmd_report(args):
         data = json.loads(path.read_text())
         records = [r for r in data["records"] if r["label"]]
         n = len(records)
-        print(f"### {s['stage']} — {data['dataset']} (n={n} labeled)\n")
+        # Verifier-labeled rows never reached the classifier, so name both
+        # counts rather than crediting the model for all of them.
+        v = sum(1 for r in records if r.get("by") == "verifier")
+        by = f", {v} by their verifier" if v else ""
+        print(f"### {s['stage']} — {data['dataset']} (n={n} labeled{by})\n")
         counts = _counts(records)
         for label in classify.LABELS:
             k = counts.get(label, 0)
