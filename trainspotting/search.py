@@ -62,8 +62,10 @@ def _flatten(value) -> str:
     return str(value)
 
 
-def _turns(messages):
-    """(turn index, role, text) for each piece of text a message turn carries.
+def _turns(messages, start: int = 0):
+    """(turn index, role, text) for each piece of text a message turn carries,
+    from turn `start` onward. Indices stay absolute, so a turn keeps the
+    position it has in the conversation however the caller sliced it.
 
     A turn is more than its `content`. `reasoning_content` and the structured
     output columns are yielded as their own entries, named for the column they
@@ -72,7 +74,7 @@ def _turns(messages):
     from a hit in the prose.
     """
     for i, m in enumerate(messages or []):
-        if not isinstance(m, dict):
+        if i < start or not isinstance(m, dict):
             continue
         role = m.get("role") or "?"
         if m.get("content"):
@@ -82,6 +84,42 @@ def _turns(messages):
         for name in STRUCTURED_TURN_FIELDS + INPUT_TURN_FIELDS:
             if m.get(name):
                 yield i, f"{role}/{name}", _flatten(m[name])
+
+
+def _turn_text(m: dict) -> tuple:
+    """A turn reduced to the text a search can see, for comparing two branches.
+
+    Only the searchable columns: the Instruct DPO schema hangs per-branch
+    metadata off every turn (timestamps, an OpenAI id, the sampling
+    temperature), so two turns holding the same words are the same turn here
+    even when those differ.
+    """
+    return (
+        m.get("role"),
+        _flatten(m.get("content")),
+        _flatten(m.get("reasoning_content")),
+        *(_flatten(m.get(name)) for name in STRUCTURED_TURN_FIELDS + INPUT_TURN_FIELDS),
+    )
+
+
+def _shared_turns(chosen, rejected) -> int:
+    """How many leading turns the two completions of a pair hold in common.
+
+    A multi-turn pair branches at some point and shares everything before it,
+    assistant turns included. Those shared turns are the conversation the pair
+    is judged in, not either candidate answer: attributing them by role would
+    report a string in the shared history as a hit on both completions, which
+    `pair_split` then calls `both` — the code for "the pair says nothing about
+    this string", claimed here about text neither completion contains.
+    """
+    n = 0
+    for a, b in zip(chosen or [], rejected or []):
+        if not (isinstance(a, dict) and isinstance(b, dict)):
+            break
+        if _turn_text(a) != _turn_text(b):
+            break
+        n += 1
+    return n
 
 
 def _side_of(role: str, response_side: str) -> str:
@@ -104,41 +142,58 @@ def fields(row: dict, stage: str) -> list[dict]:
     says it is ChatGPT while thinking still said it.
     """
     out: list[dict] = []
-    seen_prompt: set[str] = set()
 
     def add(side, role, value, turn=None):
         text = _flatten(value)
-        if not text.strip():
-            return
-        if side == "prompt":
-            # A DPO row repeats its prompt on both sides, and some RL rows carry
-            # it as both `prompt` and `source_prompt`. Counting the same text
-            # twice would double every prompt hit in those stages.
-            if text in seen_prompt:
-                return
-            seen_prompt.add(text)
-        out.append({"side": side, "role": role, "turn": turn, "text": text})
+        if text.strip():
+            out.append({"side": side, "role": role, "turn": turn, "text": text})
 
     if stage == "sft":
         for i, role, text in _turns(row.get("messages")):
             add(_side_of(role, "response"), role, text, i)
     elif stage == "dpo":
+        chosen, rejected = row.get("chosen"), row.get("rejected")
+        shared = _shared_turns(chosen, rejected)
+        # Everything before the branch point is the conversation both
+        # completions answer in — prompt text, read once, off the chosen side.
+        prefix = set()
+        for i, role, text in _turns((chosen or [])[:shared]):
+            add("prompt", role, text, i)
+            prefix.add(text)
+        # The `prompt` column repeats those opening turns verbatim, so it is
+        # added only when it says something they do not. Dropping it by text
+        # rather than by position keeps a later turn that happens to repeat it:
+        # a conversation that says "continue" twice said it twice.
         if isinstance(row.get("prompt"), list):
             for i, role, text in _turns(row["prompt"]):
-                add("prompt", role, text, i)
-        else:
+                if text not in prefix:
+                    add("prompt", role, text, i)
+        elif _flatten(row.get("prompt")) not in prefix:
             add("prompt", "prompt", row.get("prompt"))
-        for side in ("chosen", "rejected"):
-            for i, role, text in _turns(row.get(side)):
-                add(_side_of(role, side), role, text, i)
+        seen_after = set()
+        for side, turns in (("chosen", chosen), ("rejected", rejected)):
+            for i, role, text in _turns(turns, start=shared):
+                attributed = _side_of(role, side)
+                if attributed == "prompt":
+                    # Context past the branch point still appears in both
+                    # branches. The same turn in the same position is one turn,
+                    # not one per branch.
+                    if (i, text) in seen_after:
+                        continue
+                    seen_after.add((i, text))
+                add(attributed, role, text, i)
     else:
+        column = _flatten(row.get("prompt"))
         if isinstance(row.get("prompt"), list):
             for i, role, text in _turns(row["prompt"]):
                 add("prompt", role, text, i)
         else:
             add("prompt", "prompt", row.get("prompt"))
         for i, role, text in _turns(row.get("source_prompt")):
-            add("prompt", role, text, i)
+            # Some RL rows carry the prompt twice, once per column. Only a copy
+            # of the `prompt` column is dropped, not every repeated turn.
+            if text != column:
+                add("prompt", role, text, i)
         # What the verifier scores against. Not a response — no RL row stores
         # one — but it is the rest of what the example teaches, and a string in
         # the answer key is a different finding from the same string in the

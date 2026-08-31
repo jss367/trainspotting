@@ -162,14 +162,16 @@ side per hit:
 | Stage | Sides |
 |---|---|
 | SFT | `prompt` (user and system turns), `response` (assistant turns) |
-| DPO | `prompt` (shared by both completions, counted once), `chosen`, `rejected` |
+| DPO | `prompt` (everything before the pair branches, counted once), `chosen`, `rejected` |
 | RLVR | `prompt`, `verifier` (ground truth, solution, constraint), `rollout` (stored reference generations) |
 
 The side is the finding, not a detail of it. "I am ChatGPT" in a rejected
 completion trains the model away from saying it, so a count that adds it to the
 chosen hits points the wrong way; DPO stages also get a `chosen only` /
 `rejected only` / `both` split, because a string in both completions says nothing
-about which way the pair pushes. RL rows store no response at all, so their
+about which way the pair pushes. A multi-turn pair shares a conversation before
+it branches, assistant turns included, and all of it is prompt text: a string in
+the shared history is not a hit on either completion. RL rows store no response at all, so their
 non-prompt sides are the answer key and the reference rollouts the verifier
 scored — neither is text the model was fit to.
 

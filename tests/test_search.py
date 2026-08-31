@@ -311,3 +311,90 @@ def test_a_pattern_that_matches_the_empty_string_is_counted_not_collected():
 
     assert every_match > len("abcd")  # a match at every position, and then some
     assert [(h["count"], h["snippet"]) for h in hits] == [(every_match, "abcd")]
+
+
+def test_shared_history_in_a_multi_turn_pair_is_prompt_not_both_completions():
+    """A pair branches somewhere and shares everything before it, assistant
+    turns included. Attributing those by role reports a string in the shared
+    history as a hit on both completions, which `pair_split` calls `both` — its
+    code for "the pair says nothing", claimed about text neither completion
+    contains."""
+    history = [
+        {"role": "user", "content": "who are you?"},
+        {"role": "assistant", "content": "I am ChatGPT."},
+        {"role": "user", "content": "are you sure?"},
+    ]
+    row = {
+        "chosen": history + [{"role": "assistant", "content": "No — I am Olmo."}],
+        "rejected": history + [{"role": "assistant", "content": "Yes, quite sure."}],
+    }
+    pattern = compile_("i am chatgpt")
+
+    hits = search.search_row(row, "dpo", pattern)
+
+    assert [(h["side"], h["turn"]) for h in hits] == [("prompt", 1)]
+    assert search.pair_split([{"hits": hits}]) == {"chosen_only": 0, "rejected_only": 0, "both": 0}
+
+
+def test_each_completion_after_the_branch_keeps_its_side_and_its_turn_index():
+    history = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]
+    row = {
+        "chosen": history + [{"role": "user", "content": "go on"}, {"role": "assistant", "content": "Olmo speaking."}],
+        "rejected": history + [{"role": "user", "content": "go on"}, {"role": "assistant", "content": "ChatGPT speaking."}],
+    }
+
+    hits = search.search_row(row, "dpo", compile_("speaking"))
+
+    assert sorted((h["side"], h["turn"]) for h in hits) == [("chosen", 3), ("rejected", 3)]
+
+
+def test_a_pair_that_branches_immediately_shares_nothing():
+    row = {
+        "chosen": [{"role": "assistant", "content": "ChatGPT one"}],
+        "rejected": [{"role": "assistant", "content": "ChatGPT two"}],
+    }
+
+    assert search.pair_split([{"hits": search.search_row(row, "dpo", compile_("chatgpt"))}]) == {
+        "chosen_only": 0,
+        "rejected_only": 0,
+        "both": 1,
+    }
+
+
+def test_a_turn_repeated_in_one_conversation_is_kept():
+    """"continue" said twice is two turns. Dropping the second loses a turn
+    location and undercounts the string."""
+    row = {
+        "messages": [
+            {"role": "user", "content": "continue"},
+            {"role": "assistant", "content": "..."},
+            {"role": "user", "content": "continue"},
+        ]
+    }
+
+    hits = search.search_row(row, "sft", compile_("continue"))
+
+    assert [(h["side"], h["turn"]) for h in hits] == [("prompt", 0), ("prompt", 2)]
+
+
+def test_only_a_copy_of_the_prompt_column_is_dropped():
+    """The DPO prompt column repeats the pair's opening turn, so the two are
+    read once — but a later turn that happens to repeat it is a real turn, at
+    its own position."""
+    row = {
+        "prompt": "continue",
+        "chosen": [
+            {"role": "user", "content": "continue"},
+            {"role": "assistant", "content": "a"},
+            {"role": "user", "content": "continue"},
+        ],
+        "rejected": [
+            {"role": "user", "content": "continue"},
+            {"role": "assistant", "content": "b"},
+            {"role": "user", "content": "continue"},
+        ],
+    }
+
+    prompt_fields = [f for f in search.fields(row, "dpo") if f["side"] == "prompt"]
+
+    assert [f["turn"] for f in prompt_fields] == [0, 2]
