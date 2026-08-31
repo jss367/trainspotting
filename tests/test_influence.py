@@ -213,7 +213,7 @@ def test_a_source_with_no_row_count_is_named_without_inventing_a_rate():
     t = influence.compare(runs, THINK)
     assert t["best"]["sources"][0]["rate"] is None
     assert t["best"]["concentration"] is None
-    assert "largest contributor `mystery` holds 4 rows" in \
+    assert "largest contributor `mystery` holds 4 matching rows" in \
         " ".join(influence.render(t, "olmo-3-7b-think"))
 
 
@@ -466,3 +466,100 @@ def test_matching_flags_alone_make_it_a_different_search():
     ]
     with pytest.raises(ValueError, match="not the same search"):
         influence.compare(runs, THINK)
+
+
+# --- matches are never a zero, however unrankable --------------------------
+
+
+def test_hits_that_cannot_be_ranked_do_not_become_a_zero():
+    # Every hitting stage blocked from the ranking left `best` None, and the
+    # zero branch then summed the matching stage's rows into "0 of N rows" —
+    # printed directly under its own 900 matches.
+    runs = [run("dpo", hits=900, rows=1_000, groups={"prompt": 0, "response": 900}, partial=True)]
+    t = influence.compare(runs, THINK)
+    assert t["best"] is None and [r["stage"] for r in t["unranked"]] == ["dpo"]
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "**Found, and not comparable.**" in text
+    assert "dpo (900 of 1,000 rows, but only part of this repo was converted" in text
+    assert "Not in any stage searched" not in text
+    assert "exact over every one of them" not in text
+
+
+def test_a_real_zero_alongside_unrankable_hits_is_still_reported():
+    runs = [
+        run("dpo", hits=900, rows=1_000, groups={"prompt": 0, "response": 900}, partial=True),
+        run("rlvr", hits=0, rows=102_014, groups={"prompt": 0, "response": 0}),
+    ]
+    text = " ".join(influence.render(influence.compare(runs, THINK), "olmo-3-7b-think"))
+    assert "**Found, and not comparable.**" in text
+    assert "rlvr matched nothing, over every row" in text
+
+
+# --- produce-side evidence is attributed to produce-side sources -----------
+
+
+def test_the_produce_side_verdict_names_a_produce_side_source():
+    # `noisy` holds most of the matches and all of them are prompts, so it
+    # supplied none of the evidence the produce-side ranking ran on.
+    runs = [run(
+        "dpo", hits=100, rows=100_000, groups={"prompt": 80, "response": 20},
+        sources={"noisy": 80, "quiet": 20},
+        totals={"noisy": 4_000, "quiet": 2_000},
+        by_source_group={"noisy": {"prompt": 80, "response": 0},
+                         "quiet": {"prompt": 0, "response": 20}},
+    )]
+    t = influence.compare(runs, THINK)
+    best = t["best"]
+    assert best["conc_side"] == "produced"
+    assert best["concentration"]["name"] == "quiet"
+    # The all-matches reading would have named the other one.
+    assert best["concentration_all"]["name"] == "noisy"
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "produce side concentrated in `quiet`: 20 of its 2,000 rows" in text
+    assert "`noisy`" not in text
+
+
+def test_produce_side_matches_spread_thin_are_not_attributed_to_a_prompt_source():
+    runs = [run(
+        "dpo", hits=100, rows=100_000, groups={"prompt": 90, "response": 10},
+        sources={"noisy": 90, "quiet": 10},
+        totals={"noisy": 4_000, "quiet": 100_000},
+        by_source_group={"noisy": {"prompt": 90, "response": 0},
+                         "quiet": {"prompt": 0, "response": 10}},
+    )]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["concentration"] is None
+    assert "no produce side concentration" in " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+def test_a_run_without_per_source_groups_falls_back_to_all_matches():
+    runs = [run("dpo", hits=100, rows=100_000, groups={"prompt": 0, "response": 100},
+                sources={"only": 100}, totals={"only": 2_000})]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["conc_side"] == "all"
+    assert t["best"]["concentration"]["name"] == "only"
+
+
+# --- a touching interval is a tie ------------------------------------------
+
+
+def test_an_upper_bound_landing_on_the_leaders_lower_bound_is_a_tie():
+    # rlvr's produce side is 50–100 of 100,000; dpo's is exactly 50 of 50,000,
+    # so rlvr's upper bound equals dpo's rate and the two could be equal.
+    runs = [
+        run("rlvr", hits=200, rows=100_000, groups={"prompt": 0, "response": 50, "reference": 50}),
+        run("dpo", hits=50, rows=50_000, groups={"prompt": 0, "response": 50}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert [r["stage"] for r in t["contenders"]] == ["rlvr"]
+    assert "do not settle the order" in " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+def test_two_equal_exact_produce_side_rates_are_a_tie():
+    runs = [
+        run("dpo", hits=10, rows=100_000, groups={"prompt": 0, "response": 10}),
+        run("rlvr", hits=10, rows=100_000, groups={"prompt": 0, "response": 10}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert len(t["contenders"]) == 1
+    assert "do not settle the order" in " ".join(influence.render(t, "olmo-3-7b-think"))

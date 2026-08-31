@@ -279,11 +279,15 @@ read; a string in the response a stage fits, or in the reference answer a
 verifier scores rollouts against, is text the objective pushes it to emit. When
 the question is why a model *says* something, only the second is evidence, so
 the ranking runs on the produce-side rate and falls back to the overall rate
-only when no run read a produce-side column. `by_group` counts rows per group
-and one row can match two, so the union is reported as the interval it is
+only when no run read a produce-side column. The source attribution follows the
+same cut: under the produce-side basis the concentration is computed over
+produce-side rows per source, because a source that supplied only prompts
+supplied none of the evidence the ranking ran on. `by_group` counts rows per
+group and one row can match two, so the union is reported as the interval it is
 (232–235) rather than as the sum — and the interval is carried into the ranking
-rather than collapsed to its low end. Two stages whose intervals overlap are not
-ordered by these counts, and the verdict says so instead of picking one.
+rather than collapsed to its low end. Two stages whose intervals overlap, or
+touch at a single value, are not ordered by these counts, and the verdict says
+so instead of picking one.
 
 **What was not looked at.** A stage scanned and found empty, a stage nobody
 scanned, a stage this layer cannot reach, and a stage scanned but not all the
@@ -309,7 +313,9 @@ run never opened a produce-side column has no produce-side rate; a stage scanned
 over a partial conversion has a rate over the converted subset, which is a prefix
 rather than a sample. Both keep their counts on the page and are named as out of
 the ranking, rather than sorted to the bottom of it where a gap in the
-measurement reads as a low score.
+measurement reads as a low score. Where that empties the ranking, the verdict
+reports the matches and says no comparison is available — matches never turn
+into a zero because nothing could be ranked.
 
 Runs are grouped by their `--slug`, which is a filename rather than a promise:
 rerun one stage under the same slug with a refined regex and the directory holds
@@ -519,9 +525,11 @@ registry stage (`tests/fixtures/rows/`, re-captured by
 set of counts turns into a wrong story: ranking by hits rather than by rate,
 adding overlapping group counts as if they were a union, ordering two stages
 whose intervals overlap, naming the largest source as the origin when it holds
-the mix rate, ranking an unread produce side or a partial conversion's subset
-rate against a stage rate, and reading "nothing matched" as a zero when the scan
-was narrowed, incomplete, or cannot show what it covered.
+the mix rate, crediting a prompt-only source for produce-side evidence, ranking
+an unread produce side or a partial conversion's subset rate against a stage
+rate, reporting a zero for a stage that matched but could not be ranked, and
+reading "nothing matched" as a zero when the scan was narrowed, incomplete, or
+cannot show what it covered.
 `tests/test_report_traces.py` covers the grouping the report does before any of
 that: one search's stages together, two searches under one slug apart.
 

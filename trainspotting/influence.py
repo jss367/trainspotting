@@ -75,17 +75,31 @@ def _sources(result) -> list[dict]:
     groups = result.get("by_source_group") or {}
     rows = result.get("total_rows") or 0
     stage_rate = (result.get("matched", 0) / rows) if rows else 0
+    bounds = produced(result)
+    stage_produced_rate = (bounds[0] / rows) if (bounds and rows) else 0
+    fields = set(result.get("fields") or [])
     out = []
     for name, hits in (result.get("by_source") or {}).items():
         n = totals.get(name)
         rate = hits / n if n else None
+        # The same lower bound the stage's produce-side rate uses, per source.
+        # Without it the produce-side verdict credits whichever source holds the
+        # most matches overall, which can be a source that contributed only
+        # prompts — none of the evidence the ranking actually ran on.
+        per_group = groups.get(name, {})
+        p_counts = [per_group.get(g, 0) for g in PRODUCE if g in fields]
+        p_hits = max(p_counts) if (p_counts and per_group) else None
+        p_rate = (p_hits / n) if (p_hits is not None and n) else None
         out.append({
             "name": name,
             "hits": hits,
             "rows": n,
             "rate": rate,
             "lift": (rate / stage_rate) if (rate and stage_rate) else None,
-            "groups": groups.get(name, {}),
+            "produced_hits": p_hits,
+            "produced_rate": p_rate,
+            "produced_lift": (p_rate / stage_produced_rate) if (p_rate and stage_produced_rate) else None,
+            "groups": per_group,
         })
     return sorted(out, key=lambda s: -s["hits"])
 
@@ -98,19 +112,27 @@ MIN_SHARE = 0.1
 MIN_LIFT = 2.0
 
 
-def concentration(sources: list[dict], hits: int) -> dict | None:
+def concentration(sources: list[dict], hits: int, side: str = "all") -> dict | None:
     """The source the matches actually bunch in, or None if they are spread.
 
     Returning None matters as much as returning a source: "most of the matches
     are in X" is a claim about where the string entered the mix, and it is false
     whenever X is merely the largest source.
+
+    `side="produced"` runs the same test over the produce-side counts alone, so
+    a ranking that ran on produce-side rates is explained by the sources that
+    supplied those rows rather than by whichever source holds the most prompts.
     """
-    floor = max(2, MIN_SHARE * hits)
-    worth = [s for s in sources if s["hits"] >= floor and s["lift"]]
+    hk, rk, lk = ("hits", "rate", "lift") if side == "all" else (
+        "produced_hits", "produced_rate", "produced_lift")
+    total = hits if side == "all" else max(
+        (s[hk] or 0 for s in sources), default=0)
+    floor = max(2, MIN_SHARE * total)
+    worth = [s for s in sources if (s[hk] or 0) >= floor and s[lk]]
     if not worth:
         return None
-    best = max(worth, key=lambda s: s["rate"])
-    return best if best["lift"] >= MIN_LIFT else None
+    best = max(worth, key=lambda s: s[rk])
+    return best if best[lk] >= MIN_LIFT else None
 
 
 def coverage_gaps(result) -> list[str]:
@@ -168,7 +190,12 @@ def stage_trace(result) -> dict:
         "produced_rate": (bounds[0] / rows) if (bounds and rows) else None,
         "produced_rate_hi": (bounds[1] / rows) if (bounds and rows) else None,
         "sources": sources,
+        # Both readings are kept; `compare` picks the one matching the basis it
+        # ends up ranking on, so the verdict explains the number it printed.
+        "concentration_all": concentration(sources, hits),
+        "concentration_produced": concentration(sources, hits, side="produced"),
         "concentration": concentration(sources, hits),
+        "conc_side": "all",
         "revision": result.get("revision"),
         "partial": partial,
         "unsearched_columns": list(result.get("unsearched_columns") or []),
@@ -232,7 +259,9 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
             "available_fields": [], "coverage_gaps": [],
             "produced": None, "produced_rate": None,
             "produced_rate_hi": None,
-            "sources": [], "concentration": None, "revision": None, "partial": False,
+            "sources": [], "concentration": None, "concentration_all": None,
+            "concentration_produced": None, "conc_side": "all",
+            "revision": None, "partial": False,
             "unsearched_columns": [], "rank_block": None,
         })
 
@@ -249,6 +278,19 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
     key = "produced_rate" if basis == "produced" else "rate"
     for r in hitting:
         r["rank_block"] = _rank_block(r, basis, key)
+        # Explain the number that was ranked on. Under the produce-side basis a
+        # source that supplied only prompts supplied none of the evidence, and
+        # no concentration at all is the right answer where the produce-side
+        # matches are spread — falling back to the all-hits reading there would
+        # reintroduce exactly the mis-attribution.
+        # Needs per-source group counts to be there at all: a run written
+        # without `by_source_group` cannot attribute a side, and saying so by
+        # dropping the concentration line entirely would be worse than the
+        # weaker all-matches reading.
+        by_side = any(s["produced_hits"] is not None for s in r["sources"])
+        r["conc_side"] = "produced" if (basis == "produced" and r["produced"] and by_side) else "all"
+        r["concentration"] = (r["concentration_produced"] if r["conc_side"] == "produced"
+                              else r["concentration_all"])
     rankable = [r for r in hitting if not r["rank_block"]]
     unranked = [r for r in hitting if r["rank_block"]]
     ranked = sorted(rankable, key=lambda r: r[key] or 0, reverse=True)
@@ -260,7 +302,10 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
     contenders = []
     if ranked and basis == "produced":
         floor = ranked[0]["produced_rate"]
-        contenders = [r for r in ranked[1:] if (r["produced_rate_hi"] or 0) > floor]
+        # `>=`, not `>`: an upper bound that lands exactly on the leader's lower
+        # bound permits equality, and two equal exact rates are the same case.
+        # A tie the sort broke silently is still a tie.
+        contenders = [r for r in ranked[1:] if (r["produced_rate_hi"] or 0) >= floor]
 
     first = results[0] if results else {}
     return {
@@ -355,17 +400,22 @@ def _stage_lines(r: dict) -> list[str]:
         if r["rank_block"]:
             out.append(f"  - not in the ranking: {r['rank_block']} — a gap in the measurement "
                        "rather than a low score.")
+        side = r["conc_side"]
+        hk, rk, lk = (("hits", "rate", "lift") if side == "all"
+                      else ("produced_hits", "produced_rate", "produced_lift"))
+        what = "produce side" if side == "produced" else "source"
         src = r["concentration"]
         if src:
-            out.append(f"  - concentrated in `{src['name']}`: {src['hits']:,} of its "
-                       f"{src['rows']:,} rows, {_pct(src['rate'])} — {src['lift']:.0f}× the "
+            out.append(f"  - {what} concentrated in `{src['name']}`: {src[hk]:,} of its "
+                       f"{src['rows']:,} rows, {_pct(src[rk])} — {src[lk]:.0f}× the "
                        "stage's own rate.")
         elif r["sources"]:
-            top = r["sources"][0]
-            where = (f"{top['hits']:,} of its {top['rows']:,} rows, {_pct(top['rate'])}"
-                     if top["rows"] else f"{top['hits']:,} rows")
-            out.append(f"  - no source concentration: the largest contributor `{top['name']}` "
-                       f"holds {where}, against {_pct(r['rate'])} for the stage.")
+            top = max(r["sources"], key=lambda x: x[hk] or 0)
+            stage_rate = r["produced_rate"] if side == "produced" else r["rate"]
+            where = (f"{top[hk]:,} of its {top['rows']:,} rows, {_pct(top[rk])}"
+                     if top["rows"] and top[hk] is not None else f"{top['hits']:,} matching rows")
+            out.append(f"  - no {what} concentration: the largest contributor `{top['name']}` "
+                       f"holds {where}, against {_pct(stage_rate)} for the stage.")
     if r["partial"]:
         out.append("  - the server converted only part of this repo, so the count is a lower "
                    "bound and the rate is over the converted part alone.")
@@ -403,10 +453,25 @@ def _gap_lines(t: dict, cmd: str) -> list[str]:
 def _verdict(t: dict) -> list[str]:
     best, other = t["best"], t["runner_up"]
     if best is None:
-        # Only a stage read end to end can carry an exact zero. A partial
-        # conversion contributes nothing to the claim in either direction.
-        exact = t["searched"]
+        # Only a stage read end to end and found empty can carry a zero, so the
+        # claim runs over `zero` rather than over everything searched. A stage
+        # that matched and could not be ranked is the opposite of a zero, and
+        # summing its rows into one would print "0 of N rows" directly under
+        # its own match count.
+        exact = t["zero"]
         loose = ", ".join(r["stage"] for r in t["inconclusive"])
+        if t["unranked"]:
+            found = "; ".join(f"{r['stage']} ({r['hits']:,} of {r['rows']:,} rows, but "
+                              f"{r['rank_block']})" for r in t["unranked"])
+            rest = ""
+            if exact:
+                rest += (" " + ", ".join(r["stage"] for r in exact)
+                         + " matched nothing, over every row.")
+            if loose:
+                rest += f" {loose} matched nothing in what was read."
+            return [f"**Found, and not comparable.** {found}. No stage here carries a rate that "
+                    f"ranks against another, so there is no most-plausible answer to give — the "
+                    f"counts stand on their own.{rest}"]
         if not exact:
             if loose:
                 return [f"**Inconclusive.** Nothing matched in {loose}, but no stage here was "
@@ -431,14 +496,21 @@ def _verdict(t: dict) -> list[str]:
     key = "produced_rate" if t["basis"] == "produced" else "rate"
     measure = "produce-side rate" if t["basis"] == "produced" else "hit rate"
     line = [f"**Most plausibly {best['stage']}.**"]
-    src = best["concentration"]
+    src, on_produce = best["concentration"], best["conc_side"] == "produced"
+    bounds = best["produced"]
+    if src and on_produce:
+        span = f"{bounds[0]:,}" if bounds[0] == bounds[1] else f"{bounds[0]:,}–{bounds[1]:,}"
+        line.append(f"{src['produced_hits']:,} of the {src['rows']:,} `{src['name']}` rows "
+                    f"({_pct(src['produced_rate'])}, {src['produced_lift']:.0f}× the stage) hold "
+                    f"it in a response or a reference answer, out of the stage's {span} "
+                    "produce-side matches.")
+        return _tail(t, best, other, key, measure, line)
     if src:
         line.append(f"{src['hits']:,} of the {src['rows']:,} `{src['name']}` rows "
                     f"({_pct(src['rate'])}, {src['lift']:.0f}× the stage) hold it,")
     else:
         line.append(f"{best['hits']:,} of its {best['rows']:,} rows hold it, spread across its "
                     "sources at roughly the rate their sizes predict,")
-    bounds = best["produced"]
     if bounds is None:
         # A prompt-only sweep found every one of its matches in the prompt
         # because that is the only place it looked, which is a weaker claim than
@@ -451,6 +523,11 @@ def _verdict(t: dict) -> list[str]:
     else:
         line.append("none of them on the produce side: the string is in text the model was "
                     "trained to read rather than in text it was trained to write.")
+    return _tail(t, best, other, key, measure, line)
+
+
+def _tail(t, best, other, key, measure, line):
+    """The part of a verdict that is the same however the leader was described."""
     if other and other[key] and best[key]:
         ratio = best[key] / other[key]
         line.append(f"Highest {measure} of the {len(t['ranked'])} stages with any: {ratio:.1f}× "
