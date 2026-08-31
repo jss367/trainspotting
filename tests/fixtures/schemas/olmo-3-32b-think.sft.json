@@ -17,6 +17,10 @@
     [
       "messages",
       "content"
+    ],
+    [
+      "messages",
+      "role"
     ]
   ],
   "unsearched": [],

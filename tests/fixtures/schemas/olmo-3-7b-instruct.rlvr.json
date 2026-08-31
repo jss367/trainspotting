@@ -59,6 +59,10 @@
       "content"
     ],
     [
+      "source_prompt",
+      "role"
+    ],
+    [
       "reward_model",
       "ground_truth"
     ],

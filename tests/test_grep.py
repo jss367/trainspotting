@@ -332,3 +332,97 @@ def test_snippet_survives_a_regex_re_cannot_compile():
     snippet loses its centring rather than taking the scan down with it."""
     out = grep.snippet("a ChatGPT b", r"(?P<x>a)(?P<x>b)", regex=True, case_sensitive=False)
     assert out == "a ChatGPT b"
+
+
+# --- review round 1: role chunks, tool turns, matches past the SQL window ----
+
+
+def test_role_chunks_are_part_of_the_cost():
+    """A role-filtered expression reads `role` as well as `content`. Leaving the
+    role leaf out understated `bytes_read` and the --max-gb guard."""
+    schema = schema_fixture("olmo-3-7b-think", "dpo")["schema"]
+    _, leaves, _ = grep.text_fields(schema)
+    assert ("chosen", "role") in leaves
+    assert ("rejected", "role") in leaves
+
+
+def test_tool_turns_count_as_model_input():
+    """A tool result is handed back to the model, not emitted by it, so it belongs
+    on the prompt side. Only assistant output is a response."""
+    typ = 'STRUCT("content" VARCHAR, "role" VARCHAR)[]'
+    exprs, _, _ = grep.text_fields({"messages": typ})
+    assert "'assistant', 'model'" in exprs["response"][0]
+    assert exprs["prompt"][0].startswith("list_transform(list_filter(\"messages\", m -> NOT (")
+
+
+@pytest.fixture
+def tool_parquet(con, tmp_path):
+    path = tmp_path / "tool.parquet"
+    con.execute(
+        f"""COPY (SELECT [
+              {{'role': 'user', 'content': 'look it up'}},
+              {{'role': 'assistant', 'content': 'calling the tool'}},
+              {{'role': 'tool', 'content': 'the tool said ChatGPT'}}
+            ] AS messages) TO '{path}' (FORMAT parquet)"""
+    )
+    return path
+
+
+def test_tool_result_lands_in_prompt_not_response(con, tool_parquet):
+    schema = grep.schema(con, str(tool_parquet))
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(tool_parquet)]), exprs, None, "ChatGPT"
+    )
+    assert result["by_group"] == {"prompt": 1, "response": 0}
+
+
+def test_only_prompt_field_still_finds_the_tool_result(con, tool_parquet):
+    schema = grep.schema(con, str(tool_parquet))
+    exprs, _, _ = grep.text_fields(schema, ["prompt"])
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(tool_parquet)]), exprs, None, "ChatGPT"
+    )
+    assert result["matched"] == 1
+
+
+def test_snippet_finds_a_match_past_the_sql_window(con, tmp_path):
+    """A Dolci response can run past 100k characters. Cutting the first N before
+    searching would show the opening of a response instead of the match."""
+    path = tmp_path / "long.parquet"
+    filler = "a" * (grep.SNIPPET_SOURCE_CHARS * 3)
+    con.execute(
+        f"COPY (SELECT '{filler} ChatGPT appears late {filler}' AS prompt)"
+        f" TO '{path}' (FORMAT parquet)"
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(path)]), exprs, None, "ChatGPT", examples=1
+    )
+    assert result["matched"] == 1
+    snip = result["examples"][0]["snippet"]
+    assert "ChatGPT appears late" in snip
+    assert snip.startswith("…")
+
+
+def test_snippet_finds_a_late_regex_match_too(con, tmp_path):
+    path = tmp_path / "longre.parquet"
+    filler = "b" * (grep.SNIPPET_SOURCE_CHARS * 2)
+    con.execute(
+        f"COPY (SELECT '{filler} I am ChatGPT {filler}' AS prompt)"
+        f" TO '{path}' (FORMAT parquet)"
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(path)]), exprs, None,
+        r"(I am|I'm) ChatGPT", regex=True, examples=1,
+    )
+    assert "I am ChatGPT" in result["examples"][0]["snippet"]
+
+
+def test_window_start_drives_the_leading_ellipsis():
+    """Text the SQL window elided is as elided as text this function drops."""
+    assert grep.snippet("ChatGPT here", "ChatGPT", False, False, 1) == "ChatGPT here"
+    assert grep.snippet("ChatGPT here", "ChatGPT", False, False, 4001).startswith("…")

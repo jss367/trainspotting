@@ -22,8 +22,16 @@
       "content"
     ],
     [
+      "chosen",
+      "role"
+    ],
+    [
       "rejected",
       "content"
+    ],
+    [
+      "rejected",
+      "role"
     ]
   ],
   "unsearched": [],

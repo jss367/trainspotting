@@ -39,9 +39,14 @@ PARQUET_BRANCH = "refs/convert/parquet"
 # fit to (or pushed between), and what scores it.
 GROUPS = ("prompt", "response", "reference")
 
-# Turn roles that count as prompt rather than response. Everything else in a
-# message list — assistant, tool, an unset role — is text the model produces.
-PROMPT_ROLES = ("user", "system")
+# Turn roles whose content the model is fit to *produce*. Everything else in a
+# message list is text it conditions on, which includes the tool turns: a tool
+# or function result is handed back to the model, not emitted by it, so counting
+# it as a response would credit the model with text it only read. An unset or
+# unrecognised role lands on the prompt side for the same reason — under-counting
+# responses is the honest direction when the question is what a model was
+# trained to say.
+RESPONSE_ROLES = ("assistant", "model")
 
 # Columns holding training text, by the group they belong to. A message-list
 # column is split by turn role and so lands in two groups at once; it is listed
@@ -168,23 +173,29 @@ def schema(con, url: str) -> dict[str, str]:
     return {name: str(typ) for name, typ, *_ in rows}
 
 
-def _message_exprs(col: str, typ: str) -> list[tuple[str, str, str | None]]:
-    """(group, expression, subfield) for each searchable part of a message list.
+def _message_exprs(col: str, typ: str) -> list[tuple[str, str, tuple[str, ...]]]:
+    """(group, expression, subfields read) for each searchable part of a message list.
 
     The expression evaluates to VARCHAR[] so every group matches the same way.
     Roles are lowercased and null-guarded because `source_prompt` in the RL
     mixes carries rows with neither.
+
+    A role-filtered expression reads `role` as well as `content`, and both
+    subfields travel back so the byte cost covers the whole transfer. Role
+    chunks are small next to message text, but a cost the scan does not actually
+    pay for is the wrong number to put in front of a `--max-gb` decision.
     """
     q = _ident(col)
-    roles = ", ".join(_lit(r) for r in PROMPT_ROLES)
+    roles = ", ".join(_lit(r) for r in RESPONSE_ROLES)
     out = []
     if "content" in typ:
-        keep = f"lower(coalesce(m.role, '')) IN ({roles})"
-        out.append(("prompt", f"list_transform(list_filter({q}, m -> {keep}), m -> m.content)", "content"))
-        out.append(("response", f"list_transform(list_filter({q}, m -> NOT ({keep})), m -> m.content)", "content"))
+        emitted = f"lower(coalesce(m.role, '')) IN ({roles})"
+        both = ("content", "role")
+        out.append(("response", f"list_transform(list_filter({q}, m -> {emitted}), m -> m.content)", both))
+        out.append(("prompt", f"list_transform(list_filter({q}, m -> NOT ({emitted})), m -> m.content)", both))
     for sub, group in MESSAGE_EXTRAS.items():
         if f'"{sub}"' in typ or f" {sub} " in typ:
-            out.append((group, f"list_transform({q}, m -> m.{_ident(sub)})", sub))
+            out.append((group, f"list_transform({q}, m -> m.{_ident(sub)})", (sub,)))
     return out
 
 
@@ -206,26 +217,27 @@ def text_fields(
     leaves: list[tuple[str, str | None]] = []
     unsearched: list[str] = []
 
-    def add(group, expr, col, sub):
+    def add(group, expr, col, subs):
         if group not in want:
             return
         exprs[group].append(expr)
-        if (col, sub) not in leaves:
-            leaves.append((col, sub))
+        for sub in subs if isinstance(subs, tuple) else (subs,):
+            if (col, sub) not in leaves:
+                leaves.append((col, sub))
 
     for col, typ in schema_.items():
         q = _ident(col)
         if col in MESSAGE_LISTS and typ.startswith("STRUCT"):
-            for group, expr, sub in _message_exprs(col, typ):
-                add(group, expr, col, sub)
+            for group, expr, subs in _message_exprs(col, typ):
+                add(group, expr, col, subs)
         elif col in PLAIN_TEXT and typ == "VARCHAR":
-            add(PLAIN_TEXT[col], f"list_value({q})", col, None)
+            add(PLAIN_TEXT[col], f"list_value({q})", col, (None,))
         elif col in LIST_TEXT and typ == "VARCHAR[]":
-            add(LIST_TEXT[col], q, col, None)
+            add(LIST_TEXT[col], q, col, (None,))
         elif any(c == col for c, _ in STRUCT_TEXT) and typ.startswith("STRUCT"):
             for (c, sub), group in STRUCT_TEXT.items():
                 if c == col and sub in typ:
-                    add(group, f"list_value({q}.{_ident(sub)})", col, sub)
+                    add(group, f"list_value({q}.{_ident(sub)})", col, (sub,))
         elif "VARCHAR" in typ and col not in METADATA:
             unsearched.append(col)
 
@@ -316,19 +328,62 @@ def _match_sql(exprs: list[str], test: str) -> str:
     return f"len({_matching(exprs, test)}) > 0"
 
 
-# The first matching string is cut to this in SQL and windowed to SNIPPET_CHARS
-# here, for the same reason the context layer cuts its fields: a Dolci response
-# can run past 100k characters and no snippet needs that.
+# The first matching string is windowed to this in SQL and to SNIPPET_CHARS here,
+# for the same reason the context layer cuts its fields: a Dolci response can run
+# past 100k characters and no snippet needs that. The SQL window is centred on
+# the match rather than taken from the head, because a match past the cut would
+# otherwise be truncated away and the "snippet" would be the opening of a
+# response that has nothing to do with the pattern.
 SNIPPET_SOURCE_CHARS = 8000
 SNIPPET_CHARS = 240
 
 
-def snippet(text: str | None, pattern: str, regex: bool, case_sensitive: bool) -> str | None:
+def _offset_sql(col: str, pattern: str, regex: bool, case_sensitive: bool) -> str:
+    """1-based position of the first match inside `col`, or 0 if there is none.
+
+    A regex has no `position` of its own, so extract what it matched and locate
+    that; `regexp_extract` returns the empty string on no match, and `position`
+    of an empty string is 0, which is the same miss signal as the literal case.
+    """
+    if regex:
+        opts = f", {_lit('i')}" if not case_sensitive else ""
+        found = f"regexp_extract({col}, {_lit(pattern)}, 0{opts})"
+        return f"CASE WHEN {found} = '' THEN 0 ELSE position({found} IN {col}) END"
+    if case_sensitive:
+        return f"position({_lit(pattern)} IN {col})"
+    return f"position(lower({_lit(pattern)}) IN lower({col}))"
+
+
+def _window_sql(exprs: list[str], test: str, pattern: str, regex: bool, case_sensitive: bool) -> tuple[str, str]:
+    """(window, 1-based start) of the first matching string, centred on the match.
+
+    Written as a correlated scalar subquery over a one-row derived table so the
+    list filtering happens once and both the offset and the cut can refer to the
+    string by name. Costs nothing over the wire — the column has already been
+    read by the time this is evaluated.
+    """
+    first = f"{_matching(exprs, test)}[1]"
+    half = SNIPPET_SOURCE_CHARS // 2
+    start = f"greatest(1, {_offset_sql('s', pattern, regex, case_sensitive)} - {half})"
+    scalar = f"FROM (SELECT {first} AS s)"
+    window = f"(SELECT CASE WHEN s IS NULL THEN NULL ELSE substr(s, {start}, {SNIPPET_SOURCE_CHARS}) END {scalar})"
+    at = f"(SELECT CASE WHEN s IS NULL THEN NULL ELSE {start} END {scalar})"
+    return window, at
+
+
+def snippet(
+    text: str | None,
+    pattern: str,
+    regex: bool,
+    case_sensitive: bool,
+    window_start: int = 1,
+) -> str | None:
     """A window of `text` centred on the first match, so a count can be read.
 
-    Windowing happens here rather than in SQL because the string is already in
-    local memory by then — the scan pays for the column over the wire either way
-    — and because a plain function is testable without a dataset.
+    `text` is already a match-containing window cut by `_window_sql`, and
+    `window_start` is where that window began in the original string — which is
+    what the leading ellipsis has to know about, since text elided by SQL is just
+    as elided as text this function drops.
     """
     if not text:
         return None
@@ -342,7 +397,8 @@ def snippet(text: str | None, pattern: str, regex: bool, case_sensitive: bool) -
     start = m.start() if m else 0
     lead = max(0, start - (SNIPPET_CHARS - len(m.group(0) if m else "")) // 2)
     out = text[lead:lead + SNIPPET_CHARS]
-    return ("…" if lead else "") + out + ("…" if lead + SNIPPET_CHARS < len(text) else "")
+    cut_before = lead > 0 or window_start > 1
+    return ("…" if cut_before else "") + out + ("…" if lead + SNIPPET_CHARS < len(text) else "")
 
 
 def scan(
@@ -370,9 +426,9 @@ def scan(
         select.append(f"({_match_sql(exprs[g], test)}) AS hit_{g}")
     for g in groups:
         # list_filter keeps order, so [1] is the first matching string in the group.
-        select.append(
-            f"substr({_matching(exprs[g], test)}[1], 1, {SNIPPET_SOURCE_CHARS}) AS snip_{g}"
-        )
+        window, at = _window_sql(exprs[g], test, pattern, regex, case_sensitive)
+        select.append(f"{window} AS snip_{g}")
+        select.append(f"{at} AS snipat_{g}")
 
     any_match = " OR ".join(f"({_match_sql(exprs[g], test)})" for g in groups)
     con.execute(f"SELECT {', '.join(select)} FROM {from_sql} WHERE {any_match}")
@@ -388,7 +444,8 @@ def scan(
         for row in batch:
             src = row[0] or "(no source column)"
             flags = {g: bool(row[1 + i]) for i, g in enumerate(groups)}
-            snips = {g: row[1 + len(groups) + i] for i, g in enumerate(groups)}
+            snips = {g: (row[1 + len(groups) + 2 * i], row[2 + len(groups) + 2 * i])
+                     for i, g in enumerate(groups)}
             matched += 1
             by_source[src] = by_source.get(src, 0) + 1
             bucket = by_source_group.setdefault(src, {g: 0 for g in groups})
@@ -398,11 +455,11 @@ def scan(
                     bucket[g] += 1
             if len(found) < examples:
                 where = [g for g, on in flags.items() if on]
-                text = next((snips[g] for g in where if snips[g]), None)
+                text, at = next((snips[g] for g in where if snips[g][0]), (None, 1))
                 found.append({
                     "source": src,
                     "groups": where,
-                    "snippet": snippet(text, pattern, regex, case_sensitive),
+                    "snippet": snippet(text, pattern, regex, case_sensitive, at or 1),
                 })
 
     return {

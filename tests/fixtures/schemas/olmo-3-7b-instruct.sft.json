@@ -21,6 +21,10 @@
     ],
     [
       "messages",
+      "role"
+    ],
+    [
+      "messages",
       "functions"
     ],
     [
