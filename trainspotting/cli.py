@@ -681,6 +681,27 @@ def cmd_context(args):
         print(f"{s['stage']}: {len(records)} records -> {path} ({path.stat().st_size / 1e6:.1f} MB)", file=sys.stderr)
 
 
+def _phrase_slug(phrase: str) -> str:
+    """A filename-safe slug that two different phrases cannot share.
+
+    Distinctness is the requirement, because the slug names the result file
+    and a collision silently overwrites an earlier search. Two phrases can
+    collide two ways: normalizing to nothing at all (no ASCII word characters
+    — Chinese, Arabic, emoji), or agreeing on their first 60 characters, which
+    long phrases invite — a memorization check pastes a whole passage. Both
+    get a hash of the exact phrase: alone when there is nothing readable to
+    attach it to, appended when the readable part was truncated. `--slug` is
+    there to pick a fully readable name instead.
+    """
+    digest = hashlib.sha1(phrase.encode()).hexdigest()
+    norm = re.sub(r"[^a-z0-9]+", "-", phrase.lower()).strip("-")
+    if not norm:
+        return digest[:12]
+    if len(norm) > 60:
+        return f"{norm[:60].rstrip('-')}-{digest[:8]}"
+    return norm
+
+
 def cmd_find(args):
     """Exact-string search over an open training corpus, via infini-gram.
 
@@ -761,15 +782,7 @@ def cmd_find(args):
         )
 
     if args.json:
-        # A phrase with no ASCII word characters — Chinese, Arabic, emoji —
-        # derives an empty slug, and every such search would overwrite
-        # results/find..json. Fall back to a hash of the phrase, which is ugly
-        # but distinct; --slug is there to pick a readable name instead.
-        slug = (
-            args.slug
-            or re.sub(r"[^a-z0-9]+", "-", args.phrase.lower()).strip("-")[:60]
-            or hashlib.sha1(args.phrase.encode()).hexdigest()[:12]
-        )
+        slug = args.slug or _phrase_slug(args.phrase)
         path = _write_json(
             RESULTS / f"find.{slug}.json",
             {

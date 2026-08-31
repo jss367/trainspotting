@@ -53,6 +53,23 @@ def test_spread_picks_clamped_draw_is_all_matches_in_order():
     assert spread_picks(segments, 99) == [(0, 7), (0, 8), (0, 9), (1, 20), (1, 21), (1, 22)]
 
 
+def test_phrase_slug_distinctness():
+    """The slug names the result file, so two phrases must never share one:
+    not when they normalize to nothing, and not when they agree on their
+    first 60 characters — which long pasted passages invite."""
+    from trainspotting.cli import _phrase_slug
+
+    assert _phrase_slug("climate change") == "climate-change"
+
+    long_a = "the quick brown fox jumps over the lazy dog near the river bank at dawn"
+    long_b = "the quick brown fox jumps over the lazy dog near the river bank at dusk"
+    assert _phrase_slug(long_a) != _phrase_slug(long_b)
+    assert _phrase_slug(long_a).startswith("the-quick-brown-fox")
+
+    assert _phrase_slug("气候变化") != _phrase_slug("مناخ")
+    assert _phrase_slug("气候变化")  # nonempty
+
+
 def test_snippet_marks_matched_spans():
     doc = {
         "spans": [
