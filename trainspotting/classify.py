@@ -201,12 +201,21 @@ def classify_prompts(
             # reply that skipped an index. Re-ask for the unlabeled ones one at
             # a time, so what is finally lost is the prompt that caused it
             # rather than everything batched beside it.
-            for i in missing:
-                one, one_reason, _ = judge([items[i]])
+            for done, i in enumerate(missing):
+                one, one_reason, one_per_prompt = judge([items[i]])
                 if 0 in one:
                     parsed[i] = one[0]
-                else:
-                    drops[one_reason] = drops.get(one_reason, 0) + 1
+                    continue
+                drops[one_reason] = drops.get(one_reason, 0) + 1
+                if not one_per_prompt:
+                    # The run started failing partway through the retry — a 401,
+                    # a quota, a rate limit. Asking about the remaining prompts
+                    # individually would get the same answer, slower, while
+                    # deepening the limit that caused it. Count them and stop.
+                    rest = len(missing) - done - 1
+                    if rest:
+                        drops[one_reason] += rest
+                    break
         elif missing:
             # Either a one-item batch, or a failure no single prompt could have
             # caused. Fanning out the second kind turns one doomed request into

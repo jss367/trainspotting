@@ -147,6 +147,12 @@ def sample_rows_with_index(
                 if len(gaps) > budget:
                     gaps = []
                     break
+        # Walk the gaps in random order. Taking them by offset and stopping as
+        # soon as the sample is full hands every remaining slot to the front of
+        # the split: at 50 rows with n=20 and seed 13 the rounds covered rows
+        # 9-27 and the fill took offset 0, so rows 28-49 could not be selected
+        # at all. Shuffling costs nothing and is still deterministic in `seed`.
+        rng.shuffle(gaps)
         for off in gaps:
             if len(seen) >= min(n, total):
                 break
