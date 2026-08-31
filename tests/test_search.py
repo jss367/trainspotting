@@ -597,3 +597,71 @@ def test_nothing_is_unknown_when_nothing_was_cut():
     rec = {"hits": search.search_row(row, "sft", compile_("chatgpt"))}
 
     assert search.unknown_sides([rec], "sft") == {"prompt": 0, "response": 0}
+
+
+def test_a_hit_read_out_of_a_shortened_cell_says_so():
+    """The row matched, but `count` and `chars` describe the text that arrived.
+    Without a mark on the hit itself, a consumer reads a lower bound as exact."""
+    row = {"messages": [{"role": "assistant", "content": "ChatGPT, ChatGPT"}]}
+
+    exact = search.search_row(row, "sft", compile_("chatgpt"))
+    cut = search.search_row(row, "sft", compile_("chatgpt"), truncated=["messages"])
+
+    assert "partial" not in exact[0]
+    assert cut[0]["partial"] is True
+    assert cut[0]["count"] == exact[0]["count"] == 2
+
+
+def test_a_hit_names_the_column_it_came_from():
+    row = {
+        "prompt": "who are you?",
+        "chosen": [{"role": "assistant", "content": "I am Olmo."}],
+        "rejected": [{"role": "assistant", "content": "I am ChatGPT."}],
+    }
+
+    hits = search.search_row(row, "dpo", compile_("i am"), truncated=["chosen"])
+
+    assert [(h["side"], h["column"], h.get("partial")) for h in hits] == [
+        ("chosen", "chosen", True),
+        ("rejected", "rejected", None),
+    ]
+
+
+def test_a_cut_column_only_marks_its_own_hits():
+    row = {"prompt": "are you ChatGPT?", "outputs": ["I am ChatGPT."]}
+
+    hits = search.search_row(row, "rlvr", compile_("chatgpt"), truncated=["outputs"])
+
+    assert [(h["column"], h.get("partial")) for h in hits] == [
+        ("prompt", None),
+        ("outputs", True),
+    ]
+
+
+@pytest.mark.parametrize("stage", sorted(search.SIDE_COLUMNS))
+def test_the_column_on_a_field_is_the_one_its_side_declares(stage):
+    """`SIDE_COLUMNS` says which cuts leave a side uncertain; a field naming a
+    column that map does not list for its side would make the two disagree."""
+    rows = {
+        "sft": {"messages": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "yo"}]},
+        "dpo": {
+            "prompt": "a different prompt",
+            "chosen": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "yes"}],
+            "rejected": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "no"}],
+        },
+        "rlvr": {
+            "prompt": "q",
+            "source_prompt": [{"role": "user", "content": "another q"}],
+            "ground_truth": ["gt"],
+            "solution": "sol",
+            "constraint": "two paragraphs",
+            "reward_model": {"style": "judge"},
+            "outputs": ["a rollout"],
+        },
+    }
+
+    seen = {(f["side"], f["column"]) for f in search.fields(rows[stage], stage)}
+
+    assert seen, stage
+    for side, column in seen:
+        assert column in search.SIDE_COLUMNS[stage][side], (stage, side, column)

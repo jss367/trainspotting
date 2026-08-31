@@ -156,8 +156,8 @@ example a behaviour is least likely to be in. A model that claims to be ChatGPT
 does it in a response; no prompt in the mix says it, so a prompt-only search
 reports zero. `search` takes a Python regex (case-insensitive unless
 `--case-sensitive`), scans every text field of each sampled row, and writes
-`results/<model>.<stage>.search-<slug>.json` with a snippet, a match count and a
-side per hit:
+`results/<model>.<stage>.search-<slug>.json` with a snippet, a match count, the
+column it was read from and a side per hit:
 
 | Stage | Sides |
 |---|---|
@@ -418,7 +418,8 @@ sampling run that quietly labels nothing.
   unaffected and counts as the confirmed non-match it is. The per-side counts
   are lower bounds for the same reason, so `sides_unknown` says how many
   matching rows had that side's text cut: a zero beside a non-zero there means
-  "not seen", not "not there". A censored row is unknown rather than a
+  "not seen", not "not there". A hit read out of a shortened cell is marked
+  `partial`, because its `count` and `chars` describe the text that arrived. A censored row is unknown rather than a
   non-match, so it is not counted as evidence against the string: `matched` is a
   lower bound, and the interval's upper end is computed as if every censored row
   had been a hit. With nothing censored that is the ordinary Wilson interval.

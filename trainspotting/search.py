@@ -174,7 +174,12 @@ def _side_of(role: str, response_side: str) -> str:
 
 
 def fields(row: dict, stage: str) -> list[dict]:
-    """Every searchable text field of one row, tagged with its side and role.
+    """Every searchable text field of one row, tagged with its side, role and
+    the row column it was read from.
+
+    The column travels because a search cannot trust a cell the server
+    shortened: knowing which column a hit came from is what lets a count from a
+    cut cell be marked as the lower bound it is.
 
     Reasoning spans are left inside the assistant content they are part of
     (unlike `context.build`, which folds them away for display): a model that
@@ -182,14 +187,16 @@ def fields(row: dict, stage: str) -> list[dict]:
     """
     out: list[dict] = []
 
-    def add(side, role, value, turn=None):
+    def add(side, role, column, value, turn=None):
         text = _flatten(value)
         if text.strip():
-            out.append({"side": side, "role": role, "turn": turn, "text": text})
+            out.append(
+                {"side": side, "role": role, "column": column, "turn": turn, "text": text}
+            )
 
     if stage == "sft":
         for i, role, text in _turns(row.get("messages")):
-            add(_side_of(role, "response"), role, text, i)
+            add(_side_of(role, "response"), role, "messages", text, i)
     elif stage == "dpo":
         chosen, rejected = row.get("chosen"), row.get("rejected")
         # A pair's last turn is its candidate answer by definition, so it is
@@ -206,7 +213,7 @@ def fields(row: dict, stage: str) -> list[dict]:
         # completions answer in — prompt text, read once, off the chosen side.
         prefix = set()
         for i, role, text in _turns((chosen or [])[:shared]):
-            add("prompt", role, text, i)
+            add("prompt", role, "chosen", text, i)
             prefix.add(text)
         # The `prompt` column repeats those opening turns verbatim, so it is
         # added only when it says something they do not. Dropping it by text
@@ -215,9 +222,9 @@ def fields(row: dict, stage: str) -> list[dict]:
         if isinstance(row.get("prompt"), list):
             for i, role, text in _turns(row["prompt"]):
                 if text not in prefix:
-                    add("prompt", role, text, i)
+                    add("prompt", role, "prompt", text, i)
         elif _flatten(row.get("prompt")) not in prefix:
-            add("prompt", "prompt", row.get("prompt"))
+            add("prompt", "prompt", "prompt", row.get("prompt"))
         seen_after = set()
         for side, turns in (("chosen", chosen), ("rejected", rejected)):
             for i, role, text in _turns(turns, start=shared):
@@ -229,15 +236,15 @@ def fields(row: dict, stage: str) -> list[dict]:
                     if (i, text) in seen_after:
                         continue
                     seen_after.add((i, text))
-                add(attributed, role, text, i)
+                add(attributed, role, side, text, i)
     else:
         column: set[tuple] = set()
         if isinstance(row.get("prompt"), list):
             for i, role, text in _turns(row["prompt"]):
-                add("prompt", role, text, i)
+                add("prompt", role, "prompt", text, i)
                 column.add((i, text))
         else:
-            add("prompt", "prompt", row.get("prompt"))
+            add("prompt", "prompt", "prompt", row.get("prompt"))
             column.add((None, _flatten(row.get("prompt"))))
         for i, role, text in _turns(row.get("source_prompt")):
             # Some RL rows carry the same conversation in both columns. A turn
@@ -246,13 +253,13 @@ def fields(row: dict, stage: str) -> list[dict]:
             # when some other turn happened to say the same words.
             if (i, text) in column or (None, text) in column:
                 continue
-            add("prompt", role, text, i)
+            add("prompt", role, "source_prompt", text, i)
         # What the verifier scores against. Not a response — no RL row stores
         # one — but it is the rest of what the example teaches, and a string in
         # the answer key is a different finding from the same string in the
         # question.
         for name in ("ground_truth", "solution", "constraint"):
-            add("verifier", name, row.get(name))
+            add("verifier", name, name, row.get(name))
         reward_model = row.get("reward_model")
         if isinstance(reward_model, dict):
             # Every field of it, not just the ground truth: `style` names what
@@ -261,14 +268,14 @@ def fields(row: dict, stage: str) -> list[dict]:
             # of it would also let a truncation of the unread part censor a row
             # for nothing.
             for name, value in sorted(reward_model.items()):
-                add("verifier", f"reward_model.{name}", value)
+                add("verifier", f"reward_model.{name}", "reward_model", value)
         else:
-            add("verifier", "reward_model", reward_model)
+            add("verifier", "reward_model", "reward_model", reward_model)
         # Reference-model generations stored with the row. The model is not fit
         # to these — they are what the rollouts scored — so they get their own
         # side rather than being reported as a response.
         for i, output in enumerate(row.get("outputs") or []):
-            add("rollout", "output", output, i)
+            add("rollout", "output", "outputs", output, i)
     return out
 
 
@@ -284,8 +291,15 @@ def snippet(text: str, match: re.Match, pad: int = PAD) -> str:
     return ("…" if lo else "") + text[lo:hi] + ("…" if hi < len(text) else "")
 
 
-def search_row(row: dict, stage: str, pattern: re.Pattern) -> list[dict]:
-    """One hit record per matching field of a row; empty if the row does not match."""
+def search_row(row: dict, stage: str, pattern: re.Pattern, truncated=()) -> list[dict]:
+    """One hit record per matching field of a row; empty if the row does not match.
+
+    `truncated` names the columns the datasets-server shortened. A hit read out
+    of one of them is marked `partial`: the row matched, but its `count` and
+    `chars` describe the part that arrived, so both are lower bounds and a
+    consumer that treats them as exact will undercount.
+    """
+    cut = set(truncated or ())
     hits = []
     for field in fields(row, stage):
         matches = pattern.finditer(field["text"])
@@ -301,9 +315,13 @@ def search_row(row: dict, stage: str, pattern: re.Pattern) -> list[dict]:
             {
                 "side": field["side"],
                 "role": field["role"],
+                "column": field["column"],
                 "turn": field["turn"],
                 "count": count,
                 "chars": len(field["text"]),
+                # `count` and `chars` are of the text that arrived, which for a
+                # shortened cell is not the text that exists.
+                **({"partial": True} if field["column"] in cut else {}),
                 "snippet": snippet(field["text"], first),
             }
         )

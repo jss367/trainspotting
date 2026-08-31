@@ -769,7 +769,7 @@ def cmd_search(args):
             cut = search.truncated_columns(s["stage"], truncated_cells)
             if cut:
                 shortened += 1
-            hits = search.search_row(row, s["stage"], pattern)
+            hits = search.search_row(row, s["stage"], pattern, truncated=cut)
             if cut and not hits:
                 # The server cut part of this row's text away, and what is left
                 # does not match. That is not a non-match, it is a row this run
