@@ -304,7 +304,11 @@ def _label_post_training(args, question=None, slug=None):
             "unlabeled": sum(1 for label in labels if label is None),
             "unlabeled_reasons": reasons,
         }
-        if moved and moved != revision:
+        # `revision` is None when the pre-draw lookup failed, and a SHA now is
+        # not evidence the tree moved — it is the first reading we got. Saying
+        # so would also crash on revision[:7] and throw away a run that has
+        # already been paid for.
+        if revision and moved and moved != revision:
             run["revision_moved_to"] = moved
             print(
                 f"  note: {s['hf_dataset']} moved from {revision[:7]} to"

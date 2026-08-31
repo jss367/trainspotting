@@ -83,9 +83,11 @@ def sample_rows_with_index(
     on a large split and common on a small one, which is exactly where each row
     carries the most weight. Fresh offsets top the sample back up to n.
 
-    Deterministic in (n, seed). Two changes have moved which rows a given seed
-    draws — deduplication, and widening the page-start bound below — so runs are
-    only comparable to each other when they were drawn by the same version. Over
+    Deterministic in (n, seed). Three changes have moved which rows a given seed
+    draws — deduplication, widening the page-start bound, and filling the gaps
+    the rounds leave on a nearly-exhausted split — so runs are only comparable to
+    each other when they were drawn by the same version. The last two only reach
+    a split the request nearly covers, which none of the Dolci mixes are. Over
     the nine Dolci splits at n=300, 8,997 of 9,000 seeds draw exactly what they
     drew before the bound widened; the exceptions are seed 998 on Dolci-Think-RL-7B
     and seeds 71 and 764 on Dolci-Instruct-RL. Everything committed under
@@ -124,6 +126,36 @@ def sample_rows_with_index(
             break
         shortfall = n - len(seen)
         offsets = draw((shortfall + chunk - 1) // chunk)
+
+    if len(seen) < min(n, total):
+        # Random offsets do not guarantee coverage. When the request is a large
+        # fraction of the split, the rounds can end with a row undrawn simply
+        # because no page happened to start near it — an 11-row split asked for
+        # 11 rows came back with 10 — and downstream that reads as a smaller
+        # sample rather than an unlucky one. Walk the uncovered pages in order.
+        #
+        # Only the near-full regime can get here, and there uniformity is moot:
+        # the draw already wants essentially every row. Bail out if the gaps are
+        # far more numerous than the draw itself, because then being short means
+        # something other than bad luck and paging a 2M-row split to find out
+        # would be 200,000 requests.
+        budget = 2 * ((n + chunk - 1) // chunk)
+        gaps = []
+        for off in range(0, total, chunk):
+            if not all(i in seen for i in range(off, min(off + chunk, total))):
+                gaps.append(off)
+                if len(gaps) > budget:
+                    gaps = []
+                    break
+        for off in gaps:
+            if len(seen) >= min(n, total):
+                break
+            j = _get(
+                "rows", dataset=dataset, config=config, split=split, offset=off, length=chunk
+            )
+            for i, r in enumerate(j["rows"]):
+                seen.setdefault(off + i, r["row"])
+
     rows = sorted(seen.items())
     rng.shuffle(rows)
     return rows[:n]
