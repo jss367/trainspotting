@@ -427,3 +427,35 @@ def test_a_source_prompt_turn_the_prompt_column_does_not_have_is_kept():
     hits = search.search_row(row, "rlvr", compile_("chatgpt"))
 
     assert [(h["side"], h["turn"]) for h in hits] == [("prompt", 1)]
+
+
+class _WatchedRow(dict):
+    """A row that records which columns were read off it."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.read = set()
+
+    def get(self, key, default=None):
+        self.read.add(key)
+        return super().get(key, default)
+
+
+@pytest.mark.parametrize("stage", sorted(search.COLUMNS))
+def test_the_declared_columns_are_the_columns_actually_read(stage):
+    """`COLUMNS` decides whether a shortened cell censors a row, so a column
+    that drifts out of it silently turns unread rows into confirmed
+    non-matches — and one that drifts in widens every interval for nothing."""
+    row = _WatchedRow()
+
+    search.fields(row, stage)
+
+    assert row.read == set(search.COLUMNS[stage])
+
+
+def test_a_cell_this_stage_never_searches_does_not_censor_the_row():
+    """An RL row's token arrays are the longest cells on it, so they are what
+    the server cuts — and no character of searched text goes missing with them."""
+    assert search.truncated_columns("rlvr", ["input_ids", "attention_mask", "labels"]) == []
+    assert search.truncated_columns("rlvr", ["input_ids", "outputs"]) == ["outputs"]
+    assert search.truncated_columns("sft", ["messages"]) == ["messages"]

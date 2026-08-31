@@ -754,10 +754,14 @@ def cmd_search(args):
         moved = hf.dataset_revision(s["hf_dataset"])
         records, shortened, censored = [], 0, 0
         for row_index, row, truncated_cells in rows:
-            if truncated_cells:
+            # Only the cells this stage searches. The server shortens the
+            # longest cell it finds, which on an RL row is a token-id array
+            # nothing here reads.
+            cut = search.truncated_columns(s["stage"], truncated_cells)
+            if cut:
                 shortened += 1
             hits = search.search_row(row, s["stage"], pattern)
-            if truncated_cells and not hits:
+            if cut and not hits:
                 # The server cut part of this row's text away, and what is left
                 # does not match. That is not a non-match, it is a row this run
                 # could not read.
@@ -796,7 +800,9 @@ def cmd_search(args):
             "matched": k,
             "ci": [lo, hi],
             "sides": sides,
-            # Rows the datasets-server shortened to fit its response limit. A
+            # Rows whose *searched* text the datasets-server shortened to fit
+            # its response limit — a row cut only in a column this stage never
+            # reads is unaffected and is not counted here. A
             # string past the cut is unfindable, so `matched` is a lower bound
             # rather than a count of the sample; `censored` is the part of that
             # the interval had to widen for — shortened rows with no visible
@@ -820,7 +826,7 @@ def cmd_search(args):
         print(f"  rows by side: {breakdown}", file=sys.stderr)
         if shortened:
             print(
-                f"  note: {shortened} row(s) had a cell shortened by the datasets-server"
+                f"  note: {shortened} row(s) had searched text shortened by the datasets-server"
                 f" — a hit past the cut is invisible here"
                 + (
                     f"; {censored} of them show no hit at all, so the interval's"

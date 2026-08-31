@@ -410,8 +410,10 @@ sampling run that quietly labels nothing.
   the training data", use OLMoTrace / infini-gram, which indexes the whole thing.
 - The datasets-server shortens a very large cell to fit its response limit, and a
   hit past the cut cannot be found. Each search result file records how many
-  sampled rows had a shortened cell (`truncated_rows`) and how many of those
-  showed no hit at all (`censored`). A censored row is unknown rather than a
+  sampled rows had *searched* text shortened (`truncated_rows`) and how many of
+  those showed no hit at all (`censored`). A row cut only in a column the stage
+  never reads — an RL row's token arrays are the longest cells on it — is
+  unaffected and counts as the confirmed non-match it is. A censored row is unknown rather than a
   non-match, so it is not counted as evidence against the string: `matched` is a
   lower bound, and the interval's upper end is computed as if every censored row
   had been a hit. With nothing censored that is the ordinary Wilson interval.

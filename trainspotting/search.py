@@ -35,6 +35,25 @@ PAD = 100  # snippet characters kept either side of a hit
 STRUCTURED_TURN_FIELDS = ("tool_calls", "function_call", "function_calls", "refusal")
 INPUT_TURN_FIELDS = ("functions",)
 
+# The row columns `fields` reads, per stage. A shortened cell only costs a search
+# something when it is one of these: an RL row carries `input_ids`,
+# `attention_mask` and `labels`, which are long enough to be what the server cuts
+# and hold no text this searches, so a row cut there is still a confirmed
+# non-match rather than one that could not be read.
+COLUMNS = {
+    "sft": ("messages",),
+    "dpo": ("prompt", "chosen", "rejected"),
+    "rlvr": (
+        "prompt",
+        "source_prompt",
+        "ground_truth",
+        "solution",
+        "constraint",
+        "reward_model",
+        "outputs",
+    ),
+}
+
 # Every side a stage can produce, in reporting order. Sides are named for what
 # the example does with the text, not for the column it sits in: `chosen` and
 # `rejected` are both assistant turns, and that is the whole distinction.
@@ -212,6 +231,11 @@ def fields(row: dict, stage: str) -> list[dict]:
         for i, output in enumerate(row.get("outputs") or []):
             add("rollout", "output", output, i)
     return out
+
+
+def truncated_columns(stage: str, truncated_cells) -> list[str]:
+    """Which of the cells the server shortened this stage actually searches."""
+    return sorted(set(truncated_cells or ()) & set(COLUMNS[stage]))
 
 
 def snippet(text: str, match: re.Match, pad: int = PAD) -> str:
