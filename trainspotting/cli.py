@@ -775,6 +775,10 @@ def cmd_search(args):
                         "key": prompt[: context.KEY_CHARS],
                         "row": row_index,
                         "sides": sorted({h["side"] for h in hits}),
+                        # Which of this row's searched columns the server cut.
+                        # A pair matching on one completion with the other cut
+                        # is not an exclusive hit, whatever the visible text says.
+                        **({"truncated": cut} if cut else {}),
                         "hits": hits,
                     }
                 )
@@ -821,7 +825,9 @@ def cmd_search(args):
             breakdown += (
                 f" (chosen only {split['chosen_only']},"
                 f" rejected only {split['rejected_only']},"
-                f" both {split['both']})"
+                f" both {split['both']}"
+                + (f", side unknown {split['unknown']}" if split["unknown"] else "")
+                + ")"
             )
         print(f"  rows by side: {breakdown}", file=sys.stderr)
         if shortened:

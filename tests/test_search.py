@@ -99,7 +99,12 @@ def test_the_same_string_on_each_dpo_side_is_a_different_finding():
         {"hits": search.search_row(flipped, "dpo", pattern)},
     ]
     assert search.side_counts(records, "dpo") == {"prompt": 0, "chosen": 1, "rejected": 1}
-    assert search.pair_split(records) == {"chosen_only": 1, "rejected_only": 1, "both": 0}
+    assert search.pair_split(records) == {
+        "chosen_only": 1,
+        "rejected_only": 1,
+        "both": 0,
+        "unknown": 0,
+    }
 
 
 def test_a_hit_on_both_sides_is_neither():
@@ -111,7 +116,12 @@ def test_a_hit_on_both_sides_is_neither():
     }
     records = [{"hits": search.search_row(row, "dpo", compile_("chatgpt"))}]
 
-    assert search.pair_split(records) == {"chosen_only": 0, "rejected_only": 0, "both": 1}
+    assert search.pair_split(records) == {
+        "chosen_only": 0,
+        "rejected_only": 0,
+        "both": 1,
+        "unknown": 0,
+    }
     assert search.side_counts(records, "dpo") == {"prompt": 0, "chosen": 1, "rejected": 1}
 
 
@@ -333,7 +343,12 @@ def test_shared_history_in_a_multi_turn_pair_is_prompt_not_both_completions():
     hits = search.search_row(row, "dpo", pattern)
 
     assert [(h["side"], h["turn"]) for h in hits] == [("prompt", 1)]
-    assert search.pair_split([{"hits": hits}]) == {"chosen_only": 0, "rejected_only": 0, "both": 0}
+    assert search.pair_split([{"hits": hits}]) == {
+        "chosen_only": 0,
+        "rejected_only": 0,
+        "both": 0,
+        "unknown": 0,
+    }
 
 
 def test_each_completion_after_the_branch_keeps_its_side_and_its_turn_index():
@@ -358,6 +373,7 @@ def test_a_pair_that_branches_immediately_shares_nothing():
         "chosen_only": 0,
         "rejected_only": 0,
         "both": 1,
+        "unknown": 0,
     }
 
 
@@ -459,3 +475,37 @@ def test_a_cell_this_stage_never_searches_does_not_censor_the_row():
     assert search.truncated_columns("rlvr", ["input_ids", "attention_mask", "labels"]) == []
     assert search.truncated_columns("rlvr", ["input_ids", "outputs"]) == ["outputs"]
     assert search.truncated_columns("sft", ["messages"]) == ["messages"]
+
+
+def _pair(chosen, rejected, truncated=None):
+    row = {
+        "chosen": [{"role": "assistant", "content": chosen}],
+        "rejected": [{"role": "assistant", "content": rejected}],
+    }
+    rec = {"hits": search.search_row(row, "dpo", compile_("chatgpt"))}
+    if truncated:
+        rec["truncated"] = truncated
+    return rec
+
+
+def test_a_match_opposite_a_truncated_completion_is_not_an_exclusive_hit():
+    """The unread completion could hold the string too, which would make the
+    pair `both` — the case that means the pair points nowhere. Calling it
+    `chosen_only` asserts the opposite of what the row can support."""
+    split = search.pair_split([_pair("I am ChatGPT.", "I am Olmo.", ["rejected"])])
+
+    assert split == {"chosen_only": 0, "rejected_only": 0, "both": 0, "unknown": 1}
+
+
+def test_a_truncated_matching_side_still_claims_its_side():
+    """More of the same string in the cut part of the chosen completion does not
+    change which side matched."""
+    split = search.pair_split([_pair("I am ChatGPT.", "I am Olmo.", ["chosen"])])
+
+    assert split == {"chosen_only": 1, "rejected_only": 0, "both": 0, "unknown": 0}
+
+
+def test_a_hit_on_both_sides_stays_both_however_it_was_cut():
+    split = search.pair_split([_pair("ChatGPT here", "ChatGPT there", ["chosen", "rejected"])])
+
+    assert split == {"chosen_only": 0, "rejected_only": 0, "both": 1, "unknown": 0}

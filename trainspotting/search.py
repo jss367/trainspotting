@@ -287,15 +287,21 @@ def pair_split(records: list[dict]) -> dict[str, int]:
     A hit on both sides is the uninformative case — the pair says nothing about
     the string, because it appears whichever way the model answers — and reading
     it as evidence either way is the mistake this breakdown exists to prevent.
+
+    `unknown` is the same mistake one step further back: a row that matches on
+    one completion while the server shortened the other cannot be called
+    exclusive, because the text nobody read could hold the string too. A record
+    says which of its columns were cut in `truncated`.
     """
-    split = {"chosen_only": 0, "rejected_only": 0, "both": 0}
+    split = {"chosen_only": 0, "rejected_only": 0, "both": 0, "unknown": 0}
     for rec in records:
         sides = {h["side"] for h in rec["hits"]}
+        cut = set(rec.get("truncated") or ())
         chosen, rejected = "chosen" in sides, "rejected" in sides
         if chosen and rejected:
             split["both"] += 1
         elif chosen:
-            split["chosen_only"] += 1
+            split["unknown" if "rejected" in cut else "chosen_only"] += 1
         elif rejected:
-            split["rejected_only"] += 1
+            split["unknown" if "chosen" in cut else "rejected_only"] += 1
     return split
