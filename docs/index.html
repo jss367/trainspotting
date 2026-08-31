@@ -488,6 +488,41 @@ function wireTips(root){
 
 const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;");
 const escAttr = s => esc(s).replace(/"/g,"&quot;");
+// A dataset id does not say which version was counted: `main` moves. Result
+// files written since the sampler was fixed carry the commit they read, so link
+// it where the count is shown; older files simply have nothing to link.
+const treeLink = (dataset, sha) =>
+  `<a href="https://huggingface.co/datasets/${escAttr(dataset)}/tree/${escAttr(sha)}" target="_blank" rel="noopener"><code>${esc(String(sha).slice(0,7))}</code></a>`;
+// A run long enough to outlast a republish records where the dataset went. The
+// rows may then come from either tree, and showing only the first SHA would
+// present exactly the ambiguity the field exists to record as a settled fact —
+// so show both, in the order they happened.
+const revLink = d => d.revision
+  ? ` ${treeLink(d.dataset, d.revision)}` + (d.revision_moved_to
+      ? ` <span title="the dataset moved while this run was in flight; its rows may come from either tree">→ ${treeLink(d.dataset, d.revision_moved_to)}</span>`
+      : "")
+  : "";
+
+// What a run's classifier never labeled, phrased once. Both views need it: a
+// comparison that shows one model's 280 beside another's 300 without saying why
+// invites reading the gap as a difference in the data rather than in coverage.
+// Older files carry no count, so fall back to the null records they still hold.
+const unlabeledOf = (d, labeled) => {
+  const n = d.unlabeled ?? (d.records.length - labeled);
+  const why = Object.entries(d.unlabeled_reasons || {}).map(([k, v]) => `${v} ${k}`).join(", ");
+  return n ? {n, why, text: `${n} of ${n + labeled} sampled prompts unlabeled${why ? ` (${why})` : ""} and excluded`} : null;
+};
+
+// A run whose every request failed writes a real file: an unlabeled count and
+// no records. There is no share to draw from zero labels — 0/0 is NaN, which
+// renders as "NaN%" behind a bar of undefined width — so each chart says what
+// happened instead of drawing it.
+const noLabels = (parent, text) => {
+  const p = document.createElement("p");
+  p.className = "note";
+  p.textContent = text;
+  parent.appendChild(p);
+};
 
 // Mix labels are a mix of real HuggingFace dataset ids and bare internal names.
 // Only the ones checked as publicly reachable when the data was built get a link.
@@ -1166,9 +1201,11 @@ async function renderModel(model, gen){
       h.className = "stage";
       h.id = "sec-" + s.stage;
       h.style.setProperty("--bar", hueFor(s.stage));
+      // Link the tree these counts were taken from, not just the dataset root:
+      // "exact composition" is a claim about one revision, and `main` moves.
       h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())}
         <span class="ds">— <a href="https://huggingface.co/datasets/${escAttr(st.dataset)}"
-          target="_blank" rel="noopener">${esc(st.dataset)} ↗</a> (${st.total.toLocaleString()} examples)</span>`;
+          target="_blank" rel="noopener">${esc(st.dataset)} ↗</a>${revLink(st)} (${st.total.toLocaleString()} examples)</span>`;
       mix.appendChild(h);
       // RL mixes don't label their reward functions, but each mix has exactly
       // one verifier, so when every value in a mix-name column is in the
@@ -1269,14 +1306,27 @@ async function renderModel(model, gen){
     h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())} <span class="ds">— ${esc(s.name)}</span>`;
     const sub = document.createElement("p");
     sub.className = "stage-sub";
-    // Some RLVR rows are labeled by their own verifier rather than by the
-    // classifier, so say which count is which instead of crediting the model
-    // for labels it was never asked about.
+    // Two things the count alone would hide. Some RLVR rows are labeled by
+    // their own verifier and never reached the classifier, so name both counts
+    // instead of crediting the model for labels it was never asked about. And
+    // prompts the classifier never labeled are excluded from every bar below —
+    // refusals land on jailbreak-style prompts, the content the harmlessness
+    // bar is about, so an unreported gap reads as a smaller share rather than
+    // as missing data. Older files carry no unlabeled count; for those the
+    // unlabeled records are still in `records`, so count them.
     const byVerifier = recs.filter(r => r.by === "verifier").length;
-    sub.textContent = byVerifier
-      ? `${d.dataset} · n=${n} sampled prompts — ${n - byVerifier} labeled by ${d.classifier}, ${byVerifier} by their verifier`
-      : `${d.dataset} · n=${n} sampled prompts labeled by ${d.classifier}`;
+    const who = byVerifier
+      ? `n=${n} sampled prompts — ${n - byVerifier} labeled by ${esc(d.classifier)}, ${byVerifier} by their verifier`
+      : `n=${n} sampled prompts labeled by ${esc(d.classifier)}`;
+    const skipped = d.unlabeled ?? (d.records.length - n);
+    const why = Object.entries(d.unlabeled_reasons || {}).map(([k, v]) => `${v} ${k}`).join(", ");
+    sub.innerHTML = `${esc(d.dataset)}${revLink(d)} · ${who}`
+      + (skipped ? ` · <b>${skipped}</b> unlabeled${why ? ` (${esc(why)})` : ""} and excluded` : "");
     hhh.append(h, sub);
+    if (!n){
+      noLabels(hhh, `every sampled prompt went unlabeled — no shares to show for this stage`);
+      continue;
+    }
     const max = Math.max(...LABELS.map(l => wilson(counts[l]||0, n)[1]), 0.01);
     let lastGrp = null;
     for (const l of LABELS){
@@ -1330,6 +1380,7 @@ async function renderModel(model, gen){
     det.innerHTML = `<summary>
       <i class="sw"></i><b>${esc(s.stage.toUpperCase())}</b>
       <span class="ds">— ${esc(s.name)}</span>
+      <span class="ds">${esc(d.dataset)}${revLink(d)}</span>
       <span class="lsum"><em>${pct(nonEn/n)}</em> detected non-English ·
         ${undet ? `${pct(undet/n)} undetermined · ` : ""}
         ${rest.length} other language${rest.length === 1 ? "" : "s"} · n=${n}</span>
@@ -1432,17 +1483,27 @@ async function renderModel(model, gen){
         <p class="sub">Share of sampled ${unitLabel} judged a match by ${classifier}. Click a bar to read the matches verbatim.</p>`;
       const max = Math.max(...rows.map(r => r.ci[1]), 0.01);
       for (const r of rows){
+        if (!r.n){
+          noLabels(card, `${r.stage.toUpperCase()} — every sampled item went unjudged, so there is no rate to show`);
+          continue;
+        }
         const s = post.find(p => p.stage === r.stage) || {stage: r.stage, hf_dataset: r.d.dataset, name: r.d.dataset};
         const isCorpus = corpusStages.some(c => c.stage === r.stage);
         const unit = isCorpus ? "documents" : "prompts";
         // Only call out the correction when it actually bit; at one document per
         // shard the design effect is ~1 and n_eff lands within a hair of n.
         const clustered = r.nEff < r.n * 0.98;
+        // Same accounting as the HHH card: whatever the classifier never
+        // judged is missing from n, not counted as a non-match.
+        const skipped = r.d.unlabeled || 0;
+        const skipNote = skipped
+          ? `<br>${skipped} sampled ${unit} went unjudged (${esc(Object.entries(r.d.unlabeled_reasons || {}).map(([k, v]) => `${v} ${k}`).join(", ") || "no reason recorded")}) and are excluded from n`
+          : "";
         const ciNote = clustered
           ? `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])} — widened for clustering, effective n ${r.nEff.toFixed(0)} of ${r.n} (documents sharing a shard are correlated)`
           : `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`;
         barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
-          `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})${ciNote}<br>click to read them`,
+          `<b>${r.stage}</b> · ${esc(r.d.dataset)}${revLink(r.d)}<br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})${ciNote}${skipNote}<br>click to read them`,
           false,
           r.d.records.filter(x => x.match), {...ctxFor(s), isCorpus, linkKey: "ask-" + slug});
       }
@@ -1520,7 +1581,7 @@ async function renderCompare(gen){
       const recs = d.records.filter(r => r.label);
       const counts = {};
       for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
-      per.push({m, recs, counts, n: recs.length, dataset: d.dataset});
+      per.push({m, recs, counts, n: recs.length, dataset: d.dataset, rev: d, skipped: unlabeledOf(d, recs.length)});
     }
     // A stage no registered model has at all contributes neither data nor
     // missing-run notices — skip it. But a stage where every registered model
@@ -1541,7 +1602,17 @@ async function renderCompare(gen){
       hhh.appendChild(p);
     }
     if (!per.length) continue;
-    const max = Math.max(...per.flatMap(p => LABELS.map(l => wilson(p.counts[l]||0, p.n)[1])), 0.01);
+    for (const p of per.filter(x => !x.n)){
+      noLabels(hhh, `${p.m} — every sampled prompt went unlabeled, so this model has no bars here`);
+    }
+    // Same accounting as the per-model page, per model rather than per stage.
+    for (const p of per.filter(x => x.skipped)){
+      const note = document.createElement("p");
+      note.className = "note";
+      note.textContent = `${p.m} — ${p.skipped.text} from the bars below`;
+      hhh.appendChild(note);
+    }
+    const max = Math.max(...per.filter(p => p.n).flatMap(p => LABELS.map(l => wilson(p.counts[l]||0, p.n)[1])), 0.01);
     let lastGrp = null;
     for (const l of LABELS){
       const grp = VALUE_LABELS.has(l) ? "values" : "skills";
@@ -1553,11 +1624,12 @@ async function renderCompare(gen){
       lbl.className = "cmp-lbl" + (VALUE_LABELS.has(l) ? " value" : "");
       lbl.textContent = NICE[l];
       hhh.appendChild(lbl);
-      for (const p of per){
+      for (const p of per.filter(x => x.n)){
         const k = p.counts[l] || 0;
         const [lo, hi] = wilson(k, p.n);
         barRow(hhh, shortName(p.m), k/p.n, lo, hi, max,
-          `<b>${p.m}</b> · ${NICE[l]}<br>${k} of ${p.n} sampled prompts (${pct(k/p.n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
+          `<b>${p.m}</b> · ${NICE[l]}${revLink(p.rev)}<br>${k} of ${p.n} sampled prompts (${pct(k/p.n)})<br>95% CI ${pct(lo)}–${pct(hi)}`
+          + (p.skipped ? `<br>${esc(p.skipped.text)}` : "") + `<br>click to see the prompts`,
           false,
           p.recs.filter(r => r.label === l), {...ctxOf(p.m, stage, p.dataset), linkKey: `${p.m}.${l}`}, color(p.m));
       }
@@ -1595,7 +1667,7 @@ async function renderCompare(gen){
         const b = buckets.get(key);
         if (!b.rowsByStage.has(stage)) b.rowsByStage.set(stage, []);
         const n = d.records.length, k = d.records.filter(r => r.match).length;
-        b.rowsByStage.get(stage).push({m, d, n, k, ci: wilson(k, n)});
+        b.rowsByStage.get(stage).push({m, d, n, k, ci: wilson(k, n), skipped: unlabeledOf(d, n)});
       }
     }
     for (const {question, classifier, rowsByStage} of buckets.values()){
@@ -1627,9 +1699,20 @@ async function renderCompare(gen){
           p.textContent = `${m} — no ask run committed for this stage`;
           card.appendChild(p);
         }
+        for (const r of rows.filter(x => x.skipped)){
+          const note = document.createElement("p");
+          note.className = "note";
+          note.textContent = `${r.m} — ${r.skipped.text} from the bar below`;
+          card.appendChild(note);
+        }
         for (const r of rows){
+          if (!r.n){
+            noLabels(card, `${r.m} — every sampled item went unjudged, so there is no rate to show`);
+            continue;
+          }
           barRow(card, shortName(r.m), r.k/r.n, r.ci[0], r.ci[1], max,
-            `<b>${r.m}</b> · ${stage}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
+            `<b>${r.m}</b> · ${stage}${revLink(r.d)}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`
+            + (r.skipped ? `<br>${esc(r.skipped.text)}` : "") + `<br>click to read them`,
             false,
             r.d.records.filter(x => x.match), {...ctxOf(r.m, stage, r.d.dataset), linkKey: `${r.m}.ask-${slug}`}, color(r.m));
         }
