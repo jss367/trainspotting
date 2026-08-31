@@ -112,7 +112,7 @@ MIN_SHARE = 0.1
 MIN_LIFT = 2.0
 
 
-def concentration(sources: list[dict], hits: int, side: str = "all") -> dict | None:
+def concentration(sources: list[dict], total: int, side: str = "all") -> dict | None:
     """The source the matches actually bunch in, or None if they are spread.
 
     Returning None matters as much as returning a source: "most of the matches
@@ -122,11 +122,15 @@ def concentration(sources: list[dict], hits: int, side: str = "all") -> dict | N
     `side="produced"` runs the same test over the produce-side counts alone, so
     a ranking that ran on produce-side rates is explained by the sources that
     supplied those rows rather than by whichever source holds the most prompts.
+
+    `total` is the evidence the share floor is a share *of* — the stage's match
+    count for that side. It has to be the whole of it: measured against the
+    largest single source instead, ten sources of ten rows each would let a
+    two-row source clear a floor set at one row and be named as the origin of
+    evidence it supplied two percent of.
     """
     hk, rk, lk = ("hits", "rate", "lift") if side == "all" else (
         "produced_hits", "produced_rate", "produced_lift")
-    total = hits if side == "all" else max(
-        (s[hk] or 0 for s in sources), default=0)
     floor = max(2, MIN_SHARE * total)
     worth = [s for s in sources if (s[hk] or 0) >= floor and s[lk]]
     if not worth:
@@ -193,13 +197,37 @@ def stage_trace(result) -> dict:
         # Both readings are kept; `compare` picks the one matching the basis it
         # ends up ranking on, so the verdict explains the number it printed.
         "concentration_all": concentration(sources, hits),
-        "concentration_produced": concentration(sources, hits, side="produced"),
+        # The stage's own produce-side lower bound, which is the count the
+        # produce-side ranking runs on and so the evidence a source's share is
+        # a share of.
+        "concentration_produced": concentration(
+            sources, bounds[0] if bounds else 0, side="produced"),
         "concentration": concentration(sources, hits),
         "conc_side": "all",
         "revision": result.get("revision"),
         "partial": partial,
         "unsearched_columns": list(result.get("unsearched_columns") or []),
     }
+
+
+def _understated(r: dict, basis: str) -> str | None:
+    """Why this stage's rate is a lower bound, or None if it is a figure.
+
+    Under the produce-side basis only the produce-side columns matter, because
+    an unread prompt cannot change a produce-side rate. Under the row basis
+    every unread column can.
+    """
+    fields, available = set(r["fields"]), set(r["available_fields"])
+    if basis == "produced":
+        fields, available = fields & set(PRODUCE), available & set(PRODUCE)
+    if not r["available_fields"]:
+        return "its run does not record which sides the mix has, so it cannot show it read them all"
+    if available - fields:
+        return f"its run read only {', '.join(sorted(fields)) or 'none'} of " \
+               f"{', '.join(sorted(available))}"
+    if r["unsearched_columns"]:
+        return f"{', '.join(r['unsearched_columns'])} went unsearched in it"
+    return None
 
 
 def _rank_block(r: dict, basis: str, key: str) -> str | None:
@@ -307,6 +335,14 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
         # A tie the sort broke silently is still a tie.
         contenders = [r for r in ranked[1:] if (r["produced_rate_hi"] or 0) >= floor]
 
+    # A run that did not read everything its own mix has on the side being
+    # ranked can only have undercounted, so its rate is a floor rather than a
+    # figure. That is harmless where it wins — a floor above the leader beats
+    # the leader — and unsound where it loses, because the columns nobody
+    # opened could put it on top. Named rather than ranked away, since the
+    # ordering is still the best reading of what was read.
+    understated = [r for r in ranked[1:] if _understated(r, basis)]
+
     first = results[0] if results else {}
     return {
         "pattern": first.get("pattern"),
@@ -323,6 +359,10 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
         "unsearched": [r for r in rows if r["status"] == UNSEARCHED],
         "unreachable": [r for r in rows if r["status"] == UNREACHABLE],
         "produce_searched": produce_searched,
+        # Every hitting stage read a produce-side column, which is what a claim
+        # about the produce side across all of them requires.
+        "produce_complete": all(r["produced"] is not None for r in hitting),
+        "understated": understated,
         "best": ranked[0] if ranked else None,
         "runner_up": ranked[1] if len(ranked) > 1 else None,
         "basis": basis,
@@ -548,12 +588,22 @@ def _tail(t, best, other, key, measure, line):
     for r in t["unranked"]:
         line.append(f"{r['stage']} matched too and is not in this ranking at all rather than at "
                     f"the bottom of it: {r['rank_block']}.")
+    for r in t["understated"]:
+        line.append(f"{r['stage']}'s rate is a floor rather than a figure — "
+                    f"{_understated(r, t['basis'])} — so the gap to it could be smaller than "
+                    "this, or run the other way.")
     if t["basis"] == "rows" and not t["produce_searched"]:
         line.append("No run on this pattern searched a produce-side column, so this is the hit "
                     "rate over all rows and says nothing about which side matched.")
-    elif t["basis"] == "rows":
+    elif t["basis"] == "rows" and t["produce_complete"]:
         line.append("No stage matched on the produce side at all, so this ranks by the overall "
                     "hit rate: the string is in text these stages train the model to read.")
+    elif t["basis"] == "rows":
+        # Some produce side went unread, so "nothing matched there" is a claim
+        # about the columns that were opened rather than about the stages.
+        line.append("Nothing matched on the produce side of the runs that read one, and not "
+                    "every run did, so this ranks by the overall hit rate and cannot say the "
+                    "string is absent from what these stages train the model to write.")
     return [" ".join(line)]
 
 

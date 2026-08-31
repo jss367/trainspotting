@@ -289,6 +289,14 @@ rather than collapsed to its low end. Two stages whose intervals overlap, or
 touch at a single value, are not ordered by these counts, and the verdict says
 so instead of picking one.
 
+A run that did not read everything its own mix has on the side being ranked can
+only have undercounted, so its rate is a floor rather than a figure. That is
+harmless where it wins — a floor above the leader beats the leader — and unsound
+where it loses, because the columns nobody opened could put it on top. Losing
+stages in that position are named, and the fallback to the overall rate says
+"nothing matched on the produce side of the runs that read one" rather than
+"no stage matched on the produce side" whenever some run never read one.
+
 **What was not looked at.** A stage scanned and found empty, a stage nobody
 scanned, a stage this layer cannot reach, and a stage scanned but not all the
 way through are four different answers, and flattening them into "no hits" is

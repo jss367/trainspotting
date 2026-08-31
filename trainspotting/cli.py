@@ -801,9 +801,19 @@ def cmd_report(args):
     if not traces:
         print(f"- no `grep` run yet (`trainspotting grep {args.model} \"some string\"`)")
         return
-    print("Every count here is over all rows of the stage named, not a sample, so a zero is "
+    # Only true of stages the server converted in full, so it is said of those
+    # rather than of the section: a partial conversion's `total_rows` is the
+    # converted subset, and claiming otherwise here would contradict the
+    # lower-bound warning printed under the stage itself.
+    partial = sorted({f"{r['stage']} ({t['pattern']!r})"
+                      for _, _, t in traces for r in t["stages"] if r["partial"]})
+    print("Every count below is over all rows of the stage named, not a sample, so a zero is "
           "the string being absent rather than merely unlikely — and a stage listed as "
-          "unsearched is neither.\n")
+          "unsearched or inconclusive is neither.\n")
+    if partial:
+        print("Except where noted per stage: the datasets-server converted only part of "
+              + ", ".join(partial) + ", so those counts and denominators cover the converted "
+              "subset alone.\n")
     print(influence.BASIS_NOTE + "\n")
     if any(split for _, split, _ in traces):
         print("One slug below names more than one search — a pattern or a matching flag was "

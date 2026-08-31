@@ -83,3 +83,19 @@ def test_another_model_s_runs_are_not_folded_in(tmp_path, monkeypatch):
     write(tmp_path, "olmo-3-7b-think", "dpo", "chatgpt")
     write(tmp_path, "olmo-3-7b-instruct", "dpo", "chatgpt")
     assert len(traces(tmp_path, monkeypatch)) == 1
+
+
+def test_the_preamble_does_not_claim_full_coverage_for_a_partial_conversion(tmp_path, monkeypatch, capsys):
+    write(tmp_path, "olmo-3-7b-think", "dpo", "chatgpt", partial=True)
+    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    cli.cmd_report(type("A", (), {"model": "olmo-3-7b-think"})())
+    out = capsys.readouterr().out
+    assert "converted only part of dpo ('ChatGPT')" in out
+    assert "cover the converted subset alone" in out
+
+
+def test_the_qualifier_is_absent_when_every_conversion_is_complete(tmp_path, monkeypatch, capsys):
+    write(tmp_path, "olmo-3-7b-think", "dpo", "chatgpt")
+    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    cli.cmd_report(type("A", (), {"model": "olmo-3-7b-think"})())
+    assert "converted subset alone" not in capsys.readouterr().out

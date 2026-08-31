@@ -563,3 +563,99 @@ def test_two_equal_exact_produce_side_rates_are_a_tie():
     t = influence.compare(runs, THINK)
     assert len(t["contenders"]) == 1
     assert "do not settle the order" in " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+# --- a narrowed run's rate is a floor, so it can win but not lose ----------
+
+
+def test_a_stage_that_did_not_read_its_whole_produce_side_is_flagged_when_it_loses():
+    # rlvr read response and reference; dpo's mix has both and its run read
+    # only response, so dpo's produce-side rate is a floor. It lost, and the
+    # columns nobody opened could put it on top.
+    runs = [
+        run("rlvr", hits=100, rows=100_000, groups={"prompt": 0, "response": 100},
+            fields=["prompt", "response"], available_fields=["prompt", "response"]),
+        run("dpo", hits=10, rows=100_000, groups={"prompt": 0, "response": 10},
+            fields=["prompt", "response"], available_fields=["prompt", "response", "reference"]),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["stage"] == "rlvr"
+    assert [r["stage"] for r in t["understated"]] == ["dpo"]
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "dpo's rate is a floor rather than a figure" in text
+    assert "could be smaller than this, or run the other way" in text
+
+
+def test_a_leader_whose_rate_is_a_floor_is_not_flagged():
+    # A floor above the runner-up still beats the runner-up.
+    runs = [
+        run("rlvr", hits=100, rows=100_000, groups={"prompt": 0, "response": 100},
+            fields=["prompt", "response"], available_fields=["prompt", "response", "reference"]),
+        run("dpo", hits=10, rows=100_000, groups={"prompt": 0, "response": 10}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["stage"] == "rlvr" and t["understated"] == []
+
+
+def test_an_unread_prompt_does_not_understate_a_produce_side_rate():
+    # Only the produce-side columns can move a produce-side rate.
+    runs = [
+        run("rlvr", hits=100, rows=100_000, groups={"prompt": 0, "response": 100}),
+        run("dpo", hits=10, rows=100_000, groups={"response": 10}, fields=["response"],
+            available_fields=["prompt", "response"]),
+    ]
+    assert influence.compare(runs, THINK)["understated"] == []
+
+
+def test_the_row_basis_does_not_claim_an_absent_produce_side_it_never_read():
+    # dpo never opened a produce-side column, so "no stage matched on the
+    # produce side" is a claim about rlvr's columns, not about the stages.
+    runs = [
+        run("dpo", hits=100, rows=100_000, groups={"prompt": 100}, fields=["prompt"],
+            available_fields=["prompt", "response"]),
+        run("rlvr", hits=10, rows=100_000, groups={"prompt": 10, "response": 0}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["basis"] == "rows" and t["produce_searched"] and not t["produce_complete"]
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "cannot say the string is absent from what these stages train the model to write" in text
+    assert "No stage matched on the produce side at all" not in text
+
+
+def test_the_row_basis_may_claim_it_when_every_run_read_one():
+    runs = [
+        run("dpo", hits=100, rows=100_000, groups={"prompt": 100, "response": 0}),
+        run("rlvr", hits=10, rows=100_000, groups={"prompt": 10, "response": 0}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["produce_complete"]
+    assert "No stage matched on the produce side at all" in \
+        " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+# --- the share floor is a share of the evidence ----------------------------
+
+
+def test_produce_side_evidence_spread_over_many_sources_names_none_of_them():
+    # Ten sources of ten produce-side rows each; the eleventh has two at a high
+    # rate. Measured against the largest source the floor is one row, so that
+    # two-row source cleared it and was named as the origin of 2% of the
+    # evidence.
+    sources = {f"s{i}": 10 for i in range(10)} | {"tiny": 2}
+    totals = {f"s{i}": 10_000 for i in range(10)} | {"tiny": 20}
+    by_group = {f"s{i}": {"prompt": 0, "response": 10} for i in range(10)}
+    by_group["tiny"] = {"prompt": 0, "response": 2}
+    runs = [run("dpo", hits=102, rows=1_000_000, groups={"prompt": 0, "response": 102},
+                sources=sources, totals=totals, by_source_group=by_group)]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["conc_side"] == "produced"
+    assert t["best"]["concentration"] is None
+
+
+def test_a_source_holding_most_of_the_produce_side_evidence_still_counts():
+    runs = [run("dpo", hits=100, rows=100_000, groups={"prompt": 0, "response": 100},
+                sources={"big": 90, "rest": 10},
+                totals={"big": 1_000, "rest": 50_000},
+                by_source_group={"big": {"prompt": 0, "response": 90},
+                                 "rest": {"prompt": 0, "response": 10}})]
+    assert influence.compare(runs, THINK)["best"]["concentration"]["name"] == "big"
