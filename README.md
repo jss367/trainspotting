@@ -299,7 +299,17 @@ hold, or is not drawn. The advantage over the runner-up is the leader's floor
 over the runner-up's ceiling and reads "at least 8.7×", and where that quotient
 falls below one there is no advantage to report. A source is called the largest
 contributor only when its floor clears every other source's ceiling; otherwise
-the line says no largest is established and names the biggest counted floor.
+the line says no largest is established and names the biggest counted floor. The
+runner-up in the advantage clause is the stage with the highest ceiling rather
+than the second-highest floor, because that is the one that binds how big a lead
+the counts guarantee.
+
+A source concentration is measured over the produce columns its run opened, so a
+run that read `response` where the mix also has `reference` gets that said
+alongside the number. Where every run in a trace is limited the same way — as
+every committed one is, having been written before result files recorded the
+sides their mix holds — it is said once for the trace instead of under each
+stage and again in the verdict.
 
 Where a source's share rests on that interval, both tests run against the end
 that makes them hold: the lift is the source's floor over the stage's ceiling,

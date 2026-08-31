@@ -1019,3 +1019,96 @@ def test_the_unsettled_case_is_worded_as_a_floor_not_an_ordering():
     assert t["best"]["concentration"] is None
     text = " ".join(influence.render(t, "olmo-3-7b-think"))
     assert "no single source is established as the largest" in text
+
+
+# --- the nearest competitor is the one that binds --------------------------
+
+
+def test_the_runner_up_is_the_stage_with_the_highest_ceiling():
+    # Exactly 50%, exactly 21%, and 20–40%. The 21% stage sorts second by
+    # floor, but the 40% ceiling is what limits the lead the counts guarantee:
+    # 50/40 = 1.25×, not 50/21 = 2.4×.
+    runs = [
+        run("sft", hits=500, rows=1_000, groups={"prompt": 0, "response": 500}),
+        run("dpo", hits=210, rows=1_000, groups={"prompt": 0, "response": 210}),
+        run("rlvr", hits=400, rows=1_000,
+            groups={"prompt": 200, "response": 200, "reference": 200}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["stage"] == "sft"
+    assert [r["stage"] for r in t["ranked"]] == ["sft", "dpo", "rlvr"]
+    assert t["runner_up"]["stage"] == "rlvr"
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "at least 1.2× rlvr's" in text
+    assert "2.4×" not in text
+
+
+def test_exact_rates_keep_the_second_by_rate_as_the_runner_up():
+    runs = [
+        run("sft", hits=500, rows=1_000, groups={"prompt": 0, "response": 500}),
+        run("dpo", hits=210, rows=1_000, groups={"prompt": 0, "response": 210}),
+        run("rlvr", hits=100, rows=1_000, groups={"prompt": 0, "response": 100}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["runner_up"]["stage"] == "dpo"
+
+
+# --- a concentration is only over the columns that were read ---------------
+
+
+def test_a_concentration_from_a_narrowed_produce_side_is_qualified():
+    runs = [run(
+        "rlvr", hits=100, rows=100_000, groups={"prompt": 0, "response": 100},
+        fields=["prompt", "response"],
+        available_fields=["prompt", "response", "reference"],
+        sources={"src": 100}, totals={"src": 1_000},
+        by_source_group={"src": {"prompt": 0, "response": 100}},
+    )]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["concentration"]["name"] == "src"
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "over the produce columns this run read" in text
+    assert "a column it did not open could hold matches in other sources" in text
+    assert "so a column it did not open could move it" in text
+
+
+def test_a_complete_produce_side_concentration_is_not_qualified():
+    runs = [run("rlvr", hits=100, rows=100_000, groups={"prompt": 0, "response": 100},
+                sources={"src": 100}, totals={"src": 1_000},
+                by_source_group={"src": {"prompt": 0, "response": 100}})]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["concentration"]["name"] == "src"
+    assert "could hold matches in other sources" not in \
+        " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+def test_a_shared_coverage_gap_is_stated_once_for_the_trace():
+    # Every committed run predates `available_fields`, so repeating the same
+    # caveat under each stage and again in the verdict says one fact 3+ times.
+    runs = [
+        run("rlvr", hits=100, rows=100_000, groups={"prompt": 0, "response": 100},
+            available_fields=[], sources={"src": 100}, totals={"src": 1_000},
+            by_source_group={"src": {"prompt": 0, "response": 100}}),
+        run("dpo", hits=10, rows=100_000, groups={"prompt": 0, "response": 10},
+            available_fields=[]),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["coverage_unrecorded"]
+    text = "\n".join(influence.render(t, "olmo-3-7b-think"))
+    assert text.count("None of these runs records which sides its mix holds") == 1
+    assert influence.UNRECORDED not in text
+
+
+def test_a_gap_only_some_runs_have_stays_on_the_stage_that_has_it():
+    runs = [
+        run("rlvr", hits=100, rows=100_000, groups={"prompt": 0, "response": 100},
+            sources={"src": 100}, totals={"src": 1_000},
+            by_source_group={"src": {"prompt": 0, "response": 100}}),
+        run("dpo", hits=10, rows=100_000, groups={"prompt": 0, "response": 10},
+            available_fields=[]),
+    ]
+    t = influence.compare(runs, THINK)
+    assert not t["coverage_unrecorded"]
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "None of these runs records" not in text
+    assert f"dpo's rate is a floor rather than a figure — {influence.UNRECORDED}" in text

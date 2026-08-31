@@ -37,6 +37,12 @@ import shlex
 # though no response is stored.
 PRODUCE = ("response", "reference")
 
+# Why a run's coverage is unknown rather than known-partial. Result files
+# written before they recorded the sides their mix has cannot show they read all
+# of them — true of every committed run, so it is said once for the whole trace
+# rather than under each stage and again in the verdict.
+UNRECORDED = "its run does not record which sides the mix has, so it cannot show it read them all"
+
 # What a stage's absence from the result set means. INCONCLUSIVE is the fourth
 # kind and the easiest to lose: a repo the datasets-server converted only part
 # of was scanned over that part, so finding nothing there is not finding nothing.
@@ -257,7 +263,7 @@ def _understated(r: dict, basis: str) -> str | None:
     if basis == "produced":
         fields, available = fields & set(PRODUCE), available & set(PRODUCE)
     if not r["available_fields"]:
-        return "its run does not record which sides the mix has, so it cannot show it read them all"
+        return UNRECORDED
     if available - fields:
         return f"its run read only {', '.join(sorted(fields)) or 'none'} of " \
                f"{', '.join(sorted(available))}"
@@ -407,6 +413,11 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
         "unsearched": [r for r in rows if r["status"] == UNSEARCHED],
         "unreachable": [r for r in rows if r["status"] == UNREACHABLE],
         "produce_searched": produce_searched,
+        # Every stage limited the same way and for the same reason, which is a
+        # fact about the vintage of the result files rather than about any one
+        # of them.
+        "coverage_unrecorded": bool(hitting) and all(
+            not r["available_fields"] for r in hitting),
         # Every hitting stage read a produce-side column, which is what a claim
         # about the produce side across all of them requires.
         # Every stage with a result file, not only the ones that matched: a
@@ -421,7 +432,11 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
             for r in searched + inconclusive),
         "understated": understated,
         "best": ranked[0] if ranked else None,
-        "runner_up": ranked[1] if len(ranked) > 1 else None,
+        # Second by floor is not the closest competitor once the rates are
+        # intervals: exactly 21% sorts above 20–40%, and it is the 40% that
+        # binds how big a lead the counts guarantee.
+        "runner_up": (max(ranked[1:], key=lambda r: _ceiling(r, basis))
+                      if len(ranked) > 1 else None),
         "basis": basis,
     }
 
@@ -541,6 +556,13 @@ def _stage_lines(r: dict) -> list[str]:
             out.append(f"  - {what} concentrated in `{src['name']}`: {_source_count(src, side)} of "
                        f"its {src['rows']:,} rows, {_source_rate(src, side)} — {least}"
                        f"{src[lk]:.0f}× the stage's own rate.")
+            # Both the share and the lift are computed over the columns that
+            # were read. A produce column left unopened can hold matches in
+            # other sources, which moves the denominator and the ordering.
+            gap = _understated(r, "produced") if side == "produced" else None
+            if gap and gap != UNRECORDED:
+                out.append(f"    over the produce columns this run read, and {gap} — a column "
+                           "it did not open could hold matches in other sources.")
         elif r["sources"]:
             top, biggest = _largest(r["sources"], side)
             stage_rate = _span(r["produced_rate"], r["produced_rate_hi"]) if side == "produced" \
@@ -654,6 +676,10 @@ def _verdict(t: dict) -> list[str]:
                     f"rows ({_source_rate(src, 'produced')}, {least}{src['produced_lift']:.0f}× "
                     f"the stage) hold it in a response or a reference answer, out of the "
                     f"stage's {span} produce-side matches.")
+        gap = _understated(best, "produced")
+        if gap and gap != UNRECORDED:
+            line.append(f"That attribution is over the produce columns the run read, and {gap}, "
+                        "so a column it did not open could move it.")
         return _tail(t, best, other, key, measure, line)
     if src:
         line.append(f"{src['hits']:,} of the {src['rows']:,} `{src['name']}` rows "
@@ -710,9 +736,11 @@ def _tail(t, best, other, key, measure, line):
         line.append(f"{r['stage']} matched too and is not in this ranking at all rather than at "
                     f"the bottom of it: {r['rank_block']}.")
     for r in t["understated"]:
-        line.append(f"{r['stage']}'s rate is a floor rather than a figure — "
-                    f"{_understated(r, t['basis'])} — so the gap to it could be smaller than "
-                    "this, or run the other way.")
+        why = _understated(r, t["basis"])
+        if why == UNRECORDED and t["coverage_unrecorded"]:
+            continue
+        line.append(f"{r['stage']}'s rate is a floor rather than a figure — {why} — so the gap "
+                    "to it could be smaller than this, or run the other way.")
     if t["basis"] == "rows" and not t["produce_searched"]:
         line.append("No run on this pattern searched a produce-side column, so this is the hit "
                     "rate over all rows and says nothing about which side matched.")
@@ -758,6 +786,10 @@ def render(t: dict, model: str, note: bool = False) -> list[str]:
         if r["status"] in (HITS, ZERO, INCONCLUSIVE):
             out += _stage_lines(r)
     out += _gap_lines(t, cmd)
+    if t["coverage_unrecorded"]:
+        out.append("- *None of these runs records which sides its mix holds, so none can show it "
+                   "read all of them. Every produce-side figure below is a floor, and every "
+                   "attribution is over the columns that were read.*")
     out.append("")
     out += _verdict(t)
     out.append("")
