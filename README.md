@@ -184,8 +184,12 @@ the prompts alone that number does not exist.
 
 Reasoning spans stay inside the response they are part of, unlike the context
 view which folds them away: a model that says it while thinking still said it.
-`reasoning_content`, a separate column in the WildChat-derived mixes, is searched
-as its own turn.
+A turn is also more than its `content`: `reasoning_content`, `tool_calls`,
+`function_call`, `function_calls` and `refusal` are separate columns in these
+schemas, and each is searched as its own entry named after the column it came
+from, so a tool name is findable and a hit in a call reads differently from a
+hit in the prose. `functions` is searched as prompt text whatever turn it hangs
+off — it is the menu of tools the model was offered, not anything it said.
 
 The default `--sample 300 --seed 0` is the draw every other layer uses, so a hit
 is a row those runs already labeled and its whole example is in the committed

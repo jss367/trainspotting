@@ -20,9 +20,20 @@ a time:
                             generations — no response is stored for these rows)
 """
 
+import json
 import re
 
 PAD = 100  # snippet characters kept either side of a hit
+
+# Message columns that can hold what the model produced instead of `content`: an
+# OpenAI-style tool call, a function call, a refusal string. They are their own
+# columns in the WildChat-derived and Instruct SFT schemas, so a search reading
+# `content` alone would report zero for a tool name rather than "not in this
+# sample". `functions` is the menu of tools a turn was offered rather than
+# anything the model said, so it is searched as prompt text whatever role the
+# turn carries.
+STRUCTURED_TURN_FIELDS = ("tool_calls", "function_call", "function_calls", "refusal")
+INPUT_TURN_FIELDS = ("functions",)
 
 # Every side a stage can produce, in reporting order. Sides are named for what
 # the example does with the text, not for the column it sits in: `chosen` and
@@ -36,20 +47,29 @@ SIDES = {
 
 def _flatten(value) -> str:
     """A cell's searchable text. Cells arrive as strings, lists of strings
-    (`ground_truth`, `outputs`), or None."""
+    (`ground_truth`, `outputs`), structured payloads (a tool call), or None."""
     if value is None:
         return ""
-    if isinstance(value, list):
-        return "\n".join(_flatten(v) for v in value)
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list) and all(isinstance(v, (str, int, float)) for v in value):
+        return "\n".join(str(v) for v in value)
+    if isinstance(value, (list, dict)):
+        # A tool call is a name, its arguments and their values. Rendering it as
+        # JSON makes all three searchable, and keeps the field names visible so
+        # a hit can be read.
+        return json.dumps(value, ensure_ascii=False, default=str)
     return str(value)
 
 
 def _turns(messages):
-    """(turn index, role, text) for each message turn that carries text.
+    """(turn index, role, text) for each piece of text a message turn carries.
 
-    `reasoning_content` is yielded as its own turn rather than folded into the
-    content: it is a separate column in the WildChat-derived mixes, so text that
-    lives only there would otherwise never be searched.
+    A turn is more than its `content`. `reasoning_content` and the structured
+    output columns are yielded as their own entries, named for the column they
+    came from, because text that lives only there would otherwise never be
+    searched — and a hit in a tool call is a different reading of the example
+    from a hit in the prose.
     """
     for i, m in enumerate(messages or []):
         if not isinstance(m, dict):
@@ -59,6 +79,21 @@ def _turns(messages):
             yield i, role, str(m["content"])
         if m.get("reasoning_content"):
             yield i, f"{role}/reasoning", str(m["reasoning_content"])
+        for name in STRUCTURED_TURN_FIELDS + INPUT_TURN_FIELDS:
+            if m.get(name):
+                yield i, f"{role}/{name}", _flatten(m[name])
+
+
+def _side_of(role: str, response_side: str) -> str:
+    """Which side of the example a turn's text belongs to.
+
+    The role decides it — an assistant turn is what the model is fit to — except
+    for the tool definitions a turn offers: those are given to the model, not
+    produced by it, whichever turn they hang off.
+    """
+    if role.endswith(tuple(f"/{name}" for name in INPUT_TURN_FIELDS)):
+        return "prompt"
+    return response_side if role.startswith("assistant") else "prompt"
 
 
 def fields(row: dict, stage: str) -> list[dict]:
@@ -86,7 +121,7 @@ def fields(row: dict, stage: str) -> list[dict]:
 
     if stage == "sft":
         for i, role, text in _turns(row.get("messages")):
-            add("response" if role.startswith("assistant") else "prompt", role, text, i)
+            add(_side_of(role, "response"), role, text, i)
     elif stage == "dpo":
         if isinstance(row.get("prompt"), list):
             for i, role, text in _turns(row["prompt"]):
@@ -95,7 +130,7 @@ def fields(row: dict, stage: str) -> list[dict]:
             add("prompt", "prompt", row.get("prompt"))
         for side in ("chosen", "rejected"):
             for i, role, text in _turns(row.get(side)):
-                add(side if role.startswith("assistant") else "prompt", role, text, i)
+                add(_side_of(role, side), role, text, i)
     else:
         if isinstance(row.get("prompt"), list):
             for i, role, text in _turns(row["prompt"]):

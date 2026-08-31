@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import math
 import re
@@ -356,8 +357,23 @@ def cmd_classify(args):
 
 
 def _slug(text: str) -> str:
-    """A filename-safe short name derived from a question or a search pattern."""
-    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60]
+    """A filename-safe short name derived from a question or a search pattern.
+
+    Two reductions lose enough to name a different run: a pattern with no ASCII
+    letters or digits — a Chinese literal, a punctuation-only regex — reduces to
+    nothing at all, and two long patterns can agree on their first 60
+    characters. Either would write over an unrelated result file without saying
+    so, so both get a hash of the original appended. What remains is that
+    patterns differing only in case or punctuation share a file, which is a
+    collision between two ways of writing the same query.
+    """
+    slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+    digest = hashlib.sha1(text.encode()).hexdigest()[:8]
+    if not slug:
+        return f"pattern-{digest}"
+    if len(slug) > 60:
+        return f"{slug[:60].rstrip('-')}-{digest}"
+    return slug
 
 
 def cmd_ask(args):

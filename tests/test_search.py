@@ -145,6 +145,64 @@ def test_reasoning_content_is_searched():
     assert hits[0]["side"] == "response"
 
 
+def test_a_tool_call_is_searched_and_lands_on_the_response_side():
+    """The Dolci message schemas keep tool and function calls in their own
+    columns. A turn whose output is a call has an empty `content`, so reading
+    only that would report zero for a tool name."""
+    row = {
+        "messages": [
+            {"role": "user", "content": "what's the weather?"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {"function": {"name": "get_weather", "arguments": '{"city": "Oslo"}'}}
+                ],
+            },
+        ]
+    }
+
+    for pattern in ("get_weather", "oslo"):
+        hits = search.search_row(row, "sft", compile_(pattern))
+        assert [(h["side"], h["role"]) for h in hits] == [("response", "assistant/tool_calls")], pattern
+
+
+def test_a_refusal_string_is_response_text():
+    row = {"messages": [{"role": "assistant", "refusal": "I won't help with that."}]}
+
+    hits = search.search_row(row, "sft", compile_("won't help"))
+
+    assert [(h["side"], h["role"]) for h in hits] == [("response", "assistant/refusal")]
+
+
+def test_a_dpo_tool_call_keeps_its_side():
+    row = {
+        "chosen": [{"role": "assistant", "function_call": {"name": "refuse_politely"}}],
+        "rejected": [{"role": "assistant", "function_call": {"name": "run_exploit"}}],
+    }
+
+    assert [h["side"] for h in search.search_row(row, "dpo", compile_("run_exploit"))] == ["rejected"]
+    assert [h["side"] for h in search.search_row(row, "dpo", compile_("refuse_politely"))] == ["chosen"]
+
+
+def test_offered_tools_are_prompt_text_not_response_text():
+    """`functions` is the menu of tools the turn was offered, not anything the
+    model produced, so a hit there is not a hit in the response."""
+    row = {
+        "messages": [
+            {
+                "role": "assistant",
+                "content": "Sure.",
+                "functions": [{"name": "delete_everything", "description": "dangerous"}],
+            }
+        ]
+    }
+
+    hits = search.search_row(row, "sft", compile_("delete_everything"))
+
+    assert [(h["side"], h["role"]) for h in hits] == [("prompt", "assistant/functions")]
+
+
 def test_a_thinking_span_inside_a_response_is_searched():
     """`context.build` folds the reasoning away for display; search does not,
     because a model that says it while thinking still said it."""
