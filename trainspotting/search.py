@@ -172,7 +172,16 @@ def fields(row: dict, stage: str) -> list[dict]:
             add(_side_of(role, "response"), role, text, i)
     elif stage == "dpo":
         chosen, rejected = row.get("chosen"), row.get("rejected")
-        shared = _shared_turns(chosen, rejected)
+        # A pair's last turn is its candidate answer by definition, so it is
+        # never shared history however far the two lists agree. Without this a
+        # pair whose completions are identical would have every turn read as
+        # prompt text and report neither side — when what it actually shows is
+        # the string in both candidates, which is what `both` is for.
+        shared = min(
+            _shared_turns(chosen, rejected),
+            max(0, len(chosen or []) - 1),
+            max(0, len(rejected or []) - 1),
+        )
         # Everything before the branch point is the conversation both
         # completions answer in — prompt text, read once, off the chosen side.
         prefix = set()
@@ -224,7 +233,17 @@ def fields(row: dict, stage: str) -> list[dict]:
         # question.
         for name in ("ground_truth", "solution", "constraint"):
             add("verifier", name, row.get(name))
-        add("verifier", "reward_model.ground_truth", (row.get("reward_model") or {}).get("ground_truth"))
+        reward_model = row.get("reward_model")
+        if isinstance(reward_model, dict):
+            # Every field of it, not just the ground truth: `style` names what
+            # the verifier does and is text a search can legitimately be looking
+            # for. `COLUMNS` declares the whole cell searched, so reading part
+            # of it would also let a truncation of the unread part censor a row
+            # for nothing.
+            for name, value in sorted(reward_model.items()):
+                add("verifier", f"reward_model.{name}", value)
+        else:
+            add("verifier", "reward_model", reward_model)
         # Reference-model generations stored with the row. The model is not fit
         # to these — they are what the rollouts scored — so they get their own
         # side rather than being reported as a response.

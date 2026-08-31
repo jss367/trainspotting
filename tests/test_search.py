@@ -509,3 +509,50 @@ def test_a_hit_on_both_sides_stays_both_however_it_was_cut():
     split = search.pair_split([_pair("ChatGPT here", "ChatGPT there", ["chosen", "rejected"])])
 
     assert split == {"chosen_only": 0, "rejected_only": 0, "both": 1, "unknown": 0}
+
+
+def test_a_pair_whose_completions_are_identical_is_both_not_neither():
+    """The two sides agree all the way down, so nothing looks like a branch —
+    but the string is in both candidate answers, which is what `both` means.
+    Reading the last turn as shared history would report neither side."""
+    turns = [{"role": "user", "content": "who are you?"}, {"role": "assistant", "content": "I am ChatGPT."}]
+    row = {"chosen": list(turns), "rejected": list(turns)}
+
+    hits = search.search_row(row, "dpo", compile_("i am chatgpt"))
+
+    assert sorted(h["side"] for h in hits) == ["chosen", "rejected"]
+    assert search.pair_split([{"hits": hits}]) == {
+        "chosen_only": 0,
+        "rejected_only": 0,
+        "both": 1,
+        "unknown": 0,
+    }
+
+
+def test_a_one_turn_pair_still_has_two_sides():
+    row = {
+        "chosen": [{"role": "assistant", "content": "ChatGPT"}],
+        "rejected": [{"role": "assistant", "content": "ChatGPT"}],
+    }
+
+    assert sorted(h["side"] for h in search.search_row(row, "dpo", compile_("chatgpt"))) == [
+        "chosen",
+        "rejected",
+    ]
+
+
+def test_the_whole_reward_model_is_searched():
+    """`style` names what the verifier does, and `COLUMNS` declares the whole
+    cell searched — reading only `ground_truth` would miss it and would let a
+    truncation of the rest censor the row for nothing."""
+    row = {"prompt": "q", "reward_model": {"style": "chatgpt_judge", "ground_truth": "42"}}
+
+    hits = search.search_row(row, "rlvr", compile_("chatgpt"))
+
+    assert [(h["side"], h["role"]) for h in hits] == [("verifier", "reward_model.style")]
+
+
+def test_a_reward_model_that_is_not_a_mapping_is_still_searched():
+    row = {"prompt": "q", "reward_model": "chatgpt_judge"}
+
+    assert [h["role"] for h in search.search_row(row, "rlvr", compile_("chatgpt"))] == ["reward_model"]
