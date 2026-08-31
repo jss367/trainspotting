@@ -22,6 +22,16 @@ def _positive_int(value: str) -> int:
     return n
 
 
+def _nonnegative_int(value: str) -> int:
+    """argparse type for `--examples`. Zero is meaningful — count without keeping
+    any evidence — but a negative limit reaches the example heap with nothing in
+    it and raises IndexError, after the multi-gigabyte scan has already run."""
+    n = int(value)
+    if n < 0:
+        raise argparse.ArgumentTypeError(f"must be zero or a positive integer, got {n}")
+    return n
+
+
 def _fmt_tokens(n: int) -> str:
     if n >= 1e12:
         return f"{n / 1e12:.1f}T"
@@ -825,7 +835,8 @@ def main():
     )
     p.add_argument("--regex", action="store_true", help="treat the pattern as an RE2 regex")
     p.add_argument("--case-sensitive", action="store_true")
-    p.add_argument("--examples", type=int, default=20, help="matching snippets to keep in the result file")
+    p.add_argument("--examples", type=_nonnegative_int, default=20,
+                   help="matching snippets to keep in the result file; 0 counts without keeping any")
     p.add_argument(
         "--max-gb",
         type=float,

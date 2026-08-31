@@ -626,3 +626,65 @@ def test_committed_runs_record_a_usable_pattern(path):
             f"{path.name}: {run['pattern']!r} has an unescaped dot between letters"
             " — likely a quoting slip; write \\. or a character class if meant"
         )
+
+
+# --- review round 4 ---------------------------------------------------------
+
+
+def test_snippet_uses_the_sql_offset_when_re_cannot_compile():
+    """RE2 accepts patterns `re` rejects. The old fallback searched in Python,
+    failed, and cropped from offset zero — 4,000 characters short of the match
+    the SQL window had been built around."""
+    text = "a" * 4000 + "ChatGPT" + "b" * 4000
+    bad_for_python = r"(?P<x>Chat)(?P<x>GPT)"
+    blind = grep.snippet(text, bad_for_python, regex=True, case_sensitive=False)
+    assert "ChatGPT" not in blind          # what the fallback can do on its own
+    told = grep.snippet(
+        text, bad_for_python, regex=True, case_sensitive=False,
+        window_start=1, match_at=4001, match_len=7,
+    )
+    assert "ChatGPT" in told
+
+
+def test_sql_offset_and_python_search_agree_on_ordinary_patterns():
+    """Which is why switching the scan to the SQL offset moves no committed
+    snippet: for a pattern both engines understand they find the same match."""
+    text = "x" * 100 + "ChatGPT" + "y" * 100
+    assert grep.snippet(text, "ChatGPT", False, False) == grep.snippet(
+        text, "ChatGPT", False, False, 1, 101, 7
+    )
+
+
+def test_window_sql_reports_where_the_match_sits(con, tmp_path):
+    """End to end: a match past the window cut still lands inside the snippet,
+    with a pattern Python's `re` refuses to compile."""
+    path = tmp_path / "re2only.parquet"
+    filler = "z" * (grep.SNIPPET_SOURCE_CHARS * 2)
+    con.execute(
+        f"COPY (SELECT '{filler} ChatGPT late {filler}' AS prompt) TO '{path}' (FORMAT parquet)"
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(path)]), exprs, None,
+        r"(?P<a>Chat)(?P<a>GPT)", regex=True, examples=1,
+    )
+    assert result["matched"] == 1
+    assert "ChatGPT late" in result["examples"][0]["snippet"]
+
+
+def test_negative_example_limit_is_a_usage_error_not_an_indexerror():
+    """`--examples -1` used to be accepted, run the whole scan, then die on the
+    first matching row with an empty heap and no result written."""
+    from trainspotting import cli
+    with pytest.raises(Exception):
+        cli._nonnegative_int("-1")
+    assert cli._nonnegative_int("0") == 0
+    assert cli._nonnegative_int("20") == 20
+
+
+def test_pick_refuses_a_nonpositive_limit():
+    kept, by_snippet = [], {}
+    grep._pick(kept, by_snippet, -1, "text", {"snippet": "text"})
+    grep._pick(kept, by_snippet, 0, "text", {"snippet": "text"})
+    assert kept == [] and by_snippet == {}

@@ -399,21 +399,47 @@ def _offset_sql(col: str, pattern: str, regex: bool, case_sensitive: bool) -> st
     return f"position(lower({_lit(pattern)}) IN lower({col}))"
 
 
-def _window_sql(exprs: list[str], test: str, pattern: str, regex: bool, case_sensitive: bool) -> tuple[str, str]:
-    """(window, 1-based start) of the first matching string, centred on the match.
+def _match_len_sql(col: str, pattern: str, regex: bool, case_sensitive: bool) -> str:
+    """Length of the first match, for centring the snippet on it."""
+    if not regex:
+        return str(len(pattern))
+    opts = "s" if case_sensitive else "si"
+    return f"len(regexp_extract({col}, {_lit(pattern)}, 0, {_lit(opts)}))"
 
-    Written as a correlated scalar subquery over a one-row derived table so the
-    list filtering happens once and both the offset and the cut can refer to the
-    string by name. Costs nothing over the wire — the column has already been
-    read by the time this is evaluated.
+
+def _window_sql(
+    exprs: list[str], test: str, pattern: str, regex: bool, case_sensitive: bool
+) -> tuple[str, str, str, str]:
+    """The first matching string, windowed on its match, and where the match is.
+
+    Four scalars per group: the window, where it began in the original string,
+    where the match sits inside it, and how long the match is. The last two exist
+    so the final crop uses the offset SQL already computed rather than searching
+    for the match a second time in Python — RE2 accepts patterns `re` cannot
+    compile, and re-deriving what is already known is what put the window in the
+    wrong place in the first place.
+
+    Written as correlated scalar subqueries over a one-row derived table so the
+    list filtering happens once and every expression can refer to the string by
+    name. Costs nothing over the wire; the column is already read by then.
     """
     first = f"{_matching(exprs, test)}[1]"
     half = SNIPPET_SOURCE_CHARS // 2
-    start = f"greatest(1, {_offset_sql('s', pattern, regex, case_sensitive)} - {half})"
+    offset = _offset_sql("s", pattern, regex, case_sensitive)
+    start = f"greatest(1, {offset} - {half})"
     scalar = f"FROM (SELECT {first} AS s)"
-    window = f"(SELECT CASE WHEN s IS NULL THEN NULL ELSE substr(s, {start}, {SNIPPET_SOURCE_CHARS}) END {scalar})"
-    at = f"(SELECT CASE WHEN s IS NULL THEN NULL ELSE {start} END {scalar})"
-    return window, at
+
+    def q(expr):
+        return f"(SELECT CASE WHEN s IS NULL THEN NULL ELSE {expr} END {scalar})"
+
+    return (
+        q(f"substr(s, {start}, {SNIPPET_SOURCE_CHARS})"),
+        q(start),
+        # Where the match lands inside the window. Zero when the pattern did not
+        # match this string at all, which `snippet` reads as "no offset known".
+        q(f"CASE WHEN {offset} = 0 THEN 0 ELSE {offset} - {start} + 1 END"),
+        q(_match_len_sql("s", pattern, regex, case_sensitive)),
+    )
 
 
 def snippet(
@@ -422,6 +448,8 @@ def snippet(
     regex: bool,
     case_sensitive: bool,
     window_start: int = 1,
+    match_at: int | None = None,
+    match_len: int | None = None,
 ) -> str | None:
     """A window of `text` centred on the first match, so a count can be read.
 
@@ -429,18 +457,25 @@ def snippet(
     `window_start` is where that window began in the original string — which is
     what the leading ellipsis has to know about, since text elided by SQL is just
     as elided as text this function drops.
+
+    `match_at` (1-based, within `text`) and `match_len` come from the same SQL
+    that cut the window, and are what the scan passes. Searching again in Python
+    is only the fallback for a direct call, and cannot be the primary route: RE2
+    accepts patterns `re` rejects, and on those the search failed, the crop fell
+    back to offset zero, and the saved snippet was 4,000 characters short of the
+    match the window had been built around.
     """
     if not text:
         return None
-    flags = 0 if case_sensitive else re.IGNORECASE
-    try:
-        m = re.search(pattern if regex else re.escape(pattern), text, flags)
-    except re.error:
-        # The count came from DuckDB's RE2, which accepts syntax `re` does not.
-        # Losing the centring is fine; failing the scan over a snippet is not.
-        m = None
-    start = m.start() if m else 0
-    lead = max(0, start - (SNIPPET_CHARS - len(m.group(0) if m else "")) // 2)
+    start, length = (match_at - 1 if match_at else None), match_len
+    if start is None:
+        flags = 0 if case_sensitive else re.IGNORECASE
+        try:
+            m = re.search(pattern if regex else re.escape(pattern), text, flags)
+        except re.error:
+            m = None
+        start, length = (m.start(), len(m.group(0))) if m else (0, 0)
+    lead = max(0, start - (SNIPPET_CHARS - (length or 0)) // 2)
     out = text[lead:lead + SNIPPET_CHARS]
     cut_before = lead > 0 or window_start > 1
     return ("…" if cut_before else "") + out + ("…" if lead + SNIPPET_CHARS < len(text) else "")
@@ -460,7 +495,7 @@ def _pick(kept: list, by_snippet: dict, limit: int, text: str | None, record: di
     Think RL mix were 12 consecutive unit-test assertions from one source. A
     digest-ordered N spreads across the mix instead.
     """
-    if text is None:
+    if text is None or limit <= 0:
         return
     digest = hashlib.blake2b(text.encode("utf-8", "replace"), digest_size=8).digest()
     # Negated so heapq's min-heap roots at the largest hash, the one to evict.
@@ -501,9 +536,9 @@ def scan(
         select.append(f"({_match_sql(exprs[g], test)}) AS hit_{g}")
     for g in groups:
         # list_filter keeps order, so [1] is the first matching string in the group.
-        window, at = _window_sql(exprs[g], test, pattern, regex, case_sensitive)
-        select.append(f"{window} AS snip_{g}")
-        select.append(f"{at} AS snipat_{g}")
+        window, at, mo, ml = _window_sql(exprs[g], test, pattern, regex, case_sensitive)
+        select += [f"{window} AS snip_{g}", f"{at} AS at_{g}",
+                   f"{mo} AS mo_{g}", f"{ml} AS ml_{g}"]
 
     any_match = " OR ".join(f"({_match_sql(exprs[g], test)})" for g in groups)
     con.execute(f"SELECT {', '.join(select)} FROM {from_sql} WHERE {any_match}")
@@ -522,7 +557,8 @@ def scan(
         for row in batch:
             src = source_label(row[0], has_column=source is not None)
             flags = {g: bool(row[1 + i]) for i, g in enumerate(groups)}
-            snips = {g: (row[1 + len(groups) + 2 * i], row[2 + len(groups) + 2 * i])
+            base = 1 + len(groups)
+            snips = {g: tuple(row[base + 4 * i: base + 4 * i + 4])
                      for i, g in enumerate(groups)}
             matched += 1
             by_source[src] = by_source.get(src, 0) + 1
@@ -533,8 +569,12 @@ def scan(
                     bucket[g] += 1
             if examples:
                 where = [g for g, on in flags.items() if on]
-                text, at = next((snips[g] for g in where if snips[g][0]), (None, 1))
-                shown = snippet(text, pattern, regex, case_sensitive, at or 1)
+                text, at, mo, ml = next(
+                    (snips[g] for g in where if snips[g][0]), (None, 1, 0, 0)
+                )
+                shown = snippet(
+                    text, pattern, regex, case_sensitive, at or 1, mo or None, ml
+                )
                 _pick(kept, by_snippet, examples, shown, {
                     "source": src,
                     "groups": where,
