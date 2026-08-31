@@ -38,6 +38,12 @@ and the same free-form questions. There is no context layer there — a corpus
 document has no surrounding training example, it *is* the example. See
 [Pretraining data](#pretraining-data).
 
+Two more views are derived from the samples those layers commit rather than
+measured by a command of their own: how many tokens each stage of the pipeline
+actually is, which is the only thing that says what fraction of the model the
+other five layers describe (see [Size](#size)), and which source dataset each
+labeled prompt came from (see [Where each label comes from](#where-each-label-comes-from)).
+
 ## Datasets
 
 A dataset can also be the target on its own, with no model around it. Point any
@@ -196,6 +202,57 @@ if a child should be saved based on race"* counts as harmlessness content, and
 only the pair behind it shows the model is trained toward refusing it.
 
 Registered models: `olmo-3-7b-instruct`, `olmo-3-7b-think`, `olmo-3-32b-think`.
+
+## Size
+
+Every layer above answers a question about post-training, which is 0.03% of what
+the model read. That number is not published anywhere: Ai2 gives token counts for
+the pretraining mixes and row counts for the post-training ones, and 2.15M
+examples and 5.93T tokens are not comparable quantities.
+
+`scripts/export_site_data.py` closes the gap from the samples already committed.
+For every context run it writes `docs/data/<target>.<stage>.profile.json` —
+lengths, how much of each example the model is fit to, one metadata row per
+sampled example, and a token estimate: the sampled mean characters per example
+divided by four, times the exact row count. For every pretraining document sample
+it adds the same length summary to `<target>.<stage>.corpus.json`. Both are
+derived by `trainspotting/derive.py` from files the site already ships, so a
+fresh checkout rebuilds them with no network and no API key.
+
+The site draws four things from that:
+
+| View | What it says |
+|---|---|
+| **Where the token budget went** | Every stage on one strip to scale, and again on a log axis. Corpus tokens are the paper's; post-training tokens are estimated, with the 95% interval on the sampled mean. A second strip shows what *this page* sampled per stage — roughly equal everywhere, which is the inverse of the first strip. |
+| **How much of it the model is fit to** | The gradient-bearing share per stage: all of pretraining, the assistant turns of an SFT example, both completions after a DPO pair branches, and none of an RL row — the response there is generated during training and never stored. |
+| **How long is one example?** | Characters per example per stage on shared half-decade bins, which is what makes an example count and a token count the same kind of statement. |
+| **The whole pipeline as area** | A treemap where area is tokens: Common Crawl against FineMath against the whole of post-training in one frame. Boxes whose true area is under a pixel are drawn at 3px and the card says how many. |
+
+The estimate's weak part is the divisor, and it is one number
+(`derive.CHARS_PER_TOKEN`). Real tokenizers run about 3.5 characters per token on
+code and 4.5 on English prose; nothing in that range moves a finding that is a
+factor of ten thousand.
+
+## Where each label comes from
+
+The taxonomy says how much of a stage is about being harmless. The mix
+composition says which datasets the stage was built from. Neither says which of
+those datasets the harmless prompts came from — usually one or two of them.
+
+The site crosses the two: rows are the values of the source column a stage's rows
+carry (`source_dataset`, `dataset_source`, `preference_type`, or whatever else
+the mix records), columns are the seven labels, and every cell opens the prompts
+behind it like any bar does. A second grid behind a fold does the same against
+detected language. On Dolci Instruct SFT this is how you find that every sampled
+prompt from `Verifiable Reasoning` is capability content while `Wildchat` is
+mostly helpfulness — a split no stage-level share can show.
+
+The join costs no payload. A profile record carries a 32-bit FNV-1a hash of the
+same 400-character prompt opening a context record is keyed on, so the crossing
+happens in the browser over files it already has.
+`tests/test_derive.py` runs the Python and JavaScript implementations of that
+hash over the same inputs, because a drift between them would empty the grid
+rather than raise anything.
 
 ## Searching a whole example
 
@@ -466,6 +523,13 @@ registry stage (`tests/fixtures/rows/`, re-captured by
 `scripts/capture_row_fixtures.py`). Search is checked against those same saved
 rows: every registry stage has to yield more than its prompt, or a search of it
 is the prompt-only search the layer exists to replace.
+
+The derived numbers are held to the committed samples themselves rather than to
+fixtures, because the ways they break are all silent: a profile that has drifted
+from the context file it summarizes, a prompt-key hash that no longer matches the
+copy in `docs/index.html`, a DPO pair whose shared history gets counted as text
+the model was fit to. `pytest` needs `node` on PATH for the hash-parity check and
+skips it otherwise.
 
 `--live` re-runs the extraction checks against rows fetched right now. That is
 the canary for an upstream schema change, which otherwise shows up only as a

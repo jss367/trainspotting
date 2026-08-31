@@ -5,8 +5,9 @@ Run after adding a model or committing new classify/ask/context/pretrain runs:
 
 Context and pretraining-document records are copied minified (they are bulk text
 the site fetches on click); everything else is copied verbatim so its diffs stay
-readable. Each document sample also gets a `.corpus.json` summary — the same file
-without its records — so the site can draw the card without pulling megabytes.
+readable. The two bulk kinds also get a small summary derived from them — a
+`.corpus.json` per document sample and a `.profile.json` per context run — so the
+site can draw a card without pulling megabytes.
 """
 
 import json
@@ -18,22 +19,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trainspotting import languages, registry, rewards  # noqa: E402
+from trainspotting import derive, languages, registry, rewards  # noqa: E402
 
 # Bulk text the site fetches on demand: full training examples behind a prompt,
 # and sampled pretraining documents. Both are regenerable caches of upstream
 # data, so both are gitignored under results/ and committed under docs/data/.
-BULK = (".context.json", ".docs.json")
-
-# Derived from a bulk file rather than copied from results/, so a checkout
-# without the gitignored sources produces none of these — but the committed
-# copies are still what the site reads.
-DERIVED = (".corpus.json",)
-
-# Everything the manifest must keep listing even when this run did not produce
-# it. Getting this set wrong is silent: the files stay on disk, drop out of the
+# Getting this set wrong is silent: the files stay on disk, drop out of the
 # manifest, and the site stops asking for them.
-COMMITTED = BULK + DERIVED
+BULK = (".context.json", ".docs.json")
 
 out = ROOT / "docs" / "data"
 out.mkdir(parents=True, exist_ok=True)
@@ -83,18 +76,50 @@ for f in sorted((ROOT / "results").glob("*.json")):
     total += (out / f.name).stat().st_size
     copied.append(f.name)
 
-    # A document sample is a few megabytes, nearly all of it the documents
-    # themselves, but the card above them needs only the counts. Split the
-    # summary out so opening the model tab costs kilobytes and the documents
-    # load when someone actually asks to read them.
-    if f.name.endswith(".docs.json"):
-        d = json.loads(f.read_text())
-        summary = {k: v for k, v in d.items() if k != "records"}
-        summary["records"] = len(d["records"])
-        name = f.name.replace(".docs.json", ".corpus.json")
-        (out / name).write_text(json.dumps(summary, separators=(",", ":")))
-        total += (out / name).stat().st_size
-        copied.append(name)
+# Summaries of the bulk files, derived from docs/data rather than results/.
+# Both bulk kinds are gitignored under results/ and committed here, so a fresh
+# checkout has the samples but not their sources — deriving from what was just
+# written means the summaries always describe the sample the site actually
+# serves, instead of going stale the moment a re-sample lands from another
+# machine.
+derived = []
+
+
+def write_derived(name: str, payload: dict) -> None:
+    (out / name).write_text(json.dumps(payload, separators=(",", ":")))
+    derived.append(name)
+
+
+# A document sample is a few megabytes, nearly all of it the documents
+# themselves, but the card above them needs only the counts and the lengths.
+# Split the summary out so opening the model tab costs kilobytes and the
+# documents load when someone actually asks to read them.
+for docs_file in sorted(out.glob("*.docs.json")):
+    d = json.loads(docs_file.read_text())
+    summary = {k: v for k, v in d.items() if k != "records"}
+    summary["records"] = len(d["records"])
+    # How long a pretraining document is, on the same bins as a training example.
+    summary["lengths"] = derive.corpus_lengths(d)
+    write_derived(docs_file.name.replace(".docs.json", ".corpus.json"), summary)
+
+# What a stage's examples are made of: how long they are, how much of that the
+# model is fit to, and which metadata column each sampled row carries — the
+# join that lets the site cross a taxonomy label against where in the mix the
+# prompt came from without downloading the whole context file.
+for ctx_file in sorted(out.glob("*.context.json")):
+    d = json.loads(ctx_file.read_text())
+    target = ctx_file.name.rsplit(f".{d['stage']}.context.json", 1)[0]
+    src_file = out / f"{target}.sources.json"
+    # The exact row count comes from the sources layer, which counts rather than
+    # samples. Without it the shape of an example is still measurable and the
+    # token total is not, so the profile simply carries no estimate.
+    src = json.loads(src_file.read_text()).get(d["stage"], {}) if src_file.exists() else {}
+    write_derived(
+        ctx_file.name.replace(".context.json", ".profile.json"),
+        derive.stage_profile(d, src.get("total")),
+    )
+
+total += sum((out / name).stat().st_size for name in derived)
 
 # The manifest is what this run copied, plus the bulk files already sitting in
 # docs/data. Those are gitignored under results/, so a fresh checkout copies none
@@ -103,9 +128,7 @@ for f in sorted((ROOT / "results").glob("*.json")):
 # pretraining sample". Everything else still comes from results/ alone, so
 # deleting a labels or ask run there drops it from the site as before.
 kept = sorted(
-    f.name
-    for f in out.glob("*.json")
-    if f.name.endswith(COMMITTED) and f.name not in set(copied)
+    f.name for f in out.glob("*.json") if f.name.endswith(BULK) and f.name not in set(copied)
 )
 # The same drift, one class over: the README quotes measured figures from the
 # committed samples, and re-sampling moves them. Checking dataset ids alone let
@@ -133,8 +156,9 @@ for docs in out.glob("*.docs.json"):
             f"but the exported sample records {d['short_draws']}"
         )
 
-(out / "manifest.json").write_text(json.dumps(sorted(copied + kept), indent=2))
+(out / "manifest.json").write_text(json.dumps(sorted(set(copied + kept + derived)), indent=2))
 print(
-    f"wrote registry.json + language-names.json + manifest.json and {len(copied)} result files ({total / 1e6:.1f} MB)"
+    f"wrote registry.json + language-names.json + manifest.json, {len(copied)} result files "
+    f"and {len(derived)} derived summaries ({total / 1e6:.1f} MB)"
     + (f"; manifest also lists {len(kept)} committed file(s) this run did not build" if kept else "")
 )
