@@ -24,6 +24,11 @@ question, in increasing order of depth:
    response the model is fit to (SFT), the pair it is pushed between (DPO), or
    the verifier that scores it (RL). A prompt on its own can read as the
    opposite of what it teaches, so every count clicks through to this.
+6. **Search** — every post-training example containing a phrase, looked up
+   rather than estimated. Sampling answers "how much of the data is X"; this
+   answers "where did the model get *this*" — a behavior like claiming to be
+   ChatGPT lives in a handful of rows a 300-row sample would never draw. See
+   [Searching for a phrase](#searching-for-a-phrase).
 
 The pretraining corpora get their own path, because the datasets-server cannot
 sample them: exact composition from the shard listing, readable random documents,
@@ -58,6 +63,9 @@ trainspotting report olmo-3-7b-instruct
 trainspotting ask olmo-3-7b-instruct \
   "Is this training example about caring about human lives?" \
   --slug caring-about-human-lives
+
+# Find every post-training example containing a phrase (exact counts, no API key needed)
+trainspotting search olmo-3-7b-instruct "I am ChatGPT"
 
 # Store the full training example behind each sampled prompt (no API key needed)
 trainspotting context olmo-3-7b-instruct
@@ -137,6 +145,50 @@ if a child should be saved based on race"* counts as harmlessness content, and
 only the pair behind it shows the model is trained toward refusing it.
 
 Registered models: `olmo-3-7b-instruct`, `olmo-3-7b-think`, `olmo-3-32b-think`.
+
+## Searching for a phrase
+
+```bash
+trainspotting search olmo-3-7b-instruct "I am ChatGPT"
+```
+
+Every other post-training layer estimates a share from a sample, which is the
+wrong tool for behavior attribution: a model that claims to be ChatGPT got that
+from a handful of rows, and a 300-row sample almost surely contains none of
+them. `search` looks the rows up instead, through the datasets-server's
+full-text index — no download, no API key, and the match count is exact over
+the whole mix.
+
+That index is word-based: it returns every row containing all the query's
+words, in any order, in any string column. So the CLI re-reads each matched row
+(up to `--max-hits` per stage, default 300) and reports what the index cannot:
+
+- **whether the exact phrase is really there**, case-insensitive, versus the
+  words scattered across the example (`"exact"` per record);
+- **which field holds it**, because that decides what the match teaches — an
+  SFT `response` or DPO `chosen` turn is fit toward, a DPO `rejected` turn is
+  pushed away from, a `prompt` is only ever input, an RL `rollout` is sampled
+  and scored, and RL `verifier` fields are never shown to the model at all;
+- **which source datasets the hits come from**, from the mix's own source
+  columns, so a needle resolves to a named upstream dataset;
+- **a snippet around every occurrence**, so the claim is readable in place.
+
+Results land in `results/<model>.<stage>.search-<slug>.json` and the site
+renders each query as a card under **Text searches**: one line per stage with
+the verbatim-occurrence count, opening to the snippets, each linked to its row
+in the HuggingFace viewer. Zero is an answer here — "the phrase appears nowhere
+in the post-training mixes" points the question at pretraining (or at data you
+cannot see).
+
+Two honesty caveats travel with the numbers. When a stage has more word-matches
+than `--max-hits`, the exact-phrase count is a floor over the fetched rows and
+is printed as one. And the server truncates very long cells in its responses,
+so a row whose phrase sits past the truncation point is reported as
+`"unchecked"` rather than counted either way.
+
+This covers the post-training mixes only. The pretraining corpora have no
+server-side index — for "is this phrase in Dolma 3?", Ai2's own
+[infini-gram](https://infini-gram.io) answers exact n-gram counts over Dolma.
 
 ## Pretraining data
 

@@ -179,6 +179,11 @@
   }
   .doc a.shard { font-size: 11px; color: var(--muted); text-decoration: none; }
   .doc a.shard:hover { text-decoration: underline; }
+  .doc .snippet {
+    font: 12px/1.55 ui-monospace, Menlo, monospace;
+    white-space: pre-wrap; overflow-wrap: anywhere; margin: 2px 0;
+  }
+  .doc .snippet mark { background: var(--track); color: var(--text-primary); font-weight: 650; }
 
   /* ---- stage sections ---- */
   h3.stage { font-size: 14px; margin: 26px 0 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -1457,6 +1462,110 @@ async function renderModel(model, gen){
       if (!askDivider){
         main.appendChild(part("Custom questions", "asked of whichever stages you ran them against"));
         askDivider = true;
+      }
+      main.appendChild(card);
+    }
+  }
+
+  // ---- text searches (trainspotting search) ----
+  // Lookups, not sample estimates: the datasets-server word index matched these
+  // rows over the whole mix, and the CLI re-read each for the verbatim phrase.
+  // There is no committed-context join here — search hits are whichever rows
+  // matched, not the sampled ones — so each hit links to its row on HuggingFace.
+  const searchFiles = MANIFEST.filter(f => f.startsWith(model + ".") && f.includes(".search-"));
+  const searchSlugs = {};
+  for (const f of searchFiles){
+    const [, stage, slug] = f.match(/^[^.]+\.([^.]+)\.search-(.+)\.json$/) || [];
+    if (stage) (searchSlugs[slug] ||= []).push([stage, f]);
+  }
+  // What a hit teaches depends on which field holds it; these caption the chips.
+  const WHERE_NOTE = {
+    prompt: "input the model reads",
+    response: "response the model is fit to",
+    chosen: "response the model is pushed toward",
+    rejected: "response the model is pushed away from",
+    rollout: "sampled output, scored by the verifier",
+    verifier: "reward machinery the model never sees",
+  };
+  let searchDivider = false;
+  for (const [slug, files] of Object.entries(searchSlugs)){
+    const stageOrder = m.stages.map(s => s.stage);
+    files.sort((a,b) => stageOrder.indexOf(a[0]) - stageOrder.indexOf(b[0]));
+    // A slug is not a safe identity (see the ask cards); group by the stored query.
+    const buckets = new Map();
+    for (const [stage, f] of files){
+      const d = await getData(f);
+      if (gen !== GEN) return;
+      if (!d) continue;
+      if (!buckets.has(d.query)) buckets.set(d.query, []);
+      buckets.get(d.query).push({stage, d});
+    }
+    for (const [query, rows] of buckets){
+      const card = document.createElement("section");
+      card.className = "card";
+      card.innerHTML = `<h2>“${esc(query)}” — verbatim occurrences</h2>
+        <p class="sub">Every row of each mix containing this phrase (case-insensitive), found through the
+          datasets-server's full-text index and re-read locally for the exact phrase and for which field of
+          the training example holds it. Open a stage to read the matches; each links to its row on HuggingFace.</p>`;
+      for (const {stage, d} of rows){
+        const exact = d.records.filter(r => r.exact);
+        const unchecked = d.records.filter(r => r.unchecked).length;
+        const checkedAll = d.fetched >= d.matches;
+        const det = document.createElement("details");
+        det.className = "langstage";
+        det.style.setProperty("--bar", hueFor(stage));
+        det.innerHTML = `<summary>
+          <i class="sw"></i><b>${esc(stage.toUpperCase())}</b>
+          <span class="ds">— ${esc(d.dataset)}</span>
+          <span class="lsum"><em>${checkedAll ? "" : "≥"}${num(d.exact)}</em>
+            of ${num(d.total_rows)} rows</span>
+          <span class="caret">›</span></summary>`;
+        const body = document.createElement("div");
+        body.className = "langbody";
+        const sub = document.createElement("p");
+        sub.className = "stage-sub";
+        sub.textContent = `${num(d.matches)} rows contain the query's words; `
+          + (checkedAll ? `all were re-read — ${num(d.exact)}` : `the first ${num(d.fetched)} were re-read — ${num(d.exact)} of those`)
+          + ` contain the exact phrase.`
+          + (unchecked ? ` ${unchecked} could not be checked (the server truncated their long fields).` : "")
+          + (d.partial_index ? " The server indexed only part of this dataset, so a zero here is not an absence." : "");
+        body.appendChild(sub);
+        // Where the phrase comes from, when the mix says: the fetched rows carry
+        // their source labels, so a needle usually resolves to a named source.
+        const srcParts = Object.entries(d.sources || {}).flatMap(([col, counts]) =>
+          Object.entries(counts).slice(0, 4).map(([v, k]) => `${v} (${num(k)})`));
+        if (exact.length && srcParts.length){
+          const p = document.createElement("p");
+          p.className = "stage-sub";
+          p.textContent = "sources: " + srcParts.join(", ");
+          body.appendChild(p);
+        }
+        if (!exact.length){
+          const p = document.createElement("p");
+          p.className = "note";
+          p.textContent = d.matches
+            ? "None of the re-read rows contains the exact phrase — the index matched the words scattered across the example."
+            : "No row of this mix contains all the query's words.";
+          body.appendChild(p);
+        }
+        for (const r of exact){
+          const item = document.createElement("div");
+          item.className = "doc";
+          const tags = r.where.map(w =>
+            `<span class="prov">${esc(w)}${WHERE_NOTE[w] ? " — " + WHERE_NOTE[w] : ""}</span>`);
+          for (const v of Object.values(r.sources || {})) tags.push(`<span>${esc(String(v))}</span>`);
+          const url = `https://huggingface.co/datasets/${escAttr(d.dataset)}/viewer/default/train?p=${Math.floor(r.row/100)}&row=${r.row}`;
+          item.innerHTML = `<div class="doctags">${tags.join("")}</div>
+            ${r.snippets.map(sn => `<div class="snippet">${esc(sn).replace(/«([^»]*)»/g, "<mark>$1</mark>")}</div>`).join("")}
+            <a class="shard" href="${url}" target="_blank" rel="noopener">row ${num(r.row)} on HuggingFace ›</a>`;
+          body.appendChild(item);
+        }
+        det.appendChild(body);
+        card.appendChild(det);
+      }
+      if (!searchDivider){
+        main.appendChild(part("Text searches", "every training example containing a phrase — trainspotting search"));
+        searchDivider = true;
       }
       main.appendChild(card);
     }

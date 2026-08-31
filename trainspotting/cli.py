@@ -5,7 +5,7 @@ import re
 import sys
 from pathlib import Path
 
-from . import classify, context, extract, hf, languages, pretrain, registry
+from . import classify, context, extract, hf, languages, pretrain, registry, search
 
 RESULTS = Path(__file__).resolve().parent.parent / "results"
 # The committed half of the bulk artifacts: gitignored under results/, shipped
@@ -355,10 +355,105 @@ def cmd_classify(args):
     _label_post_training(args)
 
 
+def cmd_search(args):
+    """Find every post-training example whose text contains a phrase.
+
+    The other commands estimate shares from a sample; this one looks the rows
+    up, because behavior attribution ("where did the model learn to say it's
+    ChatGPT?") is about a rare needle a 300-row sample would never draw. The
+    datasets-server's index gives the exact number of rows containing the
+    query's words; each of those rows is then re-read locally for the exact
+    phrase and for *where* it sits — a phrase in an SFT response is fit toward,
+    in a DPO rejected response it is pushed away from. No model is called.
+    """
+    slug = _slug(args)
+    for s in _select_stages(args, registry.post_training_stages, "post-training"):
+        ds = s["hf_dataset"]
+        total = hf.num_rows(ds)
+        print(f"searching {ds} ({total:,} rows) ...", file=sys.stderr)
+        rows: list[tuple[int, dict, list]] = []
+        matches = None
+        partial = False
+        while matches is None or len(rows) < min(matches, args.max_hits):
+            j = hf.search_rows(ds, args.query, offset=len(rows))
+            matches = j["num_rows_total"]
+            partial = bool(j.get("partial"))
+            if not j["rows"]:
+                break
+            rows.extend((r["row_idx"], r["row"], r.get("truncated_cells") or []) for r in j["rows"])
+        rows = rows[: args.max_hits]
+
+        records = []
+        for row_idx, row, truncated in rows:
+            m = search.find_matches(row, s["stage"], args.query)
+            rec = {"row": row_idx, **m}
+            src = {c: row[c] for c in s["source_columns"] if row.get(c)}
+            if src:
+                rec["sources"] = src
+            # A truncated cell can hide the phrase, so "not exact" on such a row
+            # means "couldn't check", not "the words are scattered".
+            if truncated and not m["exact"]:
+                rec["unchecked"] = True
+            records.append(rec)
+
+        exact = [r for r in records if r["exact"]]
+        where: dict[str, int] = {}
+        for r in exact:
+            for w in r["where"]:
+                where[w] = where.get(w, 0) + 1
+        where = dict(sorted(where.items(), key=lambda kv: -kv[1]))
+        # Which sources the phrase comes from, counted over the rows that
+        # verifiably contain it — exact if every match was fetched.
+        sources: dict[str, dict[str, int]] = {}
+        for r in exact:
+            for col, val in (r.get("sources") or {}).items():
+                col_counts = sources.setdefault(col, {})
+                col_counts[val] = col_counts.get(val, 0) + 1
+        sources = {c: dict(sorted(v.items(), key=lambda kv: -kv[1])) for c, v in sources.items()}
+
+        path = _write_json(
+            RESULTS / f"{args.model}.{s['stage']}.search-{slug}.json",
+            {
+                "query": args.query,
+                "dataset": ds,
+                "stage": s["stage"],
+                "total_rows": total,
+                # Rows the server's word index matched — exact over the whole
+                # dataset. Everything below it is computed from the fetched rows.
+                "matches": matches,
+                # True when the server indexed only part of the dataset, which
+                # turns "0 matches" from an answer into "not in the indexed part".
+                # False for every current Dolci mix; stored so a dataset that
+                # someday trips the server's index size limit cannot lie here.
+                "partial_index": partial,
+                "fetched": len(records),
+                "exact": len(exact),
+                "where": where,
+                "sources": sources,
+                "records": records,
+            },
+        )
+        scope = "" if len(records) >= matches else f" of the first {len(records)} fetched"
+        whered = ", ".join(f"{w} {k}" for w, k in where.items())
+        print(
+            f"{s['stage']}: {matches:,} of {total:,} rows contain the words;"
+            f" {len(exact)}{scope} contain the exact phrase"
+            + (f" ({whered})" if whered else "")
+            + (" — WARNING: index covers only part of this dataset" if partial else "")
+            + f" -> {path}",
+            file=sys.stderr,
+        )
+
+
+def _slug(args) -> str:
+    """One short name ties a question's result files together across stages."""
+    text = getattr(args, "question", None) or args.query
+    return args.slug or re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60]
+
+
 def cmd_ask(args):
     """Score sampled prompts from every post-training stage against a free-form question."""
-    # One short name ties a question's post-training and pretraining files together.
-    slug = args.slug or re.sub(r"[^a-z0-9]+", "-", args.question.lower()).strip("-")[:60]
+    slug = _slug(args)
     print(f"question: {args.question}\n", file=sys.stderr)
     if args.pretrain:
         _warn_missing_pretrain_samples(args)
@@ -637,6 +732,19 @@ def main():
         help="also score pretraining documents sampled by `trainspotting pretrain`",
     )
     p.set_defaults(fn=cmd_ask)
+
+    p = sub.add_parser("search", help="find every post-training example containing a phrase (exact counts, no API key)")
+    p.add_argument("model")
+    p.add_argument("query", help="phrase to look for, e.g. \"I am ChatGPT\"")
+    p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
+    p.add_argument(
+        "--max-hits",
+        type=_positive_int,
+        default=300,
+        help="matched rows fetched and checked for the exact phrase, per stage",
+    )
+    p.add_argument("--slug", help="short name for the result files (default: derived from the query)")
+    p.set_defaults(fn=cmd_search)
 
     p = sub.add_parser("pretrain", help="sample documents from the Dolma 3 pretraining shards")
     p.add_argument("model")
