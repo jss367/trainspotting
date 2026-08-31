@@ -294,6 +294,13 @@ is the plain tie: equal rates are reported as equal rather than resolved by the
 sort. A source's own produce-side count is a union in the same way, so it prints
 as `40–60 of its 1,000 rows` where its groups can overlap.
 
+Every comparison drawn from a bounded count runs against the end that makes it
+hold, or is not drawn. The advantage over the runner-up is the leader's floor
+over the runner-up's ceiling and reads "at least 8.7×", and where that quotient
+falls below one there is no advantage to report. A source is called the largest
+contributor only when its floor clears every other source's ceiling; otherwise
+the line says no largest is established and names the biggest counted floor.
+
 Where a source's share rests on that interval, both tests run against the end
 that makes them hold: the lift is the source's floor over the stage's ceiling,
 so it reads "at least 5×" rather than "5×" and collapses to the plain figure

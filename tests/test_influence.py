@@ -938,3 +938,84 @@ def test_an_open_source_interval_prints_both_ends():
     assert (src["produced_hits"], src["produced_hits_hi"]) == (40, 60)
     text = " ".join(influence.render(t, "olmo-3-7b-think"))
     assert "40–60 of its 1,000 rows" in text
+
+
+# --- a ratio between bounded rates is a bound ------------------------------
+
+
+def test_the_advantage_is_the_multiple_the_counts_guarantee():
+    # Leader 200–300 of 1,000 (20–30%), runner-up 100–250 of 1,000 (10–25%).
+    # Two floors read 2.0×; the guaranteed multiple is 20/25 < 1, so there is
+    # no advantage to report and the overlap sentence covers the pair.
+    runs = [
+        run("rlvr", hits=400, rows=1_000,
+            groups={"prompt": 200, "response": 200, "reference": 100}),
+        run("dpo", hits=300, rows=1_000,
+            groups={"prompt": 200, "response": 100, "reference": 150}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["produced"] == (200, 300) and t["runner_up"]["produced"] == (150, 250)
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "Highest produce-side rate" not in text
+    assert "do not settle the order between them" in text
+
+
+def test_a_guaranteed_advantage_says_at_least():
+    runs = [
+        run("rlvr", hits=400, rows=100_000,
+            groups={"prompt": 100, "response": 300, "reference": 200}),
+        run("dpo", hits=10, rows=100_000, groups={"prompt": 0, "response": 10}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["produced"] == (300, 400) and t["runner_up"]["produced"] == (10, 10)
+    # 300/400 against an exact 10: guaranteed at least 30×, not the 30× two
+    # floors would read by coincidence — the wording is what changes.
+    assert "at least 30.0× dpo's" in " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+def test_two_settled_intervals_state_the_multiple_plainly():
+    runs = [
+        run("rlvr", hits=100, rows=100_000, groups={"prompt": 0, "response": 100}),
+        run("dpo", hits=10, rows=100_000, groups={"prompt": 0, "response": 10}),
+    ]
+    text = " ".join(influence.render(influence.compare(runs, THINK), "olmo-3-7b-think"))
+    assert "10.0× dpo's" in text and "at least 10.0×" not in text
+
+
+# --- the largest contributor, when the counts establish one ---------------
+
+
+def test_a_source_is_only_called_largest_when_its_floor_clears_the_rest():
+    # A is exactly 20; B is 15–30. Picking A by the low ends is the best
+    # available reading and does not establish that A is the larger.
+    sources = [
+        {"name": "a", "hits": 20, "produced_hits": 20, "produced_hits_hi": 20},
+        {"name": "b", "hits": 30, "produced_hits": 15, "produced_hits_hi": 30},
+    ]
+    top, biggest = influence._largest(sources, "produced")
+    assert top["name"] == "a" and not biggest
+
+
+def test_a_floor_above_every_other_ceiling_is_the_largest():
+    sources = [
+        {"name": "a", "hits": 40, "produced_hits": 40, "produced_hits_hi": 40},
+        {"name": "b", "hits": 30, "produced_hits": 15, "produced_hits_hi": 30},
+    ]
+    top, biggest = influence._largest(sources, "produced")
+    assert top["name"] == "a" and biggest
+
+
+def test_the_unsettled_case_is_worded_as_a_floor_not_an_ordering():
+    # `a` is exactly 20 produce-side rows; `b` is 15–30. Neither is established
+    # as the larger, and both are too thin against their own row counts to be a
+    # concentration, so the fallback line has to describe the pick honestly.
+    runs = [run("rlvr", hits=50, rows=100_000,
+                groups={"prompt": 15, "response": 35, "reference": 35},
+                sources={"a": 20, "b": 30},
+                totals={"a": 100_000, "b": 100_000},
+                by_source_group={"a": {"prompt": 0, "response": 20, "reference": 20},
+                                 "b": {"prompt": 15, "response": 15, "reference": 15}})]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["concentration"] is None
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "no single source is established as the largest" in text

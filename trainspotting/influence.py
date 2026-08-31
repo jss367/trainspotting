@@ -476,6 +476,22 @@ def _group_line(r: dict) -> str:
     return " · ".join(parts)
 
 
+def _largest(sources: list[dict], side: str) -> tuple[dict, bool]:
+    """The biggest contributor and whether the counts establish that it is.
+
+    On the produce side each source's count is a union of its own, so picking by
+    the low ends orders intervals that may not be ordered: an exact 20 beats a
+    15–30 on that reading and could be the smaller of the two. The pick stands —
+    it is the best available — but it is only called the largest when its floor
+    clears every other source's ceiling.
+    """
+    lo = "hits" if side != "produced" else "produced_hits"
+    hi = "hits" if side != "produced" else "produced_hits_hi"
+    top = max(sources, key=lambda s: s[lo] or 0)
+    beaten = all((s[hi] or 0) <= (top[lo] or 0) for s in sources if s is not top)
+    return top, beaten
+
+
 def _source_count(src: dict, side: str) -> str:
     """A source's matching rows. On the produce side that is a union of its own,
     so a source matching in both groups is an interval like the stage is."""
@@ -526,14 +542,18 @@ def _stage_lines(r: dict) -> list[str]:
                        f"its {src['rows']:,} rows, {_source_rate(src, side)} — {least}"
                        f"{src[lk]:.0f}× the stage's own rate.")
         elif r["sources"]:
-            top = max(r["sources"], key=lambda x: x[hk] or 0)
+            top, biggest = _largest(r["sources"], side)
             stage_rate = _span(r["produced_rate"], r["produced_rate_hi"]) if side == "produced" \
                 else _pct(r["rate"])
             where = (f"{_source_count(top, side)} of its {top['rows']:,} rows, "
                      f"{_source_rate(top, side)}"
                      if top["rows"] and top[hk] is not None else f"{top['hits']:,} matching rows")
-            out.append(f"  - no {what} concentration: the largest contributor `{top['name']}` "
-                       f"holds {where}, against {stage_rate} for the stage.")
+            which = ("the largest contributor" if biggest else
+                     "no single source is established as the largest, and `%s` has the biggest "
+                     "counted floor — it" % top["name"])
+            named = f"`{top['name']}` " if biggest else ""
+            out.append(f"  - no {what} concentration: {which} {named}holds {where}, against "
+                       f"{stage_rate} for the stage.")
     if r["partial"]:
         out.append("  - the server converted only part of this repo, so the count is a lower "
                    "bound and the rate is over the converted part alone.")
@@ -658,10 +678,17 @@ def _verdict(t: dict) -> list[str]:
 
 def _tail(t, best, other, key, measure, line):
     """The part of a verdict that is the same however the leader was described."""
-    if other and other[key] and best[key] and best[key] > other[key]:
-        ratio = best[key] / other[key]
-        line.append(f"Highest {measure} of the {len(t['ranked'])} stages with any: {ratio:.1f}× "
-                    f"{other['stage']}'s.")
+    # The leader's floor over the runner-up's ceiling: the multiple the counts
+    # guarantee. Dividing the two floors states a ratio the counts do not have —
+    # 20–30% against 10–25% prints 2.0× and could be below 1. Where that
+    # quotient drops under 1 there is no multiple to report, and the pair is
+    # already in `contenders`, so the overlap sentence covers it.
+    ceiling = _ceiling(other, t["basis"]) if other else 0
+    if other and ceiling and best[key] and best[key] / ceiling > 1:
+        ratio = best[key] / ceiling
+        exact = best[key] == _ceiling(best, t["basis"]) and other[key] == ceiling
+        line.append(f"Highest {measure} of the {len(t['ranked'])} stages with any: "
+                    f"{'' if exact else 'at least '}{ratio:.1f}× {other['stage']}'s.")
         if best["hits"] < other["hits"]:
             line.append(f"The raw counts rank them the other way — {other['stage']} holds "
                         f"{other['hits']:,} matching rows to {best['stage']}'s {best['hits']:,} — "
