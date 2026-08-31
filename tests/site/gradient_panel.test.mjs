@@ -261,6 +261,28 @@ ok(sysOut.includes("the conversation both answers continue"),
 ok(sysOut.includes("You are terse."),
   "and its text appears, since prompt extraction keeps only the first user message");
 
+// `prompt_full` stands for the opening user turn and no other, so a later turn
+// that repeats it still has to be shown — with its own role and position.
+const echoed = {prompt_full: {text: "say it twice", chars: 12}, row: 10, meta: {},
+  chosen: {model: "big", turns: [anyTurn("user", "say it twice"), anyTurn("system", "say it"),
+                                 anyTurn("user", "go"), anyTurn("assistant", "A " + LONG)]},
+  rejected: {model: "small", turns: [anyTurn("user", "say it twice"), anyTurn("system", "say it"),
+                                     anyTurn("user", "go"), anyTurn("assistant", "B " + LONG)]}};
+ok(P.renderDPO(echoed, "ds").includes("the conversation both answers continue"),
+  "a shared turn whose text reads as part of the prompt is still shown");
+
+// A side with no stored thinking span may be carrying its reasoning in a field
+// the record does not keep, which is not the same as not reasoning.
+const hiddenReasoning = {prompt_full: {text: "q", chars: 1}, row: 11, meta: {},
+  chosen: {model: "big", turns: [convo[0], turn("the answer", {reasoning: "weighing it up", raw: false})]},
+  rejected: {model: "small", turns: [convo[0],
+    {role: "assistant", text: "another answer", chars: 14, omitted: ["reasoning_content"]}]}};
+const hiddenOut = P.gradientSection(hiddenReasoning, 1).replace(/\s+/g, " ");
+ok(hiddenOut.includes("carries its reasoning in a field this record does not keep"),
+  "a side whose reasoning is stored elsewhere is not called reasoning-free");
+ok(!hiddenOut.includes("with nothing opposite it"),
+  "and the span is not described as facing nothing");
+
 // A thinking span on one side only is described as such.
 const oneSided = {prompt_full: {text: "q", chars: 1}, row: 9, meta: {},
   chosen: {model: "big", turns: [convo[0], turn("the answer", {reasoning: "weighing it up", raw: false})]},

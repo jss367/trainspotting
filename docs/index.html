@@ -1021,6 +1021,22 @@ function rawResponseStored(side, shared = 0){
     turns[0].chars === clen(turns[0].text);
 }
 
+// What to say about a pair where the thinking spans are not symmetric. A side
+// with no stored span has not necessarily reasoned less: it can be carrying its
+// reasoning in a field this record does not keep, which is a different claim.
+function thinkingNote(rec, reason, shared){
+  if (reason.a && reason.b) return "Both responses carry a thinking span, and DPO scores those tokens too.";
+  const has = reason.a ? "chosen" : "rejected", other = reason.a ? "rejected" : "chosen";
+  const hidden = candidateTurns(rec[other], shared)
+    .some(t => (t.omitted || []).includes("reasoning_content"));
+  if (hidden) return `Only the ${has} response's thinking span is stored here. The ${other} one carries
+    its reasoning in a field this record does not keep, so what faces this span cannot be read from it —
+    not that there is nothing there.`;
+  return `Only the ${has} response carries a thinking span — the other answers with no visible reasoning
+    at all — and DPO scores those tokens too, so the whole span is text one side is pushed
+    ${reason.a ? "toward" : "away from"} with nothing opposite it.`;
+}
+
 function gradientSection(rec, shared = 0){
   const reason = {a: sideText(rec.chosen, "reasoning", shared),
                   b: sideText(rec.rejected, "reasoning", shared)};
@@ -1087,11 +1103,7 @@ update ∝ σ(−margin) · [ ∇ log π(chosen) − ∇ log π(rejected) ]</div
     ${diffPanel(answers)}
     <p class="kv">${sharedNote(answers, rec, deadPair, demoted)}</p>
     ${thinking ? `<h4>the thinking span${reason.a && reason.b ? "s" : ""}</h4>
-      <p class="kv">${reason.a && reason.b
-        ? "Both responses carry a thinking span, and DPO scores those tokens too."
-        : `Only the ${reason.a ? "chosen" : "rejected"} response carries a thinking span — the other
-           answers with no visible reasoning at all — and DPO scores those tokens too, so the whole span
-           is text one side is pushed ${reason.a ? "toward" : "away from"} with nothing opposite it.`}</p>
+      <p class="kv">${thinkingNote(rec, reason, shared)}</p>
       <details><summary>diff the thinking span${reason.a && reason.b ? "s" : ""}</summary>
         <div style="margin-top:8px">${diffPanel(thinking)}</div></details>` : ""}
     <h4>what this view approximates</h4>
@@ -1121,9 +1133,13 @@ function renderDPO(rec, dataset){
   // shows. Anything else in the shared prefix — a system turn, a tool result, a
   // second user message, an assistant turn — is conversation that would
   // otherwise go unseen: prompt extraction keeps only the first user message, so
-  // there is nowhere else on the page it appears.
-  const shownInPrompt = t => t.text && rec.prompt_full.text.includes(t.text);
-  const sharedHistory = rec.chosen.turns.slice(0, shared).some(t => !shownInPrompt(t));
+  // there is nowhere else on the page it appears. `prompt_full` stands for that
+  // one turn and no other, so the exemption is by position: a later turn that
+  // repeats the opening, or reads as part of it, still has its own role and its
+  // own place in the conversation to show.
+  const isThePrompt = (t, i) => i === 0 && t.role === "user" &&
+    (t.text === rec.prompt_full.text || rec.prompt_full.text.startsWith(t.text));
+  const sharedHistory = rec.chosen.turns.slice(0, shared).some((t, i) => !isThePrompt(t, i));
   const candidateChars = side => candidateTurns(side, shared).reduce((a, t) => a + turnChars(t), 0);
   const maxLen = Math.max(...sides.map(s => candidateChars(s.side)), 1);
   const lens = sides.map(s => {
