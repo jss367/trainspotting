@@ -701,10 +701,21 @@ def cmd_find(args):
     print(f"matched as tokens: {' | '.join(found['tokens'])}")
     print(f"occurrences: {count:,}")
 
-    picks = infinigram.spread_picks(found["segment_by_shard"], args.docs if count else 0)
-    docs = []
+    # Ranks count occurrences, not documents: a phrase repeated within one
+    # document holds several ranks, all resolving to the same doc_ix. Over-draw
+    # 3x and deduplicate while fetching, walking the over-draw spread-first so
+    # backfilling a duplicate keeps the examples spread across the index.
+    picks = infinigram.spread_first(
+        infinigram.spread_picks(found["segment_by_shard"], 3 * args.docs if count else 0)
+    )
+    docs, seen = [], set()
     for s, rank in picks:
+        if len(docs) >= args.docs:
+            break
         doc = infinigram.get_doc(args.index, args.phrase, s, rank, args.maxlen)
+        if doc.get("doc_ix") in seen:
+            continue
+        seen.add(doc.get("doc_ix"))
         prov = infinigram.doc_provenance(doc)
         docs.append(
             {
@@ -720,7 +731,10 @@ def cmd_find(args):
         print(f"\n--- doc {d['doc_ix']} ({d['doc_len']:,} tokens) {where}")
         print(d["snippet"] if not d["blocked"] else "[blocked by the index owner]")
     if count > len(docs):
-        print(f"\n({len(docs)} of {count:,} occurrences shown, spread evenly across the index)")
+        print(
+            f"\n({len(docs)} distinct documents shown out of {count:,} occurrences,"
+            " spread evenly across the index)"
+        )
 
     if args.json:
         slug = re.sub(r"[^a-z0-9]+", "-", args.phrase.lower()).strip("-")[:60]

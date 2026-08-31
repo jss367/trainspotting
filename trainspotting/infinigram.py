@@ -136,6 +136,19 @@ def spread_picks(segment_by_shard: list, k: int) -> list[tuple[int, int]]:
     return picks
 
 
+def spread_first(picks: list, stride: int = 3) -> list:
+    """Reorder an overdrawn pick list so its prefix keeps the even spacing.
+
+    A phrase that repeats inside one document resolves several ranks to the
+    same document, so a caller wanting k distinct documents over-draws by
+    `stride` and deduplicates as it fetches. Walking the over-draw in order
+    would spend the first k picks on the front of the range; taking every
+    `stride`-th pick first reproduces exactly the k-pick spacing, and the
+    in-between picks follow only when a duplicate needs backfilling.
+    """
+    return [p for j in range(stride) for p in picks[j::stride]]
+
+
 def snippet(doc: dict) -> str:
     """The displayed slice of a retrieved document, matches marked with «».
 
