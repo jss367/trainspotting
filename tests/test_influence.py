@@ -1293,3 +1293,30 @@ def test_a_legacy_winner_keeps_its_caveat_in_a_mixed_vintage_trace():
     assert "None of these runs records" not in text
     assert influence.UNRECORDED in text
     assert "so a column it did not open could move it" in text
+
+
+def test_collision_recovery_names_the_renames_that_join_the_trace():
+    # A free slug alone opens a third group: the existing files have to move
+    # with it or the trace stays split.
+    runs = [
+        run("dpo", hits=5, rows=100, groups={"prompt": 5, "response": 0}, slug="identity"),
+        run("rlvr", hits=0, rows=100, groups={"prompt": 0, "response": 0}, slug="identity"),
+    ]
+    t = influence.compare(runs, THINK)
+    t["slug_collides"], t["slug_suggest"] = True, "identity-1"
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "--slug identity-1 --stage sft" in text
+    assert "Move this trace under `identity-1` first" in text
+    # Both stages that already have a file, not just the matching one.
+    assert "olmo-3-7b-think.dpo.grep-identity.json` → " \
+           "`results/olmo-3-7b-think.dpo.grep-identity-1.json" in text
+    assert "olmo-3-7b-think.rlvr.grep-identity.json` → " \
+           "`results/olmo-3-7b-think.rlvr.grep-identity-1.json" in text
+    assert "leaves this one just as incomplete" in text
+
+
+def test_no_rename_instructions_without_a_collision():
+    runs = [run("dpo", hits=5, rows=100, groups={"prompt": 5}, slug="identity")]
+    text = " ".join(influence.render(influence.compare(runs, THINK), "olmo-3-7b-think"))
+    assert "Move this trace under" not in text
+    assert "--slug identity --stage sft" in text

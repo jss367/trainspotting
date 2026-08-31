@@ -379,7 +379,10 @@ write path and pasting the shared one back would overwrite the other search's
 saved stage. Dropping the flag is not enough: two searches differing only in
 `--regex` or `--case-sensitive` share a pattern, and that is what `grep` derives
 a filename from. Collision is judged per slug, so an uncontested one keeps its
-own.
+own. The free slug travels with the renames that make it work: `_grep_traces`
+groups by slug, so scanning the missing stage under a new one without moving the
+existing files just opens a third group. The report names the renames and leaves
+them to the reader rather than rewriting `results/` itself.
 
 What the ranking deliberately does not do is weight the stages against each
 other. Identity behaviour is mostly set after pretraining, so the same rate in

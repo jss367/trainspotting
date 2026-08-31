@@ -149,3 +149,13 @@ def test_an_uncontested_slug_is_not_marked(tmp_path, monkeypatch):
     write(tmp_path, "olmo-3-7b-think", "rlvr", "chatgpt")
     _, _, t = traces(tmp_path, monkeypatch)[0]
     assert not t["slug_collides"]
+
+
+def test_the_section_heading_does_not_claim_exactness_it_may_not_have(tmp_path, monkeypatch, capsys):
+    write(tmp_path, "olmo-3-7b-think", "dpo", "chatgpt", partial=True)
+    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    cli.cmd_report(type("A", (), {"model": "olmo-3-7b-think"})())
+    out = capsys.readouterr().out
+    assert "## String traces\n" in out
+    assert "exact, every row" not in out
+    assert "cover the converted subset alone" in out

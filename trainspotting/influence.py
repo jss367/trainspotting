@@ -607,7 +607,21 @@ def _stage_lines(r: dict, hoisted: bool = False) -> list[str]:
     return out
 
 
-def _gap_lines(t: dict, cmd: str) -> list[str]:
+def _collision_steps(t: dict, model: str) -> list[str]:
+    """Renaming the trace's existing files, which is what makes a rerun join it.
+
+    `_grep_traces` groups by slug, so scanning the missing stage under a free
+    slug would open a third group and leave this one just as incomplete. The
+    files already here have to move with it. The rename is left to the reader
+    rather than done here — a report is not a thing that should quietly rewrite
+    `results/`.
+    """
+    have = [r for r in t["stages"] if r["status"] in (HITS, ZERO, INCONCLUSIVE)]
+    return [f"`results/{model}.{r['stage']}.grep-{t['slug']}.json` → "
+            f"`results/{model}.{r['stage']}.grep-{t['slug_suggest']}.json`" for r in have]
+
+
+def _gap_lines(t: dict, cmd: str, model: str) -> list[str]:
     """The stages with no count, said once each rather than once per stage.
 
     They are the half of the answer that gets dropped: a reader who sees three
@@ -621,10 +635,18 @@ def _gap_lines(t: dict, cmd: str) -> list[str]:
         # rather than a flag repeated into a command that would silently
         # search only the last of them.
         again = f", then the same for {', '.join(stages[1:])}" if len(stages) > 1 else ""
-        note = (f" The slug in that command is not this trace's: `{t['slug']}` names more than "
-                "one search here, and re-running under it would overwrite the other one's "
-                "results, so the suggestion carries a free one."
-                if t.get("slug_collides") and t.get("slug_suggest") else "")
+        note = ""
+        if t.get("slug_collides") and t.get("slug_suggest"):
+            # The free slug alone would open a third group rather than finish
+            # this one, so the rename has to travel with the command.
+            moves = _collision_steps(t, model)
+            note = (f" The slug in that command is not this trace's: `{t['slug']}` names more "
+                    "than one search here, and re-running under it would overwrite the other "
+                    f"one's results. Move this trace under `{t['slug_suggest']}` first — "
+                    + "; ".join(moves) + " — or the new scan lands in a group of its own and "
+                    "leaves this one just as incomplete." if moves else
+                    f" The slug in that command is not this trace's: `{t['slug']}` names more "
+                    "than one search here, so the suggestion carries a free one.")
         out.append(f"- **{', '.join(stages)}** — not searched. That is not a zero: no row of "
                    f"{'these stages' if len(stages) > 1 else 'this stage'} has been "
                    f"read for this pattern (`{cmd} --stage {stages[0]}`{again}).{note}")
@@ -840,7 +862,7 @@ def render(t: dict, model: str, note: bool = False) -> list[str]:
     for r in t["stages"]:
         if r["status"] in (HITS, ZERO, INCONCLUSIVE):
             out += _stage_lines(r, t["coverage_unrecorded"])
-    out += _gap_lines(t, cmd)
+    out += _gap_lines(t, cmd, model)
     if t["coverage_unrecorded"]:
         out.append("- *None of these runs records which sides its mix holds, so none can show it "
                    "read all of them. Every produce-side figure below is a floor, and every "

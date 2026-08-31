@@ -817,7 +817,7 @@ def cmd_report(args):
         print()
 
     traces = _grep_traces(args.model, model)
-    print("\n## String traces (exact, every row)\n")
+    print("\n## String traces\n")
     if not traces:
         print(f"- no `grep` run yet (`trainspotting grep {args.model} \"some string\"`)")
         return
