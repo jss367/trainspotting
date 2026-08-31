@@ -275,6 +275,14 @@ def _label_post_training(args, question=None, slug=None):
         asked_labels, reasons = classify.classify_prompts(
             ask, model=args.classifier, question=question
         )
+        # The datasets-server takes no revision — /rows serves its own build of
+        # whatever the dataset is now — so the stamp can only be the tree the
+        # hub pointed at when the draw started. Read it again now that the slow
+        # part is over: if it moved while this ran, the rows may straddle two
+        # trees, and the file should say so rather than name one of them and
+        # sound certain. Only this path checks, because only this path is slow
+        # enough for the window to matter.
+        moved = hf.dataset_revision(s["hf_dataset"])
         asked = iter(asked_labels)
         # A verifier-settled row is never None, so what stays unlabeled is what
         # the classifier was asked about and did not answer.
@@ -296,6 +304,13 @@ def _label_post_training(args, question=None, slug=None):
             "unlabeled": sum(1 for label in labels if label is None),
             "unlabeled_reasons": reasons,
         }
+        if moved and moved != revision:
+            run["revision_moved_to"] = moved
+            print(
+                f"  note: {s['hf_dataset']} moved from {revision[:7]} to"
+                f" {moved[:7]} while this ran; rows may straddle both",
+                file=sys.stderr,
+            )
         if question is None:
             records = []
             for p, lab, f in zip(prompts, labels, fixed):

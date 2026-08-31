@@ -100,6 +100,13 @@ Boilerplate, navigation chrome, link dumps, and near-empty pages are "no".
 Reply with ONLY a JSON array: [{{"i": <index>, "label": "yes" or "no"}}, ...] covering every index you were given."""
 
 
+# HTTP statuses a single prompt can plausibly cause: the request was malformed
+# or too large for this batch. Everything else — auth, quota, rate limits,
+# overload, server errors — is a property of the run, and re-asking one prompt
+# at a time would only multiply it.
+PER_PROMPT_STATUSES = {400, 413, 422}
+
+
 def build_system(question: str | None = None, system: str | None = None) -> str:
     """The exact system prompt a run will use.
 
@@ -154,8 +161,13 @@ def classify_prompts(
         for start in range(0, len(prompts), batch_size)
     ]
 
-    def judge(items: list[str]) -> tuple[dict[int, str], str | None]:
-        """(labels by position within `items`, why any are missing)."""
+    def judge(items: list[str]) -> tuple[dict[int, str], str | None, bool]:
+        """(labels by position within `items`, why any are missing, retry singly?).
+
+        The third value says whether one prompt in the batch could plausibly be
+        the cause. A refusal or a skipped index could be; a 401, an exhausted
+        quota, or a persistent 429 could not — those are about the run.
+        """
         numbered = "\n\n".join(
             f"### {i}\n{p[:max_chars]}" for i, p in enumerate(items)
         )
@@ -170,33 +182,37 @@ def classify_prompts(
                 system=system,
                 messages=[{"role": "user", "content": numbered}],
             )
-        except anthropic.APIStatusError:
-            return {}, "error"
+        except anthropic.APIStatusError as exc:
+            return {}, "error", getattr(exc, "status_code", None) in PER_PROMPT_STATUSES
         if resp.stop_reason == "refusal":
-            return {}, "refusal"
+            return {}, "refusal", True
         text = "".join(b.text for b in resp.content if b.type == "text")
         parsed = _parse(text, len(items), valid)
-        return parsed, None if len(parsed) == len(items) else "unparsed"
+        return parsed, None if len(parsed) == len(items) else "unparsed", True
 
     def run(batch):
         start, items = batch
-        parsed, reason = judge(items)
+        parsed, reason, per_prompt = judge(items)
         drops: dict[str, int] = {}
         missing = [i for i in range(len(items)) if i not in parsed]
-        if missing and len(items) > 1:
+        if missing and len(items) > 1 and per_prompt:
             # One prompt can sink the other nineteen: a refusal on a single
             # piece of raw jailbreak text, a 400 on one oversized row, or a
             # reply that skipped an index. Re-ask for the unlabeled ones one at
             # a time, so what is finally lost is the prompt that caused it
             # rather than everything batched beside it.
             for i in missing:
-                one, one_reason = judge([items[i]])
+                one, one_reason, _ = judge([items[i]])
                 if 0 in one:
                     parsed[i] = one[0]
                 else:
                     drops[one_reason] = drops.get(one_reason, 0) + 1
         elif missing:
-            drops[reason] = drops.get(reason, 0) + 1
+            # Either a one-item batch, or a failure no single prompt could have
+            # caused. Fanning out the second kind turns one doomed request into
+            # twenty, across every worker, which delays the failure and deepens
+            # the rate limit that caused it without recovering a single label.
+            drops[reason] = drops.get(reason, 0) + len(missing)
         return start, parsed, drops
 
     labels: list[str | None] = [None] * len(prompts)

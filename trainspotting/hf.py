@@ -91,7 +91,11 @@ def sample_rows_with_index(
     chunk = 10
 
     def draw(pages: int) -> list[int]:
-        return sorted(rng.randrange(max(1, total - chunk)) for _ in range(pages))
+        # Inclusive upper bound. `randrange` stops one short, which left the
+        # last page start unreachable and with it the final rows of the split:
+        # an 11-row split could only ever draw offset 0 and came back
+        # permanently short of its own 11 rows.
+        return sorted(rng.randrange(max(1, total - chunk + 1)) for _ in range(pages))
 
     seen: dict[int, dict] = {}
     offsets = draw((n + chunk - 1) // chunk)
