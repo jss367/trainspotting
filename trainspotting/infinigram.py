@@ -33,6 +33,7 @@ import json
 import time
 
 import requests
+import requests.exceptions
 
 API_URL = "https://api.infini-gram.io/"
 
@@ -92,7 +93,14 @@ def _post(payload: dict, timeout: int = 90) -> dict:
             if "error" in body:
                 raise RuntimeError(f"infini-gram: {body['error']}")
             return body
-        except (requests.ConnectionError, requests.Timeout) as e:
+        except (
+            requests.ConnectionError,
+            requests.Timeout,
+            # A hangup mid-body raises this rather than ConnectionError, and
+            # not at the top level of `requests` — same failure mode
+            # pretrain._get retries for the Hub.
+            requests.exceptions.ChunkedEncodingError,
+        ) as e:
             last = e
             time.sleep(2 * 2**attempt)
     if last:
