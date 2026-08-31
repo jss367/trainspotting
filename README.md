@@ -29,8 +29,10 @@ of depth:
    every row rather than a sample. The five layers above all estimate an
    unconditional rate from 300 prompts; this one answers the question you have
    once you know what you are looking for, which a sample that size cannot: a
-   pattern in 0.1% of a mix is expected to miss it entirely. See
-   [Searching for a string](#searching-for-a-string).
+   pattern in 0.1% of a mix is expected to miss it entirely. Counts are then read
+   across the pipeline as a ranking — which stage most plausibly taught the
+   string, by rate rather than by hits, and which side of the example it is on.
+   See [Searching for a string](#searching-for-a-string).
 
 The pretraining corpora get their own path, because the datasets-server cannot
 sample them: exact composition from the shard listing, readable random documents,
@@ -88,7 +90,8 @@ trainspotting sources olmo-3-7b-instruct --json
 # Sample 300 prompts per stage and label each one with Claude
 trainspotting classify olmo-3-7b-instruct --sample 300
 
-# Combined markdown report with Wilson 95% CIs on the sampled estimates
+# Combined markdown report: sampled rates with Wilson 95% CIs, and every
+# committed string trace ranked by which stage most plausibly taught it
 trainspotting report olmo-3-7b-instruct
 
 # Free-form question: sample each stage and judge every prompt yes/no
@@ -281,6 +284,162 @@ only worth what reading its matches says. Of the 134 matches in
 `Dolci-Think-RL-7B`, 12 are unit-test string literals asserting on
 `'OpenAI ChatGPT'` — which the snippets say and the number does not. The site
 does not render `grep` runs yet.
+
+### Which stage it most plausibly came from
+
+A count on its own is presence. Stacked across a pipeline it is easy to read
+backwards, because a bigger number is not a bigger effect: a stage with ten
+times the rows shows more of any string for that reason alone. So a multi-stage
+`grep` ends with a comparison, and `trainspotting report` prints the same one for
+every committed run:
+
+```
+### `as an AI language model` — where it most plausibly comes from
+
+- dpo  — 61 of 150,000 rows, 0.041% (1 in 2,459).  prompt 46 · response 39 · reference not counted
+  - produce side: 39 rows, 0.026% of the stage.
+  - concentrated in `tulu-3-sft-coconot-regenerated`: 33 of its 790 rows, 4.2% — 103× the stage's own rate.
+- rlvr — 400 of 102,014 rows, 0.39% (1 in 255).  prompt 209 · response 3 · reference 232
+  - produce side: 232–235 rows, 0.23% of the stage.
+  - concentrated in `hamishivi/rlvr_general_mix`: 387 of its 20,636 rows, 1.9% — 5× the stage's own rate.
+- sft — not searched. That is not a zero: no row of this stage has been read for
+  this pattern.
+- pretrain, midtrain, long-context — out of reach for this layer, which is also
+  not a zero.
+
+Most plausibly rlvr. 387 of the 20,636 `hamishivi/rlvr_general_mix` rows (1.9%,
+5× the stage) hold it, and 232–235 of the stage's matches are on the produce
+side. Highest produce-side rate of the 2 stages with any: 8.7× dpo's.
+```
+
+Three things go into that, and all three are already exact:
+
+**The rate, not the count.** Every stage against its own row count, and every
+source against its own. Inside a stage the same correction applies twice over:
+`llm_judged` holds 267 of Instruct-DPO's 521 `ChatGPT` matches, a clear majority
+— and at 124,980 rows it holds them at 0.21% against 0.20% for the mix, so it is
+the biggest source rather than the origin. A source is called a concentration
+only when it holds at least a tenth of the matches at twice the stage's rate;
+otherwise the line says the matches are spread, which is the more common answer
+and the one a top-N list hides.
+
+**Which side matched.** A string in a prompt is text the model was trained to
+read; a string in the response a stage fits, or in the reference answer a
+verifier scores rollouts against, is text the objective pushes it to emit. When
+the question is why a model *says* something, only the second is evidence, so
+the ranking runs on the produce-side rate and falls back to the overall rate
+only when no run read a produce-side column. The source attribution follows the
+same cut: under the produce-side basis the concentration is computed over
+produce-side rows per source, because a source that supplied only prompts
+supplied none of the evidence the ranking ran on. `by_group` counts rows per
+group and one row can match two, so the union is reported as the interval it is
+(232–235) rather than as the sum — bounded from below by the largest group and
+by the rows that matched no prompt, which settles it outright where nothing
+matched a prompt —  — and the interval is carried into the ranking
+rather than collapsed to its low end. Two stages whose intervals overlap, or
+touch at a single value, are not ordered by these counts, and the verdict says
+so instead of picking one — which on the row basis, where every rate is a point,
+is the plain tie: equal rates are reported as equal rather than resolved by the
+sort. A source's own produce-side count is a union in the same way, so it prints
+as `40–60 of its 1,000 rows` where its groups can overlap.
+
+Every comparison drawn from a bounded count runs against the end that makes it
+hold, or is not drawn. The advantage over the runner-up is the leader's floor
+over the runner-up's ceiling and reads "at least 8.7×", and where that quotient
+falls below one there is no advantage to report. A source is called the largest
+contributor only when its floor clears every other source's ceiling; otherwise
+the line says no largest is established and names the biggest counted floor. The
+runner-up in the advantage clause is the stage with the highest ceiling rather
+than the second-highest floor, because that is the one that binds how big a lead
+the counts guarantee — and where that runner-up did not read all its own columns
+there is no bound to state, so the multiple is dropped rather than printed
+alongside a caveat that contradicts it.
+
+A source concentration is measured over the columns its run opened, so a run
+that read `response` where the mix also has `reference` gets that said alongside
+the number — and the same on the row basis, where a `--field prompt` run's
+concentration is over prompts alone. Where every run in a trace is limited the same way — as
+every committed one is, having been written before result files recorded the
+sides their mix holds — it is said once for the trace instead of under each
+stage and again in the verdict.
+
+Where a source's share rests on that interval, both tests run against the end
+that makes them hold: the lift is the source's floor over the stage's ceiling,
+so it reads "at least 5×" rather than "5×" and collapses to the plain figure
+when the interval does, and the share floor is a share of the ceiling, since a
+source only supplies a tenth of the evidence if it does so against the most the
+evidence could be. Where every stage with produce-side evidence is excluded from
+the ranking, the verdict elects nobody rather than the comparable stage that
+measured zero there.
+
+A run that did not read everything its own mix has on the side being ranked can
+only have undercounted, so its rate is a floor rather than a figure. That is
+harmless where it wins — a floor above the leader beats the leader — and unsound
+where it loses, because the columns nobody opened could put it on top. Losing
+stages in that position are named, and the fallback to the overall rate says
+"nothing matched on the produce side of the runs that read one" rather than
+"no stage matched on the produce side" whenever some run never read one.
+
+**What was not looked at.** A stage scanned and found empty, a stage nobody
+scanned, a stage this layer cannot reach, and a stage scanned but not all the
+way through are four different answers, and flattening them into "no hits" is
+what turns *we did not look* into *it is not there*. They are named apart.
+
+A zero counts for the whole stage only when the whole stage was read. Three
+things break that, and each is printed rather than assumed: the datasets-server
+converted only part of the repo, `--field` narrowed the search to some of the
+sides the mix has, or a text column the layer does not recognise went
+unsearched. Any of them makes the result inconclusive — nothing matched *in what
+was read* — and keeps it out of the stage-wide claim. A run written before result files
+recorded which sides the mix has usually cannot demonstrate it read all of them,
+so it lands there too — unless its `fields` already holds every side this layer
+maps, which no narrowing could have produced and which the older RLVR sweeps
+do. A pattern absent from every stage read end to end does get
+said outright: 0 of N rows, exact over all of them, so a model that produces the
+string anyway did not take it from those stages. What that points at depends on
+what is left. While a reachable stage sits unscanned the ordinary explanation is
+that the string is in it, and the verdict says so first; only once every
+reachable stage has been read does it reach for a stage out of reach, text
+distilled from another model rather than carried across literally, or
+generalisation.
+
+The same rule governs the ranking, because a rate only ranks against another
+rate when both measure the same thing over the same population. A stage whose
+run never opened a produce-side column has no produce-side rate; a stage scanned
+over a partial conversion has a rate over the converted subset, which is a prefix
+rather than a sample. Both keep their counts on the page and are named as out of
+the ranking, rather than sorted to the bottom of it where a gap in the
+measurement reads as a low score. Where that empties the ranking, the verdict
+reports the matches and says no comparison is available — matches never turn
+into a zero because nothing could be ranked.
+
+A "no stage matched on the produce side" reading needs every reachable stage
+read, not just every stage with a result file; short of that it is scoped to the
+stages read and names the ones that were not.
+
+Runs are grouped by their `--slug`, which is a filename rather than a promise:
+rerun one stage under the same slug with a refined regex and the directory holds
+two searches with one name. The group key is the slug *and* the pattern and
+matching flags, so those render separately and `compare()` raises rather than
+ranking one search's counts against another's under whichever pattern sorted
+first. The suggested rerun commands then carry a free slug rather
+than the contested one, because `results/<model>.<stage>.grep-<slug>.json` is a
+write path and pasting the shared one back would overwrite the other search's
+saved stage. Dropping the flag is not enough: two searches differing only in
+`--regex` or `--case-sensitive` share a pattern, and that is what `grep` derives
+a filename from. Collision is judged per slug, so an uncontested one keeps its
+own. The free slug travels with the renames that make it work: `_grep_traces`
+groups by slug, so scanning the missing stage under a new one without moving the
+existing files just opens a third group. The report names the renames and leaves
+them to the reader rather than rewriting `results/` itself; the filename is then
+the authority for a run's slug, since `--slug` is what decides the filename and a
+moved file still carries the contested one in its payload.
+
+What the ranking deliberately does not do is weight the stages against each
+other. Identity behaviour is mostly set after pretraining, so the same rate in
+RLVR and in Dolma 3 are not the same evidence — but by how much is not something
+these counts measure, and folding a guess into a score would bury it. It is
+printed as a caveat and the rates stay comparable on their own terms.
 
 ### The same question on the site
 
@@ -515,7 +674,20 @@ The offline suite covers the pure code: the clustered Wilson interval and its
 degenerate branches, language detection on mixed-language prompts, the
 classifier's reply parser, and prompt extraction against one saved row per
 registry stage (`tests/fixtures/rows/`, re-captured by
-`scripts/capture_row_fixtures.py`).
+`scripts/capture_row_fixtures.py`). `tests/test_influence.py` pins the ways a
+set of counts turns into a wrong story: ranking by hits rather than by rate,
+adding overlapping group counts as if they were a union, ordering two stages
+whose intervals overlap, naming the largest source as the origin when it holds
+the mix rate, crediting a prompt-only source for produce-side evidence, ranking
+an unread produce side or a partial conversion's subset rate against a stage
+rate, reporting a zero for a stage that matched but could not be ranked, reading
+"nothing matched" as a zero when the scan was narrowed, incomplete, or cannot
+show what it covered, and reaching past an unscanned stage for a more
+interesting explanation of a zero. The suggested rerun commands are built with
+shell quoting, which is also pinned: these patterns are regexes, and one holding
+a `$` or a backtick would otherwise run something else when pasted.
+`tests/test_report_traces.py` covers the grouping the report does before any of
+that: one search's stages together, two searches under one slug apart.
 
 `grep` is covered twice over. Its column-to-field mapping runs against one saved
 Parquet schema per stage (`tests/fixtures/schemas/`, re-captured by
@@ -544,6 +716,12 @@ quietly labels nothing, or a string search that quietly counts less.
   published with the dataset, so those rows are still labeled from the prompt
   alone. The `sources` layer's reward-type breakdown and the `context` layer's
   verifier view are the complement.
+- The stage ranking is evidence about where a string is, and only that. It does
+  not weight the stages against each other, so a rate in RLVR and the same rate
+  in pretraining rank equal even though the late one generally moves behaviour
+  more; and a pattern present in a stage is not a demonstration that any
+  particular behaviour came from it. For "did this exact document train the
+  model", use OLMoTrace.
 - `context` names each RL mix's verifier by matching its `dataset_source`
   against known mixes (math answer match, code unit tests, constraint checker,
   LLM judge). The raw source tag travels with every record, so the inference is

@@ -84,6 +84,24 @@ def test_narrowing_fields_narrows_what_is_paid_for():
     assert ("outputs", None) in all_leaves and ("outputs", None) not in leaves
 
 
+@pytest.mark.parametrize(("model_name", "stage"), STAGES, ids=STAGE_IDS)
+def test_the_groups_a_mix_has_are_a_superset_of_the_ones_a_run_reads(model_name, stage):
+    """What a result file records as `available_fields`, against what it searched.
+
+    The report reads the gap between the two: a blank response count means
+    `--field` narrowed the search where the mix has the column, and means the
+    mix has no such column where it does not. That only holds if the unnarrowed
+    call is a superset, so an empty `--field prompt` is never mistaken for a
+    schema that lacks a response side.
+    """
+    schema = schema_fixture(model_name, stage["stage"])["schema"]
+    available, _, _ = grep.text_fields(schema)
+    for narrow in (["prompt"], ["response"], ["reference"], None):
+        exprs, _, _ = grep.text_fields(schema, narrow)
+        assert set(exprs) <= set(available)
+    assert "prompt" in available
+
+
 def test_reserved_word_columns_are_quoted():
     """Dolci RL mixes have a column called `constraint`, which DuckDB reserves."""
     exprs, _, _ = grep.text_fields({"constraint": "VARCHAR"})

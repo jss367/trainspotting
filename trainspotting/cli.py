@@ -14,6 +14,7 @@ from . import (
     grep,
     hf,
     infinigram,
+    influence,
     languages,
     pretrain,
     registry,
@@ -775,6 +776,11 @@ def _grep_plan(con, args, stages):
         listing = grep.parquet_listing(s["hf_dataset"])
         schema = grep.schema(con, listing["urls"][0])
         exprs, leaves, unsearched = grep.text_fields(schema, args.field)
+        # What the mix holds, as opposed to what this run reads. A result file
+        # with only the second cannot say whether an absent response count means
+        # `--field` narrowed the search or the mix has no response column, and
+        # those are opposite readings of the same blank. Schema only, no reads.
+        available, _, _ = grep.text_fields(schema, None)
         if not exprs:
             sys.exit(
                 f"{s['stage']}: no text columns for field(s) {', '.join(args.field or grep.GROUPS)}"
@@ -812,6 +818,7 @@ def _grep_plan(con, args, stages):
             "source": source,
             "source_column": source_column,
             "unsearched": unsearched,
+            "available": list(available),
             "rows": grep.total_rows(con, listing["urls"]),
             "bytes": grep.byte_cost(con, listing["urls"], leaves),
         })
@@ -847,6 +854,7 @@ def cmd_grep(args):
         )
 
     slug = args.slug or grep.slugify(args.pattern)
+    written = []
     for p in plan:
         s = p["stage"]
         if p["listing"]["partial"]:
@@ -897,34 +905,44 @@ def cmd_grep(args):
         if len(result["by_source"]) > len(shown):
             rest = len(result["by_source"]) - len(shown)
             print(f"  … and {rest} more source(s), all of them in the result file", file=sys.stderr)
-        path = _write_json(
-            RESULTS / f"{args.target}.{s['stage']}.grep-{slug}.json",
-            {
-                "dataset": s["hf_dataset"],
-                "stage": s["stage"],
-                "pattern": args.pattern,
-                "regex": args.regex,
-                "case_sensitive": args.case_sensitive,
-                "fields": list(p["exprs"]),
-                "source_column": p["source_column"],
-                # `_stamp` carries `generated` and the *dataset* revision every
-                # other result file records. The Parquet-branch revision is a
-                # second, different tree — the server's conversion of that
-                # dataset — so it travels under its own name rather than
-                # overwriting the one the rest of the tool means by "revision".
-                **_stamp(s["hf_dataset"], revision=p["revision"]),
-                "parquet_revision": p["listing"]["revision"],
-                "partial": p["listing"]["partial"],
-                "shards": len(p["listing"]["urls"]),
-                "bytes_read": p["bytes"],
-                "unsearched_columns": p["unsearched"],
-                "total_rows": rows,
-                "rows_by_source": totals,
-                **result,
-            },
-        )
+        payload = {
+            "dataset": s["hf_dataset"],
+            "stage": s["stage"],
+            "pattern": args.pattern,
+            "slug": slug,
+            "regex": args.regex,
+            "case_sensitive": args.case_sensitive,
+            "fields": list(p["exprs"]),
+            "available_fields": p["available"],
+            "source_column": p["source_column"],
+            # `_stamp` carries `generated` and the *dataset* revision every
+            # other result file records. The Parquet-branch revision is a
+            # second, different tree — the server's conversion of that
+            # dataset — so it travels under its own name rather than
+            # overwriting the one the rest of the tool means by "revision".
+            **_stamp(s["hf_dataset"], revision=p["revision"]),
+            "parquet_revision": p["listing"]["revision"],
+            "partial": p["listing"]["partial"],
+            "shards": len(p["listing"]["urls"]),
+            "bytes_read": p["bytes"],
+            "unsearched_columns": p["unsearched"],
+            "total_rows": rows,
+            "rows_by_source": totals,
+            **result,
+        }
+        path = _write_json(RESULTS / f"{args.target}.{s['stage']}.grep-{slug}.json", payload)
+        written.append(payload)
         print(f"  -> {path}", file=sys.stderr)
 
+    # The counts above are one mix each. Read together they are a claim about
+    # where a string most plausibly entered the model, which is a different
+    # question from how many rows hold it — and one that needs the stages
+    # nobody scanned named as such rather than left out.
+    model = registry.resolve(args.target)
+    trace = influence.compare(written, model["stages"])
+    print("", file=sys.stderr)
+    for line in influence.render(trace, args.target, note=True):
+        print(line, file=sys.stderr)
 def _phrase_slug(phrase: str) -> str:
     """A filename-safe slug that two different phrases cannot share.
 
@@ -1063,6 +1081,57 @@ def cmd_find(args):
         print(f"\nwrote {path}", file=sys.stderr)
 
 
+
+def _grep_traces(model_name, model):
+    """Committed `grep` runs for one model, grouped by the search they ran.
+
+    The slug is where the stages of one sweep line up, and it has to be, because
+    a pattern too long to name itself is stored under a `--slug`. But a slug is a
+    filename rather than a promise: rerun one stage with a refined regex under
+    the same slug and the directory holds two different searches with one name.
+    So the group key is the slug *and* the search definition, and a slug that
+    turns out to name more than one gets each rendered separately rather than
+    ranked against each other under whichever pattern sorted first.
+    """
+    groups = {}
+    for path in sorted(RESULTS.glob(f"{model_name}.*.grep-*.json")):
+        slug = path.name.split(".grep-", 1)[1][: -len(".json")]
+        run = json.loads(path.read_text())
+        # The filename wins over the recorded slug, which is only a note of what
+        # was passed. Grouping keys on the filename and `--slug` is what decides
+        # the filename, so a rerun needs the name to land back in this group —
+        # and after a collision rename the payload still carries the contested
+        # slug it was moved away from.
+        run["slug"] = slug
+        key = (slug, run.get("pattern"), bool(run.get("regex")), bool(run.get("case_sensitive")))
+        groups.setdefault(key, []).append(run)
+    # Collision is a property of one slug, not of the directory: marking every
+    # trace because some other slug is contested would strip a valid `--slug`
+    # from commands that need it to land in their own group.
+    per_slug = {}
+    for slug, *_ in groups:
+        per_slug[slug] = per_slug.get(slug, 0) + 1
+    taken = {slug for slug, *_ in groups}
+
+    out = []
+    for key, runs in sorted(groups.items(), key=lambda kv: (kv[0][0], str(kv[0][1]))):
+        slug = key[0]
+        trace = influence.compare(runs, model["stages"])
+        trace["slug_collides"] = per_slug[slug] > 1
+        if trace["slug_collides"]:
+            # Dropping `--slug` is not enough: two searches differing only in
+            # `--regex` or `--case-sensitive` share a pattern, so `grep` would
+            # derive the same filename for both. Hand out a free one instead,
+            # skipping any slug already on disk.
+            n = 1
+            while f"{slug}-{n}" in taken:
+                n += 1
+            trace["slug_suggest"] = f"{slug}-{n}"
+            taken.add(trace["slug_suggest"])
+        out.append((slug, trace["slug_collides"], trace))
+    return out
+
+
 def cmd_report(args):
     target = registry.resolve(args.target)
     kind = "Training-data audit" if target["is_model"] else "Dataset audit"
@@ -1137,6 +1206,33 @@ def cmd_report(args):
         if und:
             print(f"- undetermined: {und / n * 100:.1f}%  ({und}/{n}) — too short, too much code, or too evenly mixed to call")
         print()
+
+    traces = _grep_traces(args.target, target)
+    print("\n## String traces\n")
+    if not traces:
+        print(f"- no `grep` run yet (`trainspotting grep {args.target} \"some string\"`)")
+        return
+    # Only true of stages the server converted in full, so it is said of those
+    # rather than of the section: a partial conversion's `total_rows` is the
+    # converted subset, and claiming otherwise here would contradict the
+    # lower-bound warning printed under the stage itself.
+    partial = sorted({f"{r['stage']} ({t['pattern']!r})"
+                      for _, _, t in traces for r in t["stages"] if r["partial"]})
+    print("Every count below is over all rows of the stage named, not a sample, so a zero is "
+          "the string being absent rather than merely unlikely — and a stage listed as "
+          "unsearched or inconclusive is neither.\n")
+    if partial:
+        print("Except where noted per stage: the datasets-server converted only part of "
+              + ", ".join(partial) + ", so those counts and denominators cover the converted "
+              "subset alone.\n")
+    print(influence.BASIS_NOTE + "\n")
+    if any(split for _, split, _ in traces):
+        print("One slug below names more than one search — a pattern or a matching flag was "
+              "changed without changing the slug. Each is rendered on its own; the stages under "
+              "one heading are the stages that ran that exact search.\n")
+    for _, _, trace in traces:
+        for line in influence.render(trace, args.target):
+            print(line)
 
 
 def main():
