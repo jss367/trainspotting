@@ -223,11 +223,21 @@ counted as response wording on both sides at once.
 That covers most of the data. Of 900 sampled pairs, 328 have a continuation that
 opens identically, but only 72 can be called a shared opening: 231 have thinking
 spans in front that differ, 13 branch from a conversation cut at 4,000
-characters, and 12 have a candidate cut at 4,000 characters. Four pairs, all in
+characters or normalized on the way in, and 12 have a candidate cut at 4,000
+characters. Four pairs, all in
 Dolci-Instruct-DPO, are byte-identical on both sides and therefore carry no
 gradient at all. Beyond the openings, the two responses have very little wording
 in common — a median of 1–3% of the chosen response — so for most pairs the
 update acts on nearly every token of both.
+
+Whether a turn is stored as written is recorded by the exporter, not guessed at
+by the site: `context` writes `raw: true` on a turn whose stored text is the
+content itself. Nothing observable in the record proves that otherwise — a
+thinking span leaves its `<think>` markers and surrounding whitespace behind
+even when the span is empty and no reasoning field remains, and a cut field says
+nothing about what followed it. A context run made before that flag existed
+carries none, so the site withholds every exactness claim on it until it is
+regenerated.
 
 Two smaller things the claim depends on. Character counts are code points, to
 match the `chars` values the exporter writes with Python's `len()`; counting

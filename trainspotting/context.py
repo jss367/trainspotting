@@ -46,10 +46,20 @@ def _turns(messages) -> list[dict]:
     for m in messages or []:
         if not (isinstance(m, dict) and m.get("content")):
             continue
-        reasoning, answer = _split_think(str(m["content"]))
+        content = str(m["content"])
+        reasoning, answer = _split_think(content)
         turn = {"role": m.get("role", "?"), **_text(answer)}
         if reasoning:
             turn["reasoning"] = _text(reasoning)
+        # Whether what is stored is the content itself. Splitting a thinking span
+        # out drops the <think> markers and the whitespace around them, and long
+        # fields are cut, so a turn that went through either can no longer be
+        # compared byte for byte with the sequence the model was scored on. The
+        # absence of a reasoning field does not say this on its own: a turn whose
+        # thinking span was empty loses its markers and keeps no field to show it.
+        # Anything claiming two turns are identical needs this, not a guess.
+        if turn["text"] == content:
+            turn["raw"] = True
         out.append(turn)
     return out
 

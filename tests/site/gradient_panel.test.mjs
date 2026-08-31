@@ -87,8 +87,8 @@ for (const [a, b] of [[CODE_A, CODE_B], ["one two three four", "one two zzz four
 eq(P.opChars([{t: "same", a: "a\u{1F600}b", b: "a\u{1F600}b"}], "same", "a"), 3,
   "an emoji counts as one character, as the exported chars do");
 ok(P.gradientSection({prompt_full: {text: "p", chars: 1}, row: 1, meta: {},
-     chosen: {model: "b", turns: [{role: "assistant", text: "hi \u{1F600} there friend", chars: 17}]},
-     rejected: {model: "s", turns: [{role: "assistant", text: "hi \u{1F600} there pal", chars: 14}]}})
+     chosen: {model: "b", turns: [{role: "assistant", text: "hi \u{1F600} there friend", chars: 17, raw: true}]},
+     rejected: {model: "s", turns: [{role: "assistant", text: "hi \u{1F600} there pal", chars: 14, raw: true}]}})
    .replace(/\s+/g, " ").includes("shared opening <em>"),
   "a pair with an emoji is not mistaken for a truncated one");
 
@@ -98,8 +98,10 @@ eq(P.demotePrefix([{t: "prefix", a: "abc", b: "abc"}, {t: "same", a: "def", b: "
   "demoting an opening merges it into the overlap that follows");
 
 // ------------------------------------------------------------- the claims ---
-const turn = (text, {chars, reasoning} = {}) => ({role: "assistant", text,
-  chars: chars ?? text.length,
+// `raw: true` is what the exporter writes when a turn's stored text is the
+// content itself; pass raw: false to model a turn that was cut or normalized.
+const turn = (text, {chars, reasoning, raw = true} = {}) => ({role: "assistant", text,
+  chars: chars ?? text.length, ...(raw ? {raw: true} : {}),
   ...(reasoning ? {reasoning: {text: reasoning, chars: reasoning.length}} : {})});
 const pair = (c, r) => ({prompt_full: {text: "p", chars: 1}, row: 1, meta: {},
   chosen: {model: "big", turns: [turn(...[].concat(c))]},
@@ -111,18 +113,18 @@ const claimsZero = out => out.includes("gradient of exactly zero");
 let out = panel(pair([LONG + " alpha"], [LONG + " beta"]));
 ok(claimsOpening(out), "an untruncated pair with no thinking span can show an opening");
 
-out = panel(pair([LONG + " alpha", {chars: 9000}], [LONG + " beta"]));
+out = panel(pair([LONG + " alpha", {chars: 9000, raw: false}], [LONG + " beta"]));
 ok(!claimsOpening(out), "a truncated side shows no opening");
 ok(out.includes("one side is cut at 4,000 characters, so whether the responses stay identical"),
   "and names truncation as the reason");
 
-out = panel(pair([LONG + " alpha", {reasoning: "same trace"}],
-                 [LONG + " beta", {reasoning: "same trace"}]));
+out = panel(pair([LONG + " alpha", {reasoning: "same trace", raw: false}],
+                 [LONG + " beta", {reasoning: "same trace", raw: false}]));
 ok(!claimsOpening(out), "thinking spans that match as stored still show no opening");
 ok(out.includes("drops the"), "and name the <think> normalization as the reason");
 
-out = panel(pair([LONG + " alpha", {reasoning: "one trace"}],
-                 [LONG + " beta", {reasoning: "a different trace"}]));
+out = panel(pair([LONG + " alpha", {reasoning: "one trace", raw: false}],
+                 [LONG + " beta", {reasoning: "a different trace", raw: false}]));
 ok(out.includes("two thinking spans in front of these answers differ"),
   "thinking spans that differ are named as the reason");
 
@@ -137,13 +139,22 @@ const WS_B = WS_A.replace(/ /g, "\t");
 ok(P.uniqueChars(P.diffPair(WS_A, WS_B)) === 0, "the diff finds nothing unique in a tab-for-space pair");
 ok(!claimsZero(panel(pair([WS_A], [WS_B]))), "but that pair is not called zero-gradient");
 
-ok(!claimsZero(panel(pair(["identical text", {chars: 9000}], ["identical text", {chars: 9000}]))),
+ok(!claimsZero(panel(pair(["identical text", {chars: 9000, raw: false}],
+                          ["identical text", {chars: 9000, raw: false}]))),
   "nor is an identical-looking pair that was cut");
+
+// The exporter's flag is the only proof the stored text is what was scored.
+// "<think></think>same answer" and "same answer" both arrive with no reasoning
+// field and the same text; only the flag separates them.
+ok(!claimsZero(panel(pair(["same answer", {raw: false}], ["same answer"]))),
+  "a normalized response is not called zero-gradient against an unmodified one");
+ok(!/shared opening <em>/.test(panel(pair([LONG + " alpha", {raw: false}], [LONG + " beta"]))),
+  "nor does a normalized response show a shared opening");
 
 // ------------------------------------------------------ the branch point ---
 // A multi-turn pair shares its leading turns with itself; those are the
 // conversation both candidates answer in, not either candidate.
-const anyTurn = (role, text) => ({role, text, chars: text.length});
+const anyTurn = (role, text) => ({role, text, chars: text.length, raw: true});
 const convo = [
   anyTurn("user", "how do I bake bread?"),
   anyTurn("assistant", "Mix flour, water, salt and yeast, then prove it twice."),
@@ -228,7 +239,7 @@ for (const f of files){
       demotions++;
       let matched = false;
       for (const [k, pat] of [["multi-turn after the branch", "more than one turn a side after it branches"],
-                              ["shared history cut", "the pair branches from is cut at 4,000"],
+                              ["shared history not provable", "was cut or normalized on the way into this record"],
                               ["thinking differs", "two thinking spans in front of these"],
                               ["think markers normalized", "match as stored, but the dataset drops"],
                               ["candidate cut", "whether the responses stay identical past the stored text"]])

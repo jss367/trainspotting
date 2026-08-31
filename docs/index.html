@@ -829,6 +829,12 @@ const uniqueChars = ops => opChars(ops, "chosen", "a") + opChars(ops, "rejected"
 // however far the two lists agree.
 const sameTurn = (x, y) => x.role === y.role && x.text === y.text &&
   (x.reasoning ? x.reasoning.text : null) === (y.reasoning ? y.reasoning.text : null);
+// `raw` is set by the exporter when a turn's stored text is the content itself.
+// Nothing else proves it: a thinking span leaves its markers and surrounding
+// whitespace behind even when the span is empty and no reasoning field remains,
+// and a cut field says nothing about what followed. Absent on older context
+// runs, which therefore make no exactness claims until they are regenerated.
+const rawTurn = t => t.raw === true;
 function sharedTurns(chosen, rejected){
   const a = chosen.turns || [], b = rejected.turns || [];
   let n = 0;
@@ -851,9 +857,10 @@ const sideText = (side, part, shared = 0) => candidateTurns(side, shared)
 const cutTurn = t => t.chars > clen(t.text) ||
   (t.reasoning && t.reasoning.chars > clen(t.reasoning.text));
 const sideCut = (side, shared = 0) => candidateTurns(side, shared).some(cutTurn);
-// A cut in the shared history hides whether the two candidates really do read
-// the same text, so it costs the same claims a cut candidate does.
-const historyCut = (side, shared) => (side.turns || []).slice(0, shared).some(cutTurn);
+// The shared history is only provably shared if every turn in it is stored as
+// written: a turn that was cut or normalized can differ between the two sides in
+// what the record no longer holds, and the branch point would swallow it.
+const historyProvable = (side, shared) => (side.turns || []).slice(0, shared).every(rawTurn);
 
 function diffPanel(ops){
   const sides = [
@@ -925,9 +932,9 @@ function demotionReason(rec, reason, shared = 0){
     return `this pair keeps going for more than one turn a side after it branches, and the panel does not
       model how the scored sequence interleaves with the conversation between them, so it cannot say what
       precedes the answer.`;
-  if (historyCut(rec.chosen, shared) || historyCut(rec.rejected, shared))
-    return `the conversation the pair branches from is cut at 4,000 characters, so the panel cannot tell
-      that both candidates really do answer the same text.`;
+  if (!historyProvable(rec.chosen, shared) || !historyProvable(rec.rejected, shared))
+    return `a turn in the conversation the pair branches from was cut or normalized on the way into this
+      record, so the panel cannot tell that both candidates really do answer the same text.`;
   if (postBranchContext(rec.chosen, shared).length || postBranchContext(rec.rejected, shared).length)
     return `the pair branches on a turn the model did not write, so the answers below are replies to
       different text and cannot cancel however alike they look.`;
@@ -978,7 +985,8 @@ function sharedNote(ops, rec, dead, demoted){
 // DPO actually scored, so it stops claiming cancellation and reports overlap.
 function rawResponseStored(side, shared = 0){
   const turns = candidateTurns(side, shared);
-  return turns.length === 1 && !turns[0].reasoning && turns[0].chars === clen(turns[0].text);
+  return turns.length === 1 && rawTurn(turns[0]) && !turns[0].reasoning &&
+    turns[0].chars === clen(turns[0].text);
 }
 
 function gradientSection(rec, shared = 0){
@@ -986,7 +994,7 @@ function gradientSection(rec, shared = 0){
                   b: sideText(rec.rejected, "reasoning", shared)};
   const hasThink = reason.a || reason.b;
   const exact = rawResponseStored(rec.chosen, shared) && rawResponseStored(rec.rejected, shared) &&
-    !historyCut(rec.chosen, shared) && !historyCut(rec.rejected, shared) &&
+    historyProvable(rec.chosen, shared) && historyProvable(rec.rejected, shared) &&
     !postBranchContext(rec.chosen, shared).length && !postBranchContext(rec.rejected, shared).length;
   let answers = diffPair(sideText(rec.chosen, "answer", shared), sideText(rec.rejected, "answer", shared));
   const demoted = !exact && opChars(answers, "prefix", "a") > 0
@@ -1010,7 +1018,7 @@ function gradientSection(rec, shared = 0){
     <div class="arrow">→</div>
     <div class="step accent"><div class="t">3 · margin</div><div class="v">how much further the chosen one has moved</div></div>
     <div class="arrow">→</div>
-    <div class="step"><div class="t">4 · update</div><div class="v">chosen tokens up, rejected tokens down</div></div>
+    <div class="step"><div class="t">4 · update</div><div class="v">one step from both sets of token terms</div></div>
   </div>`;
 
   return `<div class="grad" id="gradpanel" hidden>
@@ -1023,8 +1031,11 @@ update ∝ σ(−margin) · [ ∇ log π(chosen) − ∇ log π(rejected) ]</div
       SFT checkpoint it started from (π_ref). At the first step the two are identical, so the margin is zero
       and every pair contributes the same loss, log 2. Training drives the margin positive.</p>
     <p class="kv">The update is ordinary next-token cross-entropy on the chosen response, plus the same thing
-      with its sign flipped on the rejected one: every chosen token is made more likely, every rejected token
-      less likely. The scale factor σ(−margin) shrinks as the margin grows, and the margin is measured against
+      with its sign flipped on the rejected one: every chosen token contributes a term pushing its
+      probability up, every rejected token a term pushing its probability down. Those terms are summed into
+      one update to shared parameters, so they are what the step is made of rather than a promise about each
+      token — an individual chosen token can still come out less likely once every other term has had its
+      say. The scale factor σ(−margin) shrinks as the margin grows, and the margin is measured against
       the reference rather than in absolute terms — it is how much more strongly π prefers the chosen response
       than π_ref already did. So a pair π ranks correctly still draws a large update if it ranks it less
       strongly than π_ref did, and a pair π ranks backwards draws a reduced one if π_ref ranked it more
