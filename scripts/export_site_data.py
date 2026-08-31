@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trainspotting import languages, registry  # noqa: E402
+from trainspotting import languages, registry, rewards  # noqa: E402
 
 # Bulk text the site fetches on demand: full training examples behind a prompt,
 # and sampled pretraining documents. Both are regenerable caches of upstream
@@ -63,6 +63,10 @@ if missing:
 # The site labels language bars with these; keeping the map here means the CLI
 # and the page can never disagree about what "gu" is called.
 (out / "language-names.json").write_text(json.dumps(languages.NAMES, indent=2))
+# The mix→verifier table, so the site can explain each RL row's reward from its
+# kind (instead of trusting text baked into old context exports) and roll a
+# stage's dataset_source counts up into exact reward-type shares.
+(out / "reward-kinds.json").write_text(json.dumps(rewards.site_export(), indent=2))
 
 copied, total = [], 0
 for f in sorted((ROOT / "results").glob("*.json")):

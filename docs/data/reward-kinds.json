@@ -1,0 +1,76 @@
+{
+  "kinds": {
+    "exact answer match": {
+      "explain": "The final answer is extracted from the response and compared to the ground truth below. Reward 1 on a match, 0 otherwise."
+    },
+    "unit tests": {
+      "explain": "The response's code is executed against test cases. Reward is the fraction of tests that pass.",
+      "gt_label": "test cases the answer is run against"
+    },
+    "constraint checker": {
+      "explain": "A program checks the response against the constraints listed below. Reward 1 when every constraint holds, 0 otherwise.",
+      "gt_label": "checker configuration"
+    },
+    "LLM judge": {
+      "explain": "No rule can grade a free-form answer, so a judge model compares the response to the stored reference answer and rewards a match. The grading itself is another model call.",
+      "gt_label": "reference answer the judge compares against"
+    },
+    "unknown": {
+      "explain": "This mix's reward function isn't identifiable from the row's own fields."
+    }
+  },
+  "mixes": {
+    "allenai/rlvr_general_mix-keyword-filtered-topic-chars-char-filt-topic-filtered": {
+      "kind": "LLM judge",
+      "subject": "general knowledge"
+    },
+    "allenai/IF_multi_constraints_upto5_filtered_dpo_0625_filter-keyword-filtered-topic-char-topic-filtered": {
+      "kind": "constraint checker",
+      "subject": "instruction following"
+    },
+    "hamishivi/omega-combined-no-boxed_filtered": {
+      "kind": "exact answer match",
+      "subject": "math"
+    },
+    "hamishivi/rlvr_acecoder_filtered_filtered": {
+      "kind": "unit tests",
+      "subject": "code"
+    },
+    "hamishivi/polaris_53k": {
+      "kind": "exact answer match",
+      "subject": "math"
+    },
+    "hamishivi/rlvr_orz_math_57k_collected_filtered": {
+      "kind": "exact answer match",
+      "subject": "math"
+    },
+    "hamishivi/MathSub-30K_filtered": {
+      "kind": "exact answer match",
+      "subject": "math"
+    },
+    "hamishivi/DAPO-Math-17k-Processed_filtered": {
+      "kind": "exact answer match",
+      "subject": "math"
+    },
+    "hamishivi/math_rlvr_mixture_dpo": {
+      "kind": "exact answer match",
+      "subject": "math"
+    },
+    "hamishivi/IF_multi_constraints_upto5_filtered_dpo_0625_filter": {
+      "kind": "constraint checker",
+      "subject": "instruction following"
+    },
+    "hamishivi/code_rlvr_mixture_dpo": {
+      "kind": "unit tests",
+      "subject": "code"
+    },
+    "hamishivi/rlvr_general_mix": {
+      "kind": "LLM judge",
+      "subject": "general knowledge"
+    },
+    "saurabh5/code_rlvr_mixture_dpo": {
+      "kind": "unit tests",
+      "subject": "code"
+    }
+  }
+}

@@ -646,12 +646,9 @@ function renderRLVR(rec, dataset){
     <div class="step"><div class="t">4 · reward</div><div class="v">score on that answer</div></div>
   </div>`;
 
-  const GT_LABEL = {
-    "constraint checker": "checker configuration",
-    "unit tests": "test cases the answer is run against",
-  };
+  const kindInfo = REWARDS.kinds[r.kind] || {};
   const checks = [];
-  if (r.ground_truth) checks.push([GT_LABEL[r.kind] || "ground truth the answer is matched against", r.ground_truth]);
+  if (r.ground_truth) checks.push([kindInfo.gt_label || "ground truth the answer is matched against", r.ground_truth]);
   if (r.constraint) checks.push([`constraint checked${r.constraint_type ? " (" + r.constraint_type + ")" : ""}`, r.constraint]);
   if (r.solution) checks.push(["reference solution", r.solution]);
   // Code mixes store their tests as one base64 blob; dumping it reads as noise.
@@ -672,20 +669,26 @@ function renderRLVR(rec, dataset){
           rate to filter the mix — prompts that always pass or never pass carry no gradient.</p>
       </div>
     </section>`;
+  } else {
+    meter = `<section class="ctxsec">
+      <h3>how hard this prompt was for the reference model</h3>
+      <p class="kv">This row stores no reference-model rollout statistics, so there is no
+        measured pass rate to show.</p>
+    </section>`;
   }
 
   return `${chips(rec, dataset)}
     <section class="ctxsec">
       <h3>how this prompt trains the model</h3>
       ${flow}
-      <p class="kv">${esc(r.explain || "")}</p>
+      <p class="kv">${esc(kindInfo.explain || r.explain || "")}</p>
     </section>
     ${promptSection(rec)}
     ${checks.length ? `<section class="ctxsec"><h3>what the verifier checks</h3>
       ${checks.map(check).join("")}
     </section>` : `<section class="ctxsec"><h3>what the verifier checks</h3>
-      <p class="kv">This row stores no ground truth or constraint — the reward comes from a judge model
-        whose rubric is not published with the dataset.</p></section>`}
+      <p class="kv">This row stores no ground truth, constraint, or reference answer for the
+        verifier to read.</p></section>`}
     ${meter}
     ${roll.sample ? `<section class="ctxsec"><h3>one sampled rollout</h3>
       <details><summary>show the answer the reference model produced</summary>${textBlock(roll.sample.text, roll.sample.chars)}</details>
@@ -877,7 +880,7 @@ function corpusComposition(parent, groups, totalBytes, limit = 14){
   }
 }
 
-let REG, MANIFEST, LANG_NAMES = {}, DATA = {}, CTXMAPS = {};
+let REG, MANIFEST, LANG_NAMES = {}, REWARDS = {kinds:{}, mixes:{}}, DATA = {}, CTXMAPS = {};
 const langName = c => LANG_NAMES[c] || c;
 async function fetchJSON(p){ const r = await fetch("data/"+p); if(!r.ok) throw new Error(p); return r.json(); }
 async function getData(name){
@@ -1167,6 +1170,48 @@ async function renderModel(model, gen){
         <span class="ds">— <a href="https://huggingface.co/datasets/${escAttr(st.dataset)}"
           target="_blank" rel="noopener">${esc(st.dataset)} ↗</a> (${st.total.toLocaleString()} examples)</span>`;
       mix.appendChild(h);
+      // RL mixes don't label their reward functions, but each mix has exactly
+      // one verifier, so when every value in a mix-name column is in the
+      // mix→verifier table the reward-type shares are exact — the same counts,
+      // grouped by what scores the response instead of where the prompt came from.
+      // Column stats can be sparse (nulls / long tails), so also require the
+      // counts to cover every row — otherwise "exact" would be a lie.
+      if (s.stage === "rlvr"){
+        const mapped = Object.values(st.columns).find(freq => {
+          const vals = Object.keys(freq);
+          return vals.length && vals.every(v => REWARDS.mixes[v]) &&
+            vals.reduce((sum, v) => sum + freq[v], 0) === st.total;
+        });
+        if (mapped){
+          const agg = {};
+          for (const [v, c] of Object.entries(mapped)){
+            const mx = REWARDS.mixes[v];
+            if (!agg[mx.kind]) agg[mx.kind] = {count: 0, subjects: new Set()};
+            agg[mx.kind].count += c;
+            agg[mx.kind].subjects.add(mx.subject);
+          }
+          const sub = document.createElement("p");
+          sub.className = "stage-sub";
+          sub.textContent = "what scores the response — each mix below uses exactly one verifier, so these counts are exact";
+          mix.appendChild(sub);
+          const kinds = Object.entries(agg).sort((a, b) => b[1].count - a[1].count);
+          const maxk = Math.max(...kinds.map(([, g]) => g.count/st.total));
+          for (const [kind, g] of kinds){
+            const f = g.count/st.total;
+            const info = REWARDS.kinds[kind] || {};
+            const row = document.createElement("div");
+            row.className = "row";
+            row.style.setProperty("--bar", hueFor(s.stage));
+            row.innerHTML = `
+              <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(kind)}</div>
+              <div class="trackbar"><div class="fill" style="width:${f/maxk*100}%"></div></div>
+              <div class="val">${pct(f)} <small>${g.count.toLocaleString()}</small></div>`;
+            hover(row.querySelector(".trackbar"),
+              `<b>${esc(kind)}</b> — ${esc([...g.subjects].join(", "))}<br>${esc(info.explain || "")}<br>${g.count.toLocaleString()} of ${st.total.toLocaleString()} (${pct(f)})`);
+            mix.appendChild(row);
+          }
+        }
+      }
       for (const [col, freq] of Object.entries(st.columns)){
         const sub = document.createElement("p");
         sub.className = "stage-sub"; sub.textContent = col;
@@ -1183,7 +1228,9 @@ async function renderModel(model, gen){
             <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${srcLabel(v, st.links)}</div>
             <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
             <div class="val">${pct(f)} <small>${c.toLocaleString()}</small></div>`;
-          hover(row.querySelector(".trackbar"), `<b>${v}</b><br>${c.toLocaleString()} of ${st.total.toLocaleString()} (${pct(f)})`);
+          const mx = REWARDS.mixes[v];
+          hover(row.querySelector(".trackbar"), `<b>${v}</b><br>${c.toLocaleString()} of ${st.total.toLocaleString()} (${pct(f)})`
+            + (mx ? `<br>${esc(mx.subject)}, scored by ${esc(mx.kind)}` : ""));
           mix.appendChild(row);
         }
         const restN = entries.length - shown.length;
@@ -1692,8 +1739,9 @@ async function applyHashState(nav){
 }
 
 (async () => {
-  [REG, MANIFEST, LANG_NAMES] = await Promise.all([
-    fetchJSON("registry.json"), fetchJSON("manifest.json"), fetchJSON("language-names.json")]);
+  [REG, MANIFEST, LANG_NAMES, REWARDS] = await Promise.all([
+    fetchJSON("registry.json"), fetchJSON("manifest.json"), fetchJSON("language-names.json"),
+    fetchJSON("reward-kinds.json")]);
   const tabs = document.getElementById("tabs");
   for (const name of [...Object.keys(REG), "compare"]){
     const b = document.createElement("button");
