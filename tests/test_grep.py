@@ -426,3 +426,62 @@ def test_window_start_drives_the_leading_ellipsis():
     """Text the SQL window elided is as elided as text this function drops."""
     assert grep.snippet("ChatGPT here", "ChatGPT", False, False, 1) == "ChatGPT here"
     assert grep.snippet("ChatGPT here", "ChatGPT", False, False, 4001).startswith("…")
+
+
+# --- review round 2: null and empty source values ---------------------------
+
+
+def test_null_and_empty_source_values_share_one_denominator(con, tmp_path):
+    """A column holding both NULL and '' used to produce two SQL groups whose
+    labels collided, so one denominator overwrote the other while the matches
+    summed under the shared key."""
+    path = tmp_path / "mixedsrc.parquet"
+    con.execute(
+        f"""COPY (SELECT * FROM (VALUES
+              ('ChatGPT a', 'wildchat'),
+              ('ChatGPT b', NULL),
+              ('ChatGPT c', ''),
+              ('nothing',   NULL),
+              ('nothing',   '')
+            ) AS t(prompt, dataset_source)) TO '{path}' (FORMAT parquet)"""
+    )
+    urls = [str(path)]
+    schema = grep.schema(con, str(path))
+    source, _ = grep.source_expr(schema, ["dataset_source"])
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(con, grep.read_parquet_sql(urls), exprs, source, "ChatGPT")
+    totals = grep.source_totals(con, grep.read_parquet_sql(urls), source)
+
+    assert result["by_source"] == {grep.NO_SOURCE_VALUE: 2, "wildchat": 1}
+    # Four rows carry a null-or-empty source, not the two of whichever group
+    # happened to come back last.
+    assert totals == {grep.NO_SOURCE_VALUE: 4, "wildchat": 1}
+    # Which is what makes the printed rate meaningful: 2 of 4, not 2 of 2.
+    assert result["by_source"][grep.NO_SOURCE_VALUE] < totals[grep.NO_SOURCE_VALUE]
+
+
+def test_every_matched_label_has_a_denominator(con, tmp_path):
+    """The invariant behind the percentages: scan and source_totals label cells
+    the same way, so no key in one is missing from the other."""
+    path = tmp_path / "labels.parquet"
+    con.execute(
+        f"""COPY (SELECT * FROM (VALUES
+              ('ChatGPT', 'a'), ('ChatGPT', NULL), ('ChatGPT', '')
+            ) AS t(prompt, dataset_source)) TO '{path}' (FORMAT parquet)"""
+    )
+    urls = [str(path)]
+    schema = grep.schema(con, str(path))
+    source, _ = grep.source_expr(schema, ["dataset_source"])
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(con, grep.read_parquet_sql(urls), exprs, source, "ChatGPT")
+    totals = grep.source_totals(con, grep.read_parquet_sql(urls), source)
+    assert set(result["by_source"]) <= set(totals)
+    assert all(result["by_source"][k] <= totals[k] for k in result["by_source"])
+
+
+def test_an_empty_source_value_is_not_a_missing_source_column():
+    """Two different facts about a mix, so two different labels."""
+    assert grep.source_label(None, has_column=False) == grep.NO_SOURCE_COLUMN
+    assert grep.source_label(None, has_column=True) == grep.NO_SOURCE_VALUE
+    assert grep.source_label("", has_column=True) == grep.NO_SOURCE_VALUE
+    assert grep.source_label("wildchat", has_column=True) == "wildchat"

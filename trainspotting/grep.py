@@ -291,15 +291,46 @@ def total_rows(con, urls: list[str]) -> int:
     ).fetchone()[0]
 
 
+NO_SOURCE_COLUMN = "(no source column)"
+NO_SOURCE_VALUE = "(no source value)"
+
+
+def source_label(value: str | None, has_column: bool) -> str:
+    """The one label for a source cell, so a numerator and its denominator agree.
+
+    Three states collapse to two labels and both distinctions matter. A mix with
+    no source column at all (Dolci-Instruct-DPO) is a different thing from a row
+    whose source column is null or empty, and null and the empty string are the
+    same thing for this purpose.
+
+    Normalising in one place is the point. The counts and the denominators used to
+    each do their own, so a column holding both NULL and `''` produced two SQL
+    groups whose labels collided: the matches summed under one key while the
+    denominator kept only whichever group came back last, and the printed
+    percentage and stored `rows_by_source` were both wrong for those rows.
+    """
+    if not has_column:
+        return NO_SOURCE_COLUMN
+    return value if value else NO_SOURCE_VALUE
+
+
 def source_totals(con, from_sql: str, source: str) -> dict[str, int]:
     """Rows per source over the whole mix, which is the denominator that means
     something: "434 of the 17,596 WildChat rows" says what "0.3% of the mix" does
     not. A source label is a few bytes a row and compresses to almost nothing, so
-    this is a rounding error next to the text scan."""
+    this is a rounding error next to the text scan.
+
+    Only called when the mix has a source column, so every row is labelled as
+    one, and groups that normalise together are added rather than overwritten.
+    """
     rows = con.execute(
         f"SELECT {source} AS src, count(*) FROM {from_sql} GROUP BY 1"
     ).fetchall()
-    return {src or "(no source column)": n for src, n in rows}
+    out: dict[str, int] = {}
+    for value, n in rows:
+        key = source_label(value, has_column=True)
+        out[key] = out.get(key, 0) + n
+    return out
 
 
 def _element_test(pattern: str, regex: bool, case_sensitive: bool) -> str:
@@ -442,7 +473,7 @@ def scan(
         if not batch:
             break
         for row in batch:
-            src = row[0] or "(no source column)"
+            src = source_label(row[0], has_column=source is not None)
             flags = {g: bool(row[1 + i]) for i, g in enumerate(groups)}
             snips = {g: (row[1 + len(groups) + 2 * i], row[2 + len(groups) + 2 * i])
                      for i, g in enumerate(groups)}
