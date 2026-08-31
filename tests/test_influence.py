@@ -713,37 +713,36 @@ def test_a_complete_sweep_says_the_reachable_stages_are_exhausted():
 # --- the produce-side union, bounded as tightly as the counts allow --------
 
 
-def test_disjoint_response_and_reference_sources_prove_a_bigger_union():
-    # 50 response rows in one source, 45 reference rows in another: the stage
-    # bound is max(50, 45) = 50, but a row sits in one source, so the per-source
-    # lower bounds add to 95. Against 50 the 10% floor is five rows and the
-    # five-row source clears it; against 95 it does not.
+def test_a_share_is_guaranteed_against_the_top_of_the_interval():
+    # Stage bounds 100–200; per-source floors 10 and 90. Measured against the
+    # floor the ten-row source clears a floor of 10 and is named — while the
+    # other source may hold 180 distinct rows, leaving its real share at 10/190.
     runs = [run(
-        "rlvr", hits=95, rows=1_000_000,
-        groups={"prompt": 0, "response": 50, "reference": 45},
-        sources={"a": 50, "b": 45, "tiny": 5},
-        totals={"a": 50_000, "b": 45_000, "tiny": 50},
-        by_source_group={"a": {"response": 50, "reference": 0},
-                         "b": {"response": 0, "reference": 45},
-                         "tiny": {"response": 5, "reference": 0}},
+        "rlvr", hits=200, rows=1_000_000,
+        groups={"prompt": 100, "response": 100, "reference": 100},
+        sources={"big": 180, "tiny": 20},
+        totals={"big": 180_000, "tiny": 100},
+        by_source_group={"big": {"prompt": 90, "response": 90, "reference": 90},
+                         "tiny": {"prompt": 10, "response": 10, "reference": 10}},
     )]
-    srcs = influence.stage_trace(runs[0])["sources"]
-    assert influence.produced_evidence(srcs, (50, 95)) == 100
-    # The stage bound alone would have named the five-row source.
-    assert influence.concentration(srcs, 50, side="produced")["name"] == "tiny"
-    assert influence.compare(runs, THINK)["best"]["concentration"]["name"] != "tiny"
+    t = influence.compare(runs, THINK)
+    assert t["best"]["produced"] == (100, 200)
+    srcs = t["best"]["sources"]
+    # Against the floor of 100 the ten-row source wins on rate; against the
+    # ceiling of 200 it no longer clears the share floor at all.
+    assert influence.concentration(srcs, 100, side="produced")["name"] == "tiny"
+    assert t["best"]["concentration"]["name"] == "big"
 
 
-def test_the_stage_bound_still_wins_where_it_is_the_larger_one():
-    # Every match in one source and in both groups: the per-source lower bounds
-    # add to 60, the stage's largest group is 60, and neither overstates.
-    runs = [run("rlvr", hits=60, rows=100_000,
-                groups={"prompt": 0, "response": 60, "reference": 60},
-                sources={"only": 60}, totals={"only": 1_000},
-                by_source_group={"only": {"response": 60, "reference": 60}})]
-    srcs = influence.stage_trace(runs[0])["sources"]
-    assert influence.produced_evidence(srcs, (60, 120)) == 60
-    assert influence.compare(runs, THINK)["best"]["concentration"]["name"] == "only"
+def test_a_source_clearing_the_floor_against_the_ceiling_still_counts():
+    runs = [run("rlvr", hits=100, rows=100_000, groups={"prompt": 0, "response": 100},
+                sources={"big": 90, "rest": 10},
+                totals={"big": 1_000, "rest": 50_000},
+                by_source_group={"big": {"prompt": 0, "response": 90},
+                                 "rest": {"prompt": 0, "response": 10}})]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["produced"] == (100, 100)
+    assert t["best"]["concentration"]["name"] == "big"
 
 
 # --- the suggested command is shell ----------------------------------------
@@ -816,3 +815,36 @@ def test_a_zero_run_that_never_read_its_produce_side_blocks_the_claim():
     text = " ".join(influence.render(t, "olmo-3-7b-think"))
     assert "cannot say the string is absent from what these stages train the model to write" in text
     assert "No stage matched on the produce side at all" not in text
+
+
+# --- a ranking whose leader has no evidence elects nobody ------------------
+
+
+def test_a_zero_produce_side_stage_is_not_elected_over_an_excluded_one():
+    # RLVR's response matches are the only produce-side evidence and its scan
+    # was partial, so it cannot be ranked. DPO is comparable and measured zero
+    # there. Naming DPO would elect the stage with no evidence of the kind the
+    # ranking runs on.
+    runs = [
+        run("rlvr", hits=50, rows=1_000, groups={"prompt": 0, "response": 50}, partial=True),
+        run("dpo", hits=100, rows=100_000, groups={"prompt": 100, "response": 0}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["basis"] == "produced"
+    assert t["best"] is None and t["ranked"] == []
+    assert {r["stage"] for r in t["unranked"]} == {"rlvr", "dpo"}
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "**Found, and not comparable.**" in text
+    assert "nothing matched on its produce side, and the stages that did are excluded" in text
+    assert "Most plausibly" not in text
+
+
+def test_a_measured_produce_side_zero_still_ranks_below_real_evidence():
+    # The same zero is a fine last place when a comparable stage has evidence.
+    runs = [
+        run("rlvr", hits=50, rows=100_000, groups={"prompt": 0, "response": 50}),
+        run("dpo", hits=100, rows=100_000, groups={"prompt": 100, "response": 0}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert [r["stage"] for r in t["ranked"]] == ["rlvr", "dpo"]
+    assert t["unranked"] == []

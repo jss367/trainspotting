@@ -139,23 +139,6 @@ MIN_SHARE = 0.1
 MIN_LIFT = 2.0
 
 
-def produced_evidence(sources: list[dict], bounds: tuple[int, int] | None) -> int:
-    """A lower bound on the rows matching on the produce side, as tight as the
-    counts allow.
-
-    Two independent bounds. The stage's largest produce-side group is one; a
-    row matching in both `response` and `reference` is counted once there. The
-    per-source lower bounds are the other, and they add — a row belongs to one
-    source, so no double counting across them — which proves a bigger union
-    whenever the response and reference matches sit in different sources. 50
-    response rows and 45 disjoint reference rows give `bounds = (50, 95)` and a
-    per-source total of 95, and taking the 50 would set the share floor at five
-    rows.
-    """
-    per_source = sum(s["produced_hits"] or 0 for s in sources)
-    return max(bounds[0] if bounds else 0, per_source)
-
-
 def concentration(sources: list[dict], total: int, side: str = "all") -> dict | None:
     """The source the matches actually bunch in, or None if they are spread.
 
@@ -167,11 +150,12 @@ def concentration(sources: list[dict], total: int, side: str = "all") -> dict | 
     a ranking that ran on produce-side rates is explained by the sources that
     supplied those rows rather than by whichever source holds the most prompts.
 
-    `total` is the evidence the share floor is a share *of* — the stage's match
-    count for that side. It has to be the whole of it: measured against the
-    largest single source instead, ten sources of ten rows each would let a
-    two-row source clear a floor set at one row and be named as the origin of
-    evidence it supplied two percent of.
+    `total` is what the share is a share *of*, and for a bounded count it has to
+    be the upper bound. A source supplies at least `MIN_SHARE` of the evidence
+    only if it does so against the most the evidence could be: stage bounds of
+    100–200 with per-source floors of 10 and 90 would set the floor at 10 and
+    name the ten-row source, while the other source may hold 180 distinct rows
+    and leave its real share at 10/190.
     """
     hk, rk, lk = ("hits", "rate", "lift") if side == "all" else (
         "produced_hits", "produced_rate", "produced_lift")
@@ -241,15 +225,10 @@ def stage_trace(result) -> dict:
         # Both readings are kept; `compare` picks the one matching the basis it
         # ends up ranking on, so the verdict explains the number it printed.
         "concentration_all": concentration(sources, hits),
-        # The evidence a source's share is a share of: the produce-side union,
-        # known only to a bound. `bounds[0]` is the largest single group, and
-        # the per-source lower bounds sum to a second, independent bound —
-        # every row sits in exactly one source, so their total cannot exceed
-        # the union either. Take whichever is larger, because a denominator
-        # that is too small sets the floor too low and lets a handful of rows
-        # be named as a concentration.
+        # The produce-side union is known only to an interval, and a share is
+        # only guaranteed against the top of it.
         "concentration_produced": concentration(
-            sources, produced_evidence(sources, bounds), side="produced"),
+            sources, bounds[1] if bounds else 0, side="produced"),
         "concentration": concentration(sources, hits),
         "conc_side": "all",
         "revision": result.get("revision"),
@@ -368,8 +347,18 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
         r["concentration"] = (r["concentration_produced"] if r["conc_side"] == "produced"
                               else r["concentration_all"])
     rankable = [r for r in hitting if not r["rank_block"]]
-    unranked = [r for r in hitting if r["rank_block"]]
     ranked = sorted(rankable, key=lambda r: r[key] or 0, reverse=True)
+    # The basis is chosen over every stage that matched, so a stage excluded
+    # from the ranking can still be the reason it runs on the produce side.
+    # When that happens the leader is whichever comparable stage measured zero
+    # there, and electing it names a stage with no evidence of the kind being
+    # ranked while the stage that has some sits excluded above.
+    if basis == "produced" and ranked and not ranked[0]["produced_rate"]:
+        for r in ranked:
+            r["rank_block"] = ("nothing matched on its produce side, and the stages that did "
+                               "are excluded above, so there is nothing here to compare")
+        ranked = []
+    unranked = [r for r in hitting if r["rank_block"]]
 
     # The produce-side rate of a stage matching in two groups is an interval,
     # so an order read off the low ends is only real where the intervals are

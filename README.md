@@ -291,9 +291,14 @@ rather than collapsed to its low end. Two stages whose intervals overlap, or
 touch at a single value, are not ordered by these counts, and the verdict says
 so instead of picking one.
 
-Where a source's share rests on that interval its lift is a floor over a
-ceiling, so it reads "at least 5×" rather than "5×", and collapses to the plain
-figure when the interval does.
+Where a source's share rests on that interval, both tests run against the end
+that makes them hold: the lift is the source's floor over the stage's ceiling,
+so it reads "at least 5×" rather than "5×" and collapses to the plain figure
+when the interval does, and the share floor is a share of the ceiling, since a
+source only supplies a tenth of the evidence if it does so against the most the
+evidence could be. Where every stage with produce-side evidence is excluded from
+the ranking, the verdict elects nobody rather than the comparable stage that
+measured zero there.
 
 A run that did not read everything its own mix has on the side being ranked can
 only have undercounted, so its rate is a floor rather than a figure. That is
