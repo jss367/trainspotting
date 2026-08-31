@@ -23,6 +23,8 @@ Rows are matched, not occurrences: a row whose response says "ChatGPT" four
 times counts once. That is the unit the training run sees.
 """
 
+import hashlib
+import heapq
 import os
 import re
 import sys
@@ -372,14 +374,26 @@ SNIPPET_CHARS = 240
 def _offset_sql(col: str, pattern: str, regex: bool, case_sensitive: bool) -> str:
     """1-based position of the first match inside `col`, or 0 if there is none.
 
-    A regex has no `position` of its own, so extract what it matched and locate
-    that; `regexp_extract` returns the empty string on no match, and `position`
-    of an empty string is 0, which is the same miss signal as the literal case.
+    A regex has no `position` of its own. Searching for the text `regexp_extract`
+    returned finds the wrong place whenever an earlier identical substring fails
+    the pattern: `\bChatGPT` against a string holding `xChatGPT` at the front and
+    a real match 20,000 characters later extracts "ChatGPT" and then locates the
+    copy inside `xChatGPT`, so the window gets cut around a non-match.
+
+    So measure the match's own offset instead, by capturing everything before it
+    with a lazy prefix group. The user's pattern is parenthesised so an
+    alternation binds as a unit and its own capture groups shift out of the way
+    of group 1, and `s` makes `.` cross newlines, which these prompts are full of.
+    `regexp_extract` also returns the empty string on no match, which is
+    indistinguishable from a match at position 1, so `regexp_matches` decides
+    that separately.
     """
     if regex:
-        opts = f", {_lit('i')}" if not case_sensitive else ""
-        found = f"regexp_extract({col}, {_lit(pattern)}, 0{opts})"
-        return f"CASE WHEN {found} = '' THEN 0 ELSE position({found} IN {col}) END"
+        opts = "s" if case_sensitive else "si"
+        prefix = f"'^(.*?)(' || {_lit(pattern)} || ')'"
+        located = f"len(regexp_extract({col}, {prefix}, 1, {_lit(opts)})) + 1"
+        matched = f"regexp_matches({col}, {_lit(pattern)}{'' if case_sensitive else ', ' + _lit('i')})"
+        return f"CASE WHEN NOT {matched} THEN 0 ELSE {located} END"
     if case_sensitive:
         return f"position({_lit(pattern)} IN {col})"
     return f"position(lower({_lit(pattern)}) IN lower({col}))"
@@ -432,6 +446,36 @@ def snippet(
     return ("…" if cut_before else "") + out + ("…" if lead + SNIPPET_CHARS < len(text) else "")
 
 
+def _pick(kept: list, by_snippet: dict, limit: int, text: str | None, record: dict) -> None:
+    """Keep the `limit` records whose snippet hashes smallest.
+
+    Which examples get saved has to depend on the match set and nothing else.
+    Keeping the first N that arrive does not: DuckDB reads shards in parallel, so
+    re-running a scan returns the same counts in a different order and rewrites
+    every example — the artifact stops being byte-reproducible, and "regenerate
+    it" turns into unreadable churn.
+
+    Hashing also samples better than arrival order did. The first N matches all
+    came off whichever shard was read first, so 20 examples out of 134 in the
+    Think RL mix were 12 consecutive unit-test assertions from one source. A
+    digest-ordered N spreads across the mix instead.
+    """
+    if text is None:
+        return
+    digest = hashlib.blake2b(text.encode("utf-8", "replace"), digest_size=8).digest()
+    # Negated so heapq's min-heap roots at the largest hash, the one to evict.
+    neg = -int.from_bytes(digest, "big")
+    if text in by_snippet:
+        return
+    if len(kept) < limit:
+        by_snippet[text] = record
+        heapq.heappush(kept, (neg, text))
+    elif neg > kept[0][0]:
+        _, evicted = heapq.heapreplace(kept, (neg, text))
+        by_snippet.pop(evicted, None)
+        by_snippet[text] = record
+
+
 def scan(
     con,
     from_sql: str,
@@ -467,7 +511,10 @@ def scan(
     by_source: dict[str, int] = {}
     by_group = {g: 0 for g in groups}
     by_source_group: dict[str, dict[str, int]] = {}
-    found: list[dict] = []
+    # The kept examples, as a bounded max-heap on -hash: the N snippets with the
+    # smallest digest survive, whatever order the rows arrive in. See `_pick`.
+    kept: list[tuple[int, str]] = []
+    by_snippet: dict[str, dict] = {}
     while True:
         batch = con.fetchmany(5000)
         if not batch:
@@ -484,13 +531,14 @@ def scan(
                 if on:
                     by_group[g] += 1
                     bucket[g] += 1
-            if len(found) < examples:
+            if examples:
                 where = [g for g, on in flags.items() if on]
                 text, at = next((snips[g] for g in where if snips[g][0]), (None, 1))
-                found.append({
+                shown = snippet(text, pattern, regex, case_sensitive, at or 1)
+                _pick(kept, by_snippet, examples, shown, {
                     "source": src,
                     "groups": where,
-                    "snippet": snippet(text, pattern, regex, case_sensitive, at or 1),
+                    "snippet": shown,
                 })
 
     return {
@@ -498,7 +546,7 @@ def scan(
         "by_source": dict(sorted(by_source.items(), key=lambda kv: -kv[1])),
         "by_group": by_group,
         "by_source_group": by_source_group,
-        "examples": found,
+        "examples": [by_snippet[text] for _, text in sorted(kept, key=lambda kv: -kv[0])],
     }
 
 

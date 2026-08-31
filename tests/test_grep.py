@@ -9,6 +9,7 @@ a plausible wrong number.
 """
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -485,3 +486,143 @@ def test_an_empty_source_value_is_not_a_missing_source_column():
     assert grep.source_label(None, has_column=True) == grep.NO_SOURCE_VALUE
     assert grep.source_label("", has_column=True) == grep.NO_SOURCE_VALUE
     assert grep.source_label("wildchat", has_column=True) == "wildchat"
+
+
+def test_regex_window_locates_the_match_not_an_earlier_lookalike(con, tmp_path):
+    """`\\bChatGPT` against a string holding `xChatGPT` at the front and a real
+    match past the window: searching for the extracted text finds the copy inside
+    `xChatGPT` and cuts the window around a non-match."""
+    path = tmp_path / "lookalike.parquet"
+    filler = "a" * (grep.SNIPPET_SOURCE_CHARS * 3)
+    con.execute(
+        f"COPY (SELECT 'xChatGPT {filler} the real ChatGPT match {filler}' AS prompt)"
+        f" TO '{path}' (FORMAT parquet)"
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(path)]), exprs, None,
+        r"\bChatGPT", regex=True, examples=1,
+    )
+    assert result["matched"] == 1
+    assert "the real ChatGPT match" in result["examples"][0]["snippet"]
+
+
+@pytest.mark.parametrize(
+    ("pattern", "text", "expected"),
+    [
+        (r"(As|Interact as) ChatGPT", "zzz Interact as ChatGPT", 5),
+        (r"^hi", "hi there", 1),
+        (r"^hi", "x hi", 0),          # anchored and unmatched, not "position 1"
+        (r"a+b", "zzz aaab", 5),
+        (r"\bChatGPT", "xChatGPTonly", 0),
+        ("ChatGPT", "line1\nline2 ChatGPT", 13),   # `.` has to cross newlines
+    ],
+)
+def test_regex_offset_sql(con, pattern, text, expected):
+    """The offset expression itself, over the cases that broke the old one:
+    alternation, the user's own groups, anchors, and a no-match that must not
+    read as a match at the start of the string."""
+    sql = grep._offset_sql("s", pattern, regex=True, case_sensitive=False)
+    got = con.execute(f"SELECT {sql} FROM (SELECT ? AS s)", [text]).fetchone()[0]
+    assert got == expected
+
+
+# --- the committed artifacts have to substantiate their own counts -----------
+
+RESULTS = Path(__file__).resolve().parent.parent / "results"
+COMMITTED_RUNS = sorted(RESULTS.glob("*.grep-*.json"))
+
+
+@pytest.mark.parametrize("path", COMMITTED_RUNS, ids=[p.name for p in COMMITTED_RUNS])
+def test_committed_snippets_contain_their_pattern(path):
+    """Every saved snippet has to contain the pattern the run counted.
+
+    `scan` takes each snippet from the first *matching* string in a group, so the
+    match is in there by construction — which makes this an invariant rather than
+    a style preference, and the one that says the artifact is evidence. A result
+    file whose examples do not show the pattern cannot substantiate its own
+    number, and that is exactly what a run committed before the late-match window
+    fix looked like: the snippet was the head of a long response with nothing to
+    do with the query.
+
+    Re-run the scan rather than editing a result file by hand — the point is that
+    the artifact came out of the code.
+    """
+    run = json.loads(path.read_text())
+    flags = 0 if run["case_sensitive"] else re.IGNORECASE
+    expr = run["pattern"] if run["regex"] else re.escape(run["pattern"])
+    missing = [
+        i for i, e in enumerate(run["examples"])
+        if not (e.get("snippet") and re.search(expr, e["snippet"], flags))
+    ]
+    assert not missing, (
+        f"{path.name}: examples {missing} show no {run['pattern']!r} match — "
+        f"re-run `trainspotting grep` for this stage and pattern"
+    )
+
+
+# --- examples have to depend on the match set, not on arrival order ----------
+
+
+def test_example_selection_is_independent_of_arrival_order():
+    """DuckDB reads shards in parallel, so the same match set arrives in a
+    different order each run. Keeping the first N rewrote every example on a
+    re-run; hashing keeps the choice a function of the matches alone."""
+    records = [{"source": "s", "groups": ["prompt"], "snippet": f"match {i}"} for i in range(50)]
+
+    def pick(order):
+        kept, by_snippet = [], {}
+        for i in order:
+            grep._pick(kept, by_snippet, 5, records[i]["snippet"], records[i])
+        return [by_snippet[t]["snippet"] for _, t in sorted(kept, key=lambda kv: -kv[0])]
+
+    forward = pick(range(50))
+    assert len(forward) == 5
+    assert pick(reversed(range(50))) == forward
+    assert pick([*range(25, 50), *range(25)]) == forward
+
+
+def test_example_selection_spreads_rather_than_taking_a_prefix():
+    """The old rule took whatever the first-read shard held — 12 consecutive
+    unit-test assertions out of 134 matches. A digest-ordered sample does not
+    collapse onto one run of neighbours."""
+    kept, by_snippet = [], {}
+    for i in range(200):
+        rec = {"source": "s", "groups": ["prompt"], "snippet": f"match {i}"}
+        grep._pick(kept, by_snippet, 10, rec["snippet"], rec)
+    chosen = sorted(int(by_snippet[t]["snippet"].split()[1]) for _, t in kept)
+    assert chosen != list(range(10))
+    assert max(chosen) - min(chosen) > 20
+
+
+def test_duplicate_snippets_are_kept_once():
+    kept, by_snippet = [], {}
+    for _ in range(10):
+        grep._pick(kept, by_snippet, 5, "same text", {"source": "s", "groups": [], "snippet": "same text"})
+    assert len(kept) == 1
+
+
+def test_zero_examples_keeps_none(con, dpo_parquet):
+    result, _, _ = _run(con, dpo_parquet, "ChatGPT", examples=0)
+    assert result["matched"] == 2 and result["examples"] == []
+
+
+@pytest.mark.parametrize("path", COMMITTED_RUNS, ids=[p.name for p in COMMITTED_RUNS])
+def test_committed_runs_record_a_usable_pattern(path):
+    """A run file has to say what was actually searched, in a form that can be
+    re-run. This exists because a shell-quoting slip in a regeneration script
+    turned `I'm` into `I.m` across three files: same counts, so nothing else
+    noticed, but the artifact then documented a pattern nobody had chosen.
+    """
+    run = json.loads(path.read_text())
+    assert run["pattern"] and run["pattern"].strip() == run["pattern"]
+    assert run["fields"] and set(run["fields"]) <= set(grep.GROUPS)
+    if run["regex"]:
+        re.compile(run["pattern"])
+        # `.` where a literal was meant is the shape of that slip: an unescaped
+        # dot inside a word, next to characters, matching more than intended.
+        assert not re.search(r"[A-Za-z]\.[A-Za-z]", run["pattern"]), (
+            f"{path.name}: {run['pattern']!r} has an unescaped dot between letters"
+            " — likely a quoting slip; write \\. or a character class if meant"
+        )
