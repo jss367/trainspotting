@@ -55,6 +55,43 @@ def column_frequencies(
     return out
 
 
+def sample_rows_with_truncation(
+    dataset: str,
+    n: int,
+    seed: int = 0,
+    config: str = "default",
+    split: str = "train",
+) -> list[tuple[int, dict, list[str]]]:
+    """Sample ~n rows via random pages of the /rows endpoint, keeping row indices
+    and the names of any cells the server shortened to fit its response limit.
+
+    Rows within a page are correlated (adjacent on disk), so we draw many small
+    chunks from uniformly random offsets rather than a few full pages. The index
+    is the row's absolute position in the split, which addresses it in the HF
+    dataset viewer.
+
+    A truncated cell only matters to a caller reading the text itself — a search
+    cannot find a string in the part the server cut — so it travels alongside the
+    row rather than in it.
+    """
+    total = num_rows(dataset, config, split)
+    rng = random.Random(seed)
+    chunk = 10
+    n_pages = (n + chunk - 1) // chunk
+    offsets = sorted(rng.randrange(max(1, total - chunk)) for _ in range(n_pages))
+    rows: list[tuple[int, dict, list[str]]] = []
+    for off in offsets:
+        j = _get(
+            "rows", dataset=dataset, config=config, split=split, offset=off, length=chunk
+        )
+        rows.extend(
+            (off + i, r["row"], r.get("truncated_cells") or [])
+            for i, r in enumerate(j["rows"])
+        )
+    rng.shuffle(rows)
+    return rows[:n]
+
+
 def sample_rows_with_index(
     dataset: str,
     n: int,
@@ -62,26 +99,11 @@ def sample_rows_with_index(
     config: str = "default",
     split: str = "train",
 ) -> list[tuple[int, dict]]:
-    """Sample ~n rows via random pages of the /rows endpoint, keeping row indices.
-
-    Rows within a page are correlated (adjacent on disk), so we draw many small
-    chunks from uniformly random offsets rather than a few full pages. The index
-    is the row's absolute position in the split, which addresses it in the HF
-    dataset viewer.
-    """
-    total = num_rows(dataset, config, split)
-    rng = random.Random(seed)
-    chunk = 10
-    n_pages = (n + chunk - 1) // chunk
-    offsets = sorted(rng.randrange(max(1, total - chunk)) for _ in range(n_pages))
-    rows: list[tuple[int, dict]] = []
-    for off in offsets:
-        j = _get(
-            "rows", dataset=dataset, config=config, split=split, offset=off, length=chunk
-        )
-        rows.extend((off + i, r["row"]) for i, r in enumerate(j["rows"]))
-    rng.shuffle(rows)
-    return rows[:n]
+    """The same sample, without the truncation report."""
+    return [
+        (index, row)
+        for index, row, _ in sample_rows_with_truncation(dataset, n, seed, config, split)
+    ]
 
 
 def sample_rows(

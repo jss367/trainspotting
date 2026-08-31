@@ -5,7 +5,7 @@ import re
 import sys
 from pathlib import Path
 
-from . import classify, context, extract, hf, languages, pretrain, registry
+from . import classify, context, extract, hf, languages, pretrain, registry, search
 
 RESULTS = Path(__file__).resolve().parent.parent / "results"
 # The committed half of the bulk artifacts: gitignored under results/, shipped
@@ -355,10 +355,15 @@ def cmd_classify(args):
     _label_post_training(args)
 
 
+def _slug(text: str) -> str:
+    """A filename-safe short name derived from a question or a search pattern."""
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60]
+
+
 def cmd_ask(args):
     """Score sampled prompts from every post-training stage against a free-form question."""
     # One short name ties a question's post-training and pretraining files together.
-    slug = args.slug or re.sub(r"[^a-z0-9]+", "-", args.question.lower()).strip("-")[:60]
+    slug = args.slug or _slug(args.question)
     print(f"question: {args.question}\n", file=sys.stderr)
     if args.pretrain:
         _warn_missing_pretrain_samples(args)
@@ -559,6 +564,91 @@ def cmd_context(args):
         print(f"{s['stage']}: {len(records)} records -> {path} ({path.stat().st_size / 1e6:.1f} MB)", file=sys.stderr)
 
 
+def cmd_search(args):
+    """Search the whole training example — prompt and response — for a pattern.
+
+    The other sampling layers read the prompt, which is half of the example and
+    the half a behaviour is least likely to be in: a model claiming to be ChatGPT
+    does it in an SFT response or a DPO chosen completion. So this searches every
+    text field of the row and tags each hit with the side it landed on, and for
+    DPO it reports which completion holds it — the same string chosen and
+    rejected teach opposite things.
+
+    No model is called. The default sample and seed are the ones the other layers
+    use, so a hit is a row those runs already labeled and its full example is in
+    the committed context file; a larger --sample is a wider net that no longer
+    lines up with them.
+    """
+    try:
+        pattern = re.compile(args.pattern, 0 if args.case_sensitive else re.IGNORECASE)
+    except re.error as e:
+        sys.exit(f"bad pattern {args.pattern!r}: {e}")
+    slug = args.slug or _slug(args.pattern)
+    for s in _select_stages(args, registry.post_training_stages, "post-training"):
+        print(f"searching {args.sample} sampled rows from {s['hf_dataset']} ...", file=sys.stderr)
+        rows = hf.sample_rows_with_truncation(s["hf_dataset"], args.sample, seed=args.seed)
+        records, shortened = [], 0
+        for row_index, row, truncated_cells in rows:
+            if truncated_cells:
+                shortened += 1
+            hits = search.search_row(row, s["stage"], pattern)
+            if hits:
+                # Rows carrying no prompt are searched like any other — a hit in
+                # a response is a hit — so the join key can be empty.
+                prompt = extract.extract_prompt(row, s["prompt_path"]) or ""
+                records.append(
+                    {
+                        "key": prompt[: context.KEY_CHARS],
+                        "row": row_index,
+                        "sides": sorted({h["side"] for h in hits}),
+                        "hits": hits,
+                    }
+                )
+        sides = search.side_counts(records, s["stage"])
+        k, n = len(records), len(rows)
+        lo, hi = _wilson(k, n)
+        payload = {
+            "pattern": args.pattern,
+            "case_sensitive": args.case_sensitive,
+            "dataset": s["hf_dataset"],
+            "stage": s["stage"],
+            "sample": args.sample,
+            "seed": args.seed,
+            "scanned": n,
+            "matched": k,
+            "ci": [lo, hi],
+            "sides": sides,
+            # Rows the datasets-server shortened to fit its response limit. A
+            # string past the cut is unfindable, so a non-zero count means this
+            # is a lower bound rather than a count of the sample.
+            "truncated_rows": shortened,
+            "records": records,
+        }
+        if s["stage"] == "dpo":
+            payload["pair_split"] = search.pair_split(records)
+        path = _write_json(RESULTS / f"{args.model}.{s['stage']}.search-{slug}.json", payload)
+        _print_match_rate(s["stage"], k, n, lo, hi, path)
+        breakdown = ", ".join(f"{side} {count}" for side, count in sides.items())
+        if s["stage"] == "dpo":
+            split = payload["pair_split"]
+            breakdown += (
+                f" (chosen only {split['chosen_only']},"
+                f" rejected only {split['rejected_only']},"
+                f" both {split['both']})"
+            )
+        print(f"  rows by side: {breakdown}", file=sys.stderr)
+        if shortened:
+            print(
+                f"  note: {shortened} row(s) had a cell shortened by the datasets-server"
+                " — a hit past the cut is invisible here",
+                file=sys.stderr,
+            )
+        for rec in records[: max(0, args.show)]:
+            for hit in rec["hits"]:
+                text = " ".join(hit["snippet"].split())
+                print(f"  row {rec['row']} [{hit['side']}/{hit['role']}] {text}", file=sys.stderr)
+
+
 def cmd_report(args):
     model = registry.get_model(args.model)
     print(f"# Training-data audit: {args.model}\n")
@@ -651,6 +741,21 @@ def main():
         "are correlated, which widens any interval computed over them",
     )
     p.set_defaults(fn=cmd_pretrain)
+
+    p = sub.add_parser(
+        "search",
+        help="find a regex anywhere in the sampled examples — prompt, response, "
+        "and for DPO which side of the pair",
+    )
+    p.add_argument("model")
+    p.add_argument("pattern", help="Python regex, case-insensitive unless --case-sensitive")
+    p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
+    p.add_argument("--sample", type=_positive_int, default=300)
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--case-sensitive", action="store_true")
+    p.add_argument("--slug", help="short name for the result files (default: derived from the pattern)")
+    p.add_argument("--show", type=int, default=3, help="matching rows to print (0 for none)")
+    p.set_defaults(fn=cmd_search)
 
     p = sub.add_parser("context", help="store the full training example behind each sampled prompt")
     p.add_argument("model")
