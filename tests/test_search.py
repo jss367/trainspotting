@@ -297,3 +297,17 @@ def test_every_stage_declares_its_sides():
     """Pinned to the stages the registry has, so a fourth arrives with its own
     side names rather than falling into the RL branch by default."""
     assert set(search.SIDES) == {s for _, s in STAGES}
+
+
+def test_a_pattern_that_matches_the_empty_string_is_counted_not_collected():
+    """`.*?` matches once per character. Materializing every match object is
+    megabytes on a response that runs to 200k characters, so the count comes off
+    the iterator and only the first match is kept."""
+    row = {"messages": [{"role": "assistant", "content": "abcd"}]}
+    pattern = compile_(".*?")
+    every_match = len(list(pattern.finditer("abcd")))
+
+    hits = search.search_row(row, "sft", pattern)
+
+    assert every_match > len("abcd")  # a match at every position, and then some
+    assert [(h["count"], h["snippet"]) for h in hits] == [(every_match, "abcd")]

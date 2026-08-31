@@ -165,18 +165,25 @@ def search_row(row: dict, stage: str, pattern: re.Pattern) -> list[dict]:
     """One hit record per matching field of a row; empty if the row does not match."""
     hits = []
     for field in fields(row, stage):
-        matches = list(pattern.finditer(field["text"]))
-        if matches:
-            hits.append(
-                {
-                    "side": field["side"],
-                    "role": field["role"],
-                    "turn": field["turn"],
-                    "count": len(matches),
-                    "chars": len(field["text"]),
-                    "snippet": snippet(field["text"], matches[0]),
-                }
-            )
+        matches = pattern.finditer(field["text"])
+        first = next(matches, None)
+        if first is None:
+            continue
+        # Counted off the iterator, keeping only the first match. A pattern that
+        # can match the empty string — `.*?`, `(?:)`, an empty pattern — matches
+        # once per character, and holding all of those match objects at once is
+        # megabytes per field on a response that runs to 200k characters.
+        count = 1 + sum(1 for _ in matches)
+        hits.append(
+            {
+                "side": field["side"],
+                "role": field["role"],
+                "turn": field["turn"],
+                "count": count,
+                "chars": len(field["text"]),
+                "snippet": snippet(field["text"], first),
+            }
+        )
     return hits
 
 

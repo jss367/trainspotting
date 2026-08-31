@@ -175,7 +175,7 @@ scored — neither is text the model was fit to.
 
 ```
 $ trainspotting search olmo-3-7b-instruct "I cannot" --sample 200 --stage dpo
-dpo: 6/200 match = 3.0% (95% CI 1.4–6.4%) -> results/olmo-3-7b-instruct.dpo.search-i-cannot.json
+dpo: 6/200 match = 3.0% (95% CI 1.4–6.4%) -> results/olmo-3-7b-instruct.dpo.search-i-cannot-382cdff9.json
   rows by side: prompt 1, chosen 5, rejected 0 (chosen only 5, rejected only 0, both 0)
 ```
 
@@ -190,6 +190,12 @@ schemas, and each is searched as its own entry named after the column it came
 from, so a tool name is findable and a hit in a call reads differently from a
 hit in the prose. `functions` is searched as prompt text whatever turn it hangs
 off — it is the menu of tools the model was offered, not anything it said.
+
+A default result file is named after the pattern, with a hash of it appended
+unless the pattern is already exactly its own slug: punctuation in a regex is
+syntax, so `a.b` and `a+b` are different searches that both reduce to `a-b`, and
+one silently overwriting the other is not a naming problem but a lost result.
+`--slug` gives a run a readable name instead.
 
 The default `--sample 300 --seed 0` is the draw every other layer uses, so a hit
 is a row those runs already labeled and its whole example is in the committed

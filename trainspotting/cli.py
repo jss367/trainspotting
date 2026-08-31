@@ -452,13 +452,15 @@ def cmd_classify(args):
 def _slug(text: str) -> str:
     """A filename-safe short name derived from a question or a search pattern.
 
-    Two reductions lose enough to name a different run: a pattern with no ASCII
-    letters or digits — a Chinese literal, a punctuation-only regex — reduces to
-    nothing at all, and two long patterns can agree on their first 60
+    Two reductions lose enough to name a different run: text with no ASCII
+    letters or digits — a Chinese phrase, a punctuation-only expression —
+    reduces to nothing at all, and two long inputs can agree on their first 60
     characters. Either would write over an unrelated result file without saying
-    so, so both get a hash of the original appended. What remains is that
-    patterns differing only in case or punctuation share a file, which is a
-    collision between two ways of writing the same query.
+    so, so both get a hash of the original appended.
+
+    Questions differing only in case or punctuation still share a file, which
+    for prose is two spellings of one question. A regex is not prose — see
+    `_pattern_slug`.
     """
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
     digest = hashlib.sha1(text.encode()).hexdigest()[:8]
@@ -467,6 +469,21 @@ def _slug(text: str) -> str:
     if len(slug) > 60:
         return f"{slug[:60].rstrip('-')}-{digest}"
     return slug
+
+
+def _pattern_slug(pattern: str) -> str:
+    """The same name for a regex, which cannot afford the readable reduction.
+
+    Punctuation in a regex is syntax, not spelling: `a.b` and `a+b` match
+    different text and reduce to the same `a-b`, and so does `a b` with one
+    space or two. So a pattern keeps the plain slug only when it already *is*
+    that slug; anything the reduction touched carries a hash of the original.
+    Pass `--slug` for a readable name.
+    """
+    slug, digest = _slug(pattern), hashlib.sha1(pattern.encode()).hexdigest()[:8]
+    if pattern == slug or slug.endswith(digest):
+        return slug  # already exact, or already disambiguated by `_slug`
+    return f"{slug}-{digest}"
 
 
 def cmd_ask(args):
@@ -720,7 +737,7 @@ def cmd_search(args):
         pattern = re.compile(args.pattern, 0 if args.case_sensitive else re.IGNORECASE)
     except re.error as e:
         sys.exit(f"bad pattern {args.pattern!r}: {e}")
-    slug = args.slug or _slug(args.pattern)
+    slug = args.slug or _pattern_slug(args.pattern)
     for s in _select_stages(args, registry.post_training_stages, "post-training"):
         # Before the draw, like every other sampling path: a lookup afterwards
         # could name a tree published while the paging ran.
