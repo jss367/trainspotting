@@ -7,6 +7,8 @@ Context and pretraining-document records are copied minified (they are bulk text
 the site fetches on click); everything else is copied verbatim so its diffs stay
 readable. Each document sample also gets a `.corpus.json` summary — the same file
 without its records — so the site can draw the card without pulling megabytes.
+The same bulk files are indexed by three-character run into `search-index.json`,
+which is how the page's search box avoids downloading them all.
 """
 
 import json
@@ -18,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trainspotting import languages, registry, rewards  # noqa: E402
+from trainspotting import languages, registry, rewards, searchindex  # noqa: E402
 
 # Bulk text the site fetches on demand: full training examples behind a prompt,
 # and sampled pretraining documents. Both are regenerable caches of upstream
@@ -135,7 +137,26 @@ for docs in out.glob("*.docs.json"):
             f"but the exported sample records {d['short_draws']}"
         )
 
+# Everything the search box can read, indexed by trigram. Built from docs/data
+# rather than results/ so it covers the committed bulk files a fresh checkout
+# never rebuilt (the same reason `kept` exists), and built last so it indexes
+# exactly what this run wrote.
+searchable = sorted(out.glob("*.context.json")) + sorted(out.glob("*.docs.json"))
+index = searchindex.build_from_paths(searchable)
+# ensure_ascii would triple the size of every non-Latin trigram, and the page
+# parses the file as UTF-8 either way.
+(out / "search-index.json").write_text(
+    json.dumps(index, separators=(",", ":"), ensure_ascii=False)
+)
+copied.append("search-index.json")
+index_mb = (out / "search-index.json").stat().st_size / 1e6
+total += (out / "search-index.json").stat().st_size
+
 (out / "manifest.json").write_text(json.dumps(sorted(copied + kept), indent=2))
+print(
+    f"indexed {len(index['grams']):,} trigrams across {len(searchable)} sampled files "
+    f"for search ({index_mb:.1f} MB)"
+)
 print(
     f"wrote registry.json + language-names.json + manifest.json and {len(copied)} result files ({total / 1e6:.1f} MB)"
     + (f"; manifest also lists {len(kept)} committed file(s) this run did not build" if kept else "")

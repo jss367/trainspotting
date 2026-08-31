@@ -103,6 +103,35 @@
   .tabs button[aria-pressed="true"] {
     background: var(--text-primary); border-color: var(--text-primary); color: var(--page);
   }
+  /* ---- search box, in the sticky bar so it is reachable from every card ---- */
+  .tabs form.search { margin-left: auto; display: flex; }
+  .tabs form.search input {
+    font: inherit; font-size: 13px; width: 232px; padding: 7px 14px;
+    border-radius: 999px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-primary);
+  }
+  .tabs form.search input::placeholder { color: var(--muted); }
+  @media (max-width: 640px) {
+    .tabs form.search { margin-left: 0; width: 100%; }
+    .tabs form.search input { width: 100%; }
+  }
+
+  /* ---- search results ---- */
+  .hit { border-top: 1px solid var(--grid); padding: 11px 0 12px; }
+  .hit:first-of-type { border-top: none; }
+  .hit .snip {
+    font: 12px/1.55 ui-monospace, Menlo, monospace; white-space: pre-wrap;
+    overflow-wrap: anywhere; background: var(--track); border-radius: 6px;
+    padding: 8px 10px; margin: 0 0 6px;
+  }
+  .hit mark {
+    background: color-mix(in srgb, var(--bar, var(--series-1)) 30%, transparent);
+    color: inherit; border-radius: 2px; padding: 0 1px;
+  }
+  .hit .field {
+    font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 3px;
+  }
 
   /* ---- part dividers: the two halves of the pipeline ---- */
   .part {
@@ -177,8 +206,8 @@
     background: var(--track); border-radius: 8px; padding: 10px 12px;
     max-height: 340px; overflow: auto; margin: 8px 0 0;
   }
-  .doc a.shard { font-size: 11px; color: var(--muted); text-decoration: none; }
-  .doc a.shard:hover { text-decoration: underline; }
+  .doc a.shard, .hit a.shard { font-size: 11px; color: var(--muted); text-decoration: none; }
+  .doc a.shard:hover, .hit a.shard:hover { text-decoration: underline; }
 
   /* ---- stage sections ---- */
   h3.stage { font-size: 14px; margin: 26px 0 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -422,6 +451,9 @@
     bar for the prompts behind it, then <em>see it in training context</em> for the
     rest of the training example — the response the model is fit to, the pair it is
     pushed between, or the verifier that scores it.
+    Search finds a literal string anywhere in those samples, responses and
+    reference answers included, across every model at once; it reads 300 rows per
+    stage, so it finds instances rather than a rate.
     Language is detected locally per prompt, line by line and weighted by length,
     so a template that wraps a foreign-language question in English instructions
     counts as English; a prompt split evenly between two languages is left
@@ -704,13 +736,12 @@ const dlg = document.getElementById("ctx");
 // Chrome builds don't deliver); cancel covers Esc.
 function closeCtx(){
   if (dlg._backLink){
-    // Only rewrite the hash if it still shows the row segment this modal
-    // wrote on open. If navigation has moved the hash anywhere else since
-    // (history nav, manual edit, a new view mid-render), the backlink is
-    // stale and writing it would point the URL at the old view.
-    const prefix = "#" + dlg._backLink.map(encodeURIComponent).join("/") + "/row-";
-    if (location.hash.startsWith(prefix)) setHash(...dlg._backLink);
-    dlg._backLink = null;
+    // Only rewrite the hash if it still shows exactly what this modal wrote on
+    // open. If navigation has moved the hash anywhere else since (history nav,
+    // manual edit, a new view mid-render), the backlink is stale and writing it
+    // would point the URL at the old view.
+    if (location.hash === dlg._modalHash) setHash(...dlg._backLink);
+    dlg._backLink = dlg._modalHash = null;
   }
   if (dlg.open) dlg.close();
 }
@@ -721,8 +752,15 @@ dlg.addEventListener("close", closeCtx);
 
 // `link` (hash segments incl. row-…) makes the open modal linkable.
 function openContext(rec, stage, dataset, stageName, link){
-  if (link){ setHash(...link); dlg._backLink = link.slice(0, 3); }
-  else dlg._backLink = null;
+  if (link){
+    setHash(...link);
+    dlg._modalHash = location.hash;
+    // Closing goes back to whatever was open behind the modal: the drill-down
+    // the link names, or — in the search view, whose results are the page
+    // itself and have no panel to reopen — the query alone.
+    dlg._backLink = link[0] === "search" ? link.slice(0, 2) : link.slice(0, 3);
+  }
+  else dlg._backLink = dlg._modalHash = null;
   document.getElementById("ctxtitle").innerHTML =
     `<i class="sw" style="background:${hueFor(stage)}"></i>${esc(stage.toUpperCase())} — ${esc(stageName)}`;
   document.getElementById("ctxlede").textContent = STAGE_LEDE[stage] || "";
@@ -1639,13 +1677,235 @@ async function renderCompare(gen){
   }
 }
 
+// ------------------------------------------------------------------- search ---
+// Find a string anywhere in the committed samples — prompts, the responses a
+// stage fits or prefers, the reference answers a verifier scores against, and
+// the pretraining documents. The bar drill-downs only reach a prompt whose bar
+// you already guessed, and no bar covers the response side at all; this does.
+//
+// What it searches is the sample, not the mix: 300 rows per stage, so it finds
+// instances to read, never a rate. `trainspotting grep` is the other half —
+// exact counts over every row of a mix, no sample.
+
+// The query's three-character runs, cut the way trainspotting/searchindex.py
+// cuts the samples' — by code point, which is why the string is spread first:
+// these prompts are full of emoji and mathematical-bold letters, and slicing
+// UTF-16 units would cut different trigrams than Python did and lose the file.
+function searchGrams(s, n){
+  const chars = [...s.toLowerCase()], out = new Set();
+  for (let i = 0; i + n <= chars.length; i++) out.add(chars.slice(i, i + n).join(""));
+  return [...out];
+}
+
+let SEARCH_INDEX;   // undefined = not fetched yet, null = no index in this export
+async function searchIndex(){
+  if (SEARCH_INDEX === undefined)
+    SEARCH_INDEX = await fetchJSON("search-index.json").catch(() => null);
+  return SEARCH_INDEX;
+}
+
+// Every sampled file the scan can read, in pipeline order per model, so results
+// arrive in the order the training run did.
+function searchableFiles(){
+  const out = [];
+  for (const [model, m] of Object.entries(REG))
+    for (const s of m.stages){
+      for (const name of [ctxFile(model, s.stage), `${model}.${s.stage}.docs.json`])
+        if (MANIFEST.includes(name)) out.push({name, model, stage: s.stage, stageName: s.name,
+          dataset: s.hf_dataset || s.sample_dataset, corpus: !s.hf_dataset});
+    }
+  return out;
+}
+
+// Which parts of a training example the scan reads. The user and system turns
+// inside a response are the prompt again — matching them would report the same
+// text twice under two names.
+function searchFields(rec){
+  const out = [];
+  const push = (field, text) => { if (text) out.push({field, text}); };
+  push("prompt", rec.prompt_full && rec.prompt_full.text);
+  const turns = (list, tag) => (list || []).forEach(t => {
+    if (t.role === "user" || t.role === "system") return;
+    if (t.reasoning) push(tag + t.role + " reasoning", t.reasoning.text);
+    push(tag + t.role, t.text);
+  });
+  turns(rec.turns, "");                          // sft: the target response
+  if (rec.chosen) turns(rec.chosen.turns, "chosen ");
+  if (rec.rejected) turns(rec.rejected.turns, "rejected ");
+  const reward = rec.reward || {};
+  for (const k of ["ground_truth", "solution", "constraint"]){
+    const v = reward[k];
+    push(k.replace(/_/g, " "), typeof v === "string" ? v : v && v.text);
+  }
+  if (rec.rollouts && rec.rollouts.sample) push("sampled rollout", rec.rollouts.sample.text);
+  push("document", rec.text);                    // pretraining corpora
+  return out;
+}
+
+const MAX_HITS_PER_FILE = 40;   // rendered, not found; the count above them is the truth
+const SNIPPET_PAD = 110;
+
+// One `…text <mark>match</mark> text…` line per matching field.
+function snippet(text, needle){
+  const at = text.toLowerCase().indexOf(needle);
+  const from = Math.max(0, at - SNIPPET_PAD), to = Math.min(text.length, at + needle.length + SNIPPET_PAD);
+  return (from ? "…" : "") + esc(text.slice(from, at))
+    + `<mark>${esc(text.slice(at, at + needle.length))}</mark>`
+    + esc(text.slice(at + needle.length, to)) + (to < text.length ? "…" : "");
+}
+
+// Records whose text contains `needle`, with the fields that matched.
+function scanRecords(records, needle){
+  const hits = [];
+  for (const rec of records){
+    const fields = searchFields(rec).filter(f => f.text.toLowerCase().includes(needle));
+    if (fields.length) hits.push({rec, fields});
+  }
+  return hits;
+}
+
+function hitBlock(hit, file, query){
+  const {rec, fields} = hit;
+  const el = document.createElement("div");
+  el.className = "hit";
+  el.style.setProperty("--bar", hueFor(file.stage));
+  const source = (rec.meta && rec.meta.dataset_source) || rec.source || file.dataset;
+  const tags = [
+    `<span class="prov">${esc(file.stage.toUpperCase())}</span>`,
+    `<span>${esc(source)}${rec.topic ? " · " + esc(niceGroup(rec.topic)) : ""}</span>`,
+  ];
+  if (fields.length > 1) tags.push(`<span>${fields.length} fields matched</span>`);
+  el.innerHTML = `<div class="doctags">${tags.join("")}</div>`
+    + fields.map(f => `<p class="field">${esc(f.field)}</p>
+        <div class="snip">${snippet(f.text, query.toLowerCase())}</div>`).join("");
+  if (file.corpus){
+    const a = document.createElement("a");
+    a.className = "shard";
+    a.href = `https://huggingface.co/datasets/${file.dataset}/blob/${file.revision || "main"}/${rec.shard}`;
+    a.target = "_blank"; a.rel = "noopener";
+    a.textContent = rec.shard + " ›";
+    el.appendChild(a);
+  } else {
+    const b = document.createElement("button");
+    b.className = "ctxbtn";
+    b.textContent = "see it in training context ›";
+    b.onclick = () => openContext(rec, file.stage, file.dataset, file.stageName,
+      rec.row != null ? ["search", query, `${file.model}.${file.stage}`, "row-" + rec.row] : null);
+    el.appendChild(b);
+  }
+  return el;
+}
+
+async function renderSearch(query, gen){
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  pendingJump = null;
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", "false"));
+  const box = document.getElementById("q");
+  if (box && document.activeElement !== box) box.value = query;
+
+  const card = document.createElement("section");
+  card.className = "card";
+  const short = query.trim().length < 2;
+  card.innerHTML = `<h2>${short ? "Search the committed samples"
+      : `“${esc(query)}” in the committed samples`}</h2>
+    <p class="sub">Every sampled training example whose text contains this string — prompts,
+      the responses each stage fits or prefers, the reference answers its verifier scores
+      against, and the pretraining documents. Matching is literal and case-insensitive.</p>
+    ${short ? `<p class="note">Type at least two characters.</p>` : ""}`;
+  main.appendChild(card);
+  if (short) return;
+  const needle = query.toLowerCase();
+  const files = searchableFiles();
+  const index = await searchIndex();
+  if (gen !== GEN) return;
+
+  // The index maps trigram → files, so a file survives only if it holds every
+  // three-character run of the query — somewhere, not necessarily together, so
+  // the scan below is still what decides. A run the index has never seen is
+  // decisive the other way: nothing to fetch, and the answer is no.
+  const grams = index ? searchGrams(query, index.ngram) : [];
+  let candidates = files, prefiltered = false;
+  if (grams.length){
+    const names = grams
+      .map(g => new Set((index.grams[g] || []).map(i => index.files[i])))
+      .reduce((a, b) => new Set([...a].filter(n => b.has(n))));
+    candidates = files.filter(f => names.has(f.name));
+    prefiltered = true;
+  }
+
+  const progress = document.createElement("p");
+  progress.className = "note";
+  card.appendChild(progress);
+  // Two characters is under the index's trigram, so nothing can be ruled out
+  // and every sample has to be read. Say so — it is several megabytes.
+  if (!prefiltered){
+    const p = document.createElement("p");
+    p.className = "note";
+    p.textContent = index
+      ? `Too short to use the index — reading all ${files.length} samples.`
+      : `No search index in this export — reading all ${files.length} samples.`;
+    card.appendChild(p);
+  }
+
+  let matched = 0, filesWithHits = 0, done = 0;
+  for (const file of candidates){
+    progress.textContent = `reading ${file.model} ${file.stage} (${++done} of ${candidates.length})…`;
+    const data = await getData(file.name);
+    if (gen !== GEN) return;
+    if (!data) continue;
+    const hits = scanRecords(data.records, needle);
+    if (!hits.length) continue;
+    matched += hits.length;
+    filesWithHits++;
+    // A document sample keeps its dataset and pinned revision on the file, not
+    // on each record, and the shard link needs both.
+    const src = file.corpus
+      ? {...file, dataset: data.dataset || file.dataset, revision: data.revision} : file;
+
+    const h = document.createElement("h3");
+    h.className = "stage";
+    h.style.setProperty("--bar", hueFor(file.stage));
+    h.innerHTML = `<i class="sw"></i>${esc(file.model)} · ${esc(file.stage.toUpperCase())}
+      <span class="ds">— ${hits.length} of ${data.records.length} sampled
+        ${file.corpus ? "documents" : "examples"}</span>`;
+    card.appendChild(h);
+    for (const hit of hits.slice(0, MAX_HITS_PER_FILE)) card.appendChild(hitBlock(hit, src, query));
+    if (hits.length > MAX_HITS_PER_FILE){
+      const p = document.createElement("p");
+      p.className = "note";
+      p.textContent = `showing the first ${MAX_HITS_PER_FILE} of ${hits.length} matches in this sample`;
+      card.appendChild(p);
+    }
+  }
+
+  progress.remove();
+  const summary = document.createElement("p");
+  summary.className = "note";
+  summary.style.margin = "0";
+  summary.innerHTML = matched
+    ? `<b>${matched}</b> matching example${matched > 1 ? "s" : ""} in ${filesWithHits} of
+       ${files.length} sampled sets${prefiltered && candidates.length < files.length
+         ? ` — ${candidates.length} read, the rest ruled out by the index` : ""}.
+       These are the 300-row-per-stage samples, so this finds instances to read, not a rate:
+       for an exact count over every row of a mix, run
+       <code>trainspotting grep &lt;model&gt; "${esc(query)}"</code>.`
+    : `No match in any of the ${files.length} committed samples${prefiltered ? "" : " read"}.
+       A string this rare in a 300-row sample can still be common in the mix —
+       <code>trainspotting grep &lt;model&gt; "${esc(query)}"</code> counts every row.`;
+  card.insertBefore(summary, card.querySelector("h3.stage"));
+}
+
 // ------------------------------------------------------------------ routing ---
 // The hash mirrors what is open, so every view is a link:
 //   #<model> | #compare                a tab
 //   #<model>/<stage>/<key>             an open drill-down (key = label or ask-<slug>)
 //   #<model>/<stage>/<key>/row-<n>     one training example, in the context modal
 // In the compare view the key is <model>.<label-or-ask-slug>, so the same two
-// hash forms work with "compare" in the first segment.
+// hash forms work with "compare" in the first segment. The search view packs
+// itself into the same four segments — #search/<query>, and
+// #search/<query>/<model>.<stage>/row-<n> for a result opened in the modal —
+// so the query sits in the stage slot and the model in the key slot.
 // GEN discards a render that a newer *view* superseded mid-await; NAV moves on
 // EVERY hash change (even within a view, even app-written ones) and discards
 // any in-flight continuation that would touch the DOM or the hash, so a stale
@@ -1654,7 +1914,7 @@ async function renderCompare(gen){
 // GEN !== RENDERED the view's DOM is incomplete, so routes must not apply
 // drill-down/modal state to it — the rendering route applies the latest hash
 // when it finishes. Invariant: the end state always matches the latest hash.
-let VIEW = null, suppress = 0, GEN = 0, RENDERED = 0, NAV = 0;
+let VIEW = null, SEARCH_Q = null, suppress = 0, GEN = 0, RENDERED = 0, NAV = 0;
 
 function setHash(...parts){
   const h = "#" + parts.map(encodeURIComponent).join("/");
@@ -1682,16 +1942,21 @@ async function route(){
   if (suppress){ suppress--; return; }
   const st = parseHash();
   const v = st.view;
-  const view = v && (REG[v] || v === "compare") ? v : Object.keys(REG)[0];
+  const view = v && (REG[v] || v === "compare" || v === "search") ? v : Object.keys(REG)[0];
+  // Two hashes in the search view can name the same view and different pages:
+  // a new query is a new render, not a state change inside the old results.
+  const query = view === "search" ? (st.stage || "") : null;
   // An open modal this hash does not keep (no row segment, or a different
   // view) belongs to the outgoing state: clear its backlink and close it
   // BEFORE any await, so closing the still-visible dialog mid-render can't
   // write a stale backlink over the new hash.
   if (dlg.open && (st.row == null || view !== VIEW)){ dlg._backLink = null; dlg.close(); }
-  if (view !== VIEW){
+  if (view !== VIEW || query !== SEARCH_Q){
     VIEW = view;
+    SEARCH_Q = query;
     const gen = ++GEN;
-    await (view === "compare" ? renderCompare(gen) : renderModel(view, gen));
+    await (view === "search" ? renderSearch(query, gen)
+      : view === "compare" ? renderCompare(gen) : renderModel(view, gen));
     if (gen !== GEN) return;   // a newer view render took over mid-await
     RENDERED = gen;
     // The hash may have moved within this view while the render was in
@@ -1711,6 +1976,24 @@ async function route(){
 async function applyHashState(nav){
   const st = parseHash();
   if (st.row == null && dlg.open){ dlg._backLink = null; dlg.close(); }
+  // Search results are all on screen already — there is no panel to open, only
+  // the modal a result link names: #search/<query>/<model>.<stage>/row-<n>.
+  if (VIEW === "search"){
+    if (st.row == null) return;
+    const cut = (st.key || "").lastIndexOf(".");   // model names carry no dot; stage names carry none either
+    const model = st.key.slice(0, cut), stage = st.key.slice(cut + 1);
+    const s = cut > 0 && REG[model] && REG[model].stages.find(x => x.stage === stage);
+    let rec = s ? await contextRowFor(model, stage, st.row) : null;
+    if (nav !== NAV) return;
+    // Same guard the bar links use, one layer down: honor only a row that this
+    // hash's own query actually matches, so an edited link can't dress an
+    // unrelated example up as a search result.
+    const needle = (st.stage || "").toLowerCase();
+    if (rec && !searchFields(rec).some(f => f.text.toLowerCase().includes(needle))) rec = null;
+    if (rec) openContext(rec, stage, s.hf_dataset, s.name, ["search", st.stage, st.key, "row-" + st.row]);
+    else if (dlg.open){ dlg._backLink = null; dlg.close(); }
+    return;
+  }
   // Back/Forward restores a hash; close any panel that hash does not name.
   const want = st.stage && st.key ? st.stage + "/" + st.key : null;
   for (const open of document.querySelectorAll("[data-link]"))
@@ -1756,6 +2039,20 @@ async function applyHashState(nav){
     b.onclick = () => { if (name !== VIEW) location.hash = "#" + name; };
     tabs.appendChild(b);
   }
+  // Search lives in the sticky bar rather than in a card, because the question
+  // it answers ("where does this string appear?") arrives while you are reading
+  // some other card, and a card you have to scroll back to is a card you forget
+  // exists.
+  const form = document.createElement("form");
+  form.className = "search";
+  form.innerHTML = `<input id="q" type="search" autocomplete="off" spellcheck="false"
+    aria-label="search the sampled training examples" placeholder="search the samples — e.g. ChatGPT">`;
+  form.onsubmit = e => {
+    e.preventDefault();
+    const q = form.querySelector("input").value.trim();
+    location.hash = q ? "#search/" + encodeURIComponent(q) : "#" + Object.keys(REG)[0];
+  };
+  tabs.appendChild(form);
   syncStickyHeight();
   if (window.ResizeObserver) new ResizeObserver(syncStickyHeight).observe(tabs);
   window.addEventListener("resize", syncStickyHeight);
