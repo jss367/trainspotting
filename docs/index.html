@@ -262,6 +262,20 @@
   }
   .ci::before { left: 0; } .ci::after { right: 0; }
   .note { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+
+  /* ---- budget table: every stage on one scale, so it is a table not bars ---- */
+  .budget { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .budget th {
+    text-align: right; font-weight: 550; font-size: 11px; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--muted); padding: 0 0 7px; border-bottom: 1px solid var(--grid);
+  }
+  .budget th:first-child, .budget td:first-child { text-align: left; }
+  .budget td { text-align: right; padding: 7px 0; border-bottom: 1px solid var(--track); }
+  .budget td:first-child { color: var(--text-secondary); }
+  .budget tr.unmeasured td { color: var(--muted); }
+  .budget tr.total td { border-bottom: none; border-top: 1px solid var(--grid); font-weight: 600; padding-top: 9px; }
+  .budget td + td { padding-left: 14px; }
+  .budget .est { display: block; color: var(--muted); font-size: 11px; line-height: 1.4; }
   .row.clickable { cursor: pointer; transition: background .12s; }
   .row.clickable:hover { background: var(--track); }
   .drill {
@@ -1016,6 +1030,159 @@ function jumpToStage(stage){
 
 // A divider between the two halves of the pipeline, so the page reads top to
 // bottom in the same order as the tiles at the top of it.
+// Mirrors cli._fmt_est: three significant figures at most, because these are a
+// 300-draw rate times a mean length and anything more claims precision the
+// sample has nowhere near.
+function tokens(n){
+  if (n == null) return "—";
+  for (const [scale, suffix] of [[1e12,"T"],[1e9,"B"],[1e6,"M"],[1e3,"K"]]){
+    if (n >= scale){
+      const v = n / scale;
+      return (v >= 100 ? v.toFixed(0) : String(+v.toFixed(1))) + suffix;
+    }
+  }
+  return n.toFixed(0);
+}
+
+// A question answered only over post-training is a rounding error against 5.93T
+// pretraining tokens. "0.00%" would read as "none" rather than as the
+// three-orders-of-magnitude gap that is the actual finding.
+const shareText = f => (f * 100 >= 0.01 || f === 0) ? (f*100).toFixed(2)+"%" : (f*100).toPrecision(2)+"%";
+
+// One card per question, rolling every stage onto the scale the question is
+// actually about: tokens the model was fit to. The per-stage rates above this
+// are not comparable to each other — a share of DPO rows and a share of Dolma 3
+// documents are different denominators — and this is where they become one
+// number. Built by scripts/export_site_data.py from the committed ask runs, so
+// it cannot disagree with the bars above it.
+async function budgetCard(main, model, slug){
+  const est = await getData(`${model}.budget-${slug}.json`);
+  if (!est) return;
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<h2>How much training is that?</h2>
+    <p class="sub">Each stage's rate times its size, in tokens the model was fit to —
+    the assistant turns of an SFT example, both completions of a preference pair,
+    every token of a corpus. Not the size of the dataset.</p>`;
+  const t = document.createElement("table");
+  t.className = "budget";
+  t.innerHTML = `<thead><tr><th>stage</th><th>fit tokens</th><th>by row</th>
+    <th>by length</th><th>matching tokens</th></tr></thead>`;
+  const body = document.createElement("tbody");
+  for (const st of est.stages){
+    const tr = document.createElement("tr");
+    if (!st.measured) tr.className = "unmeasured";
+    const size = tokens(st.size_tokens) + (st.size_is_floor ? "*" : "");
+    if (!st.measured){
+      tr.innerHTML = `<td>${esc(st.stage)}</td><td>${size}</td>`
+        + `<td colspan="3">never asked this question</td>`;
+    } else {
+      const ci = st.matching_tokens_ci
+        ? `<span class="est">${tokens(st.matching_tokens_ci[0])}–${tokens(st.matching_tokens_ci[1])}</span>` : "";
+      tr.innerHTML = `<td>${esc(st.stage)}</td><td>${size}</td>`
+        + `<td>${st.matched}/${st.n} · ${pct(st.count_rate)}</td>`
+        + `<td>${pct(st.char_rate)}</td>`
+        + `<td>${tokens(st.matching_tokens)}${ci}</td>`;
+    }
+    body.appendChild(tr);
+  }
+  const all = est.totals.all;
+  const total = document.createElement("tr");
+  total.className = "total";
+  total.innerHTML = `<td>whole pipeline</td><td>${tokens(all.size_tokens)}</td>`
+    + `<td colspan="2">${all.measured} of ${all.stages} stages measured</td>`
+    + `<td>${tokens(all.matching_tokens)}<span class="est">${shareText(all.share)}</span></td>`;
+  body.appendChild(total);
+  t.appendChild(body);
+  card.appendChild(t);
+
+  const notes = [];
+  if (all.measured < all.stages){
+    // The single most misleading thing this page could do is show a pipeline
+    // total that quietly leaves out 5.93T tokens of pretraining.
+    const missing = est.stages.filter(st => !st.measured);
+    const unasked = missing.reduce((a, st) => a + (st.size_tokens || 0), 0);
+    notes.push(`${missing.map(st => st.stage).join(", ")} ${missing.length > 1 ? "were" : "was"} never asked `
+      + `this question, so ${tokens(unasked)} of the ${tokens(all.size_tokens)} fit tokens above `
+      + `— ${shareText(unasked / all.size_tokens)} of the pipeline — are unmeasured, and the total `
+      + `is a share of the rest.`);
+  }
+  if (all.floor.length){
+    notes.push(`${all.floor.join(", ")} sized at one reference rollout per prompt — a floor. `
+      + `The rollouts the policy was actually fit to are not in the published mix.`);
+  }
+  if (all.unsized.length) notes.push(`No size for ${all.unsized.join(", ")}; excluded from the total.`);
+  for (const st of est.stages) for (const n of (st.notes || [])) notes.push(`${st.stage}: ${n}`);
+  notes.push(`Fit characters are converted at ${est.chars_per_token} per token. This weighs tokens, not learning: `
+    + `a post-training token and a pretraining token are not equally formative, and nothing here corrects for that.`);
+  for (const text of notes){
+    const p = document.createElement("p");
+    p.className = "note";
+    p.textContent = text;
+    card.appendChild(p);
+  }
+  main.appendChild(card);
+}
+
+// The colour a direction gets. `away` takes the diverging pole the page already
+// reserves for "trained away from" — a stage where the dispreferred completion
+// is the one that serves the question is the finding, and it should not read as
+// just another category next to `toward`.
+const STANCE_COLOR = {
+  toward: "var(--series-1)",
+  away: "var(--neg)",
+  neither: "var(--baseline)",
+};
+const STANCE_TIP = {
+  toward: "fitting this example makes the behaviour more likely",
+  away: "fitting it makes the behaviour less likely — the preferred side, or the reward, points the other way",
+  neither: "the example does not bear on the question either way",
+};
+
+// `trainspotting stance`: the same question asked of whole examples instead of
+// prompts, so the answer can be signed. A yes/no over prompts cannot say that a
+// stage contains training pushing the other way, and this data has some.
+async function stanceCard(main, model, slug, stages, ctxFor, post){
+  const rows = [];
+  for (const stage of stages){
+    const d = await getData(`${model}.${stage}.stance-${slug}.json`);
+    if (d) rows.push({stage, d});
+  }
+  if (!rows.length) return false;
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<h2>Which way does it push?</h2>
+    <p class="sub">The same question asked of the whole example — the response the model is fit to,
+    which side of a preference pair is preferred, what the verifier pays for — so the answer can be
+    negative. Judged by ${esc(rows[0].d.classifier)}.</p>`;
+  const max = Math.max(...rows.flatMap(r => ["toward","away"].map(k => r.d.counts[k] / r.d.records.length)), 0.01);
+  for (const {stage, d} of rows){
+    const n = d.records.length;
+    const s = post.find(p => p.stage === stage) || {stage, hf_dataset: d.dataset, name: d.dataset};
+    const head = document.createElement("div");
+    head.className = "lbl";
+    head.style.cssText = "font-size:12px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);margin:14px 0 4px";
+    head.textContent = `${stage.toUpperCase()} — ${d.dataset.split("/")[1]} · net ${d.net > 0 ? "+" : ""}${d.net}`;
+    card.appendChild(head);
+    for (const k of ["toward", "away", "neither"]){
+      const c = d.counts[k], [lo, hi] = wilson(c, n);
+      barRow(card, k, c/n, lo, hi, k === "neither" ? 1 : max,
+        `<b>${k}</b> — ${esc(STANCE_TIP[k])}<br>${c} of ${n} judged examples (${pct(c/n)})`
+        + `<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to read them`,
+        false, d.records.filter(x => x.stance === k),
+        {...ctxFor(s), linkKey: `stance-${slug}-${k}`}, STANCE_COLOR[k]);
+    }
+  }
+  const p1 = document.createElement("p");
+  p1.className = "note";
+  p1.textContent = "`neither` is drawn on its own scale — it is the answer for most of any mix, "
+    + "and putting it beside the other two would flatten them to nothing. The headline is the net, "
+    + "toward minus away.";
+  card.appendChild(p1);
+  main.appendChild(card);
+  return true;
+}
+
 function part(title, note){
   const h = document.createElement("h2");
   h.className = "part";
@@ -1527,6 +1694,19 @@ async function renderModel(model, gen){
     const [, stage, rest] = f.match(/^[^.]+\.([^.]+)\.ask-(.+)\.json$/) || [];
     if (stage) (bySlug[rest] ||= []).push([stage, f]);
   }
+  // A stance run is optional and lands per stage under the same slug, so index
+  // them once here rather than re-scanning the manifest inside the loop.
+  const stanceStages = {};
+  for (const f of MANIFEST){
+    if (!f.startsWith(model + ".")) continue;
+    const [, stage, slug] = f.match(/^[^.]+\.([^.]+)\.stance-(.+)\.json$/) || [];
+    if (stage) (stanceStages[slug] ||= []).push(stage);
+  }
+  for (const slug in stanceStages){
+    const order = m.stages.map(x => x.stage);
+    stanceStages[slug].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  }
+
   let askDivider = false;   // only if a card actually renders — the files may all fail to load
   for (const [slug, files] of Object.entries(bySlug)){
     // Pipeline order, not just post-training order — a question asked with
@@ -1603,6 +1783,17 @@ async function renderModel(model, gen){
       }
       main.appendChild(card);
     }
+    // After the bars, not instead of them: the bars are what was measured and
+    // the budget is what it adds up to. One per slug, however many wordings the
+    // slug turned out to cover.
+    if (askDivider){
+      // Direction first, then the budget: which way it pushes, then how much of
+      // it there is. A total is only worth reading once the sign is settled.
+      await stanceCard(main, model, slug, stanceStages[slug] || [], ctxFor, post);
+      if (gen !== GEN) return;
+      await budgetCard(main, model, slug);
+    }
+    if (gen !== GEN) return;
   }
 
   // Every destination is mounted now, so honor a tile clicked while data was loading.

@@ -1,13 +1,13 @@
 import argparse
 import hashlib
 import json
-import math
 import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 from . import (
+    budget,
     classify,
     context,
     extract,
@@ -17,12 +17,11 @@ from . import (
     pretrain,
     registry,
     search,
+    stance,
 )
-
-RESULTS = Path(__file__).resolve().parent.parent / "results"
-# The committed half of the bulk artifacts: gitignored under results/, shipped
-# here for the site, and so the only copy present in a fresh clone.
-SITE_DATA = Path(__file__).resolve().parent.parent / "docs" / "data"
+from . import paths
+from .paths import RESULTS
+from .stats import cluster_wilson as _cluster_wilson, wilson as _wilson
 
 # Every command takes one of these. A model walks its whole pipeline; a dataset
 # is a single samplable dataset with no pipeline around it, and the layers that
@@ -45,68 +44,6 @@ def _fmt_tokens(n: int) -> str:
     if n >= 1e9:
         return f"{n / 1e9:.0f}B"
     return f"{n:,}"
-
-
-def _wilson(k: float, n: float, z: float = 1.96) -> tuple[float, float]:
-    """Wilson score interval. k and n may be non-integer effective counts."""
-    if n <= 0:
-        return 0.0, 0.0
-    p = k / n
-    denom = 1 + z**2 / n
-    center = (p + z**2 / (2 * n)) / denom
-    half = z * math.sqrt(p * (1 - p) / n + z**2 / (4 * n**2)) / denom
-    return max(0.0, center - half), min(1.0, center + half)
-
-
-def _cluster_wilson(records: list[dict], key: str = "shard") -> tuple[float, float, float]:
-    """Wilson interval widened by the design effect of clustering by `key`.
-
-    Documents drawn from one shard share a topic cluster, so they are not
-    independent observations and a binomial interval over the document count is
-    too narrow. Rescaling the match count to the number of distinct shards, which
-    is what this used to do, is not an interval over shards either: a shard
-    contributing five matches and one contributing a single non-match would round
-    to "two successes out of two clusters", hiding the disagreement between them.
-
-    So take the design effect properly, from the Taylor-linearised variance of the
-    ratio estimator over clusters:
-
-        Var(p) = C / ((C - 1) · M²) · Σ (y_c - p·m_c)²
-
-    where cluster c holds m_c documents of which y_c match, and M = Σ m_c. Divide
-    by the binomial variance to get the design effect, and evaluate Wilson at the
-    effective sample size n/deff. Wilson is kept rather than a normal interval
-    because it still behaves at rates near 0 and 1, which several of these are.
-
-    Returns (lo, hi, n_effective). With one document per shard every cluster has
-    size one, the design effect is C/(C-1) ≈ 1, and this is the ordinary interval.
-    """
-    n = len(records)
-    if n == 0:
-        return 0.0, 0.0, 0.0
-    clusters: dict[str, list[int]] = {}
-    for r in records:
-        clusters.setdefault(r.get(key) or "", []).append(1 if r["match"] else 0)
-    C = len(clusters)
-    p = sum(r["match"] for r in records) / n
-    if C < 2 or p in (0.0, 1.0):
-        # The design effect is unestimable here, not 1. With a single cluster
-        # there is nothing to compare it against; with a unanimous outcome the
-        # observed between-cluster variance is zero, which is 0/0 rather than
-        # evidence of independence. Either way, falling back to the document
-        # count would hand a clustered run the narrow interval for n independent
-        # observations — and "no matches at all" is a likely answer to a pointed
-        # question, so that branch fires exactly when the number matters. Use the
-        # cluster count instead: assume documents sharing a shard told us one
-        # thing, not m_c things. At one document per shard C is n and nothing
-        # changes.
-        return (*_wilson(p * C, C), float(C))
-    ss = sum((sum(ys) - p * len(ys)) ** 2 for ys in clusters.values())
-    var_cluster = C / ((C - 1) * n**2) * ss
-    var_binomial = p * (1 - p) / n
-    deff = max(1.0, var_cluster / var_binomial) if var_binomial else 1.0
-    n_eff = max(1.0, n / deff)
-    return (*_wilson(p * n_eff, n_eff), n_eff)
 
 
 # Sentinel for "look the revision up now". Distinct from None, which is a
@@ -287,7 +224,7 @@ def cmd_sources(args):
         print(f"\nwrote {path}", file=sys.stderr)
 
 
-def _label_post_training(args, question=None, slug=None):
+def _label_post_training(args, question=None, slug=None, stages=None):
     """sample → extract → classify → write, for each selected post-training stage.
 
     `question` selects the label mode. Without one, each prompt gets a single
@@ -304,7 +241,7 @@ def _label_post_training(args, question=None, slug=None):
     topic instead. A free-form question gets no such shortcut — knowing what the
     reward checks does not answer it.
     """
-    for s in _select_stages(args, registry.post_training_stages, "post-training"):
+    for s in stages or _select_stages(args, registry.post_training_stages, "post-training"):
         # Before the draw, not after: labeling 300 prompts takes minutes, and a
         # revision resolved at the end could name a tree published while it ran.
         revision = hf.dataset_revision(s["hf_dataset"])
@@ -397,13 +334,13 @@ def _label_post_training(args, question=None, slug=None):
             _print_match_rate(s["stage"], k, n, *_wilson(k, n), path, note)
 
 
-def _label_pretrain_docs(args, question, slug):
+def _label_pretrain_docs(args, question, slug, stages=None):
     """Score the documents `pretrain` wrote against `question`.
 
     Judged from that file rather than re-sampled, so asking a second question
     scores the same documents and costs nothing but the API call.
     """
-    for s in registry.pretrain_stages(registry.resolve(args.target)):
+    for s in stages or registry.pretrain_stages(registry.resolve(args.target)):
         docs_path = _pretrain_docs_source(args.target, s["stage"])
         if docs_path is None:
             print(
@@ -435,6 +372,12 @@ def _label_pretrain_docs(args, question, slug):
                 "source": d["source"],
                 "topic": d["topic"],
                 "shard": d["shard"],
+                # The document's true length, not the excerpt's. `budget` weighs
+                # a corpus rate by length — a 200k-character long-context PDF is
+                # not one 500-character web snippet's worth of training — and
+                # carrying the number here means that rollup never has to reopen
+                # the multi-megabyte document sample to find it.
+                "chars": d["chars"],
             }
             for d, lab in zip(docs, labels)
             if lab
@@ -473,7 +416,7 @@ def _label_pretrain_docs(args, question, slug):
         _print_match_rate(s["stage"], k, n, lo, hi, path, _unlabeled_note(labels, reasons))
 
 
-def _warn_missing_pretrain_samples(args):
+def _warn_missing_pretrain_samples(args, stages=None):
     """Warn before spending anything.
 
     The post-training stages cost an API call per batch, and finding out
@@ -482,7 +425,7 @@ def _warn_missing_pretrain_samples(args):
     """
     missing = [
         s["stage"]
-        for s in registry.pretrain_stages(registry.resolve(args.target))
+        for s in stages or registry.pretrain_stages(registry.resolve(args.target))
         if _pretrain_docs_source(args.target, s["stage"]) is None
     ]
     if missing:
@@ -553,19 +496,43 @@ def _pattern_slug(pattern: str, case_sensitive: bool = False) -> str:
 
 
 def cmd_ask(args):
-    """Score sampled prompts from every post-training stage against a free-form question."""
+    """Score sampled examples against a free-form question, either half of the pipeline.
+
+    Unlike every other command, `--stage` here selects across two families:
+    post-training stages are sampled and judged as prompts, corpus stages are
+    read out of a committed document sample and judged as documents. So the
+    selection is resolved once, here, rather than by `_select_stages` inside
+    each half — which would exit on `--stage pretrain` before the pretraining
+    half ever ran.
+
+    `--pretrain-only` exists because the two halves cost very different things.
+    A question already answered over post-training should be extendable to the
+    corpora — which is where 99% of the tokens are — without re-paying for nine
+    stages of prompt labeling that are already committed.
+    """
     # One short name ties a question's post-training and pretraining files together.
     slug = args.slug or _slug(args.question)
     print(f"question: {args.question}\n", file=sys.stderr)
-    if args.pretrain:
+    target = registry.resolve(args.target)
+    want_pretrain = args.pretrain or args.pretrain_only
+    post = [] if args.pretrain_only else registry.post_training_stages(target)
+    pre = registry.pretrain_stages(target) if want_pretrain else []
+    if want_pretrain and not registry.pretrain_stages(target):
         # A dataset has no corpora to score. Accepting the flag and quietly
         # scoring only the prompts would answer half the question asked.
-        if not registry.pretrain_stages(registry.resolve(args.target)):
-            sys.exit(f"--pretrain: {args.target} has no pretraining stages")
-        _warn_missing_pretrain_samples(args)
-    _label_post_training(args, question=args.question, slug=slug)
-    if args.pretrain:
-        _label_pretrain_docs(args, args.question, slug)
+        sys.exit(f"--pretrain: {args.target} has no pretraining stages")
+    if args.stage:
+        post = [s for s in post if s["stage"] == args.stage]
+        pre = [s for s in pre if s["stage"] == args.stage]
+        if not post and not pre:
+            hint = "" if want_pretrain else " (pass --pretrain to reach a corpus stage)"
+            sys.exit(f"no stage {args.stage!r} to ask about for {args.target}{hint}")
+    if pre:
+        _warn_missing_pretrain_samples(args, pre)
+    if post:
+        _label_post_training(args, question=args.question, slug=slug, stages=post)
+    if pre:
+        _label_pretrain_docs(args, args.question, slug, stages=pre)
 
 
 def _pretrain_docs_path(target_name: str, stage: str) -> Path:
@@ -581,13 +548,7 @@ def _pretrain_docs_source(target_name: str, stage: str) -> Path | None:
     that the site serves. Reading only from results/ would tell someone who just
     cloned the repo that the sample shipped with it does not exist.
     """
-    for path in (
-        _pretrain_docs_path(target_name, stage),
-        SITE_DATA / f"{target_name}.{stage}.docs.json",
-    ):
-        if path.exists():
-            return path
-    return None
+    return paths.find(f"{target_name}.{stage}.docs.json")
 
 
 def cmd_pretrain(args):
@@ -1069,6 +1030,214 @@ def cmd_search(args):
                 print(f"  row {rec['row']} [{hit['side']}/{hit['role']}] {text}", file=sys.stderr)
 
 
+def cmd_stance(args):
+    """Judge which way each stored training example pushes on a question.
+
+    Reads the committed context records rather than re-sampling: `context`
+    already holds the whole example behind every sampled prompt, so this lands
+    on exactly the rows an `ask` or `classify` run labeled and costs nothing but
+    the API calls. A stage with no context run yet says so instead of quietly
+    contributing nothing to the total.
+    """
+    slug = args.slug or _slug(args.question)
+    print(f"question: {args.question}\n", file=sys.stderr)
+    for s in _select_stages(args, registry.post_training_stages, "post-training"):
+        kind = registry.stage_kind(s)
+        if kind not in ("sft", "dpo", "rlvr"):
+            # A chat log has no direction to read. Judging one would report a
+            # training signal the data does not carry — the same reason
+            # `context` marks no turn in it as a target.
+            print(
+                f"{s['stage']}: skipped — {kind} examples were not trained on,"
+                " so there is no direction to judge",
+                file=sys.stderr,
+            )
+            continue
+        data = budget.load(f"{args.target}.{s['stage']}.context.json")
+        if not data:
+            print(
+                f"{s['stage']}: no stored examples"
+                f" (`trainspotting context {args.target} --stage {s['stage']}`)",
+                file=sys.stderr,
+            )
+            continue
+        records = data["records"]
+        print(
+            f"judging {len(records)} whole {kind} examples with {args.classifier} ...",
+            file=sys.stderr,
+        )
+        labels, reasons = classify.classify_prompts(
+            [stance.render(r) for r in records],
+            model=args.classifier,
+            question=args.question,
+            system=stance.SYSTEM,
+            valid=stance.STANCES,
+            max_chars=stance.MAX_EXAMPLE,
+            batch_size=stance.BATCH,
+        )
+        out = [
+            {
+                "row": r.get("row"),
+                "prompt": extract.clip((r.get("prompt_full") or {}).get("text", "")),
+                "stance": lab,
+            }
+            for r, lab in zip(records, labels)
+            if lab
+        ]
+        counts = {k: sum(1 for r in out if r["stance"] == k) for k in stance.STANCES}
+        n = len(out)
+        path = _write_json(
+            RESULTS / f"{args.target}.{s['stage']}.stance-{slug}.json",
+            {
+                "question": args.question,
+                "dataset": data["dataset"],
+                # The example is the one the context run stored, so the revision
+                # is that run's — not whatever `main` points at now.
+                **_stamp(data["dataset"], revision=data.get("revision")),
+                "stage": s["stage"],
+                "kind": kind,
+                "sample": data.get("sample"),
+                "seed": data.get("seed"),
+                "classifier": args.classifier,
+                "system_sha": classify.system_id(
+                    classify.build_system(args.question, stance.SYSTEM)
+                ),
+                "judged_chars": stance.MAX_EXAMPLE,
+                "unlabeled": sum(1 for label in labels if label is None),
+                "unlabeled_reasons": reasons,
+                "counts": counts,
+                "net": stance.net(counts),
+                "records": out,
+            },
+        )
+        toward, away = counts["toward"], counts["away"]
+        lo, hi = _wilson(toward, n)
+        print(
+            f"{s['stage']}: toward {toward}/{n} = {toward / n * 100 if n else 0:.1f}%"
+            f" (95% CI {lo * 100:.1f}–{hi * 100:.1f}%), away {away}, net {toward - away}"
+            f" -> {path}{_unlabeled_note(labels, reasons)}",
+            file=sys.stderr,
+        )
+
+
+def _fmt_est(n: float | None) -> str:
+    """An estimated token count, at the resolution the estimate supports.
+
+    Three significant figures at most: these come from a 300-draw rate times a
+    mean length, and printing 41,283,915 would claim precision the sample has
+    nowhere near.
+    """
+    if n is None:
+        return "—"
+    for scale, suffix in ((1e12, "T"), (1e9, "B"), (1e6, "M"), (1e3, "K")):
+        if n >= scale:
+            v = n / scale
+            text = f"{v:.0f}" if v >= 100 else f"{v:.1f}".removesuffix(".0")
+            return text + suffix
+    return f"{n:.0f}"
+
+
+def _fmt_share(share: float) -> str:
+    """A share as a percentage, with enough digits to be a number.
+
+    A question answered only over post-training is a rounding error against
+    5.93T pretraining tokens, and "0.00%" would read as "none" rather than as
+    the three-orders-of-magnitude gap that is the actual finding.
+    """
+    pct = share * 100
+    return f"{pct:.2f}%" if pct >= 0.01 or pct == 0 else f"{pct:.2g}%"
+
+
+BUDGET_COLS = f"{'stage':<14}{'fit tokens':>11}  {'by row':>13}  {'by length':>9}  {'matching tokens':>17}"
+
+
+def _budget_row(s: dict) -> str:
+    size = _fmt_est(s.get("size_tokens")) + ("*" if s.get("size_is_floor") else " ")
+    if not s.get("measured"):
+        return f"{s['stage']:<14}{size:>12}  not measured"
+    by_row = f"{s['matched']}/{s['n']}  {s['count_rate'] * 100:4.1f}%"
+    matching = _fmt_est(s.get("matching_tokens"))
+    ci = s.get("matching_tokens_ci")
+    if ci:
+        matching += f" ({_fmt_est(ci[0])}–{_fmt_est(ci[1])})"
+    return (
+        f"{s['stage']:<14}{size:>12}  {by_row:>13}  {s['char_rate'] * 100:8.1f}%"
+        f"  {matching:>17}"
+    )
+
+
+def cmd_budget(args):
+    """Roll an `ask` question up into a share of the training budget.
+
+    Reads committed runs only. Every stage the question was never asked of
+    prints "not measured" rather than dropping out, because a total that
+    silently excludes 5.93T tokens of pretraining is the exact error this
+    command exists to prevent.
+    """
+    est = budget.estimate(args.target, args.slug)
+    measured = [s for s in est["stages"] if s.get("measured")]
+    if not measured:
+        sys.exit(
+            f"no ask run for {args.target} with slug {args.slug!r}"
+            f" — run `trainspotting ask {args.target} \"...\" --slug {args.slug}`"
+        )
+    print(f"# Training budget — {args.target}\n")
+    print(f"question: {est['question']}\n")
+    if est["question_variants"]:
+        print(
+            "warning: these runs were scored against different wordings of the"
+            " question, and are summed here anyway:",
+            file=sys.stderr,
+        )
+        for q in est["question_variants"]:
+            print(f"  - {q}", file=sys.stderr)
+        print(file=sys.stderr)
+
+    print(BUDGET_COLS)
+    print("-" * len(BUDGET_COLS))
+    for s in est["stages"]:
+        print(_budget_row(s))
+
+    print()
+    for family, label in (("pretrain", "pretraining"), ("post-training", "post-training"), ("all", "whole pipeline")):
+        t = est["totals"][family]
+        if not t["stages"]:
+            continue
+        line = f"{label:<16}{_fmt_est(t['size_tokens']):>10} fit tokens"
+        if t["measured"]:
+            line += (
+                f"  →  {_fmt_est(t['matching_tokens'])} matching"
+                f"  ({_fmt_share(t['share'])} of it)"
+            )
+        if t["measured"] < t["stages"]:
+            line += f"  [{t['stages'] - t['measured']} stage(s) not measured]"
+        print(line)
+
+    floors = est["totals"]["all"]["floor"]
+    unsized = est["totals"]["all"]["unsized"]
+    if floors:
+        print(
+            f"\n* {', '.join(floors)} sized at one reference rollout per prompt — a floor."
+            " The rollouts the policy was actually fit to are not in the published mix."
+        )
+    if unsized:
+        print(f"\nno size for: {', '.join(unsized)} — excluded from every total above")
+    notes = [(s["stage"], n) for s in est["stages"] for n in s.get("notes", [])]
+    if notes:
+        print()
+        for stage, note in notes:
+            print(f"note ({stage}): {note}")
+    print(
+        f"\nFit tokens are what the model was trained to produce, at"
+        f" {budget.CHARS_PER_TOKEN:g} characters per token."
+        "\nThis weighs tokens, not learning: a post-training token and a"
+        " pretraining token are not equally formative, and nothing here corrects for that."
+    )
+    if args.json:
+        path = _write_json(RESULTS / f"{args.target}.budget-{args.slug}.json", est)
+        print(f"\nwrote {path}", file=sys.stderr)
+
+
 def cmd_report(args):
     target = registry.resolve(args.target)
     kind = "Training-data audit" if target["is_model"] else "Dataset audit"
@@ -1144,6 +1313,88 @@ def cmd_report(args):
             print(f"- undetermined: {und / n * 100:.1f}%  ({und}/{n}) — too short, too much code, or too evenly mixed to call")
         print()
 
+    _report_questions(args.target, target)
+
+
+def _report_questions(target_name: str, target: dict) -> None:
+    """The free-form layers: what was asked, which way it pushes, what it costs
+    as a share of training.
+
+    Ordered so the last thing a reader sees is the budget. The rates above it
+    are per stage and not comparable to each other — that is the whole reason
+    the budget table exists — so leading with them and stopping would leave the
+    report saying "6% of DPO prompts" as if it answered how much training the
+    model got.
+    """
+    asks = paths.runs(target_name, "ask")
+    stances = paths.runs(target_name, "stance")
+    if not asks and not stances:
+        return
+    order = [s["stage"] for s in target["stages"]]
+
+    if asks:
+        print("\n## Custom questions (sampled)\n")
+        for slug, stages in asks.items():
+            data = {st: budget.load(f"{target_name}.{st}.ask-{slug}.json") for st in stages}
+            first = next(iter(d for d in data.values() if d), None)
+            print(f"### {slug}\n")
+            if first:
+                print(f"> {first['question']}\n")
+            for st in sorted(stages, key=lambda x: order.index(x) if x in order else 99):
+                d = data[st]
+                if not d:
+                    continue
+                records = d["records"]
+                k, n = sum(bool(r["match"]) for r in records), len(records)
+                # A corpus run stores its own cluster-corrected interval; the
+                # binomial one would be too narrow for documents drawn by shard.
+                lo, hi = d["ci"] if d.get("ci") else _wilson(k, n)
+                print(
+                    f"- {st:14s} {k / n * 100 if n else 0:5.1f}%  ({k}/{n},"
+                    f" 95% CI {lo * 100:.1f}–{hi * 100:.1f}%)"
+                )
+            print()
+
+    if stances:
+        print("\n## Which way each example pushes (whole examples, sampled)\n")
+        for slug, stages in stances.items():
+            print(f"### {slug}\n")
+            for st in sorted(stages, key=lambda x: order.index(x) if x in order else 99):
+                d = budget.load(f"{target_name}.{st}.stance-{slug}.json")
+                if not d:
+                    continue
+                c = d["counts"]
+                n = len(d["records"])
+                lo, hi = _wilson(c["toward"], n)
+                print(
+                    f"- {st:14s} toward {c['toward']}/{n} = {c['toward'] / n * 100 if n else 0:.1f}%"
+                    f" (95% CI {lo * 100:.1f}–{hi * 100:.1f}%), away {c['away']},"
+                    f" net {d['net']:+d}"
+                )
+            print()
+
+    for slug in asks:
+        est = budget.estimate(target_name, slug)
+        if not any(s.get("measured") for s in est["stages"]):
+            continue
+        print(f"\n## Training budget — {slug}\n")
+        print(BUDGET_COLS)
+        print("-" * len(BUDGET_COLS))
+        for st in est["stages"]:
+            print(_budget_row(st))
+        t = est["totals"]["all"]
+        print(
+            f"\nwhole pipeline: {_fmt_est(t['matching_tokens'])} of"
+            f" {_fmt_est(t['size_tokens'])} fit tokens ({_fmt_share(t['share'])})"
+        )
+        if t["measured"] < t["stages"]:
+            print(
+                f"  {t['stages'] - t['measured']} of {t['stages']} stages were never"
+                f" asked this question — run `trainspotting ask {target_name} \"...\""
+                f" --slug {slug} --pretrain-only` to close the gap"
+            )
+        print()
+
 
 def main():
     ap = argparse.ArgumentParser(prog="trainspotting")
@@ -1159,6 +1410,11 @@ def main():
     p = sub.add_parser("ask", help="score sampled prompts against a free-form yes/no question")
     p.add_argument("target", help=TARGET_HELP)
     p.add_argument("question")
+    p.add_argument(
+        "--stage",
+        help="only this stage — a post-training one (sft/dpo/rlvr), or with --pretrain "
+        "a corpus one (pretrain/midtrain/long-context)",
+    )
     p.add_argument("--sample", type=_positive_int, default=300)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--classifier", default="claude-opus-5")
@@ -1168,7 +1424,34 @@ def main():
         action="store_true",
         help="also score pretraining documents sampled by `trainspotting pretrain`",
     )
+    p.add_argument(
+        "--pretrain-only",
+        action="store_true",
+        help="score only the pretraining documents — for extending a question already "
+        "answered over post-training without paying for those stages again",
+    )
     p.set_defaults(fn=cmd_ask)
+
+    p = sub.add_parser(
+        "stance",
+        help="judge which way each stored training example pushes on a question "
+        "(toward / away / neither) — reads whole examples, not prompts",
+    )
+    p.add_argument("target", help=TARGET_HELP)
+    p.add_argument("question")
+    p.add_argument("--stage", help="only this stage (sft/dpo/rlvr)")
+    p.add_argument("--classifier", default="claude-opus-5")
+    p.add_argument("--slug", help="short name for the result files (default: derived from the question)")
+    p.set_defaults(fn=cmd_stance)
+
+    p = sub.add_parser(
+        "budget",
+        help="roll an ask question up into a share of the training budget, in tokens",
+    )
+    p.add_argument("target", help=TARGET_HELP)
+    p.add_argument("slug", help="the --slug of the ask runs to roll up")
+    p.add_argument("--json", action="store_true", help="also write results/<target>.budget-<slug>.json")
+    p.set_defaults(fn=cmd_budget)
 
     p = sub.add_parser(
         "find",
