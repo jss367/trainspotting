@@ -37,13 +37,15 @@ for path in sorted((ROOT / "results").glob("*.json")):
     rows = hf.sample_rows(stage["hf_dataset"], data["sample"], seed=data["seed"])
     prompts = [extract.extract_prompt(r, stage["prompt_path"]) for r in rows]
     # Keyed on the prefix the records store, so a record finds its own row
-    # wherever the draw put it. A prefix collision would be two rows that agree
-    # for 200 characters and disagree after; drop both rather than guess.
+    # wherever the draw put it. Ambiguity is about the text, not the rows: a
+    # prompt appearing in several rows still upgrades to one answer, while two
+    # rows agreeing for 200 characters and diverging after have no single
+    # answer, so drop those rather than guess.
     by_prefix = {}
     for full in prompts:
         if full:
-            by_prefix.setdefault(full[:200], []).append(full)
-    unique = {k: v[0] for k, v in by_prefix.items() if len(v) == 1}
+            by_prefix.setdefault(full[:200], set()).add(full)
+    unique = {k: next(iter(v)) for k, v in by_prefix.items() if len(v) == 1}
 
     upgraded = ambiguous = 0
     missing = []
