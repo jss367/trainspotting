@@ -503,6 +503,16 @@ const revLink = d => d.revision
       : "")
   : "";
 
+// What a run's classifier never labeled, phrased once. Both views need it: a
+// comparison that shows one model's 280 beside another's 300 without saying why
+// invites reading the gap as a difference in the data rather than in coverage.
+// Older files carry no count, so fall back to the null records they still hold.
+const unlabeledOf = (d, labeled) => {
+  const n = d.unlabeled ?? (d.records.length - labeled);
+  const why = Object.entries(d.unlabeled_reasons || {}).map(([k, v]) => `${v} ${k}`).join(", ");
+  return n ? {n, why, text: `${n} of ${n + labeled} sampled prompts unlabeled${why ? ` (${why})` : ""} and excluded`} : null;
+};
+
 // Mix labels are a mix of real HuggingFace dataset ids and bare internal names.
 // Only the ones checked as publicly reachable when the data was built get a link.
 const srcLabel = (v, links) => (links && links[v])
@@ -1549,7 +1559,7 @@ async function renderCompare(gen){
       const recs = d.records.filter(r => r.label);
       const counts = {};
       for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
-      per.push({m, recs, counts, n: recs.length, dataset: d.dataset});
+      per.push({m, recs, counts, n: recs.length, dataset: d.dataset, skipped: unlabeledOf(d, recs.length)});
     }
     // A stage no registered model has at all contributes neither data nor
     // missing-run notices — skip it. But a stage where every registered model
@@ -1570,6 +1580,13 @@ async function renderCompare(gen){
       hhh.appendChild(p);
     }
     if (!per.length) continue;
+    // Same accounting as the per-model page, per model rather than per stage.
+    for (const p of per.filter(x => x.skipped)){
+      const note = document.createElement("p");
+      note.className = "note";
+      note.textContent = `${p.m} — ${p.skipped.text} from the bars below`;
+      hhh.appendChild(note);
+    }
     const max = Math.max(...per.flatMap(p => LABELS.map(l => wilson(p.counts[l]||0, p.n)[1])), 0.01);
     let lastGrp = null;
     for (const l of LABELS){
@@ -1586,7 +1603,8 @@ async function renderCompare(gen){
         const k = p.counts[l] || 0;
         const [lo, hi] = wilson(k, p.n);
         barRow(hhh, shortName(p.m), k/p.n, lo, hi, max,
-          `<b>${p.m}</b> · ${NICE[l]}<br>${k} of ${p.n} sampled prompts (${pct(k/p.n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
+          `<b>${p.m}</b> · ${NICE[l]}<br>${k} of ${p.n} sampled prompts (${pct(k/p.n)})<br>95% CI ${pct(lo)}–${pct(hi)}`
+          + (p.skipped ? `<br>${esc(p.skipped.text)}` : "") + `<br>click to see the prompts`,
           false,
           p.recs.filter(r => r.label === l), {...ctxOf(p.m, stage, p.dataset), linkKey: `${p.m}.${l}`}, color(p.m));
       }
@@ -1624,7 +1642,7 @@ async function renderCompare(gen){
         const b = buckets.get(key);
         if (!b.rowsByStage.has(stage)) b.rowsByStage.set(stage, []);
         const n = d.records.length, k = d.records.filter(r => r.match).length;
-        b.rowsByStage.get(stage).push({m, d, n, k, ci: wilson(k, n)});
+        b.rowsByStage.get(stage).push({m, d, n, k, ci: wilson(k, n), skipped: unlabeledOf(d, n)});
       }
     }
     for (const {question, classifier, rowsByStage} of buckets.values()){
@@ -1656,9 +1674,16 @@ async function renderCompare(gen){
           p.textContent = `${m} — no ask run committed for this stage`;
           card.appendChild(p);
         }
+        for (const r of rows.filter(x => x.skipped)){
+          const note = document.createElement("p");
+          note.className = "note";
+          note.textContent = `${r.m} — ${r.skipped.text} from the bar below`;
+          card.appendChild(note);
+        }
         for (const r of rows){
           barRow(card, shortName(r.m), r.k/r.n, r.ci[0], r.ci[1], max,
-            `<b>${r.m}</b> · ${stage}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
+            `<b>${r.m}</b> · ${stage}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`
+            + (r.skipped ? `<br>${esc(r.skipped.text)}` : "") + `<br>click to read them`,
             false,
             r.d.records.filter(x => x.match), {...ctxOf(r.m, stage, r.d.dataset), linkKey: `${r.m}.ask-${slug}`}, color(r.m));
         }
