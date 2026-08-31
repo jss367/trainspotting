@@ -217,14 +217,19 @@ MODELS = {
                 "name": "Dolci Think SFT 32B",
                 "hf_dataset": "allenai/Dolci-Think-SFT-32B",
                 "prompt_path": "messages",
-                "source_columns": ["dataset_source"],
+                # This one names the column `source`, where the 7B SFT mix names
+                # it `dataset_source`. Listing only the latter left the 32B SFT
+                # sources table empty, which reads as "this mix has no source
+                # labels" rather than as a column-name mismatch.
+                "source_columns": ["source", "dataset_source"],
             },
             {
                 "stage": "dpo",
                 "name": "Dolci Think DPO 32B",
                 "hf_dataset": "allenai/Dolci-Think-DPO-32B",
                 "prompt_path": "prompt",
-                "source_columns": ["dataset_source", "preference_type"],
+                # `dataset` here, `dataset_source` in the 7B DPO mix, same values.
+                "source_columns": ["dataset", "dataset_source", "preference_type"],
             },
             {
                 "stage": "rlvr",
