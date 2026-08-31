@@ -7,6 +7,8 @@ has no pretraining corpora, and no verifier to read a label off) failing loudly
 rather than producing an empty or mislabeled record.
 """
 
+import sys
+
 import pytest
 from conftest import row_fixture
 
@@ -83,6 +85,30 @@ def test_only_an_rl_row_gets_a_label_from_its_verifier():
     assert classify.verifier_label(row, "chat") is None
 
 
+def test_a_chat_kind_gets_its_own_rubric_in_both_label_modes():
+    """The default rubric reads a prompt for what training on it would teach,
+    and sends a jailbreak attempt to `harmlessness` on that basis. Nothing was
+    trained on a chat log, so it needs a rubric that describes the request."""
+    assert classify.system_for("chat") is classify.CHAT_SYSTEM
+    assert classify.system_for("chat", "is this about X?") is classify.ASK_CHAT_SYSTEM
+    for kind in ("sft", "dpo", "rlvr"):
+        assert classify.system_for(kind) is None
+        assert classify.system_for(kind, "is this about X?") is None
+
+
+def test_the_chat_rubric_offers_exactly_the_taxonomy():
+    """A label the parser rejects would silently drop the prompt, and a missing
+    one would never be assigned — either way the card under-counts."""
+    for label in classify.LABELS:
+        assert f"- {label}:" in classify.CHAT_SYSTEM
+
+
+def test_the_chat_rubric_does_not_claim_a_training_signal():
+    """The one thing it exists to avoid saying."""
+    assert "training signal" not in classify.CHAT_SYSTEM.split("Nothing was trained")[0]
+    assert "Nothing was trained on these conversations" in classify.CHAT_SYSTEM
+
+
 def test_a_chat_row_becomes_a_conversation_record_not_an_rl_one():
     saved = row_fixture("wildchat-1m", "chat")
     prompt = extract.extract_prompt(saved["row"], "conversation")
@@ -93,3 +119,26 @@ def test_a_chat_row_becomes_a_conversation_record_not_an_rl_one():
     # store a verifier record for a row that has no verifier.
     assert "reward" not in rec
     assert rec["meta"]["model"]
+
+
+def test_the_cli_canonicalizes_a_target_name_before_using_it(monkeypatch, capsys):
+    """Result filenames are built from the target name, and the site indexes the
+    registry key — so `classify WildChat-1M` writing WildChat-1M.chat.labels.json
+    produced a run the page never asked for."""
+    from trainspotting import cli
+
+    seen = {}
+    monkeypatch.setattr(cli, "cmd_facts", lambda args: seen.setdefault("target", args.target))
+    monkeypatch.setattr(sys, "argv", ["trainspotting", "facts", "WildChat-1M"])
+    cli.main()
+    assert seen["target"] == "wildchat-1m"
+
+
+def test_an_unknown_target_exits_with_the_registry_message(monkeypatch):
+    """A KeyError traceback out of argparse is a crash report, not a usage error."""
+    from trainspotting import cli
+
+    monkeypatch.setattr(sys, "argv", ["trainspotting", "facts", "gpt-5"])
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert "Unknown model or dataset" in str(exc.value)

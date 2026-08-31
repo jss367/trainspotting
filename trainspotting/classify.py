@@ -62,6 +62,30 @@ If a prompt is a harmful or trick request (even disguised as a normal task), lab
 Reply with ONLY a JSON array: [{"i": <index>, "label": "<label>"}, ...] covering every index you were given."""
 
 
+# A chat log is not training data. The rubric above labels a prompt by what
+# fitting the example would teach — which is why it sends a jailbreak attempt to
+# `harmlessness`, "the training signal is how to handle it". Nothing was fit to a
+# WildChat conversation, so there is no such signal to read, and only the opening
+# user turn is passed anyway: whether the assistant refused or complied is not
+# even on screen. Applied there, the model rubric reports a training property the
+# data does not have.
+#
+# So label what the person asked for instead. Same seven labels, so a dataset's
+# card and a model stage's card still stack up against each other — what changes
+# is the claim each bar makes.
+CHAT_SYSTEM = """You label prompts that real people sent to a chatbot, by what the person was asking for. Nothing was trained on these conversations; you are describing the request, not a training signal. You see only the opening user turn, so judge that — not how the assistant did or should have answered. Assign exactly one label per prompt:
+
+- harmlessness: the person is asking for something unsafe, harmful, illegal, or unethical, or is trying to jailbreak the assistant. This means the request was safety-relevant; it says nothing about what came back.
+- honesty: the request presses on what is true or knowable — asking for facts the assistant cannot know, resting on a false premise, pushing it to agree, or asking about the assistant's own nature or limits.
+- helpfulness: ordinary assistance — open-ended chat, writing and editing, advice, planning, explanation, summarization, everyday questions.
+- capability: skill work — math, code writing or debugging, algorithms, science and logic problems.
+- instruction_following: the point of the request is a precise formal constraint (word count, forced format, forbidden words, JSON shape), whatever the topic.
+- tool_use: asking the assistant to call functions or APIs, or to act as an agent with tools.
+- other: none of the above fits.
+
+Reply with ONLY a JSON array: [{"i": <index>, "label": "<label>"}, ...] covering every index you were given."""
+
+
 def _parse(text: str, n: int, valid: list[str] = LABELS) -> dict[int, str]:
     m = re.search(r"\[.*\]", text, re.DOTALL)
     if not m:
@@ -101,6 +125,31 @@ Two failure modes to avoid. Do not match on topic alone: a news report that a pe
 Boilerplate, navigation chrome, link dumps, and near-empty pages are "no".
 
 Reply with ONLY a JSON array: [{{"i": <index>, "label": "yes" or "no"}}, ...] covering every index you were given."""
+
+
+ASK_CHAT_SYSTEM = """You judge prompts that real people sent to a chatbot against a question the user wants answered about the data. The question is:
+
+{question}
+
+Nothing was trained on these conversations, so there is no training signal to judge — judge the request itself: what the person wanted, what they were willing to ask for, what they took for granted. You see only the opening user turn, so the assistant's answer is not evidence either way.
+
+Do not match on topic alone: mentioning a subject is not the same as the request being about it.
+
+Reply with ONLY a JSON array: [{{"i": <index>, "label": "yes" or "no"}}, ...] covering every index you were given."""
+
+# Which rubric a stage's prompts are judged under. Only `chat` needs one of its
+# own; every model stage is a training example and reads correctly under the
+# default. Returning None means "let classify_prompts pick", which keeps the
+# default path in exactly one place.
+SYSTEMS = {"chat": (CHAT_SYSTEM, ASK_CHAT_SYSTEM)}
+
+
+def system_for(kind: str, question: str | None = None) -> str | None:
+    """The system prompt for this kind of example, or None for the default."""
+    pair = SYSTEMS.get(kind)
+    if not pair:
+        return None
+    return pair[1] if question else pair[0]
 
 
 def classify_prompts(

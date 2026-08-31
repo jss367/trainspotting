@@ -46,7 +46,12 @@ The two things a dataset changes about how a result reads:
 - Nothing was trained on it. The context view shows the conversation a prompt
   opened, and says outright that no turn in it is a target — an SFT view would
   mark the replies "trained to produce this", which is exactly the claim a raw
-  chat log does not support.
+  chat log does not support. The values layer changes rubric for the same
+  reason: the default one labels a prompt by what fitting the example would
+  teach, and on that basis sends a jailbreak attempt to `harmlessness`. A chat
+  log has no such signal to read, so `chat` prompts are labeled by what the
+  person asked for instead (`classify.CHAT_SYSTEM`). Same seven labels, so the
+  cards still stack up; what changes is the claim each bar makes.
 - It brings its own labels. WildChat records the model, language, country and
   redaction status of every conversation, so the `languages` layer becomes a
   check on py3langid rather than the only breakdown available. It passes: the

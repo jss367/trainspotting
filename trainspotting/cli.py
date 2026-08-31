@@ -253,7 +253,16 @@ def _label_post_training(args, question=None, slug=None):
             + " ...",
             file=sys.stderr,
         )
-        asked = iter(classify.classify_prompts(ask, model=args.classifier, question=question))
+        asked = iter(
+            classify.classify_prompts(
+                ask,
+                model=args.classifier,
+                question=question,
+                # A chat log is not a training example, so it is not judged as
+                # one. Every model stage gets None here and takes the default.
+                system=classify.system_for(registry.stage_kind(s), question),
+            )
+        )
         labels = [f or next(asked) for f in fixed]
         run = {
             "dataset": s["hf_dataset"],
@@ -711,6 +720,15 @@ def main():
     p.set_defaults(fn=cmd_classify)
 
     args = ap.parse_args()
+    # Canonicalize once, here, so every result path and every lookup downstream
+    # agrees. `resolve` accepts case variants; writing the raw argument into the
+    # filename meant `classify WildChat-1M` produced a file the site — which
+    # indexes the registry key — never asks for, and the run silently didn't
+    # exist.
+    try:
+        args.target = registry.resolve(args.target)["target"]
+    except KeyError as e:
+        sys.exit(e.args[0])
     args.fn(args)
 
 
