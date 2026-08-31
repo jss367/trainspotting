@@ -645,6 +645,11 @@ def cmd_context(args):
         revision = hf.dataset_revision(s["hf_dataset"])
         print(f"re-fetching {args.sample} sampled rows from {s['hf_dataset']} ...", file=sys.stderr)
         rows = hf.sample_rows_with_index(s["hf_dataset"], args.sample, seed=args.seed)
+        # Thirty-odd paged requests, so the same republish window the labeling
+        # path checks for applies here — smaller, but not absent, and these
+        # records are what the site shows when someone clicks through to a
+        # training example.
+        moved = hf.dataset_revision(s["hf_dataset"])
         records = []
         for row_index, row in rows:
             prompt = extract.extract_prompt(row, s["prompt_path"])
@@ -655,6 +660,7 @@ def cmd_context(args):
             {
                 "dataset": s["hf_dataset"],
                 **_stamp(s["hf_dataset"], revision=revision),
+                **({"revision_moved_to": moved} if revision and moved and moved != revision else {}),
                 "stage": s["stage"],
                 "sample": args.sample,
                 "seed": args.seed,

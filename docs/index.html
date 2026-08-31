@@ -1481,7 +1481,7 @@ async function renderModel(model, gen){
           ? `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])} — widened for clustering, effective n ${r.nEff.toFixed(0)} of ${r.n} (documents sharing a shard are correlated)`
           : `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`;
         barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
-          `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})${ciNote}${skipNote}<br>click to read them`,
+          `<b>${r.stage}</b> · ${esc(r.d.dataset)}${revLink(r.d)}<br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})${ciNote}${skipNote}<br>click to read them`,
           false,
           r.d.records.filter(x => x.match), {...ctxFor(s), isCorpus, linkKey: "ask-" + slug});
       }
@@ -1559,7 +1559,7 @@ async function renderCompare(gen){
       const recs = d.records.filter(r => r.label);
       const counts = {};
       for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
-      per.push({m, recs, counts, n: recs.length, dataset: d.dataset, skipped: unlabeledOf(d, recs.length)});
+      per.push({m, recs, counts, n: recs.length, dataset: d.dataset, rev: d, skipped: unlabeledOf(d, recs.length)});
     }
     // A stage no registered model has at all contributes neither data nor
     // missing-run notices — skip it. But a stage where every registered model
@@ -1603,7 +1603,7 @@ async function renderCompare(gen){
         const k = p.counts[l] || 0;
         const [lo, hi] = wilson(k, p.n);
         barRow(hhh, shortName(p.m), k/p.n, lo, hi, max,
-          `<b>${p.m}</b> · ${NICE[l]}<br>${k} of ${p.n} sampled prompts (${pct(k/p.n)})<br>95% CI ${pct(lo)}–${pct(hi)}`
+          `<b>${p.m}</b> · ${NICE[l]}${revLink(p.rev)}<br>${k} of ${p.n} sampled prompts (${pct(k/p.n)})<br>95% CI ${pct(lo)}–${pct(hi)}`
           + (p.skipped ? `<br>${esc(p.skipped.text)}` : "") + `<br>click to see the prompts`,
           false,
           p.recs.filter(r => r.label === l), {...ctxOf(p.m, stage, p.dataset), linkKey: `${p.m}.${l}`}, color(p.m));
@@ -1682,7 +1682,7 @@ async function renderCompare(gen){
         }
         for (const r of rows){
           barRow(card, shortName(r.m), r.k/r.n, r.ci[0], r.ci[1], max,
-            `<b>${r.m}</b> · ${stage}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`
+            `<b>${r.m}</b> · ${stage}${revLink(r.d)}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`
             + (r.skipped ? `<br>${esc(r.skipped.text)}` : "") + `<br>click to read them`,
             false,
             r.d.records.filter(x => x.match), {...ctxOf(r.m, stage, r.d.dataset), linkKey: `${r.m}.ask-${slug}`}, color(r.m));
