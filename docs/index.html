@@ -1380,6 +1380,7 @@ async function renderModel(model, gen){
     det.innerHTML = `<summary>
       <i class="sw"></i><b>${esc(s.stage.toUpperCase())}</b>
       <span class="ds">— ${esc(s.name)}</span>
+      <span class="ds">${esc(d.dataset)}${revLink(d)}</span>
       <span class="lsum"><em>${pct(nonEn/n)}</em> detected non-English ·
         ${undet ? `${pct(undet/n)} undetermined · ` : ""}
         ${rest.length} other language${rest.length === 1 ? "" : "s"} · n=${n}</span>

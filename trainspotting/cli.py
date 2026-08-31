@@ -210,6 +210,10 @@ def cmd_sources(args):
         revision = hf.dataset_revision(s["hf_dataset"])
         freqs = hf.column_frequencies(s["hf_dataset"], s["source_columns"])
         total = hf.num_rows(s["hf_dataset"])
+        # /statistics and /info are two requests, and this layer is the one that
+        # calls its numbers exact — so a republish between them would leave
+        # frequencies and a row count describing different trees.
+        moved = hf.dataset_revision(s["hf_dataset"])
         # One hub request per repo-shaped label, so only pay for it when the
         # result is being written out — the printed table has nowhere to put a URL.
         links = {}
@@ -223,6 +227,7 @@ def cmd_sources(args):
         out[s["stage"]] = {
             "dataset": s["hf_dataset"],
             **_stamp(s["hf_dataset"], revision=revision),
+            **({"revision_moved_to": moved} if revision and moved and moved != revision else {}),
             "total": total,
             "columns": freqs,
             "links": links,
@@ -622,8 +627,10 @@ def cmd_languages(args):
                 **_stamp(s["hf_dataset"], revision=revision),
                 # From a reused run, this is the ambiguity it recorded; from a
                 # fresh draw, movement observed across that draw. Either way it
-                # only appears when there are two known and different readings.
-                **({"revision_moved_to": moved} if moved and moved != revision else {}),
+                # takes two known and different readings: a first lookup that
+                # failed leaves the tree unknown, and a SHA read afterwards is
+                # the first answer we got, not evidence of a republish.
+                **({"revision_moved_to": moved} if revision and moved and moved != revision else {}),
                 "sample": sample,
                 "seed": seed,
                 "detector": "py3langid",
