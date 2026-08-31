@@ -17,13 +17,19 @@ sys.path.insert(0, str(ROOT))
 
 from trainspotting import extract, hf, registry  # noqa: E402
 
+# The stage token in a result filename is a kind, so read the alternation off
+# the registry rather than hardcoding the three model stages — a dataset's files
+# are named for its own kind (wildchat-1m.chat.labels.json) and a literal list
+# would skip them without saying so.
+STAGE_RE = re.compile(rf"^(.+?)\.({'|'.join(registry.KINDS)})\.")
+
 for path in sorted((ROOT / "results").glob("*.json")):
-    m = re.match(r"^(.+?)\.(sft|dpo|rlvr)\.", path.name)
+    m = STAGE_RE.match(path.name)
     if not m:
         continue
-    model_name, stage_name = m.groups()
+    target_name, stage_name = m.groups()
     stage = next(
-        s for s in registry.post_training_stages(registry.get_model(model_name))
+        s for s in registry.post_training_stages(registry.resolve(target_name))
         if s["stage"] == stage_name
     )
     data = json.loads(path.read_text())
