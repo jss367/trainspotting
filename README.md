@@ -237,7 +237,8 @@ does not render `grep` runs yet.
 
 The search box in the site's header answers the reading half: it finds a string
 in the committed samples and shows every match in place, across every model and
-stage at once, prompts and responses alike. Type `ChatGPT` and five sampled
+stage at once — every turn of the prompt, system instructions included, and the
+response side with it. Type `ChatGPT` and five sampled
 examples come back: the WildChat prompt that opens `Interact as ChatGPT`, a
 DPO prompt asking for `a persona distinct from ChatGPT`, an RL reference answer
 about `working with AI like ChatGPT`, and two long-context documents, one of

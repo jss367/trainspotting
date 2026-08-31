@@ -1721,11 +1721,21 @@ function searchableFiles(){
 // inside a response are the prompt again — matching them would report the same
 // text twice under two names.
 function searchFields(rec){
-  const out = [];
-  const push = (field, text) => { if (text) out.push({field, text}); };
+  const out = [], seen = new Set();
+  // Deduplicate on the text itself, not on the role. `prompt_full` is the FIRST
+  // user turn (extract.py's _first), so a record's own turn list repeats it —
+  // but a system instruction and every later user turn are text the prompt does
+  // not carry, and skipping them by role hid 430,000 characters across the
+  // committed samples. The trigram index reads them (it walks every string in
+  // the record), so a query that only lived there passed the prefilter, cost a
+  // download, and came back "no match" for text that is provably in the data.
+  const push = (field, text) => {
+    if (!text || seen.has(text)) return;
+    seen.add(text);
+    out.push({field, text});
+  };
   push("prompt", rec.prompt_full && rec.prompt_full.text);
   const turns = (list, tag) => (list || []).forEach(t => {
-    if (t.role === "user" || t.role === "system") return;
     if (t.reasoning) push(tag + t.role + " reasoning", t.reasoning.text);
     push(tag + t.role, t.text);
   });
@@ -1809,9 +1819,10 @@ async function renderSearch(query, gen){
   const short = query.trim().length < 2;
   card.innerHTML = `<h2>${short ? "Search the committed samples"
       : `“${esc(query)}” in the committed samples`}</h2>
-    <p class="sub">Every sampled training example whose text contains this string — prompts,
-      the responses each stage fits or prefers, the reference answers its verifier scores
-      against, and the pretraining documents. Matching is literal and case-insensitive.</p>
+    <p class="sub">Every sampled training example whose text contains this string — every turn
+      of the prompt, system instructions included, the responses each stage fits or prefers,
+      the reference answers its verifier scores against, and the pretraining documents.
+      Matching is literal and case-insensitive.</p>
     ${short ? `<p class="note">Type at least two characters.</p>` : ""}`;
   main.appendChild(card);
   if (short) return;
