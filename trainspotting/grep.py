@@ -293,6 +293,17 @@ def total_rows(con, urls: list[str]) -> int:
     ).fetchone()[0]
 
 
+def _by_count(counts: dict[str, int]) -> dict[str, int]:
+    """Biggest first, then by name — the order a reader wants, and a fixed one.
+
+    DuckDB aggregates in parallel and returns groups in no particular order, and
+    arrival order is not an order either. Left alone, every re-run reshuffled the
+    keys of `rows_by_source` and `by_source_group`: same names, same numbers,
+    a diff on every regeneration. Ties break on the name so the sort is total.
+    """
+    return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+
+
 NO_SOURCE_COLUMN = "(no source column)"
 NO_SOURCE_VALUE = "(no source value)"
 
@@ -332,7 +343,7 @@ def source_totals(con, from_sql: str, source: str) -> dict[str, int]:
     for value, n in rows:
         key = source_label(value, has_column=True)
         out[key] = out.get(key, 0) + n
-    return out
+    return _by_count(out)
 
 
 def _element_test(pattern: str, regex: bool, case_sensitive: bool) -> str:
@@ -583,9 +594,11 @@ def scan(
 
     return {
         "matched": matched,
-        "by_source": dict(sorted(by_source.items(), key=lambda kv: -kv[1])),
+        "by_source": _by_count(by_source),
         "by_group": by_group,
-        "by_source_group": by_source_group,
+        "by_source_group": {
+            src: by_source_group[src] for src in _by_count(by_source)
+        },
         "examples": [by_snippet[text] for _, text in sorted(kept, key=lambda kv: -kv[0])],
     }
 

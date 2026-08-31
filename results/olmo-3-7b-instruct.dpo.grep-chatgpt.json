@@ -16,10 +16,10 @@
   "unsearched_columns": [],
   "total_rows": 259922,
   "rows_by_source": {
-    "multiturn_synthetic_context": 5000,
-    "multiturn_self_talk": 5000,
     "llm_judged": 124980,
-    "delta_learning": 124942
+    "delta_learning": 124942,
+    "multiturn_self_talk": 5000,
+    "multiturn_synthetic_context": 5000
   },
   "matched": 521,
   "by_source": {
@@ -33,13 +33,13 @@
     "response": 193
   },
   "by_source_group": {
-    "delta_learning": {
-      "prompt": 232,
-      "response": 87
-    },
     "llm_judged": {
       "prompt": 223,
       "response": 105
+    },
+    "delta_learning": {
+      "prompt": 232,
+      "response": 87
     },
     "multiturn_self_talk": {
       "prompt": 5,

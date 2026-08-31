@@ -17,14 +17,14 @@
   "unsearched_columns": [],
   "total_rows": 169964,
   "rows_by_source": {
+    "allenai/rlvr_general_mix-keyword-filtered-topic-chars-char-filt-topic-filtered": 48398,
+    "allenai/IF_multi_constraints_upto5_filtered_dpo_0625_filter-keyword-filtered-topic-char-topic-filtered": 37568,
+    "hamishivi/omega-combined-no-boxed_filtered": 20000,
+    "hamishivi/rlvr_acecoder_filtered_filtered": 20000,
+    "hamishivi/polaris_53k": 14000,
     "hamishivi/rlvr_orz_math_57k_collected_filtered": 14000,
     "hamishivi/MathSub-30K_filtered": 8998,
-    "hamishivi/DAPO-Math-17k-Processed_filtered": 7000,
-    "hamishivi/omega-combined-no-boxed_filtered": 20000,
-    "hamishivi/polaris_53k": 14000,
-    "allenai/IF_multi_constraints_upto5_filtered_dpo_0625_filter-keyword-filtered-topic-char-topic-filtered": 37568,
-    "hamishivi/rlvr_acecoder_filtered_filtered": 20000,
-    "allenai/rlvr_general_mix-keyword-filtered-topic-chars-char-filt-topic-filtered": 48398
+    "hamishivi/DAPO-Math-17k-Processed_filtered": 7000
   },
   "matched": 815,
   "by_source": {
@@ -37,15 +37,15 @@
     "reference": 496
   },
   "by_source_group": {
-    "allenai/IF_multi_constraints_upto5_filtered_dpo_0625_filter-keyword-filtered-topic-char-topic-filtered": {
-      "prompt": 12,
-      "response": 2,
-      "reference": 1
-    },
     "allenai/rlvr_general_mix-keyword-filtered-topic-chars-char-filt-topic-filtered": {
       "prompt": 402,
       "response": 0,
       "reference": 495
+    },
+    "allenai/IF_multi_constraints_upto5_filtered_dpo_0625_filter-keyword-filtered-topic-char-topic-filtered": {
+      "prompt": 12,
+      "response": 2,
+      "reference": 1
     }
   },
   "examples": [

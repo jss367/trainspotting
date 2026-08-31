@@ -17,10 +17,10 @@
   "unsearched_columns": [],
   "total_rows": 102014,
   "rows_by_source": {
-    "hamishivi/rlvr_general_mix": 20636,
     "hamishivi/math_rlvr_mixture_dpo": 30180,
+    "hamishivi/IF_multi_constraints_upto5_filtered_dpo_0625_filter": 29813,
     "hamishivi/code_rlvr_mixture_dpo": 21385,
-    "hamishivi/IF_multi_constraints_upto5_filtered_dpo_0625_filter": 29813
+    "hamishivi/rlvr_general_mix": 20636
   },
   "matched": 134,
   "by_source": {
@@ -34,11 +34,6 @@
     "reference": 28
   },
   "by_source_group": {
-    "hamishivi/code_rlvr_mixture_dpo": {
-      "prompt": 0,
-      "response": 0,
-      "reference": 12
-    },
     "hamishivi/IF_multi_constraints_upto5_filtered_dpo_0625_filter": {
       "prompt": 8,
       "response": 61,
@@ -48,6 +43,11 @@
       "prompt": 55,
       "response": 0,
       "reference": 13
+    },
+    "hamishivi/code_rlvr_mixture_dpo": {
+      "prompt": 0,
+      "response": 0,
+      "reference": 12
     }
   },
   "examples": [

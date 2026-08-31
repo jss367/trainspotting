@@ -688,3 +688,26 @@ def test_pick_refuses_a_nonpositive_limit():
     grep._pick(kept, by_snippet, -1, "text", {"snippet": "text"})
     grep._pick(kept, by_snippet, 0, "text", {"snippet": "text"})
     assert kept == [] and by_snippet == {}
+
+
+def test_source_orderings_are_total_not_arrival_ordered():
+    """Same names and numbers in a different order is still a diff. DuckDB
+    aggregates in parallel, so nothing about arrival order is stable — ties break
+    on the name to make the sort total rather than merely mostly-defined."""
+    assert list(grep._by_count({"b": 1, "a": 3, "c": 1})) == ["a", "b", "c"]
+    assert list(grep._by_count({"c": 1, "a": 3, "b": 1})) == ["a", "b", "c"]
+
+
+@pytest.mark.parametrize("path", COMMITTED_RUNS, ids=[p.name for p in COMMITTED_RUNS])
+def test_committed_runs_are_in_canonical_order(path):
+    """The whole file has to be a function of the scan, not of which thread
+    finished first — otherwise `git diff` after a regeneration says nothing."""
+    run = json.loads(path.read_text())
+    for field in ("by_source", "rows_by_source"):
+        got = run.get(field) or {}
+        assert list(got) == list(grep._by_count(got)), (
+            f"{path.name}: {field} is not biggest-first-then-name — re-run the scan"
+        )
+    assert list(run["by_source_group"]) == [
+        s for s in run["by_source"] if s in run["by_source_group"]
+    ]

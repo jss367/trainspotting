@@ -16,30 +16,30 @@
   "unsearched_columns": [],
   "total_rows": 150000,
   "rows_by_source": {
-    "personahub_code_v2_34999": 1736,
-    "tulu_v3.9_open_math_2_gsm8k_50k": 2561,
-    "oasst1_converted": 1259,
-    "DaringAnteater-prefs_olmo2_7b": 729,
-    "tulu-3-sft-personas-algebra": 930,
-    "flan_v2_converted": 14057,
-    "tulu_v3.9_synthetic_finalresp_wildguardmixtrain_decontaminated_50k": 3884,
-    "OpenThoughts3-full-filtered-science-no-cot": 14967,
-    "tulu_v3.9_aya_100k": 2863,
-    "IF_sft_data_verified_permissive": 2482,
-    "evol_codealpaca_heval_decontaminated": 5171,
-    "correct-python-sft-187k": 9005,
-    "filtered_wc_sample_500k": 17596,
-    "tulu_v3.9_sciriff_10k": 1554,
-    "tulu-3-sft-personas-instruction-following-o3": 2447,
-    "tulu_v3.9_wildjailbreak_decontaminated_50k": 3885,
-    "Wildchat-1M-gpt-4.1-regenerated-english": 13955,
-    "Wildchat-1m-gpt-4.1-regeneration-not-english": 5220,
-    "tulu-3-sft-personas-math-grade": 2520,
     "ultrafeedback_cleaned_olmo2_7b": 23202,
-    "tulu_v3.9_table_gpt_5k": 834,
+    "filtered_wc_sample_500k": 17596,
+    "OpenThoughts3-full-filtered-science-no-cot": 14967,
+    "flan_v2_converted": 14057,
+    "Wildchat-1M-gpt-4.1-regenerated-english": 13955,
     "valpy_if_qwq_reasoning_verified_no_reasoning": 11101,
+    "correct-python-sft-187k": 9005,
     "tulu-3-sft-personas-math": 7252,
-    "tulu-3-sft-coconot-regenerated": 790
+    "Wildchat-1m-gpt-4.1-regeneration-not-english": 5220,
+    "evol_codealpaca_heval_decontaminated": 5171,
+    "tulu_v3.9_wildjailbreak_decontaminated_50k": 3885,
+    "tulu_v3.9_synthetic_finalresp_wildguardmixtrain_decontaminated_50k": 3884,
+    "tulu_v3.9_aya_100k": 2863,
+    "tulu_v3.9_open_math_2_gsm8k_50k": 2561,
+    "tulu-3-sft-personas-math-grade": 2520,
+    "IF_sft_data_verified_permissive": 2482,
+    "tulu-3-sft-personas-instruction-following-o3": 2447,
+    "personahub_code_v2_34999": 1736,
+    "tulu_v3.9_sciriff_10k": 1554,
+    "oasst1_converted": 1259,
+    "tulu-3-sft-personas-algebra": 930,
+    "tulu_v3.9_table_gpt_5k": 834,
+    "tulu-3-sft-coconot-regenerated": 790,
+    "DaringAnteater-prefs_olmo2_7b": 729
   },
   "matched": 773,
   "by_source": {
@@ -51,19 +51,15 @@
     "valpy_if_qwq_reasoning_verified_no_reasoning": 4,
     "oasst1_converted": 3,
     "OpenThoughts3-full-filtered-science-no-cot": 2,
-    "tulu_v3.9_aya_100k": 1,
     "evol_codealpaca_heval_decontaminated": 1,
-    "tulu-3-sft-personas-instruction-following-o3": 1
+    "tulu-3-sft-personas-instruction-following-o3": 1,
+    "tulu_v3.9_aya_100k": 1
   },
   "by_group": {
     "prompt": 647,
     "response": 521
   },
   "by_source_group": {
-    "ultrafeedback_cleaned_olmo2_7b": {
-      "prompt": 0,
-      "response": 24
-    },
     "filtered_wc_sample_500k": {
       "prompt": 403,
       "response": 233
@@ -76,31 +72,35 @@
       "prompt": 62,
       "response": 85
     },
-    "valpy_if_qwq_reasoning_verified_no_reasoning": {
-      "prompt": 3,
-      "response": 2
-    },
-    "OpenThoughts3-full-filtered-science-no-cot": {
+    "ultrafeedback_cleaned_olmo2_7b": {
       "prompt": 0,
-      "response": 2
-    },
-    "tulu_v3.9_aya_100k": {
-      "prompt": 0,
-      "response": 1
+      "response": 24
     },
     "tulu_v3.9_synthetic_finalresp_wildguardmixtrain_decontaminated_50k": {
       "prompt": 2,
       "response": 6
     },
+    "valpy_if_qwq_reasoning_verified_no_reasoning": {
+      "prompt": 3,
+      "response": 2
+    },
     "oasst1_converted": {
       "prompt": 1,
       "response": 3
+    },
+    "OpenThoughts3-full-filtered-science-no-cot": {
+      "prompt": 0,
+      "response": 2
     },
     "evol_codealpaca_heval_decontaminated": {
       "prompt": 1,
       "response": 1
     },
     "tulu-3-sft-personas-instruction-following-o3": {
+      "prompt": 0,
+      "response": 1
+    },
+    "tulu_v3.9_aya_100k": {
       "prompt": 0,
       "response": 1
     }
