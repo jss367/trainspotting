@@ -516,7 +516,7 @@ def test_regex_window_locates_the_match_not_an_earlier_lookalike(con, tmp_path):
         (r"^hi", "x hi", 0),          # anchored and unmatched, not "position 1"
         (r"a+b", "zzz aaab", 5),
         (r"\bChatGPT", "xChatGPTonly", 0),
-        ("ChatGPT", "line1\nline2 ChatGPT", 13),   # `.` has to cross newlines
+        ("ChatGPT", "line1\nline2 ChatGPT", 13),   # the prefix has to cross newlines
     ],
 )
 def test_regex_offset_sql(con, pattern, text, expected):
@@ -711,3 +711,27 @@ def test_committed_runs_are_in_canonical_order(path):
     assert list(run["by_source_group"]) == [
         s for s in run["by_source"] if s in run["by_source_group"]
     ]
+
+
+def test_locating_a_match_keeps_the_pattern_own_newline_semantics(con):
+    """`.` not crossing a newline is part of what the user's pattern means. The
+    locator used to pass `s` for the whole composite pattern, so `a.b` matched
+    `a\\nb` while locating and not while matching: the offset landed on text the
+    predicate had rejected, windowing out the hit that made the row count."""
+    text = "a\nb" + "z" * 20000 + "a-b"
+    sql = grep._offset_sql("s", "a.b", regex=True, case_sensitive=False)
+    got = con.execute(f"SELECT {sql} FROM (SELECT ? AS s)", [text]).fetchone()[0]
+    assert got == text.index("a-b") + 1
+    # and the row does match, on the later occurrence
+    test = grep._element_test("a.b", regex=True, case_sensitive=False)
+    assert con.execute(f"SELECT {test} FROM (SELECT ? AS t)", [text]).fetchone()[0]
+
+
+def test_dotall_stays_available_to_a_pattern_that_asks_for_it(con):
+    """Scoping `s` to the prefix does not take it away: a user who writes `(?s)`
+    gets it, in the locator and the predicate alike."""
+    text = "a\nb"
+    for expr, col in ((grep._offset_sql("s", "(?s)a.b", True, False), "s"),
+                      (grep._element_test("(?s)a.b", True, False), "t")):
+        got = con.execute(f"SELECT {expr} FROM (SELECT ? AS {col})", [text]).fetchone()[0]
+        assert got in (1, True), got

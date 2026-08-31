@@ -400,22 +400,35 @@ def _offset_sql(col: str, pattern: str, regex: bool, case_sensitive: bool) -> st
     that separately.
     """
     if regex:
-        opts = "s" if case_sensitive else "si"
-        prefix = f"'^(.*?)(' || {_lit(pattern)} || ')'"
-        located = f"len(regexp_extract({col}, {prefix}, 1, {_lit(opts)})) + 1"
-        matched = f"regexp_matches({col}, {_lit(pattern)}{'' if case_sensitive else ', ' + _lit('i')})"
+        opts = _regex_opts(case_sensitive)
+        tail = f", {_lit(opts)}" if opts else ""
+        # `(?s:...)` scopes dot-all to the prefix. Passing `s` as an option would
+        # apply it to the user's pattern too, so `.` would cross newlines while
+        # locating a match but not while finding one — and the locator would
+        # settle on text the predicate never matched, windowing out the real hit.
+        prefix = f"'^(?s:(.*?))(' || {_lit(pattern)} || ')'"
+        located = f"len(regexp_extract({col}, {prefix}, 1{tail})) + 1"
+        matched = f"regexp_matches({col}, {_lit(pattern)}{tail})"
         return f"CASE WHEN NOT {matched} THEN 0 ELSE {located} END"
     if case_sensitive:
         return f"position({_lit(pattern)} IN {col})"
     return f"position(lower({_lit(pattern)}) IN lower({col}))"
 
 
+def _regex_opts(case_sensitive: bool) -> str:
+    """The flags the matching predicate uses, and therefore the only flags any
+    expression locating that match may use. Dot-all is deliberately absent: `.`
+    not crossing a newline is part of what the user's pattern means."""
+    return "" if case_sensitive else "i"
+
+
 def _match_len_sql(col: str, pattern: str, regex: bool, case_sensitive: bool) -> str:
     """Length of the first match, for centring the snippet on it."""
     if not regex:
         return str(len(pattern))
-    opts = "s" if case_sensitive else "si"
-    return f"len(regexp_extract({col}, {_lit(pattern)}, 0, {_lit(opts)}))"
+    opts = _regex_opts(case_sensitive)
+    tail = f", {_lit(opts)}" if opts else ""
+    return f"len(regexp_extract({col}, {_lit(pattern)}, 0{tail}))"
 
 
 def _window_sql(
