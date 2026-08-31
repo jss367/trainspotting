@@ -289,7 +289,10 @@ by the rows that matched no prompt, which settles it outright where nothing
 matched a prompt —  — and the interval is carried into the ranking
 rather than collapsed to its low end. Two stages whose intervals overlap, or
 touch at a single value, are not ordered by these counts, and the verdict says
-so instead of picking one.
+so instead of picking one — which on the row basis, where every rate is a point,
+is the plain tie: equal rates are reported as equal rather than resolved by the
+sort. A source's own produce-side count is a union in the same way, so it prints
+as `40–60 of its 1,000 rows` where its groups can overlap.
 
 Where a source's share rests on that interval, both tests run against the end
 that makes them hold: the lift is the source's floor over the stage's ceiling,

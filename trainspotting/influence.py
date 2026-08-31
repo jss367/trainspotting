@@ -120,6 +120,7 @@ def _sources(result) -> list[dict]:
             "produced_hits": p_lo,
             "produced_hits_hi": p_hi,
             "produced_rate": p_rate,
+            "produced_rate_hi": (p_hi / n) if (p_hi is not None and n) else None,
             # The source's floor over the stage's ceiling, which is the lift the
             # counts guarantee. Dividing two floors proves nothing: a source
             # whose two groups overlap and a stage whose do not can show 2× and
@@ -235,6 +236,14 @@ def stage_trace(result) -> dict:
         "partial": partial,
         "unsearched_columns": list(result.get("unsearched_columns") or []),
     }
+
+
+def _ceiling(r: dict, basis: str) -> float:
+    """The most this stage's rate could be on the basis being ranked. A row-rate
+    is exact, so it is its own ceiling; a produce-side rate is an interval."""
+    if basis == "produced":
+        return r["produced_rate_hi"] or 0
+    return r["rate"] or 0
 
 
 def _understated(r: dict, basis: str) -> str | None:
@@ -365,12 +374,14 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
     # disjoint. Anything whose upper bound clears the leader's lower bound
     # could be the leader.
     contenders = []
-    if ranked and basis == "produced":
-        floor = ranked[0]["produced_rate"]
-        # `>=`, not `>`: an upper bound that lands exactly on the leader's lower
-        # bound permits equality, and two equal exact rates are the same case.
-        # A tie the sort broke silently is still a tie.
-        contenders = [r for r in ranked[1:] if (r["produced_rate_hi"] or 0) >= floor]
+    if ranked:
+        floor = ranked[0][key]
+        # `>=`, not `>`: a ceiling landing exactly on the leader's floor permits
+        # equality. On the row basis every rate is a point, so its ceiling is
+        # itself and this catches the plain tie — two prompt-only runs at 10 of
+        # 100 rows each, where the sort was picking the winner by registry
+        # order and the verdict then claimed a 1.0× advantage.
+        contenders = [r for r in ranked[1:] if _ceiling(r, basis) >= (floor or 0)]
 
     # A run that did not read everything its own mix has on the side being
     # ranked can only have undercounted, so its rate is a floor rather than a
@@ -400,9 +411,14 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
         # about the produce side across all of them requires.
         # Every stage with a result file, not only the ones that matched: a
         # zero-hit run that never opened its response column cannot support
-        # "nothing matched on the produce side" either.
-        "produce_complete": all(r["produced"] is not None
-                                for r in searched + inconclusive),
+        # "nothing matched on the produce side" either. And having opened one
+        # is not enough — a run that read `response` where the mix also has
+        # `reference`, or read a partial conversion, leaves rows unread that
+        # could hold exactly what the claim says is absent.
+        "produce_complete": all(
+            r["produced"] is not None and not r["partial"]
+            and not _understated(r, "produced")
+            for r in searched + inconclusive),
         "understated": understated,
         "best": ranked[0] if ranked else None,
         "runner_up": ranked[1] if len(ranked) > 1 else None,
@@ -460,6 +476,21 @@ def _group_line(r: dict) -> str:
     return " · ".join(parts)
 
 
+def _source_count(src: dict, side: str) -> str:
+    """A source's matching rows. On the produce side that is a union of its own,
+    so a source matching in both groups is an interval like the stage is."""
+    if side != "produced":
+        return f"{src['hits']:,}"
+    lo, hi = src["produced_hits"], src["produced_hits_hi"]
+    return f"{lo:,}" if lo == hi else f"{lo:,}–{hi:,}"
+
+
+def _source_rate(src: dict, side: str) -> str:
+    if side != "produced":
+        return _pct(src["rate"])
+    return _span(src["produced_rate"], src["produced_rate_hi"])
+
+
 def _stage_lines(r: dict) -> list[str]:
     if r["status"] == INCONCLUSIVE:
         why = "; ".join(r["coverage_gaps"])
@@ -491,16 +522,18 @@ def _stage_lines(r: dict) -> list[str]:
         least = "at least " if (side == "produced" and r["produced"][0] != r["produced"][1]) else ""
         src = r["concentration"]
         if src:
-            out.append(f"  - {what} concentrated in `{src['name']}`: {src[hk]:,} of its "
-                       f"{src['rows']:,} rows, {_pct(src[rk])} — {least}{src[lk]:.0f}× the "
-                       "stage's own rate.")
+            out.append(f"  - {what} concentrated in `{src['name']}`: {_source_count(src, side)} of "
+                       f"its {src['rows']:,} rows, {_source_rate(src, side)} — {least}"
+                       f"{src[lk]:.0f}× the stage's own rate.")
         elif r["sources"]:
             top = max(r["sources"], key=lambda x: x[hk] or 0)
-            stage_rate = r["produced_rate"] if side == "produced" else r["rate"]
-            where = (f"{top[hk]:,} of its {top['rows']:,} rows, {_pct(top[rk])}"
+            stage_rate = _span(r["produced_rate"], r["produced_rate_hi"]) if side == "produced" \
+                else _pct(r["rate"])
+            where = (f"{_source_count(top, side)} of its {top['rows']:,} rows, "
+                     f"{_source_rate(top, side)}"
                      if top["rows"] and top[hk] is not None else f"{top['hits']:,} matching rows")
             out.append(f"  - no {what} concentration: the largest contributor `{top['name']}` "
-                       f"holds {where}, against {_pct(stage_rate)} for the stage.")
+                       f"holds {where}, against {stage_rate} for the stage.")
     if r["partial"]:
         out.append("  - the server converted only part of this repo, so the count is a lower "
                    "bound and the rate is over the converted part alone.")
@@ -597,10 +630,10 @@ def _verdict(t: dict) -> list[str]:
     if src and on_produce:
         span = f"{bounds[0]:,}" if bounds[0] == bounds[1] else f"{bounds[0]:,}–{bounds[1]:,}"
         least = "at least " if bounds[0] != bounds[1] else ""
-        line.append(f"{src['produced_hits']:,} of the {src['rows']:,} `{src['name']}` rows "
-                    f"({_pct(src['produced_rate'])}, {least}{src['produced_lift']:.0f}× the "
-                    f"stage) hold it in a response or a reference answer, out of the stage's "
-                    f"{span} produce-side matches.")
+        line.append(f"{_source_count(src, 'produced')} of the {src['rows']:,} `{src['name']}` "
+                    f"rows ({_source_rate(src, 'produced')}, {least}{src['produced_lift']:.0f}× "
+                    f"the stage) hold it in a response or a reference answer, out of the "
+                    f"stage's {span} produce-side matches.")
         return _tail(t, best, other, key, measure, line)
     if src:
         line.append(f"{src['hits']:,} of the {src['rows']:,} `{src['name']}` rows "
@@ -625,7 +658,7 @@ def _verdict(t: dict) -> list[str]:
 
 def _tail(t, best, other, key, measure, line):
     """The part of a verdict that is the same however the leader was described."""
-    if other and other[key] and best[key]:
+    if other and other[key] and best[key] and best[key] > other[key]:
         ratio = best[key] / other[key]
         line.append(f"Highest {measure} of the {len(t['ranked'])} stages with any: {ratio:.1f}× "
                     f"{other['stage']}'s.")
@@ -633,7 +666,7 @@ def _tail(t, best, other, key, measure, line):
             line.append(f"The raw counts rank them the other way — {other['stage']} holds "
                         f"{other['hits']:,} matching rows to {best['stage']}'s {best['hits']:,} — "
                         "which is what normalising is for.")
-    if t["contenders"]:
+    if t["contenders"] and t["basis"] == "produced":
         # Two overlapping intervals do not order each other, and the low ends
         # they were sorted on are an artefact of how they were sorted.
         names = ", ".join(f"{r['stage']} ({_span(r['produced_rate'], r['produced_rate_hi'])})"
@@ -642,6 +675,10 @@ def _tail(t, best, other, key, measure, line):
                     "stage matching in two groups is only known to an interval, and "
                     f"{best['stage']}'s {_span(best['produced_rate'], best['produced_rate_hi'])} "
                     f"overlaps {names}, so the counts do not settle the order between them.")
+    elif t["contenders"]:
+        names = ", ".join([best["stage"]] + [r["stage"] for r in t["contenders"]])
+        line.append(f"Read that as a tie: {names} match at the same rate, so which of them is "
+                    "named here is the sort order rather than the data.")
     for r in t["unranked"]:
         line.append(f"{r['stage']} matched too and is not in this ranking at all rather than at "
                     f"the bottom of it: {r['rank_block']}.")

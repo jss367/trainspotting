@@ -848,3 +848,93 @@ def test_a_measured_produce_side_zero_still_ranks_below_real_evidence():
     t = influence.compare(runs, THINK)
     assert [r["stage"] for r in t["ranked"]] == ["rlvr", "dpo"]
     assert t["unranked"] == []
+
+
+# --- absence needs every produce column its mix has ------------------------
+
+
+def test_reading_one_of_two_produce_columns_does_not_prove_absence():
+    # `--field prompt --field response` on a mix that also has `reference`:
+    # `produced` is (0, 0), which is a measurement of the response column and
+    # not of the produce side.
+    runs = [
+        run("dpo", hits=100, rows=100_000, groups={"prompt": 100, "response": 0}),
+        run("rlvr", hits=10, rows=100_000, groups={"prompt": 10, "response": 0},
+            fields=["prompt", "response"],
+            available_fields=["prompt", "response", "reference"]),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["basis"] == "rows" and not t["produce_complete"]
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "cannot say the string is absent from what these stages train the model to write" in text
+    assert "No stage matched on the produce side at all" not in text
+
+
+def test_a_partial_conversion_with_prompt_hits_also_blocks_the_absence_claim():
+    runs = [
+        run("dpo", hits=100, rows=100_000, groups={"prompt": 100, "response": 0}),
+        run("rlvr", hits=10, rows=1_000, groups={"prompt": 10, "response": 0}, partial=True),
+    ]
+    t = influence.compare(runs, THINK)
+    assert not t["produce_complete"]
+    assert "No stage matched on the produce side at all" not in \
+        " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+# --- a tie on the row basis is a tie too ----------------------------------
+
+
+def test_equal_row_basis_rates_are_reported_as_a_tie():
+    runs = [
+        run("dpo", hits=10, rows=100, groups={"prompt": 10}, fields=["prompt"]),
+        run("rlvr", hits=10, rows=100, groups={"prompt": 10}, fields=["prompt"]),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["basis"] == "rows"
+    assert [r["stage"] for r in t["contenders"]] == ["rlvr"]
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "Read that as a tie: dpo, rlvr match at the same rate" in text
+    # And no fictitious advantage.
+    assert "1.0×" not in text
+
+
+def test_an_unequal_row_basis_pair_is_not_a_tie():
+    runs = [
+        run("dpo", hits=20, rows=100, groups={"prompt": 20}, fields=["prompt"]),
+        run("rlvr", hits=10, rows=100, groups={"prompt": 10}, fields=["prompt"]),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["contenders"] == []
+    assert "2.0× rlvr's" in " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+# --- a source's produce-side count is a bound too --------------------------
+
+
+def test_a_source_matching_in_both_groups_is_rendered_as_an_interval():
+    # 10 response and 10 reference rows in one source is 10–20 distinct rows.
+    runs = [run("rlvr", hits=40, rows=100_000,
+                groups={"prompt": 20, "response": 10, "reference": 10},
+                sources={"src": 40}, totals={"src": 1_000},
+                by_source_group={"src": {"prompt": 20, "response": 10, "reference": 10}})]
+    t = influence.compare(runs, THINK)
+    src = t["best"]["sources"][0]
+    assert (src["produced_hits"], src["produced_hits_hi"]) == (20, 20)
+    # With no prompt matches in the source the bound is the pair of groups.
+    runs[0]["by_source_group"]["src"] = {"prompt": 0, "response": 10, "reference": 10}
+    runs[0]["by_source"] = {"src": 20}
+    t = influence.compare(runs, THINK)
+    src = t["best"]["sources"][0]
+    assert (src["produced_hits"], src["produced_hits_hi"]) == (20, 20)
+
+
+def test_an_open_source_interval_prints_both_ends():
+    runs = [run("rlvr", hits=100, rows=100_000,
+                groups={"prompt": 60, "response": 30, "reference": 30},
+                sources={"src": 100}, totals={"src": 1_000},
+                by_source_group={"src": {"prompt": 60, "response": 30, "reference": 30}})]
+    t = influence.compare(runs, THINK)
+    src = t["best"]["sources"][0]
+    assert (src["produced_hits"], src["produced_hits_hi"]) == (40, 60)
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "40–60 of its 1,000 rows" in text
