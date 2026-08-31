@@ -199,6 +199,21 @@ ok(forkedOut.includes("branches on a turn the model did not write"),
 ok(P.renderDPO(forked, "ds").includes("no yeast, what now?"),
   "the turn that made the answers differ is rendered, not filtered away");
 
+// A turn whose whole output is a tool call is stored empty and never raw, so two
+// completions differing only there cannot be read as the same conversation.
+const toolTurn = {role: "assistant", text: "", chars: 0, omitted: ["tool_calls"]};
+const tooled = {prompt_full: {text: "q", chars: 1}, row: 4, meta: {},
+  chosen: {model: "big", turns: [convo[0], toolTurn, anyTurn("assistant", "the same answer " + LONG)]},
+  rejected: {model: "small", turns: [convo[0], toolTurn, anyTurn("assistant", "the same answer " + LONG)]}};
+const tooledOut = P.gradientSection(tooled, P.sharedTurns(tooled.chosen, tooled.rejected))
+  .replace(/\s+/g, " ");
+ok(!/shared opening <em>/.test(tooledOut),
+  "a dropped tool-call turn blocks the shared-opening claim");
+ok(!tooledOut.includes("gradient of exactly zero"),
+  "and blocks zero gradient, though every stored byte matches");
+ok(P.renderDPO(tooled, "ds").includes("tool_calls"),
+  "and the view says which field the turn carried but the record does not keep");
+
 // --------------------------------------------------- against the real rows ---
 const dataDir = path.join(ROOT, "docs", "data");
 const files = fs.readdirSync(dataDir).filter(f => f.includes(".dpo.context."));

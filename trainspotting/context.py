@@ -41,16 +41,32 @@ def _split_think(text: str) -> tuple[str | None, str]:
     return head.strip(), text[i + len("</think>") :].strip()
 
 
+# Output a message can carry beside its `content`. `search` reads these as part
+# of the turn; this record keeps none of them, so a turn holding any is not
+# stored whole however well its text matches.
+BESIDE_CONTENT = ("reasoning_content",) + search.STRUCTURED_TURN_FIELDS + search.INPUT_TURN_FIELDS
+
+
 def _turns(messages) -> list[dict]:
     out = []
     for m in messages or []:
-        if not (isinstance(m, dict) and m.get("content")):
+        if not isinstance(m, dict):
             continue
-        content = str(m["content"])
+        content = str(m["content"]) if m.get("content") else ""
+        omitted = [k for k in BESIDE_CONTENT if m.get(k)]
+        if not content and not omitted:
+            continue
+        # A turn can be nothing but a tool call. Dropping it would close the gap
+        # it leaves: two completions differing only in such a turn would read as
+        # the same conversation, and the answers behind them as a shared opening.
+        # It is kept, empty, so the turn counts stay aligned and nothing here is
+        # marked as stored whole.
         reasoning, answer = _split_think(content)
         turn = {"role": m.get("role", "?"), **_text(answer)}
         if reasoning:
             turn["reasoning"] = _text(reasoning)
+        if omitted:
+            turn["omitted"] = omitted
         # Whether what is stored is the turn as it was written. Splitting a
         # thinking span out drops the <think> markers and the whitespace around
         # them, and long fields are cut, so a turn that went through either can no
@@ -61,8 +77,7 @@ def _turns(messages) -> list[dict]:
         # it, a separate reasoning field or tool calls or a refusal, which
         # `search` reads as part of the turn and this record does not keep.
         # Anything claiming two turns are identical needs this, not a guess.
-        beside_content = ("reasoning_content",) + search.STRUCTURED_TURN_FIELDS + search.INPUT_TURN_FIELDS
-        if turn["text"] == content and not any(m.get(k) for k in beside_content):
+        if turn["text"] == content and not omitted:
             turn["raw"] = True
         out.append(turn)
     return out

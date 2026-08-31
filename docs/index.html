@@ -598,8 +598,15 @@ function textBlock(text, chars){
 
 function turnBlock(turn, trained){
   const r = turn.reasoning;
+  // A turn can carry output this record does not keep — a tool call, a refusal.
+  // Saying so is the difference between a turn that was empty and one whose
+  // content lives somewhere the site never sees.
+  const omitted = turn.omitted && turn.omitted.length
+    ? `<p class="note">plus ${turn.omitted.map(f => `<code>${esc(f)}</code>`).join(", ")},
+       carried by this turn and not stored here — read the row on HuggingFace for it</p>` : "";
   return `<div class="turn">
     <div class="role">${esc(turn.role)} ${trained ? `<b>${trained}</b>` : ""}</div>
+    ${omitted}
     ${r ? `<details><summary>reasoning — ${num(r.chars)} characters, folded away</summary>${textBlock(r.text, r.chars)}</details>` : ""}
     ${textBlock(turn.text, turn.chars)}
   </div>`;

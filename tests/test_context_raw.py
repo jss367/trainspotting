@@ -59,3 +59,29 @@ def search_fields():
 def test_empty_auxiliary_field_still_raw():
     """An empty list is the schema's way of saying there were no tool calls."""
     assert turn({"role": "assistant", "content": "the answer", "tool_calls": []})["raw"] is True
+
+
+def test_auxiliary_only_turn_is_kept_and_not_raw():
+    """A turn can be nothing but a tool call. Dropping it would let two
+    completions that differ only there read as the same conversation."""
+    turns = context._turns(
+        [
+            {"role": "assistant", "content": None, "tool_calls": [{"name": "search"}]},
+            {"role": "assistant", "content": "the answer"},
+        ]
+    )
+    assert len(turns) == 2
+    assert turns[0]["text"] == "" and "raw" not in turns[0]
+    assert turns[0]["omitted"] == ["tool_calls"]
+    assert turns[1]["raw"] is True
+
+
+def test_empty_message_is_still_skipped():
+    assert context._turns([{"role": "assistant", "content": ""}]) == []
+    assert context._turns([{"role": "assistant", "content": None, "tool_calls": []}]) == []
+
+
+def test_omitted_names_what_was_left_out():
+    t = turn({"role": "assistant", "content": "the answer", "refusal": "no"})
+    assert t["omitted"] == ["refusal"]
+    assert "raw" not in t
