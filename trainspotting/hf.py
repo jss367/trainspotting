@@ -4,9 +4,11 @@ Everything here works without downloading the datasets: /info for schema and
 row counts, /statistics for exact column value frequencies, /rows for sampling.
 """
 
+import os
 import random
 import re
 import time
+from pathlib import Path
 
 import requests
 
@@ -14,19 +16,55 @@ BASE = "https://datasets-server.huggingface.co"
 ROWS_PER_PAGE = 100  # server maximum for /rows length
 
 
+def _token() -> str | None:
+    """The user's Hub token, if they have one lying around. Optional — every
+    dataset here is public — but anonymous rate limits are shared per IP and
+    low enough that two sampling runs side by side can exhaust them, while
+    authenticated ones are roomy."""
+    tok = os.environ.get("HF_TOKEN")
+    if tok:
+        return tok
+    try:
+        return (Path.home() / ".cache" / "huggingface" / "token").read_text().strip() or None
+    except OSError:
+        return None
+
+
+HEADERS = {"Authorization": f"Bearer {tok}"} if (tok := _token()) else {}
+
+
 def _get(path: str, **params) -> dict:
-    """GET with backoff. The datasets-server rate-limits (429) and occasionally
-    500s on a large page; both clear on a retry."""
-    for attempt in range(6):
-        r = requests.get(f"{BASE}/{path}", params=params, timeout=60)
+    """GET with backoff, patient about the errors that mean "later", not "no".
+
+    A 429 honors retry-after and waits the window out flat — the exponential
+    clock capped at six attempts died mid-run whenever the shared per-IP quota
+    was already drained by a run next door, which is exactly when the wait is
+    worth it. A timeout retries for the same reason: a page the server is slow
+    to cut is still coming. Other 500s keep the short exponential clock; they
+    clear on a retry or not at all. Everything is bounded by the loop cap.
+    """
+    attempt = 0
+    r = exc = None
+    for _ in range(60):
+        try:
+            r = requests.get(f"{BASE}/{path}", params=params, timeout=120, headers=HEADERS)
+        except (requests.Timeout, requests.ConnectionError) as e:
+            exc = e
+            time.sleep(30)
+            continue
         if r.status_code == 429:
-            time.sleep(int(r.headers.get("retry-after", 0)) or 5 * 2**attempt)
+            time.sleep(int(r.headers.get("retry-after", 0)) or 60)
             continue
         if r.status_code >= 500:
             time.sleep(2 * 2**attempt)
+            attempt += 1
+            if attempt >= 6:
+                break
             continue
         r.raise_for_status()
         return r.json()
+    if r is None:
+        raise exc
     r.raise_for_status()
 
 
