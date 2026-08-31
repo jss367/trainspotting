@@ -55,6 +55,11 @@ def extract_prompt(row: dict, prompt_path: str) -> str | None:
         text = _first(row.get("messages"), "user")
     elif prompt_path == "chosen_messages":
         text = _first(row.get("chosen"), "user")
+    elif prompt_path == "conversation":
+        # Chat logs (WildChat) put the whole exchange under `conversation`, with
+        # per-turn metadata alongside the content. Only the first user turn is
+        # the prompt; the rest is what the other side said back.
+        text = _first(row.get("conversation"), "user")
     elif prompt_path == "prompt":
         p = row.get("prompt")
         if isinstance(p, list):  # some RL mixes store prompt as chat messages

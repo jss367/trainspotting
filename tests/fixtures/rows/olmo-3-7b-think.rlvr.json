@@ -1,5 +1,5 @@
 {
-  "model": "olmo-3-7b-think",
+  "target": "olmo-3-7b-think",
   "stage": "rlvr",
   "dataset": "allenai/Dolci-Think-RL-7B",
   "prompt_path": "prompt",

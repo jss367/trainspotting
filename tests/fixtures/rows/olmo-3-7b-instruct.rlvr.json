@@ -1,5 +1,5 @@
 {
-  "model": "olmo-3-7b-instruct",
+  "target": "olmo-3-7b-instruct",
   "stage": "rlvr",
   "dataset": "allenai/Dolci-Instruct-RL",
   "prompt_path": "prompt",

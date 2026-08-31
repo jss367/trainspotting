@@ -848,3 +848,51 @@ def test_the_clamp_shows_up_in_the_priced_bytes(con, tmp_path):
     clamped = grep.byte_cost(con, urls, _plan_leaves(con, path, None, "prompt"))
     naive = grep.byte_cost(con, urls, [("prompt", None)] * 3)
     assert clamped < naive
+
+
+# --- review round 7 ---------------------------------------------------------
+
+
+def test_a_literal_longer_than_the_window_widens_it():
+    """A literal's length is the caller's choice, so the window grows to hold it.
+    An 8,000-character boilerplate paragraph is a plausible thing to search a mix
+    for, and a snippet that cannot contain it fails the invariant."""
+    long_literal = "P" * (grep.SNIPPET_SOURCE_CHARS + 4000)
+    assert grep.window_chars(long_literal, regex=False) > len(long_literal)
+    assert grep.window_chars("ChatGPT", regex=False) == grep.SNIPPET_SOURCE_CHARS
+
+
+def test_a_regex_window_stays_capped():
+    """A regex match's length is the data's choice and unbounded — `(?s).*` matches
+    a whole 100k response — so the ceiling stays and is documented."""
+    assert grep.window_chars(r"(?s).*", regex=True) == grep.SNIPPET_SOURCE_CHARS
+
+
+def test_a_long_literal_survives_end_to_end(con, tmp_path):
+    path = tmp_path / "longlit.parquet"
+    needle = "Q" * (grep.SNIPPET_SOURCE_CHARS + 2000)
+    con.execute(
+        f"COPY (SELECT '{'.' * 3000}{needle}{'.' * 3000}' AS prompt)"
+        f" TO '{path}' (FORMAT parquet)"
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(path)]), exprs, None, needle, examples=1
+    )
+    assert result["matched"] == 1
+    assert needle in result["examples"][0]["snippet"]
+
+
+@pytest.mark.parametrize("path", COMMITTED_RUNS, ids=[p.name for p in COMMITTED_RUNS])
+def test_committed_snippet_invariant_is_bounded_by_the_window(path):
+    """The invariant `test_committed_snippets_contain_their_pattern` asserts holds
+    for any literal and for a regex whose match fits the window. It cannot hold
+    for a regex that matches more text than the window carries, so record which
+    runs are in scope rather than leaving the limit implicit."""
+    run = json.loads(path.read_text())
+    if run["regex"]:
+        for e in run["examples"]:
+            assert len(e["snippet"] or "") <= grep.SNIPPET_SOURCE_CHARS + 2
+    else:
+        assert len(run["pattern"]) < grep.window_chars(run["pattern"], regex=False)

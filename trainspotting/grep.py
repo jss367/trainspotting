@@ -437,6 +437,23 @@ def _match_len_sql(col: str, pattern: str, regex: bool, case_sensitive: bool) ->
     return f"len(regexp_extract({col}, {_lit(pattern)}, 0{tail}))"
 
 
+def window_chars(pattern: str, regex: bool) -> int:
+    """How much of the matching string to pull back for the snippet.
+
+    A literal's length is chosen by the caller, so the window grows to hold it:
+    searching for an 8,000-character boilerplate paragraph and getting back a
+    snippet that cannot contain it would fail the one invariant these artifacts
+    carry. A regex match's length is chosen by the *data* and is unbounded — a
+    `(?s).*` matches a whole 100k-character response — so that stays capped, and
+    the ceiling is documented rather than removed. A snippet is evidence that a
+    row matched, and every record links to the untruncated row on the hub; the
+    `context` layer makes the same trade at 4,000 characters.
+    """
+    if regex:
+        return SNIPPET_SOURCE_CHARS
+    return max(SNIPPET_SOURCE_CHARS, len(pattern) + 2 * SNIPPET_CHARS)
+
+
 def _window_sql(
     exprs: list[str], test: str, pattern: str, regex: bool, case_sensitive: bool
 ) -> tuple[str, str, str, str]:
@@ -454,7 +471,14 @@ def _window_sql(
     name. Costs nothing over the wire; the column is already read by then.
     """
     first = f"{_matching(exprs, test)}[1]"
-    half = SNIPPET_SOURCE_CHARS // 2
+    chars = window_chars(pattern, regex)
+    # Context before the match, which is what centres the *match* in the window
+    # rather than centring the window on the match's start. Half the window is
+    # right only while the match is short: a 10,000-character literal in a 10,480
+    # window offset by half would have its last 4,760 characters cut off the end,
+    # so the widening bought nothing. A literal's length is known here; a regex
+    # match's is not, so that keeps the halved lead.
+    half = chars // 2 if regex else max(0, (chars - len(pattern)) // 2)
     offset = _offset_sql("s", pattern, regex, case_sensitive)
     start = f"greatest(1, {offset} - {half})"
     scalar = f"FROM (SELECT {first} AS s)"
@@ -463,7 +487,7 @@ def _window_sql(
         return f"(SELECT CASE WHEN s IS NULL THEN NULL ELSE {expr} END {scalar})"
 
     return (
-        q(f"substr(s, {start}, {SNIPPET_SOURCE_CHARS})"),
+        q(f"substr(s, {start}, {chars})"),
         q(start),
         # Where the match lands inside the window. Zero when the pattern did not
         # match this string at all, which `snippet` reads as "no offset known".
@@ -480,6 +504,7 @@ def snippet(
     window_start: int = 1,
     match_at: int | None = None,
     match_len: int | None = None,
+    max_chars: int = SNIPPET_SOURCE_CHARS,
 ) -> str | None:
     """A window of `text` centred on the first match, so a count can be read.
 
@@ -514,7 +539,7 @@ def snippet(
     # that long is a real thing to search for; the wrapper-template one here is
     # already 32 characters and a boilerplate paragraph would be hundreds.
     context = max(0, (SNIPPET_CHARS - length) // 2)
-    width = max(SNIPPET_CHARS, min(length + 2 * context, SNIPPET_SOURCE_CHARS))
+    width = max(SNIPPET_CHARS, min(length + 2 * context, max_chars))
     lead = max(0, min(start - context, max(0, len(text) - 1)))
     out = text[lead:lead + width]
     cut_before = lead > 0 or window_start > 1
@@ -613,7 +638,8 @@ def scan(
                     (snips[g] for g in where if snips[g][0]), (None, 1, 0, 0)
                 )
                 shown = snippet(
-                    text, pattern, regex, case_sensitive, at or 1, mo or None, ml
+                    text, pattern, regex, case_sensitive, at or 1, mo or None, ml,
+                    max_chars=window_chars(pattern, regex),
                 )
                 _pick(kept, by_snippet, examples, shown, {
                     "source": src,

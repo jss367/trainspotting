@@ -1,11 +1,19 @@
-"""Hardcoded per-model training-pipeline registry.
+"""What the tool can be pointed at: models, and datasets on their own.
 
-Each model maps to an ordered list of stages. Pretraining-scale stages carry
+A **model** maps to an ordered list of stages. Pretraining-scale stages carry
 facts only (the corpora are terabytes; we don't compute over them). Post-training
 stages carry a HuggingFace dataset ID plus schema hints so the generic code can
 pull prompts and source tags out of heterogeneous Dolci schemas.
 
-Facts sourced from the Olmo 3 paper (arXiv:2512.13961) and the Ai2 release blog.
+A **dataset** is a target with no pipeline around it — one samplable dataset and
+nothing else. Every layer below `facts` only ever needed a dataset ID and how to
+read a prompt out of a row; requiring a training pipeline around that was an
+accident of starting with Olmo. `resolve` hands both kinds back in the same
+shape, so a dataset is a one-stage target and no command has to know which it
+got.
+
+Model facts sourced from the Olmo 3 paper (arXiv:2512.13961) and the Ai2 release
+blog.
 """
 
 # Schema hints:
@@ -13,6 +21,7 @@ Facts sourced from the Olmo 3 paper (arXiv:2512.13961) and the Ai2 release blog.
 #     "messages"        -> first role=="user" content in row["messages"]
 #     "chosen_messages" -> first role=="user" content in row["chosen"]
 #     "prompt"          -> row["prompt"] (string, or list of chat messages)
+#     "conversation"    -> first role=="user" content in row["conversation"]
 #   source_columns: columns whose value counts describe the mix composition.
 #     Every name must exist on the dataset. `sources` renders each column
 #     independently and skips one the dataset doesn't have, so a stale name
@@ -248,18 +257,103 @@ MODELS = {
     },
 }
 
+# The shape of the training example a prompt was drawn from. It decides what
+# `context` stores behind the prompt and whether `classify` may read a label off
+# the row's verifier, and for a dataset it is also the stage token in the result
+# filenames (results/wildchat-1m.chat.labels.json).
+#
+# A model stage takes its kind from its own `stage` name; the three post-training
+# stage names are kinds. A dataset has no pipeline position to borrow one from,
+# so it states its kind outright — and gets `chat` when it is a conversation log
+# rather than anything a model was fit to.
+KINDS = ("sft", "dpo", "rlvr", "chat")
 
-def get_model(name: str) -> dict:
+# Datasets explorable in their own right, with no model wrapped around them.
+# Same schema hints a post-training stage carries, plus the kind and a note.
+DATASETS = {
+    "wildchat-1m": {
+        "name": "WildChat-1M",
+        "hf_dataset": "allenai/WildChat-1M",
+        "kind": "chat",
+        "prompt_path": "conversation",
+        "source_columns": ["model", "language", "country", "redacted"],
+        "note": (
+            "Real conversations between people and ChatGPT, collected by Ai2 "
+            "in exchange for free access. Not a training mix: nothing was fit "
+            "to these responses. Olmo's Dolci mixes draw on it — the Instruct "
+            "SFT mix takes 302,406 of its prompts, the Think mixes take "
+            "regenerated variants — so it is what a large slice of Olmo's "
+            "post-training data started as. 837,989 conversations, and `toxic` "
+            "is false on every one HuggingFace's stats API reached: the toxic "
+            "conversations are held back in the gated WildChat-1M-Full."
+        ),
+    },
+}
+
+for _key, _d in DATASETS.items():
+    # A kind outside the set would fall through context.build's dispatch to the
+    # RL branch and store an empty verifier record for every sampled row.
+    assert _d["kind"] in KINDS, f"{_key}: unknown kind {_d['kind']!r}"
+
+
+def resolve(name: str) -> dict:
+    """A target — model or dataset — in the one shape every command reads.
+
+    Both carry `stages`; a dataset's is a single post-training stage built from
+    its own fields, so `post_training_stages` and everything downstream of it
+    work on a dataset without a special case. `is_model` is what the two things
+    that genuinely differ read: `facts` has no pipeline to print for a dataset,
+    and the site's cross-model compare has nothing to put one on an axis with.
+    """
     key = name.lower()
-    if key not in MODELS:
-        raise KeyError(f"Unknown model {name!r}. Known: {', '.join(sorted(MODELS))}")
-    return MODELS[key]
+    if key in MODELS:
+        return {"target": key, "is_model": True, **MODELS[key]}
+    if key in DATASETS:
+        d = DATASETS[key]
+        return {
+            "target": key,
+            "is_model": False,
+            "hf_model": None,
+            "name": d["name"],
+            "note": d.get("note"),
+            "stages": [
+                {
+                    "stage": d["kind"],
+                    "kind": d["kind"],
+                    "name": d["name"],
+                    "note": d.get("note"),
+                    "hf_dataset": d["hf_dataset"],
+                    "prompt_path": d["prompt_path"],
+                    "source_columns": d["source_columns"],
+                }
+            ],
+        }
+    raise KeyError(
+        f"Unknown model or dataset {name!r}."
+        f" Models: {', '.join(sorted(MODELS))}."
+        f" Datasets: {', '.join(sorted(DATASETS))}."
+    )
 
 
-def post_training_stages(model: dict) -> list[dict]:
-    return [s for s in model["stages"] if s.get("hf_dataset")]
+def targets() -> list[str]:
+    """Every name `resolve` accepts, models first."""
+    return sorted(MODELS) + sorted(DATASETS)
 
 
-def pretrain_stages(model: dict) -> list[dict]:
+def stage_kind(stage: dict) -> str:
+    """The shape of this stage's training examples.
+
+    A model stage's pipeline position is its kind; a dataset states one. Reading
+    it through here is what lets a dataset be sampled by a stage name that is not
+    one of sft/dpo/rlvr.
+    """
+    return stage.get("kind") or stage["stage"]
+
+
+def post_training_stages(target: dict) -> list[dict]:
+    return [s for s in target["stages"] if s.get("hf_dataset")]
+
+
+def pretrain_stages(target: dict) -> list[dict]:
     """Stages whose corpora are shard repos rather than datasets-server datasets."""
-    return [s for s in model["stages"] if s.get("sample_dataset")]
+    return [s for s in target["stages"] if s.get("sample_dataset")]
