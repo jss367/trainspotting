@@ -718,20 +718,29 @@ def cmd_grep(args):
 
 
 def _grep_traces(model_name, model):
-    """Committed `grep` runs for one model, grouped by the pattern they searched.
+    """Committed `grep` runs for one model, grouped by the search they ran.
 
-    Keyed on the slug rather than the pattern so the stages of one sweep line up
-    even where a `--slug` was given for a pattern too long to name itself, which
-    is how the regex sweeps are stored.
+    The slug is where the stages of one sweep line up, and it has to be, because
+    a pattern too long to name itself is stored under a `--slug`. But a slug is a
+    filename rather than a promise: rerun one stage with a refined regex under
+    the same slug and the directory holds two different searches with one name.
+    So the group key is the slug *and* the search definition, and a slug that
+    turns out to name more than one gets each rendered separately rather than
+    ranked against each other under whichever pattern sorted first.
     """
-    by_slug = {}
+    groups = {}
     for path in sorted(RESULTS.glob(f"{model_name}.*.grep-*.json")):
         slug = path.name.split(".grep-", 1)[1][: -len(".json")]
         run = json.loads(path.read_text())
         # Runs written before the slug was recorded still have it in their name.
         run.setdefault("slug", slug)
-        by_slug.setdefault(slug, []).append(run)
-    return {slug: influence.compare(runs, model["stages"]) for slug, runs in by_slug.items()}
+        key = (slug, run.get("pattern"), bool(run.get("regex")), bool(run.get("case_sensitive")))
+        groups.setdefault(key, []).append(run)
+    split = len({slug for slug, *_ in groups}) != len(groups)
+    return [
+        (key[0], split, influence.compare(runs, model["stages"]))
+        for key, runs in sorted(groups.items(), key=lambda kv: (kv[0][0], str(kv[0][1])))
+    ]
 
 
 def cmd_report(args):
@@ -796,7 +805,11 @@ def cmd_report(args):
           "the string being absent rather than merely unlikely — and a stage listed as "
           "unsearched is neither.\n")
     print(influence.BASIS_NOTE + "\n")
-    for _, trace in sorted(traces.items()):
+    if any(split for _, split, _ in traces):
+        print("One slug below names more than one search — a pattern or a matching flag was "
+              "changed without changing the slug. Each is rendered on its own; the stages under "
+              "one heading are the stages that ran that exact search.\n")
+    for _, _, trace in traces:
         for line in influence.render(trace, args.model):
             print(line)
 

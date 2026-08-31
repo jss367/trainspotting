@@ -113,19 +113,47 @@ def concentration(sources: list[dict], hits: int) -> dict | None:
     return best if best["lift"] >= MIN_LIFT else None
 
 
+def coverage_gaps(result) -> list[str]:
+    """Why a zero from this run would not be a zero for the whole stage.
+
+    Three ways a scan can miss text it never read, and each turns "0 rows
+    matched" from a fact about the stage into a fact about the columns that
+    were opened. The rows axis (a partial conversion) and the columns axis
+    (`--field`, and any text column the mapping did not recognise) are both
+    here because the verdict reads a zero as *this string is not in the
+    stage*, which neither one supports.
+    """
+    gaps = []
+    if result.get("partial"):
+        gaps.append("the server converted only part of the repo")
+    fields, available = set(result.get("fields") or []), set(result.get("available_fields") or [])
+    if available and available - fields:
+        gaps.append(f"this run read only {', '.join(sorted(fields))} of "
+                    f"{', '.join(sorted(available))}")
+    elif not available:
+        # Runs predating `available_fields` cannot show they read everything.
+        gaps.append("this run does not record which sides the mix has, so it cannot show it "
+                    "read all of them")
+    if result.get("unsearched_columns"):
+        gaps.append(f"{', '.join(result['unsearched_columns'])} went unsearched")
+    return gaps
+
+
 def stage_trace(result) -> dict:
     """One `grep` result, annotated with everything the comparison needs."""
     rows = result.get("total_rows") or 0
     hits = result.get("matched", 0)
     partial = bool(result.get("partial"))
+    gaps = coverage_gaps(result)
     bounds = produced(result)
     sources = _sources(result)
     return {
         "stage": result["stage"],
         "dataset": result.get("dataset"),
-        # No hits over a partial conversion says nothing about the rows the
-        # server never converted, so it is not allowed to become a zero.
-        "status": HITS if hits else (INCONCLUSIVE if partial else ZERO),
+        # Finding nothing is only a zero for the stage if the whole stage was
+        # read. Anything short of that is inconclusive, and says which part.
+        "status": HITS if hits else (ZERO if not gaps else INCONCLUSIVE),
+        "coverage_gaps": gaps,
         "rows": rows,
         "hits": hits,
         "rate": hits / rows if rows else None,
@@ -147,6 +175,28 @@ def stage_trace(result) -> dict:
     }
 
 
+def _rank_block(r: dict, basis: str, key: str) -> str | None:
+    """Why this stage cannot be compared to the others, or None if it can.
+
+    A rate only ranks against another rate when both are the same measurement
+    over the same population. Two ways that fails, and in both the honest move
+    is to keep the stage's counts on the page and out of the ordering rather
+    than to sort it low — a stage sorted last reads as measured and losing.
+    """
+    if r["partial"]:
+        # The denominator is the converted subset, and the conversion is a
+        # prefix rather than a sample, so the quotient is not a stage rate.
+        return ("only part of this repo was converted, so its denominator is that subset "
+                "rather than the stage")
+    if basis == "produced" and r[key] is None:
+        # `--field` is per run, so one pattern's stages can disagree about what
+        # was read. Sorting an unread side as zero is the conflation this layer
+        # exists to avoid.
+        return (f"this run read only {', '.join(r['fields']) or 'nothing'}, so there is no "
+                "produce-side rate to compare")
+    return None
+
+
 def compare(results: list[dict], stages: list[dict]) -> dict:
     """Every stage of a pipeline against one pattern, ranked by likely influence.
 
@@ -155,6 +205,16 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
     the stages *missing* from `results` — the point of the exercise is that a
     stage nobody scanned reads differently from one scanned and found empty.
     """
+    definitions = {(r.get("pattern"), bool(r.get("regex")), bool(r.get("case_sensitive")))
+                   for r in results}
+    if len(definitions) > 1:
+        # Runs are grouped by slug, and a slug is a filename rather than a
+        # promise. Ranking two different searches against each other while
+        # printing one of their patterns is worse than refusing.
+        raise ValueError(
+            "these runs are not the same search: "
+            + "; ".join(sorted(f"{p!r} (regex={g}, case_sensitive={c})" for p, g, c in definitions))
+        )
     found = {r["stage"]: stage_trace(r) for r in results}
     rows = []
     for s in stages:
@@ -169,10 +229,11 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
             # of, so no argument to this command would have covered them.
             "status": UNSEARCHED if s.get("hf_dataset") else UNREACHABLE,
             "rows": None, "hits": None, "rate": None, "by_group": {}, "fields": [],
-            "available_fields": [], "produced": None, "produced_rate": None,
+            "available_fields": [], "coverage_gaps": [],
+            "produced": None, "produced_rate": None,
             "produced_rate_hi": None,
             "sources": [], "concentration": None, "revision": None, "partial": False,
-            "unsearched_columns": [],
+            "unsearched_columns": [], "rank_block": None,
         })
 
     searched = [r for r in rows if r["status"] in (HITS, ZERO)]
@@ -186,13 +247,10 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
     # run read a produce-side column, or every run did and found nothing there.
     produce_searched = any(r["produced"] is not None for r in searched + inconclusive)
     key = "produced_rate" if basis == "produced" else "rate"
-    # A stage whose run never read a produce-side column has no produce-side
-    # rate, and sorting it as zero would rank it as though that side had been
-    # searched and found empty — the exact conflation this layer exists to
-    # avoid. It is held out of the ranking and named instead. Runs of one
-    # pattern can differ this way because `--field` is per run.
-    rankable = [r for r in hitting if r[key] is not None] if basis == "produced" else hitting
-    unranked = [r for r in hitting if r not in rankable]
+    for r in hitting:
+        r["rank_block"] = _rank_block(r, basis, key)
+    rankable = [r for r in hitting if not r["rank_block"]]
+    unranked = [r for r in hitting if r["rank_block"]]
     ranked = sorted(rankable, key=lambda r: r[key] or 0, reverse=True)
 
     # The produce-side rate of a stage matching in two groups is an interval,
@@ -276,11 +334,11 @@ def _group_line(r: dict) -> str:
     return " · ".join(parts)
 
 
-def _stage_lines(r: dict, unranked: set) -> list[str]:
+def _stage_lines(r: dict) -> list[str]:
     if r["status"] == INCONCLUSIVE:
-        return [f"- **{r['stage']}** — 0 of the {r['rows']:,} rows the server converted, and it "
-                f"converted only part of `{r['dataset']}`. The rest was never read, so this is "
-                "inconclusive rather than a zero."]
+        why = "; ".join(r["coverage_gaps"])
+        return [f"- **{r['stage']}** — nothing matched in the {r['rows']:,} rows read, and that "
+                f"is not a zero for the stage: {why}. What went unread could hold it."]
     if r["status"] == ZERO:
         out = [f"- **{r['stage']}** — 0 of {r['rows']:,} rows. Exact, over every row of "
                f"`{r['dataset']}` at revision `{(r['revision'] or '')[:12]}`."]
@@ -294,10 +352,9 @@ def _stage_lines(r: dict, unranked: set) -> list[str]:
             span = f"{lo:,}" if lo == hi else f"{lo:,}–{hi:,}"
             out.append(f"  - produce side: {span} rows, "
                        f"{_span(r['produced_rate'], r['produced_rate_hi'])} of the stage.")
-        if r["stage"] in unranked:
-            out.append(f"  - not in the produce-side ranking: this run read only "
-                       f"{', '.join(r['fields']) or 'nothing'}, so there is no produce-side rate "
-                       "to compare — a gap in the measurement rather than a zero.")
+        if r["rank_block"]:
+            out.append(f"  - not in the ranking: {r['rank_block']} — a gap in the measurement "
+                       "rather than a low score.")
         src = r["concentration"]
         if src:
             out.append(f"  - concentrated in `{src['name']}`: {src['hits']:,} of its "
@@ -352,15 +409,15 @@ def _verdict(t: dict) -> list[str]:
         loose = ", ".join(r["stage"] for r in t["inconclusive"])
         if not exact:
             if loose:
-                return [f"**Inconclusive.** Nothing matched in {loose}, but the server converted "
-                        "only part of those repos and the rest was never read, so this is not a "
-                        "zero and no stage here was searched end to end."]
+                return [f"**Inconclusive.** Nothing matched in {loose}, but no stage here was "
+                        "read end to end — see each line for what went unread — so this is not "
+                        "a zero."]
             return ["**Nothing searched yet**, so there is no answer here either way."]
         rows = sum(r["rows"] for r in exact)
         names = ", ".join(r["stage"] for r in exact)
         them = "they are" if len(t["inconclusive"]) > 1 else "it is"
-        caveat = (f" {loose} matched nothing either, but only over the part of the repo the "
-                  f"server converted, so {them} outside this claim.") if loose else ""
+        caveat = (f" {loose} matched nothing either, but was not read end to end, so {them} "
+                  "outside this claim.") if loose else ""
         return [
             f"**Not in any stage searched.** 0 of {rows:,} rows across {names}, exact over "
             f"every one of them.{caveat} A model that produces this string anyway did not take "
@@ -411,10 +468,9 @@ def _verdict(t: dict) -> list[str]:
                     "stage matching in two groups is only known to an interval, and "
                     f"{best['stage']}'s {_span(best['produced_rate'], best['produced_rate_hi'])} "
                     f"overlaps {names}, so the counts do not settle the order between them.")
-    if t["unranked"]:
-        names = ", ".join(r["stage"] for r in t["unranked"])
-        line.append(f"{names} matched too but read only the prompt side, so {'they are' if len(t['unranked']) > 1 else 'it is'} "
-                    "not in this ranking at all rather than at the bottom of it.")
+    for r in t["unranked"]:
+        line.append(f"{r['stage']} matched too and is not in this ranking at all rather than at "
+                    f"the bottom of it: {r['rank_block']}.")
     if t["basis"] == "rows" and not t["produce_searched"]:
         line.append("No run on this pattern searched a produce-side column, so this is the hit "
                     "rate over all rows and says nothing about which side matched.")
@@ -447,10 +503,9 @@ def render(t: dict, model: str, note: bool = False) -> list[str]:
     out = [f"### `{t['pattern']}` — where it most plausibly comes from", ""]
     if note:
         out += [BASIS_NOTE, ""]
-    unranked = {r["stage"] for r in t["unranked"]}
     for r in t["stages"]:
         if r["status"] in (HITS, ZERO, INCONCLUSIVE):
-            out += _stage_lines(r, unranked)
+            out += _stage_lines(r)
     out += _gap_lines(t, cmd)
     out.append("")
     out += _verdict(t)

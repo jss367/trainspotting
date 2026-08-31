@@ -286,18 +286,37 @@ rather than collapsed to its low end. Two stages whose intervals overlap are not
 ordered by these counts, and the verdict says so instead of picking one.
 
 **What was not looked at.** A stage scanned and found empty, a stage nobody
-scanned, a stage this layer cannot reach, and a stage scanned only over the part
-of the repo the datasets-server converted are four different answers, and
-flattening them into "no hits" is what turns *we did not look* into *it is not
-there*. They are named apart. A pattern absent from every stage searched gets
-said outright — 0 of N rows, exact over all of them, so a model that produces
-the string anyway did not take it from the data we can see, which points at a
-stage out of reach, at text distilled from another model rather than carried
-across literally, or at generalisation — and only stages read end to end are
-allowed into that claim. `--field` is per run, so one pattern's stages can also
-disagree about what was read; a stage whose run never opened a produce-side
-column is held out of the produce-side ranking by name rather than sorted to the
-bottom of it as if that side had been searched and found empty.
+scanned, a stage this layer cannot reach, and a stage scanned but not all the
+way through are four different answers, and flattening them into "no hits" is
+what turns *we did not look* into *it is not there*. They are named apart.
+
+A zero counts for the whole stage only when the whole stage was read. Three
+things break that, and each is printed rather than assumed: the datasets-server
+converted only part of the repo, `--field` narrowed the search to some of the
+sides the mix has, or a text column the layer does not recognise went
+unsearched. Any of them makes the result inconclusive — nothing matched *in what
+was read* — and keeps it out of the stage-wide claim. A run written before result
+files recorded which sides the mix has cannot demonstrate it read all of them, so
+it lands there too. A pattern absent from every stage read end to end does get
+said outright: 0 of N rows, exact over all of them, so a model that produces the
+string anyway did not take it from the data we can see — which points at a stage
+out of reach, at text distilled from another model rather than carried across
+literally, or at generalisation.
+
+The same rule governs the ranking, because a rate only ranks against another
+rate when both measure the same thing over the same population. A stage whose
+run never opened a produce-side column has no produce-side rate; a stage scanned
+over a partial conversion has a rate over the converted subset, which is a prefix
+rather than a sample. Both keep their counts on the page and are named as out of
+the ranking, rather than sorted to the bottom of it where a gap in the
+measurement reads as a low score.
+
+Runs are grouped by their `--slug`, which is a filename rather than a promise:
+rerun one stage under the same slug with a refined regex and the directory holds
+two searches with one name. The group key is the slug *and* the pattern and
+matching flags, so those render separately and `compare()` raises rather than
+ranking one search's counts against another's under whichever pattern sorted
+first.
 
 What the ranking deliberately does not do is weight the stages against each
 other. Identity behaviour is mostly set after pretraining, so the same rate in
@@ -500,8 +519,11 @@ registry stage (`tests/fixtures/rows/`, re-captured by
 set of counts turns into a wrong story: ranking by hits rather than by rate,
 adding overlapping group counts as if they were a union, ordering two stages
 whose intervals overlap, naming the largest source as the origin when it holds
-the mix rate, ranking an unread produce side as an empty one, and printing a
-stage nobody scanned — or one scanned over a partial conversion — as a zero.
+the mix rate, ranking an unread produce side or a partial conversion's subset
+rate against a stage rate, and reading "nothing matched" as a zero when the scan
+was narrowed, incomplete, or cannot show what it covered.
+`tests/test_report_traces.py` covers the grouping the report does before any of
+that: one search's stages together, two searches under one slug apart.
 
 `grep` is covered twice over. Its column-to-field mapping runs against one saved
 Parquet schema per stage (`tests/fixtures/schemas/`, re-captured by

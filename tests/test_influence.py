@@ -14,14 +14,23 @@ THINK = registry.MODELS["olmo-3-7b-think"]["stages"]
 
 
 def run(stage, *, hits, rows, groups, fields=None, sources=None, totals=None, **kw):
-    """One grep result file, with only the keys the influence layer reads."""
-    return {
+    """One grep result file, with only the keys the influence layer reads.
+
+    `available_fields` defaults to the fields searched — a run that read
+    everything the mix has, which is what a modern unnarrowed `grep` writes.
+    Pass a wider list to model `--field` narrowing, or `[]` to model a run
+    written before the key existed.
+    """
+    searched = fields if fields is not None else list(groups)
+    available = kw.pop("available_fields", searched)
+    out = {
         "stage": stage,
         "dataset": f"allenai/{stage}",
         "pattern": kw.pop("pattern", "as an AI language model"),
         "regex": kw.pop("regex", False),
         "case_sensitive": kw.pop("case_sensitive", False),
-        "fields": fields if fields is not None else list(groups),
+        "available_fields": list(available),
+        "fields": searched,
         "matched": hits,
         "total_rows": rows,
         "by_group": groups,
@@ -33,6 +42,9 @@ def run(stage, *, hits, rows, groups, fields=None, sources=None, totals=None, **
         "unsearched_columns": [],
         **kw,
     }
+    if not available:
+        del out["available_fields"]
+    return out
 
 
 # --- the produce-side union ------------------------------------------------
@@ -224,7 +236,8 @@ def test_a_narrowed_field_reads_differently_from_a_missing_column():
 
 
 def test_a_run_predating_available_fields_says_the_weaker_thing():
-    old = run("dpo", hits=5, rows=100, groups={"prompt": 5}, fields=["prompt"])
+    old = run("dpo", hits=5, rows=100, groups={"prompt": 5}, fields=["prompt"],
+              available_fields=[])
     assert "response not counted" in influence._group_line(influence.stage_trace(old))
 
 
@@ -301,8 +314,8 @@ def test_a_prompt_only_run_is_held_out_of_the_produce_side_ranking():
     assert [r["stage"] for r in t["ranked"]] == ["rlvr"]
     assert [r["stage"] for r in t["unranked"]] == ["dpo"]
     text = " ".join(influence.render(t, "olmo-3-7b-think"))
-    assert "not in the produce-side ranking: this run read only prompt" in text
-    assert "not in this ranking at all rather than at the bottom of it" in text
+    assert "not in the ranking: this run read only prompt, so there is no produce-side rate" in text
+    assert "dpo matched too and is not in this ranking at all rather than at the bottom" in text
 
 
 def test_a_produce_side_searched_and_empty_still_ranks():
@@ -354,7 +367,8 @@ def test_no_hits_over_a_partial_conversion_is_inconclusive_not_zero():
     t = influence.compare(runs, THINK)
     assert t["searched"] == [] and [r["stage"] for r in t["inconclusive"]] == ["dpo"]
     text = " ".join(influence.render(t, "olmo-3-7b-think"))
-    assert "inconclusive rather than a zero" in text
+    assert "the server converted only part of the repo" in text
+    assert "not a zero for the stage" in text
     assert "**Inconclusive.**" in text
     # The exact-zero reading must not be reached on data that was never read.
     assert "exact over every one of them" not in text
@@ -370,4 +384,85 @@ def test_a_partial_zero_does_not_join_a_real_zero_in_the_verdict():
     text = " ".join(influence.render(t, "olmo-3-7b-think"))
     # The exact claim is made over rlvr's rows alone, not over both stages'.
     assert "0 of 102,014 rows across rlvr, exact over every one of them" in text
-    assert "dpo matched nothing either, but only over the part of the repo the server converted, so it is outside this claim" in text
+    assert "dpo matched nothing either, but was not read end to end, so it is outside this claim" in text
+
+
+# --- a zero is only stage-wide if the whole stage was read -----------------
+
+
+def test_a_narrowed_run_that_matched_nothing_is_not_a_stage_zero():
+    # `--field prompt` never opened the response column, so "no matches" is a
+    # fact about the prompts and the verdict must not read it as the stage.
+    runs = [run("dpo", hits=0, rows=150_000, groups={"prompt": 0}, fields=["prompt"],
+                available_fields=["prompt", "response"])]
+    t = influence.compare(runs, THINK)
+    assert t["searched"] == [] and [r["stage"] for r in t["inconclusive"]] == ["dpo"]
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "this run read only prompt of prompt, response" in text
+    assert "exact over every one of them" not in text
+    assert "did not take it from the data we can see" not in text
+
+
+def test_an_unrecognised_text_column_also_blocks_a_stage_zero():
+    runs = [run("dpo", hits=0, rows=150_000, groups={"prompt": 0, "response": 0},
+                unsearched_columns=["rationale"])]
+    t = influence.compare(runs, THINK)
+    assert t["inconclusive"] and t["searched"] == []
+    assert "rationale went unsearched" in " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+def test_a_run_that_cannot_show_its_coverage_does_not_get_the_benefit_of_doubt():
+    # Written before `available_fields` existed: it may have read everything,
+    # and it cannot demonstrate that, which is not the same as having.
+    runs = [run("dpo", hits=0, rows=150_000, groups={"prompt": 0, "response": 0},
+                available_fields=[])]
+    t = influence.compare(runs, THINK)
+    assert [r["stage"] for r in t["inconclusive"]] == ["dpo"]
+    assert "does not record which sides the mix has" in \
+        " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+def test_a_complete_run_that_matched_nothing_is_still_a_real_zero():
+    runs = [run("dpo", hits=0, rows=150_000, groups={"prompt": 0, "response": 0})]
+    t = influence.compare(runs, THINK)
+    assert [r["stage"] for r in t["zero"]] == ["dpo"]
+    assert "exact over every one of them" in " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+# --- a subset rate does not rank against a stage rate ----------------------
+
+
+def test_a_partial_conversion_with_hits_is_kept_out_of_the_ranking():
+    # Its denominator is the converted subset, and the conversion is a prefix
+    # rather than a sample, so the quotient is not a rate for the stage.
+    runs = [
+        run("dpo", hits=900, rows=1_000, groups={"prompt": 0, "response": 900}, partial=True),
+        run("rlvr", hits=10, rows=100_000, groups={"prompt": 0, "response": 10}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["stage"] == "rlvr"
+    assert [r["stage"] for r in t["unranked"]] == ["dpo"]
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "not in the ranking: only part of this repo was converted" in text
+    assert "dpo matched too and is not in this ranking" in text
+
+
+# --- one slug is not a promise that it is one search -----------------------
+
+
+def test_two_different_searches_are_refused_rather_than_ranked():
+    runs = [
+        run("dpo", hits=5, rows=100, groups={"prompt": 5}, pattern="ChatGPT"),
+        run("rlvr", hits=5, rows=100, groups={"prompt": 5}, pattern="ChatGPT", regex=True),
+    ]
+    with pytest.raises(ValueError, match="not the same search"):
+        influence.compare(runs, THINK)
+
+
+def test_matching_flags_alone_make_it_a_different_search():
+    runs = [
+        run("dpo", hits=5, rows=100, groups={"prompt": 5}),
+        run("rlvr", hits=5, rows=100, groups={"prompt": 5}, case_sensitive=True),
+    ]
+    with pytest.raises(ValueError, match="not the same search"):
+        influence.compare(runs, THINK)
