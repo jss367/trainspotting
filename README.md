@@ -28,8 +28,10 @@ question, in increasing order of depth:
    every row rather than a sample. The five layers above all estimate an
    unconditional rate from 300 prompts; this one answers the question you have
    once you know what you are looking for, which a sample that size cannot: a
-   pattern in 0.1% of a mix is expected to miss it entirely. See
-   [Searching for a string](#searching-for-a-string).
+   pattern in 0.1% of a mix is expected to miss it entirely. Counts are then read
+   across the pipeline as a ranking — which stage most plausibly taught the
+   string, by rate rather than by hits, and which side of the example it is on.
+   See [Searching for a string](#searching-for-a-string).
 
 The pretraining corpora get their own path, because the datasets-server cannot
 sample them: exact composition from the shard listing, readable random documents,
@@ -58,7 +60,8 @@ trainspotting sources olmo-3-7b-instruct --json
 # Sample 300 prompts per stage and label each one with Claude
 trainspotting classify olmo-3-7b-instruct --sample 300
 
-# Combined markdown report with Wilson 95% CIs on the sampled estimates
+# Combined markdown report: sampled rates with Wilson 95% CIs, and every
+# committed string trace ranked by which stage most plausibly taught it
 trainspotting report olmo-3-7b-instruct
 
 # Free-form question: sample each stage and judge every prompt yes/no
@@ -232,6 +235,68 @@ only worth what reading its matches says. Of the 134 matches in
 `Dolci-Think-RL-7B`, 12 are unit-test string literals asserting on
 `'OpenAI ChatGPT'` — which the snippets say and the number does not. The site
 does not render `grep` runs yet.
+
+### Which stage it most plausibly came from
+
+A count on its own is presence. Stacked across a pipeline it is easy to read
+backwards, because a bigger number is not a bigger effect: a stage with ten
+times the rows shows more of any string for that reason alone. So a multi-stage
+`grep` ends with a comparison, and `trainspotting report` prints the same one for
+every committed run:
+
+```
+### `as an AI language model` — where it most plausibly comes from
+
+- dpo  — 61 of 150,000 rows, 0.041% (1 in 2,459).  prompt 46 · response 39 · reference not counted
+  - produce side: 39 rows, 0.026% of the stage.
+  - concentrated in `tulu-3-sft-coconot-regenerated`: 33 of its 790 rows, 4.2% — 103× the stage's own rate.
+- rlvr — 400 of 102,014 rows, 0.39% (1 in 255).  prompt 209 · response 3 · reference 232
+  - produce side: 232–235 rows, 0.23% of the stage.
+  - concentrated in `hamishivi/rlvr_general_mix`: 387 of its 20,636 rows, 1.9% — 5× the stage's own rate.
+- sft — not searched. That is not a zero: no row of this stage has been read for
+  this pattern.
+- pretrain, midtrain, long-context — out of reach for this layer, which is also
+  not a zero.
+
+Most plausibly rlvr. 387 of the 20,636 `hamishivi/rlvr_general_mix` rows (1.9%,
+5× the stage) hold it, and 232–235 of the stage's matches are on the produce
+side. Highest produce-side rate of the 2 stages with any: 8.7× dpo's.
+```
+
+Three things go into that, and all three are already exact:
+
+**The rate, not the count.** Every stage against its own row count, and every
+source against its own. Inside a stage the same correction applies twice over:
+`llm_judged` holds 267 of Instruct-DPO's 521 `ChatGPT` matches, a clear majority
+— and at 124,980 rows it holds them at 0.21% against 0.20% for the mix, so it is
+the biggest source rather than the origin. A source is called a concentration
+only when it holds at least a tenth of the matches at twice the stage's rate;
+otherwise the line says the matches are spread, which is the more common answer
+and the one a top-N list hides.
+
+**Which side matched.** A string in a prompt is text the model was trained to
+read; a string in the response a stage fits, or in the reference answer a
+verifier scores rollouts against, is text the objective pushes it to emit. When
+the question is why a model *says* something, only the second is evidence, so
+the ranking runs on the produce-side rate and falls back to the overall rate
+only when no run read a produce-side column. `by_group` counts rows per group
+and one row can match two, so the union is reported as the interval it is
+(232–235) rather than as the sum.
+
+**What was not looked at.** A stage scanned and found empty, a stage nobody
+scanned, and a stage this layer cannot reach are three different answers, and
+flattening them into "no hits" is what turns *we did not look* into *it is not
+there*. They are named apart, and a pattern absent from every stage searched
+gets said outright: 0 of N rows, exact over all of them, so a model that
+produces the string anyway did not take it from the data we can see — which
+points at a stage out of reach, at text distilled from another model rather than
+carried across literally, or at generalisation.
+
+What the ranking deliberately does not do is weight the stages against each
+other. Identity behaviour is mostly set after pretraining, so the same rate in
+RLVR and in Dolma 3 are not the same evidence — but by how much is not something
+these counts measure, and folding a guess into a score would bury it. It is
+printed as a caveat and the rates stay comparable on their own terms.
 
 ### The same question on the site
 
@@ -424,7 +489,11 @@ The offline suite covers the pure code: the clustered Wilson interval and its
 degenerate branches, language detection on mixed-language prompts, the
 classifier's reply parser, and prompt extraction against one saved row per
 registry stage (`tests/fixtures/rows/`, re-captured by
-`scripts/capture_row_fixtures.py`).
+`scripts/capture_row_fixtures.py`). `tests/test_influence.py` pins the ways a
+set of counts turns into a wrong story: ranking by hits rather than by rate,
+adding overlapping group counts as if they were a union, naming the largest
+source as the origin when it holds the mix rate, and printing a stage nobody
+scanned as a zero.
 
 `grep` is covered twice over. Its column-to-field mapping runs against one saved
 Parquet schema per stage (`tests/fixtures/schemas/`, re-captured by
@@ -453,6 +522,12 @@ quietly labels nothing, or a string search that quietly counts less.
   published with the dataset, so those rows are still labeled from the prompt
   alone. The `sources` layer's reward-type breakdown and the `context` layer's
   verifier view are the complement.
+- The stage ranking is evidence about where a string is, and only that. It does
+  not weight the stages against each other, so a rate in RLVR and the same rate
+  in pretraining rank equal even though the late one generally moves behaviour
+  more; and a pattern present in a stage is not a demonstration that any
+  particular behaviour came from it. For "did this exact document train the
+  model", use OLMoTrace.
 - `context` names each RL mix's verifier by matching its `dataset_source`
   against known mixes (math answer match, code unit tests, constraint checker,
   LLM judge). The raw source tag travels with every record, so the inference is

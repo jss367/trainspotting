@@ -5,7 +5,7 @@ import re
 import sys
 from pathlib import Path
 
-from . import classify, context, extract, grep, hf, languages, pretrain, registry
+from . import classify, context, extract, grep, hf, influence, languages, pretrain, registry
 
 RESULTS = Path(__file__).resolve().parent.parent / "results"
 # The committed half of the bulk artifacts: gitignored under results/, shipped
@@ -576,6 +576,11 @@ def _grep_plan(con, args, stages):
         listing = grep.parquet_listing(s["hf_dataset"])
         schema = grep.schema(con, listing["urls"][0])
         exprs, leaves, unsearched = grep.text_fields(schema, args.field)
+        # What the mix holds, as opposed to what this run reads. A result file
+        # with only the second cannot say whether an absent response count means
+        # `--field` narrowed the search or the mix has no response column, and
+        # those are opposite readings of the same blank. Schema only, no reads.
+        available, _, _ = grep.text_fields(schema, None)
         if not exprs:
             sys.exit(
                 f"{s['stage']}: no text columns for field(s) {', '.join(args.field or grep.GROUPS)}"
@@ -599,6 +604,7 @@ def _grep_plan(con, args, stages):
             "source": source,
             "source_column": source_column,
             "unsearched": unsearched,
+            "available": list(available),
             "rows": grep.total_rows(con, listing["urls"]),
             "bytes": grep.byte_cost(con, listing["urls"], leaves),
         })
@@ -634,6 +640,7 @@ def cmd_grep(args):
         )
 
     slug = args.slug or grep.slugify(args.pattern)
+    written = []
     for p in plan:
         s = p["stage"]
         if p["listing"]["partial"]:
@@ -676,27 +683,55 @@ def cmd_grep(args):
         if len(result["by_source"]) > len(shown):
             rest = len(result["by_source"]) - len(shown)
             print(f"  … and {rest} more source(s), all of them in the result file", file=sys.stderr)
-        path = _write_json(
-            RESULTS / f"{args.model}.{s['stage']}.grep-{slug}.json",
-            {
-                "dataset": s["hf_dataset"],
-                "stage": s["stage"],
-                "pattern": args.pattern,
-                "regex": args.regex,
-                "case_sensitive": args.case_sensitive,
-                "fields": list(p["exprs"]),
-                "source_column": p["source_column"],
-                "revision": p["listing"]["revision"],
-                "partial": p["listing"]["partial"],
-                "shards": len(p["listing"]["urls"]),
-                "bytes_read": p["bytes"],
-                "unsearched_columns": p["unsearched"],
-                "total_rows": rows,
-                "rows_by_source": totals,
-                **result,
-            },
-        )
+        payload = {
+            "dataset": s["hf_dataset"],
+            "stage": s["stage"],
+            "pattern": args.pattern,
+            "slug": slug,
+            "regex": args.regex,
+            "case_sensitive": args.case_sensitive,
+            "fields": list(p["exprs"]),
+            "available_fields": p["available"],
+            "source_column": p["source_column"],
+            "revision": p["listing"]["revision"],
+            "partial": p["listing"]["partial"],
+            "shards": len(p["listing"]["urls"]),
+            "bytes_read": p["bytes"],
+            "unsearched_columns": p["unsearched"],
+            "total_rows": rows,
+            "rows_by_source": totals,
+            **result,
+        }
+        path = _write_json(RESULTS / f"{args.model}.{s['stage']}.grep-{slug}.json", payload)
+        written.append(payload)
         print(f"  -> {path}", file=sys.stderr)
+
+    # The counts above are one mix each. Read together they are a claim about
+    # where a string most plausibly entered the model, which is a different
+    # question from how many rows hold it — and one that needs the stages
+    # nobody scanned named as such rather than left out.
+    model = registry.get_model(args.model)
+    trace = influence.compare(written, model["stages"])
+    print("", file=sys.stderr)
+    for line in influence.render(trace, args.model, note=True):
+        print(line, file=sys.stderr)
+
+
+def _grep_traces(model_name, model):
+    """Committed `grep` runs for one model, grouped by the pattern they searched.
+
+    Keyed on the slug rather than the pattern so the stages of one sweep line up
+    even where a `--slug` was given for a pattern too long to name itself, which
+    is how the regex sweeps are stored.
+    """
+    by_slug = {}
+    for path in sorted(RESULTS.glob(f"{model_name}.*.grep-*.json")):
+        slug = path.name.split(".grep-", 1)[1][: -len(".json")]
+        run = json.loads(path.read_text())
+        # Runs written before the slug was recorded still have it in their name.
+        run.setdefault("slug", slug)
+        by_slug.setdefault(slug, []).append(run)
+    return {slug: influence.compare(runs, model["stages"]) for slug, runs in by_slug.items()}
 
 
 def cmd_report(args):
@@ -751,6 +786,19 @@ def cmd_report(args):
         if und:
             print(f"- undetermined: {und / n * 100:.1f}%  ({und}/{n}) — too short, too much code, or too evenly mixed to call")
         print()
+
+    traces = _grep_traces(args.model, model)
+    print("\n## String traces (exact, every row)\n")
+    if not traces:
+        print(f"- no `grep` run yet (`trainspotting grep {args.model} \"some string\"`)")
+        return
+    print("Every count here is over all rows of the stage named, not a sample, so a zero is "
+          "the string being absent rather than merely unlikely — and a stage listed as "
+          "unsearched is neither.\n")
+    print(influence.BASIS_NOTE + "\n")
+    for _, trace in sorted(traces.items()):
+        for line in influence.render(trace, args.model):
+            print(line)
 
 
 def main():
