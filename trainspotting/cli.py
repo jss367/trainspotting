@@ -6,7 +6,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import classify, context, extract, hf, languages, pretrain, registry
+from . import classify, context, extract, hf, infinigram, languages, pretrain, registry
 
 RESULTS = Path(__file__).resolve().parent.parent / "results"
 # The committed half of the bulk artifacts: gitignored under results/, shipped
@@ -680,6 +680,65 @@ def cmd_context(args):
         print(f"{s['stage']}: {len(records)} records -> {path} ({path.stat().st_size / 1e6:.1f} MB)", file=sys.stderr)
 
 
+def cmd_find(args):
+    """Exact-string search over an open training corpus, via infini-gram.
+
+    The inverse of `ask`: instead of sampling documents and judging each one,
+    take a string the caller already has and get its exact occurrence count
+    plus example documents. The count doubles as a duplication count, which
+    matters on its own — memorization scales with how many times a string
+    appears in training. No model is called and nothing is downloaded; both
+    steps are API lookups against a prebuilt suffix-array index.
+    """
+    covers = infinigram.INDEXES.get(args.index, "not in the known-index list; passed through as-is")
+    print(f"index: {args.index} — {covers}", file=sys.stderr)
+    print(f"note: {infinigram.NO_OLMO3_CAVEAT}\n", file=sys.stderr)
+
+    found = infinigram.find(args.index, args.phrase)
+    count = found["cnt"]
+    # What was matched is the token sequence, not the raw string — say so, so a
+    # surprising count can be traced to a surprising tokenization.
+    print(f"matched as tokens: {' | '.join(found['tokens'])}")
+    print(f"occurrences: {count:,}")
+
+    picks = infinigram.spread_picks(found["segment_by_shard"], args.docs if count else 0)
+    docs = []
+    for s, rank in picks:
+        doc = infinigram.get_doc(args.index, args.phrase, s, rank, args.maxlen)
+        prov = infinigram.doc_provenance(doc)
+        docs.append(
+            {
+                "doc_ix": doc.get("doc_ix"),
+                "doc_len": doc.get("doc_len"),
+                "blocked": doc.get("blocked", False),
+                **prov,
+                "snippet": infinigram.snippet(doc),
+            }
+        )
+    for d in docs:
+        where = " ".join(str(d[k]) for k in ("source", "path", "url") if d.get(k))
+        print(f"\n--- doc {d['doc_ix']} ({d['doc_len']:,} tokens) {where}")
+        print(d["snippet"] if not d["blocked"] else "[blocked by the index owner]")
+    if count > len(docs):
+        print(f"\n({len(docs)} of {count:,} occurrences shown, spread evenly across the index)")
+
+    if args.json:
+        slug = re.sub(r"[^a-z0-9]+", "-", args.phrase.lower()).strip("-")[:60]
+        path = _write_json(
+            RESULTS / f"find.{slug}.json",
+            {
+                "phrase": args.phrase,
+                "index": args.index,
+                "covers": covers,
+                "caveat": infinigram.NO_OLMO3_CAVEAT,
+                "tokens": found["tokens"],
+                "count": count,
+                "docs": docs,
+            },
+        )
+        print(f"\nwrote {path}", file=sys.stderr)
+
+
 def cmd_report(args):
     model = registry.get_model(args.model)
     print(f"# Training-data audit: {args.model}\n")
@@ -770,6 +829,28 @@ def main():
         help="also score pretraining documents sampled by `trainspotting pretrain`",
     )
     p.set_defaults(fn=cmd_ask)
+
+    p = sub.add_parser(
+        "find",
+        help="exact occurrence count + example documents for a phrase, via infini-gram",
+    )
+    p.add_argument("phrase", help="the exact string to look up (matched on token boundaries)")
+    p.add_argument(
+        "--index",
+        default=infinigram.DEFAULT_INDEX,
+        help="infini-gram index to search; known: "
+        + ", ".join(infinigram.INDEXES)
+        + " (no Dolma 3 / OLMo 3 index exists publicly yet; other names are passed through)",
+    )
+    p.add_argument("--docs", type=_positive_int, default=5, help="example documents to retrieve")
+    p.add_argument(
+        "--maxlen",
+        type=_positive_int,
+        default=200,
+        help="tokens of each document to display around the match",
+    )
+    p.add_argument("--json", action="store_true", help="also write results/find.<slug>.json")
+    p.set_defaults(fn=cmd_find)
 
     p = sub.add_parser("pretrain", help="sample documents from the Dolma 3 pretraining shards")
     p.add_argument("model")

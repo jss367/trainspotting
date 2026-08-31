@@ -1,8 +1,9 @@
 """Shared test plumbing: the saved dataset rows, and the opt-in live tests.
 
 Everything runs offline by default. `--live` additionally runs the tests that
-hit the HuggingFace datasets-server, which is where an upstream schema change
-gets caught before it reaches a sampling run.
+hit external services — the HuggingFace datasets-server and the infini-gram
+API — which is where an upstream schema change gets caught before it reaches
+a sampling run.
 """
 
 import json
