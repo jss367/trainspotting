@@ -1134,10 +1134,13 @@ def test_a_gap_only_some_runs_have_stays_on_the_stage_that_has_it():
 # --- a legacy run holding every group read every side ----------------------
 
 
-def test_a_legacy_run_covering_all_three_groups_needs_no_available_fields():
+def test_a_legacy_run_covering_every_group_needs_no_available_fields():
     # `available_fields` is drawn from GROUPS, so a run whose `fields` holds all
-    # of them cannot have been narrowed, whatever its vintage.
-    r = run("rlvr", hits=0, rows=100, groups={"prompt": 0, "response": 0, "reference": 0},
+    # of them cannot have been narrowed, whatever its vintage. `rollout` joined
+    # GROUPS when RL reference generations stopped being counted as responses,
+    # so a run has to hold it too before it counts as a full sweep.
+    r = run("rlvr", hits=0, rows=100,
+            groups={"prompt": 0, "response": 0, "reference": 0, "rollout": 0},
             available_fields=[])
     assert influence.coverage_gaps(r) == []
     t = influence.compare([r], THINK)
@@ -1163,7 +1166,8 @@ def test_a_legacy_run_holding_both_produce_groups_is_not_understated():
 
 
 def test_an_unrecognised_column_still_counts_against_a_full_sweep():
-    r = run("rlvr", hits=0, rows=100, groups={"prompt": 0, "response": 0, "reference": 0},
+    r = run("rlvr", hits=0, rows=100,
+            groups={"prompt": 0, "response": 0, "reference": 0, "rollout": 0},
             available_fields=[], unsearched_columns=["rationale"])
     assert influence.coverage_gaps(r) == ["rationale went unsearched"]
     assert influence._understated(influence.stage_trace(r), "produced") == \

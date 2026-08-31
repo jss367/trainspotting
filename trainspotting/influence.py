@@ -502,7 +502,7 @@ def _group_line(r: dict) -> str:
     existed cannot tell those two apart, so they say the weaker thing.
     """
     parts = []
-    for g in ("prompt", *PRODUCE):
+    for g in GROUPS:
         if g in r["fields"]:
             parts.append(f"{g} {r['by_group'].get(g, 0):,}")
         elif r["available_fields"]:

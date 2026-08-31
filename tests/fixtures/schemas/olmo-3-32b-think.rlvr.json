@@ -22,8 +22,8 @@
   },
   "groups": {
     "prompt": 1,
-    "response": 1,
-    "reference": 2
+    "reference": 2,
+    "rollout": 1
   },
   "leaves": [
     [

@@ -37,10 +37,19 @@ BASE = "https://datasets-server.huggingface.co"
 HUB = "https://huggingface.co"
 PARQUET_BRANCH = "refs/convert/parquet"
 
-# Which part of the training example a column belongs to. The three groups are
-# the same cut the `context` layer draws: what the model is asked, what it is
-# fit to (or pushed between), and what scores it.
-GROUPS = ("prompt", "response", "reference")
+# Which part of the training example a column belongs to. The first three are
+# the cut the `context` layer draws: what the model is asked, what it is fit to
+# (or pushed between), and what scores it.
+#
+# `rollout` is the fourth and exists to stay *out* of the third. An RL row's
+# `outputs` are reference-model generations kept to compute a passrate for
+# difficulty filtering — the context view says so in as many words, and an RL row
+# stores no response at all. Counting them as response made a hit in text the
+# objective never pushes the model to emit into produce-side evidence, which is
+# what `influence` ranks a stage's origin on: a phrase appearing only in
+# rollouts could rank RLVR as where the model learned to say it. They stay
+# searchable, in their own group, outside `influence.PRODUCE`.
+GROUPS = ("prompt", "response", "reference", "rollout")
 
 # Turn roles whose content the model is fit to *produce*. Everything else in a
 # message list is text it conditions on, which includes the tool turns: a tool
@@ -61,7 +70,7 @@ PLAIN_TEXT = {
 }
 LIST_TEXT = {
     "ground_truth": "reference",
-    "outputs": "response",  # RL: reference rollouts, scored to get the passrate
+    "outputs": "rollout",  # reference generations, not anything the model is fit to
 }
 STRUCT_TEXT = {
     ("reward_model", "ground_truth"): "reference",

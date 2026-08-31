@@ -38,8 +38,9 @@
   },
   "groups": {
     "prompt": 2,
-    "response": 2,
-    "reference": 4
+    "response": 1,
+    "reference": 4,
+    "rollout": 1
   },
   "leaves": [
     [

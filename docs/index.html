@@ -1897,26 +1897,32 @@ function searchFields(rec){
   // committed samples. The trigram index reads them (it walks every string in
   // the record), so a query that only lived there passed the prefilter, cost a
   // download, and came back "no match" for text that is provably in the data.
-  const push = (field, text) => {
+  // `cut` is whether context.py shortened this field. Every field it writes
+  // carries the true length beside the text, so a search can tell "not in this
+  // sample" from "not in the first 4,000 characters of it" — which are
+  // different claims, and only the first is the one the page used to make.
+  const push = (field, text, chars) => {
     if (!text || seen.has(text)) return;
     seen.add(text);
-    out.push({field, text});
+    out.push({field, text, cut: typeof chars === "number" && chars > text.length});
   };
-  push("prompt", rec.prompt_full && rec.prompt_full.text);
+  const cell = (v, field) => v && push(field, v.text, v.chars);
+  cell(rec.prompt_full, "prompt");
   const turns = (list, tag) => (list || []).forEach(t => {
-    if (t.reasoning) push(tag + t.role + " reasoning", t.reasoning.text);
-    push(tag + t.role, t.text);
+    if (t.reasoning) push(tag + t.role + " reasoning", t.reasoning.text, t.reasoning.chars);
+    push(tag + t.role, t.text, t.chars);
   });
   turns(rec.turns, "");                          // sft: the target response
   if (rec.chosen) turns(rec.chosen.turns, "chosen ");
   if (rec.rejected) turns(rec.rejected.turns, "rejected ");
   const reward = rec.reward || {};
   for (const k of ["ground_truth", "solution", "constraint"]){
-    const v = reward[k];
-    push(k.replace(/_/g, " "), typeof v === "string" ? v : v && v.text);
+    const v = reward[k], field = k.replace(/_/g, " ");
+    if (typeof v === "string") push(field, v);
+    else cell(v, field);
   }
-  if (rec.rollouts && rec.rollouts.sample) push("sampled rollout", rec.rollouts.sample.text);
-  push("document", rec.text);                    // pretraining corpora
+  if (rec.rollouts && rec.rollouts.sample) cell(rec.rollouts.sample, "sampled rollout");
+  push("document", rec.text, rec.chars);         // pretraining corpora
   return out;
 }
 
@@ -1936,13 +1942,21 @@ const SNIPPET_PAD = 110;
 // until it finds it.
 function matchIndex(text, needle){
   if (!needle) return -1;
-  for (let i = 0; i + needle.length <= text.length; i++){
+  for (let i = 0; i < text.length; i++){
     // Compare a slice of the original, folded, against the folded needle.
     // Folding changes length in both directions — "İ" folds to two code units,
     // so a two-unit needle can match a one-unit slice, and a longer slice can
     // fold down to a shorter needle — so widths either side of the natural one
     // are tried too.
-    for (let w = Math.max(1, needle.length - 2); w <= needle.length + 2 && i + w <= text.length; w++){
+    // Widths from one up to the needle's own length. Bounding starts by
+    // `needle.length` was wrong at the end of a field: a needle that is itself a
+    // fold — "i" plus a combining dot, two code units — matches a one-unit "İ",
+    // and if that İ is the last character there are fewer than two units left,
+    // so the position was never visited and a real late hit went unhighlighted.
+    // Folding expands or preserves length and never shrinks it, so a slice that
+    // folds to the needle can be no wider than the needle; the upper bound needs
+    // no guess about how far a fold can stretch.
+    for (let w = 1; w <= needle.length && i + w <= text.length; w++){
       if (text.slice(i, i + w).toLowerCase() === needle) return {at: i, len: w};
     }
   }
@@ -1960,13 +1974,20 @@ function snippet(text, needle){
     + esc(text.slice(at + len, to)) + (to < text.length ? "…" : "");
 }
 
-// Records whose text contains `needle`, with the fields that matched.
+// Records whose text contains `needle`, with the fields that matched — plus how
+// many records could not answer, because a field this search read was shortened
+// by context.py and the match may sit past the cut. Reporting those as a clean
+// miss is the page claiming to have looked at text it never had.
 function scanRecords(records, needle){
   const hits = [];
+  let censored = 0;
   for (const rec of records){
-    const fields = searchFields(rec).filter(f => f.text.toLowerCase().includes(needle));
+    const all = searchFields(rec);
+    const fields = all.filter(f => f.text.toLowerCase().includes(needle));
     if (fields.length) hits.push({rec, fields});
+    else if (all.some(f => f.cut)) censored++;
   }
+  hits.censored = censored;
   return hits;
 }
 
@@ -2055,13 +2076,14 @@ async function renderSearch(query, gen){
     card.appendChild(p);
   }
 
-  let matched = 0, filesWithHits = 0, done = 0;
+  let matched = 0, filesWithHits = 0, done = 0, censored = 0;
   for (const file of candidates){
     progress.textContent = `reading ${file.model} ${file.stage} (${++done} of ${candidates.length})…`;
     const data = await getData(file.name);
     if (gen !== GEN) return;
     if (!data) continue;
     const hits = scanRecords(data.records, needle);
+    censored += hits.censored;
     if (!hits.length) continue;
     matched += hits.length;
     filesWithHits++;
@@ -2090,16 +2112,23 @@ async function renderSearch(query, gen){
   const summary = document.createElement("p");
   summary.className = "note";
   summary.style.margin = "0";
+  // Said in both branches. It qualifies a zero more than it qualifies a count,
+  // and a zero is exactly where the page most needs to not overclaim.
+  const cutNote = censored
+    ? ` ${censored} record${censored > 1 ? "s were" : " was"} shortened to 4,000 characters
+        per field before export, so a match past that could not be seen here;
+        the linked row on HuggingFace is untruncated.`
+    : "";
   summary.innerHTML = matched
     ? `<b>${matched}</b> matching example${matched > 1 ? "s" : ""} in ${filesWithHits} of
        ${files.length} sampled sets${prefiltered && candidates.length < files.length
          ? ` — ${candidates.length} read, the rest ruled out by the index` : ""}.
        These are the 300-row-per-stage samples, so this finds instances to read, not a rate:
        for an exact count over every row of a mix, run
-       <code>trainspotting grep &lt;model&gt; "${esc(query)}"</code>.`
+       <code>trainspotting grep &lt;model&gt; "${esc(query)}"</code>.${cutNote}`
     : `No match in any of the ${files.length} committed samples${prefiltered ? "" : " read"}.
        A string this rare in a 300-row sample can still be common in the mix —
-       <code>trainspotting grep &lt;model&gt; "${esc(query)}"</code> counts every row.`;
+       <code>trainspotting grep &lt;model&gt; "${esc(query)}"</code> counts every row.${cutNote}`;
   card.insertBefore(summary, card.querySelector("h3.stage"));
 }
 
