@@ -76,9 +76,41 @@ def test_auxiliary_only_turn_is_kept_and_not_raw():
     assert turns[1]["raw"] is True
 
 
-def test_empty_message_is_still_skipped():
-    assert context._turns([{"role": "assistant", "content": ""}]) == []
-    assert context._turns([{"role": "assistant", "content": None, "tool_calls": []}]) == []
+def test_empty_message_is_kept():
+    """An empty message is still a turn in the sequence the model was scored on:
+    it contributes its role header and end-of-turn token, and `_shared_turns`
+    branches at one that appears on a single side. Dropping it would let two
+    completions differing only there read as the same conversation. It is stored
+    faithfully — empty is what it said — so it stays raw."""
+    for message in ({"role": "assistant", "content": ""},
+                    {"role": "assistant", "content": None},
+                    {"role": "assistant", "content": None, "tool_calls": []}):
+        t = turn(message)
+        assert t["text"] == "" and t["chars"] == 0
+        assert t["raw"] is True
+        assert "omitted" not in t
+
+
+def test_an_empty_turn_on_one_side_shifts_the_rest():
+    """Which is how it protects the branch point: the turn lists stop lining up
+    at its position, so nothing after it reads as shared."""
+    with_empty = context._turns(
+        [{"role": "user", "content": "q"}, {"role": "assistant", "content": ""},
+         {"role": "assistant", "content": "the answer"}]
+    )
+    without = context._turns(
+        [{"role": "user", "content": "q"}, {"role": "assistant", "content": "the answer"}]
+    )
+    assert len(with_empty) == 3 and len(without) == 2
+    assert with_empty[1] != without[1]
+
+
+def test_falsy_content_that_is_not_empty_is_kept():
+    assert turn({"role": "assistant", "content": 0})["text"] == "0"
+
+
+def test_non_messages_are_skipped():
+    assert context._turns(["not a message", None, 7]) == []
 
 
 def test_omitted_names_what_was_left_out():

@@ -52,14 +52,18 @@ def _turns(messages) -> list[dict]:
     for m in messages or []:
         if not isinstance(m, dict):
             continue
-        content = str(m["content"]) if m.get("content") else ""
+        # `is not None` rather than truthiness: a falsy content that is not
+        # absent, `""` or a bare `0`, is still what the turn said.
+        content = "" if m.get("content") is None else str(m["content"])
         omitted = [k for k in BESIDE_CONTENT if m.get(k)]
-        if not content and not omitted:
-            continue
-        # A turn can be nothing but a tool call. Dropping it would close the gap
-        # it leaves: two completions differing only in such a turn would read as
-        # the same conversation, and the answers behind them as a shared opening.
-        # It is kept, empty, so the turn counts stay aligned and nothing here is
+        # Every message in the list is kept, including one that is nothing but a
+        # tool call and one that is empty. Both are turns in the sequence the
+        # model was scored on — a message with no content still contributes its
+        # role header and end-of-turn token — and `_shared_turns` branches at one
+        # that appears on a single side. Dropping either would close the gap it
+        # leaves: two completions differing only there would read as the same
+        # conversation, and the answers behind them as a shared opening. They are
+        # kept, empty, so the turn counts stay aligned and nothing about them is
         # marked as stored whole.
         reasoning, answer = _split_think(content)
         turn = {"role": m.get("role", "?"), **_text(answer)}

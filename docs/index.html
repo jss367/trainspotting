@@ -1086,9 +1086,13 @@ update ∝ σ(−margin) · [ ∇ log π(chosen) − ∇ log π(rejected) ]</div
       alike after two different thinking spans share no opening at all.</p>
     ${diffPanel(answers)}
     <p class="kv">${sharedNote(answers, rec, deadPair, demoted)}</p>
-    ${thinking ? `<h4>the thinking spans</h4>
-      <p class="kv">Both responses carry a thinking span, and DPO scores those tokens too.</p>
-      <details><summary>diff the two thinking spans</summary>
+    ${thinking ? `<h4>the thinking span${reason.a && reason.b ? "s" : ""}</h4>
+      <p class="kv">${reason.a && reason.b
+        ? "Both responses carry a thinking span, and DPO scores those tokens too."
+        : `Only the ${reason.a ? "chosen" : "rejected"} response carries a thinking span — the other
+           answers with no visible reasoning at all — and DPO scores those tokens too, so the whole span
+           is text one side is pushed ${reason.a ? "toward" : "away from"} with nothing opposite it.`}</p>
+      <details><summary>diff the thinking span${reason.a && reason.b ? "s" : ""}</summary>
         <div style="margin-top:8px">${diffPanel(thinking)}</div></details>` : ""}
     <h4>what this view approximates</h4>
     <p class="note">The diff is over words and the model is scored over tokens, so the spans above are an
@@ -1114,9 +1118,12 @@ function renderDPO(rec, dataset){
   ];
   const shared = sharedTurns(rec.chosen, rec.rejected);
   // Every pair shares its opening user turn, which the prompt section already
-  // shows. Only a shared *assistant* turn means there is conversation here that
-  // would otherwise go unseen — or, before this, be read as response wording.
-  const sharedHistory = rec.chosen.turns.slice(0, shared).some(t => t.role === "assistant");
+  // shows. Anything else in the shared prefix — a system turn, a tool result, a
+  // second user message, an assistant turn — is conversation that would
+  // otherwise go unseen: prompt extraction keeps only the first user message, so
+  // there is nowhere else on the page it appears.
+  const shownInPrompt = t => t.text && rec.prompt_full.text.includes(t.text);
+  const sharedHistory = rec.chosen.turns.slice(0, shared).some(t => !shownInPrompt(t));
   const candidateChars = side => candidateTurns(side, shared).reduce((a, t) => a + turnChars(t), 0);
   const maxLen = Math.max(...sides.map(s => candidateChars(s.side)), 1);
   const lens = sides.map(s => {
@@ -1161,8 +1168,9 @@ function renderDPO(rec, dataset){
         turn${shared > 1 ? "s" : ""} and branch after them. Those turns are the conversation both
         candidates answer in, so they are shown once here rather than inside each side — counting them as
         response wording would make the same text something the model is pushed toward and away from at
-        once. This follows the split the search layer uses (<code>_shared_turns</code> in
-        <code>trainspotting/search.py</code>).</p>
+        once. Prompt extraction keeps only the opening user message, so this is the only place the rest of
+        the conversation appears. The split follows the search layer's
+        (<code>_shared_turns</code> in <code>trainspotting/search.py</code>).</p>
       ${rec.chosen.turns.slice(0, shared).map(t => turnBlock(t, "")).join("")}
     </section>` : ""}
     <section class="ctxsec">

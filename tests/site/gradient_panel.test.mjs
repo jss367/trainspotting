@@ -239,6 +239,38 @@ ok(!normOut.includes("one side is cut at 4,000 characters, so whether"),
 ok(normOut.includes("does not hold an answer as written"),
   "it is reported as normalized");
 
+// An empty turn on one side only shifts everything after it out of alignment, so
+// the two completions cannot read as the same conversation.
+const emptyTurn = {role: "assistant", text: "", chars: 0, raw: true};
+const lopsided = {prompt_full: {text: "q", chars: 1}, row: 7, meta: {},
+  chosen: {model: "big", turns: [convo[0], emptyTurn, anyTurn("assistant", "the same answer " + LONG)]},
+  rejected: {model: "small", turns: [convo[0], anyTurn("assistant", "the same answer " + LONG)]}};
+eq(P.sharedTurns(lopsided.chosen, lopsided.rejected), 1,
+  "an empty turn on one side ends the provable history");
+ok(!P.gradientSection(lopsided, 1).replace(/\s+/g, " ").includes("gradient of exactly zero"),
+  "and the answers behind it are not called a zero-gradient pair");
+
+// Shared context the prompt section cannot show has to be rendered somewhere.
+const sysShared = {role: "system", text: "You are terse.", chars: 14, raw: true};
+const systemPair = {prompt_full: {text: "q", chars: 1}, row: 8, meta: {},
+  chosen: {model: "big", turns: [sysShared, anyTurn("user", "q"), anyTurn("assistant", "A " + LONG)]},
+  rejected: {model: "small", turns: [sysShared, anyTurn("user", "q"), anyTurn("assistant", "B " + LONG)]}};
+const sysOut = P.renderDPO(systemPair, "ds");
+ok(sysOut.includes("the conversation both answers continue"),
+  "a shared system turn is shown even with no shared assistant turn");
+ok(sysOut.includes("You are terse."),
+  "and its text appears, since prompt extraction keeps only the first user message");
+
+// A thinking span on one side only is described as such.
+const oneSided = {prompt_full: {text: "q", chars: 1}, row: 9, meta: {},
+  chosen: {model: "big", turns: [convo[0], turn("the answer", {reasoning: "weighing it up", raw: false})]},
+  rejected: {model: "small", turns: [convo[0], anyTurn("assistant", "another answer")]}};
+const oneSidedOut = P.gradientSection(oneSided, 1).replace(/\s+/g, " ");
+ok(oneSidedOut.includes("Only the chosen response carries a thinking span"),
+  "a one-sided thinking span is not described as two");
+ok(!oneSidedOut.includes("Both responses carry a thinking span"),
+  "and the both-sided sentence does not appear");
+
 // --------------------------------------------------- against the real rows ---
 const dataDir = path.join(ROOT, "docs", "data");
 const files = fs.readdirSync(dataDir).filter(f => f.includes(".dpo.context."));
