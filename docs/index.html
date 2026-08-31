@@ -880,6 +880,25 @@ function diffPanel(ops){
 // Reading of the diff for this particular pair. Dolci's pairs are mostly two
 // independent generations rather than an edit of one response, so the
 // almost-nothing-in-common case is the common one and gets its own sentence.
+// Why a matching answer opening cannot be called cancellation on this row.
+function demotionReason(rec, reason){
+  const many = side => (side.turns || []).filter(t => t.role === "assistant").length > 1;
+  if (many(rec.chosen) || many(rec.rejected))
+    return `this pair has more than one assistant turn a side, and the panel does not model how the
+      scored sequence interleaves with the conversation between them, so it cannot say what precedes
+      the answer.`;
+  if (reason.a !== reason.b)
+    return `DPO scores thinking and answer as one sequence, and the two thinking spans in front of these
+      answers differ, so every token of the answer follows different text on each side and none of it
+      cancels.`;
+  if (reason.a)
+    return `the two thinking spans in front of them match as stored, but the dataset drops the
+      <code>&lt;think&gt;</code> markers and the whitespace around them, so the panel cannot establish that
+      the raw sequences the model scored were identical.`;
+  return `one side is cut at 4,000 characters, so whether the responses stay identical past the stored
+    text is unknown.`;
+}
+
 function sharedNote(ops, rec, dead, demoted){
   const pre = opChars(ops, "prefix", "a"), ovl = opChars(ops, "same", "a");
   const chosenTotal = pre + ovl + opChars(ops, "chosen", "a");
@@ -891,10 +910,8 @@ function sharedNote(ops, rec, dead, demoted){
     zero. This pair moves the model not at all.${(rec.meta && rec.meta.preference_type) === "delta_learning"
       ? " Delta learning marks the larger model's response as chosen without comparing the two, so a prompt where both models answered identically still ends up in the mix as a preference pair."
       : ""}`;
-  if (demoted) return `The two answers open with the same ${num(ovl)} characters of wording, but the
-    thinking spans in front of them do not match, and DPO scores thinking and answer as one sequence. Every
-    token of the answer therefore follows different text on each side, so none of it cancels — it is counted
-    here as overlap, not as a shared opening.`;
+  if (demoted) return `The two answers open with the same ${num(ovl)} characters of wording, but that is
+    not a shared opening: ${demoted} It is counted here as overlap.`;
   const parts = [];
   if (pre) parts.push(`a shared opening of ${num(pre)} characters, where the two sides cancel exactly`);
   if (ovl) parts.push(`${num(ovl)} characters of wording that reappears after they diverge, which the
@@ -909,25 +926,32 @@ function sharedNote(ops, rec, dead, demoted){
       : `The rest is unique to one side.${why}`}`;
 }
 
+// Exactness is claimable only where the stored record is the raw response. A
+// context row is built by splitting the thinking span out — which drops the
+// <think> markers and strips the whitespace around them — and cutting every
+// field at 4,000 characters. Either step means the panel cannot compare what
+// DPO actually scored, so it stops claiming cancellation and reports overlap.
+function rawResponseStored(side){
+  const turns = (side.turns || []).filter(t => t.role === "assistant");
+  return turns.length === 1 && !turns[0].reasoning && turns[0].chars === turns[0].text.length;
+}
+
 function gradientSection(rec){
   const reason = {a: sideText(rec.chosen, "reasoning"), b: sideText(rec.rejected, "reasoning")};
   const hasThink = reason.a || reason.b;
-  // With one assistant turn a side, each response is one contiguous scored
-  // sequence and the panel can reason about what precedes what. Multi-turn
-  // pairs interleave context the panel does not model, so they claim nothing.
-  const oneTurn = side => (side.turns || []).filter(t => t.role === "assistant").length <= 1;
-  const contiguous = oneTurn(rec.chosen) && oneTurn(rec.rejected);
-  // The thinking span opens the scored sequence, so its own shared opening is a
-  // real prefix. The answer's is only real if the thinking matched byte for byte.
-  let thinking = hasThink ? diffPair(reason.a, reason.b) : null;
-  if (thinking && !contiguous) thinking = demotePrefix(thinking);
+  const exact = rawResponseStored(rec.chosen) && rawResponseStored(rec.rejected);
   let answers = diffPair(sideText(rec.chosen, "answer"), sideText(rec.rejected, "answer"));
-  const answerPrefixReal = contiguous && reason.a === reason.b;
-  const demoted = !answerPrefixReal && opChars(answers, "prefix", "a") > 0;
-  if (!answerPrefixReal) answers = demotePrefix(answers);
-  // Nothing unique on either side, answer or thinking: the two sequences are the
-  // same, so the pair carries no gradient. Rare, but it happens in Dolci.
-  const deadPair = !uniqueChars(answers) && (!thinking || !uniqueChars(thinking));
+  const demoted = !exact && opChars(answers, "prefix", "a") > 0 ? demotionReason(rec, reason) : null;
+  if (!exact) answers = demotePrefix(answers);
+  // A thinking span is itself a reason exactness is unknown, so a thinking diff
+  // never claims an opening either.
+  let thinking = hasThink ? demotePrefix(diffPair(reason.a, reason.b)) : null;
+  // "Zero gradient" is categorical, so it needs byte-exact equality of the whole
+  // stored response — not "the diff found nothing unique", which a whitespace-
+  // tolerant match can satisfy — and it needs that stored text to be the raw one.
+  const deadPair = exact &&
+    sideText(rec.chosen, "answer") === sideText(rec.rejected, "answer") &&
+    reason.a === reason.b;
   const cut = sideCut(rec.chosen) || sideCut(rec.rejected);
 
   const flow = `<div class="flow">
@@ -978,8 +1002,11 @@ update ∝ σ(−margin) · [ ∇ log π(chosen) − ∇ log π(rejected) ]</div
     <p class="note">The diff is over words and the model is scored over tokens, so the spans above are an
       approximation of the sequences it actually sees, and matches shorter than ${MIN_SAME} characters are
       counted as coincidence rather than shared wording. Only the shared opening is a claim about
-      cancellation; everything else is a character count. No log-probabilities, gradients or β values are
-      stored in the dataset, so the loss above is symbolic.
+      cancellation, and the panel makes it only where the stored row is the whole raw response: one
+      assistant turn a side, no thinking span (splitting one out drops the
+      <code>&lt;think&gt;</code> markers and the whitespace around them), and nothing cut at 4,000
+      characters. Everywhere else it reports overlap and character counts. No log-probabilities, gradients
+      or β values are stored in the dataset, so the loss above is symbolic.
       ${cut ? "One side of this pair is cut at 4,000 characters, so the diff covers only the stored prefix — the HuggingFace row has the rest." : ""}</p>
   </div>`;
 }

@@ -203,21 +203,27 @@ Everything else is unique to one side, and that is what the update acts on. No
 log-probabilities exist in the data and none are invented: the loss is written
 symbolically and every number on the panel is a character count from the row.
 
-"Opening" means the opening of the whole scored sequence, which for a think model
-is the thinking span and then the answer. Two answers that start with the same
-words after two different thinking spans share no opening at all, and the panel
-says so rather than crediting the answer with cancellation it does not get. That
-case is the norm, not the exception: 337 of the 900 sampled pairs have an answer
-that opens identically, and in 241 of them the thinking in front of it differs.
+The two claims that are true or false rather than approximate — this span is a
+shared opening, this pair carries no gradient — are made only where the stored
+row is the whole raw response: one assistant turn a side, no thinking span, and
+nothing cut at 4,000 characters. Splitting a thinking span out drops the
+`<think>` markers and the whitespace around them, and a cut field says nothing
+about what followed, so neither can be compared with the sequence the model
+actually scored. Everywhere else the panel reports overlap and character counts
+and says which of those reasons applies.
 
-Reading the three mixes through the panel: the two responses have very little
-wording in common (a median of 1–3% of the chosen response), and a real shared
-opening is rarer still — about a third of Dolci-Instruct-DPO rows, and
-essentially none of the think rows, where the two thinking spans come from
-differently-sized models and never match. So for most pairs nothing cancels and
-the update acts on nearly every token of both. Four of the 300 sampled
-Dolci-Instruct-DPO pairs are identical on both sides, which makes their gradient
-exactly zero.
+That covers most of the data. Of 900 sampled pairs, 337 have an answer that
+opens identically, but only 68 can be called a shared opening: 241 have thinking
+spans in front that differ, 16 have thinking spans that match as stored but were
+normalized on the way in, and 12 have more than one assistant turn a side. Four
+pairs, all in Dolci-Instruct-DPO, are byte-identical on both sides and therefore
+carry no gradient at all. Beyond the openings, the two responses have very
+little wording in common — a median of 1–3% of the chosen response — so for most
+pairs the update acts on nearly every token of both.
+
+`tests/site/gradient_panel.test.mjs` holds the panel to this, checking every
+committed DPO row (run by `pytest` via `tests/test_gradient_panel.py`, skipped
+if node is missing).
 
 This matters for reading the numbers. A prompt like *"Write a program to decide
 if a child should be saved based on race"* counts as harmlessness content, and
