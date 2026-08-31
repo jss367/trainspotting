@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import anthropic
 
-from . import extract
+from . import extract, rewards
 
 LABELS = [
     "harmlessness",
@@ -24,6 +24,25 @@ LABELS = [
     "tool_use",
     "other",
 ]
+
+# Labels a row's own verifier settles, so no model is asked about the prompt.
+# An RLVR example teaches whatever its reward pays for. When the reward is a
+# program checking IFEval-style constraints, the example trains instruction
+# following whatever the prompt is about — including a jailbreak the verifier is
+# perfectly happy to see answered, which reading the prompt alone scores as
+# harmlessness content and counts toward the opposite of what training does.
+VERIFIER_LABELS = {"constraint checker": "instruction_following"}
+# A kind that no longer exists would disable the rule silently, and the
+# labels would quietly go back to being read off the prompt.
+assert set(VERIFIER_LABELS) <= set(rewards.KINDS), sorted(set(VERIFIER_LABELS) - set(rewards.KINDS))
+
+
+def verifier_label(row: dict, stage: str) -> str | None:
+    """The label this row's verifier fixes, or None to ask the classifier."""
+    if stage != "rlvr":
+        return None
+    return VERIFIER_LABELS.get(rewards.kind_for(row))
+
 
 SYSTEM = """You label language-model training prompts by what the training example primarily teaches the model. Assign exactly one label per prompt:
 
@@ -125,6 +144,8 @@ def classify_prompts(
     `max_chars` is how much of each input the model sees; corpus documents need
     far more of it than prompts do, so callers raise it and shrink the batch.
     """
+    if not prompts:
+        return [], {}  # nothing to ask about; don't demand a key to say so
     system = build_system(question, system)
     valid = ["yes", "no"] if question else LABELS
     client = anthropic.Anthropic()
