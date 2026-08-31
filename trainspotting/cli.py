@@ -793,6 +793,10 @@ def cmd_find(args):
         path = _write_json(
             RESULTS / f"find.{slug}.json",
             {
+                # The index name plays the role `dataset`+`revision` play in
+                # the other result files: infini-gram indexes are immutable
+                # builds, so the name alone says what was counted.
+                **_stamp(),
                 "phrase": args.phrase,
                 "index": args.index,
                 "covers": covers,
