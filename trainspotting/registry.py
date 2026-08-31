@@ -14,6 +14,9 @@ Facts sourced from the Olmo 3 paper (arXiv:2512.13961) and the Ai2 release blog.
 #     "chosen_messages" -> first role=="user" content in row["chosen"]
 #     "prompt"          -> row["prompt"] (string, or list of chat messages)
 #   source_columns: columns whose value counts describe the mix composition.
+#     Every name must exist on the dataset. `sources` renders each column
+#     independently and skips one the dataset doesn't have, so a stale name
+#     is invisible — it drops a breakdown from the site rather than erroring.
 #
 # Base (pretraining-scale) stages additionally carry:
 #   hf: dataset ID for linking only — hf_dataset stays None so the generic
@@ -217,14 +220,22 @@ MODELS = {
                 "name": "Dolci Think SFT 32B",
                 "hf_dataset": "allenai/Dolci-Think-SFT-32B",
                 "prompt_path": "messages",
-                "source_columns": ["dataset_source"],
+                # This mix names the column `source`; the 7B SFT mix names the
+                # same thing `dataset_source`. Listing only the latter left the
+                # 32B SFT sources table empty, which reads as "this mix has no
+                # source labels" rather than as a column-name mismatch. Only
+                # columns the dataset actually has belong here — a name that
+                # addresses nothing is silently dropped by `sources`, so it can
+                # only hide the next mismatch.
+                "source_columns": ["source"],
             },
             {
                 "stage": "dpo",
                 "name": "Dolci Think DPO 32B",
                 "hf_dataset": "allenai/Dolci-Think-DPO-32B",
                 "prompt_path": "prompt",
-                "source_columns": ["dataset_source", "preference_type"],
+                # `dataset` here, `dataset_source` in the 7B DPO mix, same values.
+                "source_columns": ["dataset", "preference_type"],
             },
             {
                 "stage": "rlvr",

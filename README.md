@@ -290,6 +290,24 @@ of those repos is both partial and topic-ordered. Either way no dataset is ever
 downloaded. The classifier sends batches to Claude (`claude-opus-5` by default)
 and records one label per prompt or document in `results/`.
 
+## Tests
+
+```bash
+pip install -e ".[dev]"
+pytest                  # offline, no API key
+pytest --live           # also fetch one row per dataset from the datasets-server
+```
+
+The offline suite covers the pure code: the clustered Wilson interval and its
+degenerate branches, language detection on mixed-language prompts, the
+classifier's reply parser, and prompt extraction against one saved row per
+registry stage (`tests/fixtures/rows/`, re-captured by
+`scripts/capture_row_fixtures.py`).
+
+`--live` re-runs the extraction checks against rows fetched right now. That is
+the canary for an upstream schema change, which otherwise shows up only as a
+sampling run that quietly labels nothing.
+
 ## Caveats
 
 - The values layer classifies **prompts**. For RLVR stages the values are also
@@ -334,3 +352,7 @@ served by the datasets-server), or a `sample_dataset` pointing at a repo of
 facts-only row. Any fully open pipeline on the Hub works the same way; the shard
 path parser in `trainspotting/pretrain.py` is the piece most likely to need a new
 naming convention added.
+
+For a post-training stage, then run `python scripts/capture_row_fixtures.py` to
+save a row for it — `tests/test_extract.py` asserts every registry stage has one,
+so the new `prompt_path` and `source_columns` are checked against a real row.
