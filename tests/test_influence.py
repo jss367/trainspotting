@@ -1112,3 +1112,67 @@ def test_a_gap_only_some_runs_have_stays_on_the_stage_that_has_it():
     text = " ".join(influence.render(t, "olmo-3-7b-think"))
     assert "None of these runs records" not in text
     assert f"dpo's rate is a floor rather than a figure — {influence.UNRECORDED}" in text
+
+
+# --- a legacy run holding every group read every side ----------------------
+
+
+def test_a_legacy_run_covering_all_three_groups_needs_no_available_fields():
+    # `available_fields` is drawn from GROUPS, so a run whose `fields` holds all
+    # of them cannot have been narrowed, whatever its vintage.
+    r = run("rlvr", hits=0, rows=100, groups={"prompt": 0, "response": 0, "reference": 0},
+            available_fields=[])
+    assert influence.coverage_gaps(r) == []
+    t = influence.compare([r], THINK)
+    assert [x["stage"] for x in t["zero"]] == ["rlvr"]
+    assert "exact over every one of them" in " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+def test_a_legacy_run_holding_both_produce_groups_is_not_understated():
+    runs = [
+        run("rlvr", hits=100, rows=100_000,
+            groups={"prompt": 0, "response": 60, "reference": 60}, available_fields=[]),
+        run("dpo", hits=10, rows=100_000, groups={"prompt": 0, "response": 10},
+            available_fields=[]),
+    ]
+    t = influence.compare(runs, THINK)
+    assert influence._understated(t["best"], "produced") is None
+    # dpo read only `response` and cannot show the mix had no `reference`.
+    assert [r["stage"] for r in t["understated"]] == ["dpo"]
+    assert not t["coverage_unrecorded"]
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "None of these runs records" not in text
+    assert "dpo's rate is a floor" in text
+
+
+def test_an_unrecognised_column_still_counts_against_a_full_sweep():
+    r = run("rlvr", hits=0, rows=100, groups={"prompt": 0, "response": 0, "reference": 0},
+            available_fields=[], unsearched_columns=["rationale"])
+    assert influence.coverage_gaps(r) == ["rationale went unsearched"]
+    assert influence._understated(influence.stage_trace(r), "produced") == \
+        "rationale went unsearched in it"
+
+
+# --- the row basis qualifies a narrowed concentration too ------------------
+
+
+def test_a_row_basis_concentration_over_narrowed_fields_is_qualified():
+    runs = [run(
+        "dpo", hits=100, rows=100_000, groups={"prompt": 100}, fields=["prompt"],
+        available_fields=["prompt", "response"],
+        sources={"src": 100}, totals={"src": 1_000},
+    )]
+    t = influence.compare(runs, THINK)
+    assert t["basis"] == "rows" and t["best"]["concentration"]["name"] == "src"
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "over the columns this run read" in text
+    assert "That attribution is over the columns the run read" in text
+
+
+def test_a_complete_row_basis_concentration_is_not_qualified():
+    runs = [run("dpo", hits=100, rows=100_000,
+                groups={"prompt": 100, "response": 0, "reference": 0},
+                sources={"src": 100}, totals={"src": 1_000})]
+    t = influence.compare(runs, THINK)
+    assert "could hold matches in other sources" not in \
+        " ".join(influence.render(t, "olmo-3-7b-think"))

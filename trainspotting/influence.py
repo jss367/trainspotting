@@ -31,6 +31,12 @@ named apart.
 
 import shlex
 
+# The full set of sides a result file can name. Imported rather than restated
+# because the argument below turns on the two being the same set: a run whose
+# `fields` holds all of these cannot have been narrowed, since `available_fields`
+# is drawn from here too.
+from .grep import GROUPS
+
 # The groups holding text the training objective pushes the model toward, as
 # opposed to text it only conditions on. `reference` belongs here for RL: it is
 # the ground truth a verifier scores against, so the gradient points at it even
@@ -42,6 +48,8 @@ PRODUCE = ("response", "reference")
 # of them — true of every committed run, so it is said once for the whole trace
 # rather than under each stage and again in the verdict.
 UNRECORDED = "its run does not record which sides the mix has, so it cannot show it read them all"
+UNRECORDED_HERE = ("this run does not record which sides the mix has, so it cannot show it "
+                   "read all of them")
 
 # What a stage's absence from the result set means. INCONCLUSIVE is the fourth
 # kind and the easiest to lose: a repo the datasets-server converted only part
@@ -188,13 +196,18 @@ def coverage_gaps(result) -> list[str]:
     if result.get("partial"):
         gaps.append("the server converted only part of the repo")
     fields, available = set(result.get("fields") or []), set(result.get("available_fields") or [])
-    if available and available - fields:
+    if set(GROUPS) <= fields:
+        # Nothing to establish: `available_fields` is drawn from GROUPS, so a
+        # run holding all of them read every side this layer can map, whatever
+        # its vintage. Columns the mapping does not recognise are separate, and
+        # `unsearched_columns` below covers them.
+        pass
+    elif available and available - fields:
         gaps.append(f"this run read only {', '.join(sorted(fields))} of "
                     f"{', '.join(sorted(available))}")
     elif not available:
         # Runs predating `available_fields` cannot show they read everything.
-        gaps.append("this run does not record which sides the mix has, so it cannot show it "
-                    "read all of them")
+        gaps.append(UNRECORDED_HERE)
     if result.get("unsearched_columns"):
         gaps.append(f"{', '.join(result['unsearched_columns'])} went unsearched")
     return gaps
@@ -260,8 +273,13 @@ def _understated(r: dict, basis: str) -> str | None:
     every unread column can.
     """
     fields, available = set(r["fields"]), set(r["available_fields"])
+    whole = set(PRODUCE) if basis == "produced" else set(GROUPS)
     if basis == "produced":
-        fields, available = fields & set(PRODUCE), available & set(PRODUCE)
+        fields, available = fields & whole, available & whole
+    if whole <= fields:
+        # Every group this layer maps, so nothing it could have narrowed away.
+        return None if not r["unsearched_columns"] else \
+            f"{', '.join(r['unsearched_columns'])} went unsearched in it"
     if not r["available_fields"]:
         return UNRECORDED
     if available - fields:
@@ -415,9 +433,10 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
         "produce_searched": produce_searched,
         # Every stage limited the same way and for the same reason, which is a
         # fact about the vintage of the result files rather than about any one
-        # of them.
+        # of them. A run that read every side this layer maps is not limited at
+        # all, whatever it records, so it does not count toward "every".
         "coverage_unrecorded": bool(hitting) and all(
-            not r["available_fields"] for r in hitting),
+            _understated(r, basis) == UNRECORDED for r in hitting),
         # Every hitting stage read a produce-side column, which is what a claim
         # about the produce side across all of them requires.
         # Every stage with a result file, not only the ones that matched: a
@@ -559,9 +578,10 @@ def _stage_lines(r: dict) -> list[str]:
             # Both the share and the lift are computed over the columns that
             # were read. A produce column left unopened can hold matches in
             # other sources, which moves the denominator and the ordering.
-            gap = _understated(r, "produced") if side == "produced" else None
+            gap = _understated(r, "rows" if side == "all" else "produced")
             if gap and gap != UNRECORDED:
-                out.append(f"    over the produce columns this run read, and {gap} — a column "
+                where = "produce columns" if side == "produced" else "columns"
+                out.append(f"    over the {where} this run read, and {gap} — a column "
                            "it did not open could hold matches in other sources.")
         elif r["sources"]:
             top, biggest = _largest(r["sources"], side)
@@ -684,7 +704,9 @@ def _verdict(t: dict) -> list[str]:
     if src:
         line.append(f"{src['hits']:,} of the {src['rows']:,} `{src['name']}` rows "
                     f"({_pct(src['rate'])}, {src['lift']:.0f}× the stage) hold it,")
+        rows_gap = _understated(best, "rows")
     else:
+        rows_gap = None
         line.append(f"{best['hits']:,} of its {best['rows']:,} rows hold it, spread across its "
                     "sources at roughly the rate their sizes predict,")
     if bounds is None:
@@ -699,6 +721,11 @@ def _verdict(t: dict) -> list[str]:
     else:
         line.append("none of them on the produce side: the string is in text the model was "
                     "trained to read rather than in text it was trained to write.")
+    if rows_gap and rows_gap != UNRECORDED:
+        # The all-hits attribution is over whatever columns were opened, the
+        # same way the produce-side one is.
+        line.append(f"That attribution is over the columns the run read, and {rows_gap}, so a "
+                    "column it did not open could move it.")
     return _tail(t, best, other, key, measure, line)
 
 

@@ -304,9 +304,10 @@ runner-up in the advantage clause is the stage with the highest ceiling rather
 than the second-highest floor, because that is the one that binds how big a lead
 the counts guarantee.
 
-A source concentration is measured over the produce columns its run opened, so a
-run that read `response` where the mix also has `reference` gets that said
-alongside the number. Where every run in a trace is limited the same way — as
+A source concentration is measured over the columns its run opened, so a run
+that read `response` where the mix also has `reference` gets that said alongside
+the number — and the same on the row basis, where a `--field prompt` run's
+concentration is over prompts alone. Where every run in a trace is limited the same way — as
 every committed one is, having been written before result files recorded the
 sides their mix holds — it is said once for the trace instead of under each
 stage and again in the verdict.
@@ -338,9 +339,11 @@ things break that, and each is printed rather than assumed: the datasets-server
 converted only part of the repo, `--field` narrowed the search to some of the
 sides the mix has, or a text column the layer does not recognise went
 unsearched. Any of them makes the result inconclusive — nothing matched *in what
-was read* — and keeps it out of the stage-wide claim. A run written before result
-files recorded which sides the mix has cannot demonstrate it read all of them, so
-it lands there too. A pattern absent from every stage read end to end does get
+was read* — and keeps it out of the stage-wide claim. A run written before result files
+recorded which sides the mix has usually cannot demonstrate it read all of them,
+so it lands there too — unless its `fields` already holds every side this layer
+maps, which no narrowing could have produced and which the older RLVR sweeps
+do. A pattern absent from every stage read end to end does get
 said outright: 0 of N rows, exact over all of them, so a model that produces the
 string anyway did not take it from those stages. What that points at depends on
 what is left. While a reachable stage sits unscanned the ordinary explanation is
