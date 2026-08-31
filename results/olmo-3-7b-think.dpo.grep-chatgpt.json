@@ -2,14 +2,19 @@
   "dataset": "allenai/Dolci-Think-DPO-7B",
   "stage": "dpo",
   "pattern": "ChatGPT",
+  "slug": "chatgpt",
   "regex": false,
   "case_sensitive": false,
   "fields": [
     "prompt",
     "response"
   ],
+  "available_fields": [
+    "prompt",
+    "response"
+  ],
   "source_column": "dataset_source",
-  "generated": "2026-08-31T20:48:55+00:00",
+  "generated": "2026-08-31T21:13:23+00:00",
   "revision": "f27fa9b8e9f315f01fbc25b4d6d7763e0f6e25cb",
   "parquet_revision": "bed3a9f759ed1ced7d59a9a1d8f76ca2ae331602",
   "partial": false,

@@ -2,6 +2,7 @@
   "dataset": "allenai/Dolci-Think-RL-7B",
   "stage": "rlvr",
   "pattern": "as an AI language model",
+  "slug": "as-an-ai-language-model",
   "regex": false,
   "case_sensitive": false,
   "fields": [
@@ -9,8 +10,13 @@
     "response",
     "reference"
   ],
+  "available_fields": [
+    "prompt",
+    "response",
+    "reference"
+  ],
   "source_column": "dataset_source",
-  "generated": "2026-08-31T20:57:34+00:00",
+  "generated": "2026-08-31T21:22:17+00:00",
   "revision": "0fb6466d31ef3a9dd16985ef635e6429e05a6491",
   "parquet_revision": "32c49640832240a6c3cd7ae5766eb377d8a4a562",
   "partial": false,

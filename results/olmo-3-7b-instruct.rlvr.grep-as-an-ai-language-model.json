@@ -2,6 +2,7 @@
   "dataset": "allenai/Dolci-Instruct-RL",
   "stage": "rlvr",
   "pattern": "as an AI language model",
+  "slug": "as-an-ai-language-model",
   "regex": false,
   "case_sensitive": false,
   "fields": [
@@ -9,8 +10,13 @@
     "response",
     "reference"
   ],
+  "available_fields": [
+    "prompt",
+    "response",
+    "reference"
+  ],
   "source_column": "dataset_source",
-  "generated": "2026-08-31T20:58:15+00:00",
+  "generated": "2026-08-31T21:23:00+00:00",
   "revision": "1a8d79b1012d77e4bb1fd7f699c5c7eb33ef931e",
   "parquet_revision": "5327da53e02eb4cc0fa6a2d8860f6c9c3df3fcda",
   "partial": false,

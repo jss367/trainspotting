@@ -2,14 +2,19 @@
   "dataset": "allenai/Dolci-Instruct-DPO",
   "stage": "dpo",
   "pattern": "ChatGPT",
+  "slug": "chatgpt",
   "regex": false,
   "case_sensitive": false,
   "fields": [
     "prompt",
     "response"
   ],
+  "available_fields": [
+    "prompt",
+    "response"
+  ],
   "source_column": "preference_type",
-  "generated": "2026-08-31T20:53:18+00:00",
+  "generated": "2026-08-31T21:17:43+00:00",
   "revision": "aed155cf32e809b590490b6c3577ee4b0d0a5019",
   "parquet_revision": "45ed895db8f8eabcb2c9f6dd5bf93c5c27157d28",
   "partial": false,
