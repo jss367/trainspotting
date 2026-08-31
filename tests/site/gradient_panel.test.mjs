@@ -283,6 +283,17 @@ ok(hiddenOut.includes("carries its reasoning in a field this record does not kee
 ok(!hiddenOut.includes("with nothing opposite it"),
   "and the span is not described as facing nothing");
 
+// A whitespace-only <think> span leaves no reasoning field and no trace but the
+// missing raw flag, so the other side cannot be called reasoning-free either.
+const whitespaceThink = {prompt_full: {text: "q", chars: 1}, row: 12, meta: {},
+  chosen: {model: "big", turns: [convo[0], turn("the answer", {reasoning: "weighing it up", raw: false})]},
+  rejected: {model: "small", turns: [convo[0], turn("another answer", {raw: false})]}};
+const wsOut = P.gradientSection(whitespaceThink, 1).replace(/\s+/g, " ");
+ok(wsOut.includes("not held as written"),
+  "a normalized quiet side is reported as unreadable, not as silent");
+ok(!wsOut.includes("with nothing opposite it"),
+  "and the span is not described as facing nothing");
+
 // A thinking span on one side only is described as such.
 const oneSided = {prompt_full: {text: "q", chars: 1}, row: 9, meta: {},
   chosen: {model: "big", turns: [convo[0], turn("the answer", {reasoning: "weighing it up", raw: false})]},

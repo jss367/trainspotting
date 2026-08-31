@@ -1027,11 +1027,19 @@ function rawResponseStored(side, shared = 0){
 function thinkingNote(rec, reason, shared){
   if (reason.a && reason.b) return "Both responses carry a thinking span, and DPO scores those tokens too.";
   const has = reason.a ? "chosen" : "rejected", other = reason.a ? "rejected" : "chosen";
-  const hidden = candidateTurns(rec[other], shared)
-    .some(t => (t.omitted || []).includes("reasoning_content"));
-  if (hidden) return `Only the ${has} response's thinking span is stored here. The ${other} one carries
-    its reasoning in a field this record does not keep, so what faces this span cannot be read from it —
-    not that there is nothing there.`;
+  const turns = candidateTurns(rec[other], shared);
+  if (turns.some(t => (t.omitted || []).includes("reasoning_content")))
+    return `Only the ${has} response's thinking span is stored here. The ${other} one carries its
+      reasoning in a field this record does not keep, so what faces this span cannot be read from it —
+      not that there is nothing there.`;
+  // A span of whitespace between <think> markers comes out as no span at all:
+  // the markers go, the whitespace goes, no reasoning field is left, and the
+  // turn is marked non-raw. Only a turn stored as written can say there was
+  // nothing there.
+  if (!turns.length || !turns.every(rawTurn))
+    return `Only the ${has} response's thinking span is stored here. The ${other} answer is not held as
+      written — normalized or cut on the way in — so whether anything faced this span cannot be read from
+      this record either way.`;
   return `Only the ${has} response carries a thinking span — the other answers with no visible reasoning
     at all — and DPO scores those tokens too, so the whole span is text one side is pushed
     ${reason.a ? "toward" : "away from"} with nothing opposite it.`;
