@@ -419,6 +419,8 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
     return {
         "pattern": first.get("pattern"),
         "slug": first.get("slug"),
+        # Set by the caller when one slug turned out to name several searches.
+        "slug_collides": False,
         "regex": bool(first.get("regex")),
         "case_sensitive": bool(first.get("case_sensitive")),
         "stages": rows,
@@ -619,9 +621,12 @@ def _gap_lines(t: dict, cmd: str) -> list[str]:
         # rather than a flag repeated into a command that would silently
         # search only the last of them.
         again = f", then the same for {', '.join(stages[1:])}" if len(stages) > 1 else ""
+        note = (" The `--slug` is dropped from that command on purpose: it names more than one "
+                "search here, and re-running under it would overwrite the other one's results."
+                if t.get("slug_collides") else "")
         out.append(f"- **{', '.join(stages)}** — not searched. That is not a zero: no row of "
                    f"{'these stages' if len(stages) > 1 else 'this stage'} has been "
-                   f"read for this pattern (`{cmd} --stage {stages[0]}`{again}).")
+                   f"read for this pattern (`{cmd} --stage {stages[0]}`{again}).{note}")
     if t["unreachable"]:
         names = ", ".join(r["stage"] for r in t["unreachable"])
         out.append(f"- **{names}** — out of reach for this layer, which is also not a zero: the "
@@ -736,8 +741,13 @@ def _tail(t, best, other, key, measure, line):
     # 20–30% against 10–25% prints 2.0× and could be below 1. Where that
     # quotient drops under 1 there is no multiple to report, and the pair is
     # already in `contenders`, so the overlap sentence covers it.
+    # `_ceiling` bounds the columns the run opened. Where the competitor did not
+    # open all of them its true rate can sit above that, so the quotient is not
+    # a guarantee — and printing one here contradicts the floor caveat that
+    # follows two clauses later.
     ceiling = _ceiling(other, t["basis"]) if other else 0
-    if other and ceiling and best[key] and best[key] / ceiling > 1:
+    bounded = other and not _understated(other, t["basis"])
+    if bounded and ceiling and best[key] and best[key] / ceiling > 1:
         ratio = best[key] / ceiling
         exact = best[key] == _ceiling(best, t["basis"]) and other[key] == ceiling
         line.append(f"Highest {measure} of the {len(t['ranked'])} stages with any: "
@@ -771,9 +781,17 @@ def _tail(t, best, other, key, measure, line):
     if t["basis"] == "rows" and not t["produce_searched"]:
         line.append("No run on this pattern searched a produce-side column, so this is the hit "
                     "rate over all rows and says nothing about which side matched.")
-    elif t["basis"] == "rows" and t["produce_complete"]:
+    elif t["basis"] == "rows" and t["produce_complete"] and not t["unsearched"]:
         line.append("No stage matched on the produce side at all, so this ranks by the overall "
                     "hit rate: the string is in text these stages train the model to read.")
+    elif t["basis"] == "rows" and t["produce_complete"]:
+        # Every stage with a result file read its produce side and found
+        # nothing there, which is a claim about those stages. A single
+        # `--stage` run leaves the rest unread and they can hold anything.
+        left = ", ".join(r["stage"] for r in t["unsearched"])
+        line.append("Nothing matched on the produce side of the stages read here, so this ranks "
+                    f"by the overall hit rate — but {left} {'have' if len(t['unsearched']) > 1 else 'has'} "
+                    "not been read, so it is not a claim about the pipeline.")
     elif t["basis"] == "rows":
         # Some produce side went unread, so "nothing matched there" is a claim
         # about the columns that were opened rather than about the stages.
@@ -795,12 +813,17 @@ BASIS_NOTE = (
 
 def render(t: dict, model: str, note: bool = False) -> list[str]:
     """The comparison as markdown, which is also what it prints to a terminal."""
+    # A slug naming two searches must not be pasted back: `grep` writes
+    # `results/<model>.<stage>.grep-<slug>.json`, so re-running under it would
+    # overwrite the other search's saved stage — a scan that can cost hours.
+    # Dropping the flag lets the slug be derived from the pattern instead.
+    reuse_slug = t.get("slug") and not t.get("slug_collides")
     flags = "".join([
         " --regex" if t["regex"] else "",
         " --case-sensitive" if t["case_sensitive"] else "",
         # Without the slug a re-run derives its own from the pattern and lands
         # in a different group, which is how a trace ends up split in two.
-        f" --slug {shlex.quote(t['slug'])}" if t.get("slug") else "",
+        f" --slug {shlex.quote(t['slug'])}" if reuse_slug else "",
     ])
     # Quoted as the shell will read it. A pattern is arbitrary text and these
     # are regexes: `$`, a backtick or a quote inside naive double quotes either

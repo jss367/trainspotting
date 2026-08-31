@@ -99,3 +99,20 @@ def test_the_qualifier_is_absent_when_every_conversion_is_complete(tmp_path, mon
     monkeypatch.setattr(cli, "RESULTS", tmp_path)
     cli.cmd_report(type("A", (), {"model": "olmo-3-7b-think"})())
     assert "converted subset alone" not in capsys.readouterr().out
+
+
+def test_split_traces_are_marked_so_the_slug_is_not_pasted_back(tmp_path, monkeypatch):
+    write(tmp_path, "olmo-3-7b-think", "dpo", "identity", pattern="I am ChatGPT")
+    write(tmp_path, "olmo-3-7b-think", "rlvr", "identity", pattern="I am GPT-4")
+    out = traces(tmp_path, monkeypatch)
+    assert all(t["slug_collides"] for _, _, t in out)
+    from trainspotting import influence
+    for _, _, t in out:
+        assert "--slug identity" not in " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+def test_an_uncontested_slug_is_not_marked(tmp_path, monkeypatch):
+    write(tmp_path, "olmo-3-7b-think", "dpo", "chatgpt")
+    write(tmp_path, "olmo-3-7b-think", "rlvr", "chatgpt")
+    _, _, t = traces(tmp_path, monkeypatch)[0]
+    assert not t["slug_collides"]

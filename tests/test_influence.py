@@ -313,6 +313,7 @@ def test_an_unrecognised_text_column_is_named():
 
 def test_searched_and_empty_on_the_produce_side_is_not_the_same_as_unsearched():
     both = [
+        run("sft", hits=1, rows=100, groups={"prompt": 1, "response": 0}),
         run("dpo", hits=10, rows=100, groups={"prompt": 10, "response": 0}),
         run("rlvr", hits=1, rows=100, groups={"prompt": 1, "response": 0}),
     ]
@@ -649,15 +650,31 @@ def test_the_row_basis_does_not_claim_an_absent_produce_side_it_never_read():
     assert "No stage matched on the produce side at all" not in text
 
 
-def test_the_row_basis_may_claim_it_when_every_run_read_one():
+def test_the_row_basis_may_claim_it_when_every_stage_was_read():
+    runs = [
+        run("sft", hits=5, rows=100_000, groups={"prompt": 5, "response": 0}),
+        run("dpo", hits=100, rows=100_000, groups={"prompt": 100, "response": 0}),
+        run("rlvr", hits=10, rows=100_000, groups={"prompt": 10, "response": 0}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["produce_complete"] and not t["unsearched"]
+    assert "No stage matched on the produce side at all" in \
+        " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+def test_an_unread_stage_keeps_the_produce_side_absence_local():
+    # The same runs minus SFT: every stage read here looked at its produce side
+    # and found nothing, and SFT can still hold anything.
     runs = [
         run("dpo", hits=100, rows=100_000, groups={"prompt": 100, "response": 0}),
         run("rlvr", hits=10, rows=100_000, groups={"prompt": 10, "response": 0}),
     ]
     t = influence.compare(runs, THINK)
-    assert t["produce_complete"]
-    assert "No stage matched on the produce side at all" in \
-        " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert t["produce_complete"] and [r["stage"] for r in t["unsearched"]] == ["sft"]
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "Nothing matched on the produce side of the stages read here" in text
+    assert "sft has not been read, so it is not a claim about the pipeline" in text
+    assert "No stage matched on the produce side at all" not in text
 
 
 # --- the share floor is a share of the evidence ----------------------------
@@ -1176,3 +1193,53 @@ def test_a_complete_row_basis_concentration_is_not_qualified():
     t = influence.compare(runs, THINK)
     assert "could hold matches in other sources" not in \
         " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+# --- a guaranteed multiple needs a bounded competitor ----------------------
+
+
+def test_no_multiplier_against_a_competitor_with_unread_columns():
+    # A complete 10% response rate against an observed 1% whose `reference`
+    # column was never opened: `_ceiling` bounds only what was read, so the
+    # quotient is not a guarantee — and the floor caveat two clauses later
+    # already says the ordering could reverse.
+    runs = [
+        run("rlvr", hits=100, rows=1_000, groups={"prompt": 0, "response": 100},
+            fields=["prompt", "response"], available_fields=["prompt", "response"]),
+        run("dpo", hits=10, rows=1_000, groups={"prompt": 0, "response": 10},
+            fields=["prompt", "response"],
+            available_fields=["prompt", "response", "reference"]),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["stage"] == "rlvr"
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "Highest produce-side rate" not in text
+    assert "dpo's rate is a floor rather than a figure" in text
+
+
+def test_a_bounded_competitor_still_gets_a_multiplier():
+    runs = [
+        run("rlvr", hits=100, rows=1_000, groups={"prompt": 0, "response": 100}),
+        run("dpo", hits=10, rows=1_000, groups={"prompt": 0, "response": 10}),
+    ]
+    assert "10.0× dpo's" in " ".join(
+        influence.render(influence.compare(runs, THINK), "olmo-3-7b-think"))
+
+
+# --- a colliding slug is a shared write path ------------------------------
+
+
+def test_a_colliding_slug_is_kept_out_of_the_rerun_command():
+    runs = [run("rlvr", hits=5, rows=100, groups={"prompt": 5}, slug="identity")]
+    t = influence.compare(runs, THINK)
+    t["slug_collides"] = True
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "--slug identity" not in text
+    assert "re-running under it would overwrite the other one's results" in text
+
+
+def test_a_unique_slug_is_still_carried():
+    runs = [run("rlvr", hits=5, rows=100, groups={"prompt": 5}, slug="identity")]
+    text = " ".join(influence.render(influence.compare(runs, THINK), "olmo-3-7b-think"))
+    assert "--slug identity" in text
+    assert "overwrite the other one's results" not in text

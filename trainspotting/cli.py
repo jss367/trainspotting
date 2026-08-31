@@ -737,10 +737,14 @@ def _grep_traces(model_name, model):
         key = (slug, run.get("pattern"), bool(run.get("regex")), bool(run.get("case_sensitive")))
         groups.setdefault(key, []).append(run)
     split = len({slug for slug, *_ in groups}) != len(groups)
-    return [
-        (key[0], split, influence.compare(runs, model["stages"]))
-        for key, runs in sorted(groups.items(), key=lambda kv: (kv[0][0], str(kv[0][1])))
-    ]
+    out = []
+    for key, runs in sorted(groups.items(), key=lambda kv: (kv[0][0], str(kv[0][1]))):
+        trace = influence.compare(runs, model["stages"])
+        # A colliding slug is a write path shared by two searches, so the
+        # rendered rerun commands must not carry it.
+        trace["slug_collides"] = split
+        out.append((key[0], split, trace))
+    return out
 
 
 def cmd_report(args):

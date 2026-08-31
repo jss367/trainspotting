@@ -302,7 +302,9 @@ contributor only when its floor clears every other source's ceiling; otherwise
 the line says no largest is established and names the biggest counted floor. The
 runner-up in the advantage clause is the stage with the highest ceiling rather
 than the second-highest floor, because that is the one that binds how big a lead
-the counts guarantee.
+the counts guarantee — and where that runner-up did not read all its own columns
+there is no bound to state, so the multiple is dropped rather than printed
+alongside a caveat that contradicts it.
 
 A source concentration is measured over the columns its run opened, so a run
 that read `response` where the mix also has `reference` gets that said alongside
@@ -362,12 +364,18 @@ measurement reads as a low score. Where that empties the ranking, the verdict
 reports the matches and says no comparison is available — matches never turn
 into a zero because nothing could be ranked.
 
+A "no stage matched on the produce side" reading needs every reachable stage
+read, not just every stage with a result file; short of that it is scoped to the
+stages read and names the ones that were not.
+
 Runs are grouped by their `--slug`, which is a filename rather than a promise:
 rerun one stage under the same slug with a refined regex and the directory holds
 two searches with one name. The group key is the slug *and* the pattern and
 matching flags, so those render separately and `compare()` raises rather than
 ranking one search's counts against another's under whichever pattern sorted
-first.
+first. The suggested rerun commands then drop the `--slug`, because
+`results/<model>.<stage>.grep-<slug>.json` is a write path and pasting the
+colliding one back would overwrite the other search's saved stage.
 
 What the ranking deliberately does not do is weight the stages against each
 other. Identity behaviour is mostly set after pretraining, so the same rate in
