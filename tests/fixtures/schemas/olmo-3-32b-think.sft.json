@@ -1,5 +1,5 @@
 {
-  "model": "olmo-3-32b-think",
+  "target": "olmo-3-32b-think",
   "stage": "sft",
   "dataset": "allenai/Dolci-Think-SFT-32B",
   "shards": 156,

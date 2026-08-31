@@ -66,7 +66,7 @@ LIST_TEXT = {
 STRUCT_TEXT = {
     ("reward_model", "ground_truth"): "reference",
 }
-MESSAGE_LISTS = ("messages", "chosen", "rejected", "source_prompt")
+MESSAGE_LISTS = ("messages", "chosen", "rejected", "source_prompt", "conversation")
 # Extra subfields some message lists carry, and which side of the turn they are
 # on: a tool schema is given to the model, a call is emitted by it.
 MESSAGE_EXTRAS = {"functions": "prompt", "function_calls": "response"}
@@ -81,6 +81,13 @@ METADATA = {
     "preference_type", "setting_key", "setting_name", "domain", "ability",
     "topic", "characters", "constraint_type", "difficulty_explanation",
     "extra_info", "difficulty",
+    # WildChat-1M, the first standalone dataset target: a chat log carries the
+    # request's own metadata beside the turns — where it came from, what
+    # language it was in, and what two moderation models made of it. None of it
+    # is text the model was fit to.
+    "language", "hashed_ip", "header", "openai_moderation",
+    "detoxify_moderation", "turn", "timestamp", "toxic", "redacted",
+    "state", "country",
 }
 
 
@@ -245,6 +252,34 @@ def text_fields(
             unsearched.append(col)
 
     return {g: e for g, e in exprs.items() if e}, leaves, unsearched
+
+
+# The scan and the denominators query. Both read the source label column once.
+QUERIES_READING_SOURCE = 2
+
+
+def plan_leaves(
+    schema_: dict[str, str], fields: list[str] | None, source_column: str | None
+) -> list[tuple[str, str | None]]:
+    """Every column read for one scan, with the multiplicity it is read at.
+
+    Multiplicity counts *queries that touch a column*, not roles it plays: the
+    scan reads a column once whether it is filtered, projected or both, and the
+    denominators query reads the source label column once more. So the source
+    leaf is clamped to two rather than appended to whatever `text_fields`
+    already returned — `--by prompt` on an RL stage would otherwise be charged
+    three copies of a column read twice.
+
+    This lives here because it was computed in two places and they diverged: the
+    CLI learned to clamp and `scripts/recompute_grep_bytes.py` kept appending,
+    so the maintenance script would have rewritten `bytes_read` with the
+    inflated figure the CLI had just stopped producing.
+    """
+    _, leaves, _ = text_fields(schema_, fields)
+    if source_column:
+        already = sum(1 for leaf in leaves if leaf == (source_column, None))
+        leaves = [*leaves, *[(source_column, None)] * max(0, QUERIES_READING_SOURCE - already)]
+    return leaves
 
 
 def source_expr(schema_: dict[str, str], columns: list[str]) -> tuple[str | None, str | None]:

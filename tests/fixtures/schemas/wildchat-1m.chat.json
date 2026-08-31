@@ -1,0 +1,39 @@
+{
+  "target": "wildchat-1m",
+  "stage": "chat",
+  "dataset": "allenai/WildChat-1M",
+  "shards": 14,
+  "partial": false,
+  "schema": {
+    "conversation_hash": "VARCHAR",
+    "model": "VARCHAR",
+    "timestamp": "TIMESTAMP WITH TIME ZONE",
+    "conversation": "STRUCT(\"content\" VARCHAR, country VARCHAR, hashed_ip VARCHAR, \"header\" STRUCT(\"accept-language\" VARCHAR, \"user-agent\" VARCHAR), \"language\" VARCHAR, redacted BOOLEAN, \"role\" VARCHAR, state VARCHAR, \"timestamp\" TIMESTAMP WITH TIME ZONE, toxic BOOLEAN, turn_identifier BIGINT)[]",
+    "turn": "BIGINT",
+    "language": "VARCHAR",
+    "openai_moderation": "STRUCT(categories STRUCT(harassment BOOLEAN, \"harassment/threatening\" BOOLEAN, harassment_threatening BOOLEAN, hate BOOLEAN, \"hate/threatening\" BOOLEAN, hate_threatening BOOLEAN, \"self-harm\" BOOLEAN, \"self-harm/instructions\" BOOLEAN, \"self-harm/intent\" BOOLEAN, self_harm BOOLEAN, self_harm_instructions BOOLEAN, self_harm_intent BOOLEAN, sexual BOOLEAN, \"sexual/minors\" BOOLEAN, sexual_minors BOOLEAN, violence BOOLEAN, \"violence/graphic\" BOOLEAN, violence_graphic BOOLEAN), category_scores STRUCT(harassment DOUBLE, \"harassment/threatening\" DOUBLE, harassment_threatening DOUBLE, hate DOUBLE, \"hate/threatening\" DOUBLE, hate_threatening DOUBLE, \"self-harm\" DOUBLE, \"self-harm/instructions\" DOUBLE, \"self-harm/intent\" DOUBLE, self_harm DOUBLE, self_harm_instructions DOUBLE, self_harm_intent DOUBLE, sexual DOUBLE, \"sexual/minors\" DOUBLE, sexual_minors DOUBLE, violence DOUBLE, \"violence/graphic\" DOUBLE, violence_graphic DOUBLE), flagged BOOLEAN)[]",
+    "detoxify_moderation": "STRUCT(identity_attack DOUBLE, insult DOUBLE, obscene DOUBLE, severe_toxicity DOUBLE, sexual_explicit DOUBLE, threat DOUBLE, toxicity DOUBLE)[]",
+    "toxic": "BOOLEAN",
+    "redacted": "BOOLEAN",
+    "state": "VARCHAR",
+    "country": "VARCHAR",
+    "hashed_ip": "VARCHAR",
+    "header": "STRUCT(\"accept-language\" VARCHAR, \"user-agent\" VARCHAR)"
+  },
+  "groups": {
+    "prompt": 1,
+    "response": 1
+  },
+  "leaves": [
+    [
+      "conversation",
+      "content"
+    ],
+    [
+      "conversation",
+      "role"
+    ]
+  ],
+  "unsearched": [],
+  "source_column": "model"
+}

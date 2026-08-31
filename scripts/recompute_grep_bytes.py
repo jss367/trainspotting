@@ -22,9 +22,11 @@ for path in sorted(glob.glob("results/*.grep-*.json")):
     urls = [u.replace(live["revision"], rev) for u in live["urls"]]
     assert len(urls) == run["shards"], f"{path}: shard count moved"
     schema = grep.schema(con, urls[0])
-    _, leaves, _ = grep.text_fields(schema, run["fields"])
-    if run["source_column"]:
-        leaves = [*leaves, (run["source_column"], None), (run["source_column"], None)]
+    # Same function the CLI prices its plan with. This script used to compute the
+    # leaves itself and the two drifted: the CLI learned to clamp the source
+    # leaf's multiplicity and this kept appending, so a maintenance run would
+    # have written back the inflated figure the CLI had just stopped producing.
+    leaves = grep.plan_leaves(schema, run["fields"], run["source_column"])
     got = grep.byte_cost(con, urls, leaves)
     if got != run["bytes_read"]:
         changed.append((path, run["bytes_read"], got))

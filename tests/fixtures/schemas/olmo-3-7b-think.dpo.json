@@ -1,5 +1,5 @@
 {
-  "model": "olmo-3-7b-think",
+  "target": "olmo-3-7b-think",
   "stage": "dpo",
   "dataset": "allenai/Dolci-Think-DPO-7B",
   "shards": 7,

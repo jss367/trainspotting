@@ -40,10 +40,6 @@ def _positive_int(value: str) -> int:
     return n
 
 
-# The scan and the denominators query. Both read the source label column once.
-QUERIES_READING_SOURCE = 2
-
-
 def _nonnegative_int(value: str) -> int:
     """argparse type for `--examples`. Zero is meaningful — count without keeping
     any evidence — but a negative limit reaches the example heap with nothing in
@@ -775,7 +771,7 @@ def _grep_plan(con, args, stages):
     for s in stages:
         listing = grep.parquet_listing(s["hf_dataset"])
         schema = grep.schema(con, listing["urls"][0])
-        exprs, leaves, unsearched = grep.text_fields(schema, args.field)
+        exprs, _, unsearched = grep.text_fields(schema, args.field)
         # What the mix holds, as opposed to what this run reads. A result file
         # with only the second cannot say whether an absent response count means
         # `--field` narrowed the search or the mix has no response column, and
@@ -791,21 +787,7 @@ def _grep_plan(con, args, stages):
         )
         if args.by and not source:
             sys.exit(f"{s['stage']}: no text column {args.by!r} in {s['hf_dataset']}")
-        # Multiplicity in `leaves` counts *queries that read the column*, not
-        # roles it plays. Two queries touch the source label column: the scan,
-        # which projects it beside the snippets, and the separate `source_totals`
-        # query for the denominators. So its multiplicity is two — and clamping
-        # rather than appending matters when `--by` names a column that is also
-        # searched (`--by prompt` on an RL stage). The scan still reads that
-        # column once whether it is filtered, projected or both, so appending two
-        # on top of the one `text_fields` already added would charge three copies
-        # and overstate the plan by a whole text column, which for the Think RL
-        # mix is a large enough share to make `--max-gb` refuse an affordable
-        # scan. Under-counting was the round-one defect; over-counting is the
-        # same defect with the sign flipped.
-        if source_column:
-            already = sum(1 for leaf in leaves if leaf == (source_column, None))
-            leaves = [*leaves, *[(source_column, None)] * max(0, QUERIES_READING_SOURCE - already)]
+        leaves = grep.plan_leaves(schema, args.field, source_column)
         plan.append({
             "stage": s,
             "listing": listing,
@@ -853,7 +835,12 @@ def cmd_grep(args):
             f"read yet. Narrow it (--stage, --field) or allow it (--max-gb {total_bytes / 1e9:.1f}, or --yes)."
         )
 
-    slug = args.slug or grep.slugify(args.pattern)
+    # `slugify` already yields a filename-safe slug, but an explicit `--slug`
+    # is raw user input that lands in a path, and `_write_json` creates parent
+    # directories: `--slug a/b` would quietly file a multi-gigabyte scan where
+    # neither `_grep_traces` nor the site export looks, and `../..` would write
+    # outside results/ entirely. Same treatment `find` gives its components.
+    slug = _filename_part(args.slug) if args.slug else grep.slugify(args.pattern)
     written = []
     for p in plan:
         s = p["stage"]

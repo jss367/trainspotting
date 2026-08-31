@@ -9,6 +9,7 @@ a plausible wrong number.
 """
 
 import json
+import pathlib
 import re
 from pathlib import Path
 
@@ -18,10 +19,13 @@ from trainspotting import grep, registry
 
 SCHEMAS = Path(__file__).resolve().parent / "fixtures" / "schemas"
 
+# Every target, not only the models: WildChat-1M is a standalone dataset whose
+# turns live in a `conversation` list, and the layer silently had no expressions
+# for it until that column was mapped.
 STAGES = [
-    (model_name, stage)
-    for model_name, model in registry.MODELS.items()
-    for stage in registry.post_training_stages(model)
+    (name, stage)
+    for name in registry.targets()
+    for stage in registry.post_training_stages(registry.resolve(name))
 ]
 STAGE_IDS = [f"{m}.{s['stage']}" for m, s in STAGES]
 
@@ -820,15 +824,12 @@ def test_overlapping_leaf_specs_still_count_a_chunk_once(con, tmp_path):
 
 
 def _plan_leaves(con, path, fields, by):
-    """The leaves `_grep_plan` would price, for a local Parquet file."""
-    from trainspotting import cli
+    """The leaves a plan prices, via the function both the CLI and the
+    recompute script call — reimplementing the clamp here is what let those two
+    diverge in the first place."""
     schema = grep.schema(con, str(path))
-    _, leaves, _ = grep.text_fields(schema, fields)
-    source, name = grep.source_expr(schema, [by])
-    if name:
-        already = sum(1 for leaf in leaves if leaf == (name, None))
-        leaves = [*leaves, *[(name, None)] * max(0, cli.QUERIES_READING_SOURCE - already)]
-    return leaves
+    _, name = grep.source_expr(schema, [by])
+    return grep.plan_leaves(schema, fields, name)
 
 
 def test_a_source_column_that_is_also_searched_is_charged_twice_not_three_times(con, tmp_path):
@@ -914,3 +915,52 @@ def test_committed_snippet_invariant_is_bounded_by_the_window(path):
             assert len(e["snippet"] or "") <= grep.SNIPPET_SOURCE_CHARS + 2
     else:
         assert len(run["pattern"]) < grep.window_chars(run["pattern"], regex=False)
+
+
+# --- review round 8 ---------------------------------------------------------
+
+
+def test_a_chat_log_is_searchable(con, tmp_path):
+    """WildChat-1M is the repo's only standalone dataset target and keeps its
+    turns in `conversation`. That column was missing from the message-list map,
+    so `text_fields` produced no expressions and the whole command exited "no
+    text columns" for it."""
+    path = tmp_path / "chat.parquet"
+    con.execute(
+        f"""COPY (SELECT [
+              {{'role': 'user', 'content': 'are you ChatGPT?'}},
+              {{'role': 'assistant', 'content': 'I am an AI language model'}}
+            ] AS conversation) TO '{path}' (FORMAT parquet)"""
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, unsearched = grep.text_fields(schema)
+    assert exprs.get("prompt") and exprs.get("response")
+    assert unsearched == []
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(path)]), exprs, None, "ChatGPT"
+    )
+    assert result["by_group"] == {"prompt": 1, "response": 0}
+
+
+def test_the_recompute_script_prices_a_plan_the_same_way_the_cli_does():
+    """Both call `plan_leaves`. They used to each compute the leaves, and
+    diverged: the CLI learned to clamp the source leaf and the script kept
+    appending, so a maintenance run would have written back the inflated
+    `bytes_read` the CLI had just stopped producing."""
+    source = pathlib.Path("scripts/recompute_grep_bytes.py").read_text()
+    assert "grep.plan_leaves(" in source
+    assert "QUERIES_READING_SOURCE" not in source
+    assert "text_fields(" not in source
+
+
+@pytest.mark.parametrize(
+    ("slug", "expected"),
+    [("foo/bar", "foo-bar"), ("../../etc/passwd", "etc-passwd"), ("..", "x")],
+)
+def test_an_explicit_slug_cannot_escape_the_results_directory(slug, expected):
+    """`_write_json` creates parent directories, so a raw `--slug` in the path
+    would file a multi-gigabyte scan where neither the report nor the site export
+    looks — and `../..` would write outside results/ entirely."""
+    from trainspotting import cli
+    assert cli._filename_part(slug) == expected
+    assert "/" not in cli._filename_part(slug)

@@ -28,18 +28,19 @@ FIXTURES = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "sche
 def main():
     FIXTURES.mkdir(parents=True, exist_ok=True)
     con = grep.connect()
-    for model_name, model in registry.MODELS.items():
-        for stage in registry.post_training_stages(model):
+    for name in registry.targets():
+        target = registry.resolve(name)
+        for stage in registry.post_training_stages(target):
             dataset = stage["hf_dataset"]
             listing = grep.parquet_listing(dataset)
             schema = grep.schema(con, listing["urls"][0])
             exprs, leaves, unsearched = grep.text_fields(schema)
             _, source_column = grep.source_expr(schema, stage["source_columns"])
-            path = FIXTURES / f"{model_name}.{stage['stage']}.json"
+            path = FIXTURES / f"{name}.{stage['stage']}.json"
             path.write_text(
                 json.dumps(
                     {
-                        "model": model_name,
+                        "target": name,
                         "stage": stage["stage"],
                         "dataset": dataset,
                         # Not the revision: it moves whenever the server
