@@ -611,7 +611,13 @@ def cmd_report(args):
                 print(f"- {s['stage']}: {s['name']} ({s['hf_dataset']})")
     elif target.get("note"):
         print(target["note"])
-    print("\n## HHH classification (sampled)\n")
+    # The same seven labels mean different things by kind, and the heading is
+    # the only place the report says which.
+    print(
+        "\n## HHH classification (sampled)\n"
+        if target["is_model"]
+        else "\n## What the prompts ask for (sampled)\n"
+    )
     for s in registry.post_training_stages(target):
         path = RESULTS / f"{args.target}.{s['stage']}.labels.json"
         if not path.exists():

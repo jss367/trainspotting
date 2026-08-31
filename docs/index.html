@@ -422,7 +422,9 @@
     per stage and labeled with Claude; whiskers are Wilson 95% intervals. Click any
     bar for the prompts behind it, then <em>see it in training context</em> for the
     rest of the training example — the response the model is fit to, the pair it is
-    pushed between, or the verifier that scores it.
+    pushed between, or the verifier that scores it. On a dataset tab those same
+    labels describe what the person asked for: nothing was trained on a chat log,
+    so there is no training signal there to read.
     Language is detected locally per prompt, line by line and weighted by length,
     so a template that wraps a foreign-language question in English instructions
     counts as English; a prompt split evenly between two languages is left
@@ -1305,8 +1307,11 @@ async function renderModel(model, gen){
   const hhh = document.createElement("section");
   hhh.className = "card";
   hhh.innerHTML = m.is_model === false
-    ? `<h2>How much of this dataset is about being helpful, honest, harmless?</h2>
-       <p class="sub">Share of sampled prompts whose primary training signal is each label. Whiskers: Wilson 95% CI.</p>`
+    ? `<h2>What are people in this dataset asking for?</h2>
+       <p class="sub">Share of sampled prompts in each request category. The same seven labels a model
+          stage gets, but read differently: nothing was trained on these, so a bar is what was asked,
+          not a training signal — <code>harmlessness</code> here means the request was safety-relevant,
+          and says nothing about what came back. Whiskers: Wilson 95% CI.</p>`
     : `<h2>How much of post-training is about being helpful, honest, harmless?</h2>
        <p class="sub">Share of sampled prompts per stage whose primary training signal is each label. Whiskers: Wilson 95% CI.</p>`;
   let any = false;
