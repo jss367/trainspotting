@@ -2,6 +2,8 @@
   "sft": {
     "dataset": "allenai/Dolci-Think-SFT-32B",
     "total": 2253684,
+    "counted": 144470,
+    "partial": true,
     "columns": {
       "source": {
         "Dolci Think OpenThoughts3 Math": 50199,
@@ -25,6 +27,8 @@
   "dpo": {
     "dataset": "allenai/Dolci-Think-DPO-32B",
     "total": 200000,
+    "counted": 200000,
+    "partial": false,
     "columns": {
       "dataset": {
         "ultrafeedback_cleaned_olmo2_7b": 32778,
@@ -61,6 +65,8 @@
   "rlvr": {
     "dataset": "allenai/Dolci-Think-RL-32B",
     "total": 102026,
+    "counted": 102026,
+    "partial": false,
     "columns": {
       "dataset_source": {
         "hamishivi/math_rlvr_mixture_dpo": 30182,

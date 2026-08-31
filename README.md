@@ -2,8 +2,9 @@
 
 Spot what's in a model's training data. Audits what a fully open model was
 trained on — currently the OLMo 3 pipelines (Ai2), whose pretraining (Dolma 3)
-and post-training (Dolci) data are public. The tool answers five kinds of
-question, in increasing order of depth:
+and post-training (Dolci) data are public — and, with the same layers, any
+dataset on its own. The tool answers five kinds of question, in increasing order
+of depth:
 
 1. **Facts** — stage sizes for a model's whole training pipeline (pretrain →
    midtrain → long-context → SFT → DPO → RLVR), hardcoded in a registry.
@@ -30,6 +31,30 @@ sample them: exact composition from the shard listing, readable random documents
 and the same free-form questions. There is no context layer there — a corpus
 document has no surrounding training example, it *is* the example. See
 [Pretraining data](#pretraining-data).
+
+## Datasets
+
+A dataset can also be the target on its own, with no model around it. Point any
+command at `wildchat-1m` instead of a model and it runs the same layers over
+[WildChat-1M](https://huggingface.co/datasets/allenai/WildChat-1M) — 837,989
+real conversations between people and ChatGPT, and the source Dolci Instruct SFT
+draws 302,406 of its prompts from. Only `pretrain` refuses: a dataset has no
+corpora behind it.
+
+The two things a dataset changes about how a result reads:
+
+- Nothing was trained on it. The context view shows the conversation a prompt
+  opened, and says outright that no turn in it is a target — an SFT view would
+  mark the replies "trained to produce this", which is exactly the claim a raw
+  chat log does not support.
+- It brings its own labels. WildChat records the model, language, country and
+  redaction status of every conversation, so the `languages` layer becomes a
+  check on py3langid rather than the only breakdown available. It passes: the
+  dataset's own column says 56.2% English / 14.9% Chinese / 10.4% Russian, and
+  the detector reads the committed 300-prompt sample as 52.2% / 15.7% / 10.7%,
+  with the 10.4% it declines to call covering most of the gap.
+
+See [Adding a dataset](#adding-a-dataset).
 
 ## Install
 
@@ -75,6 +100,22 @@ trainspotting pretrain olmo-3-7b-think --sample 300
 trainspotting ask olmo-3-7b-think "..." --slug my-question --pretrain
 ```
 
+Every command also takes a **dataset** in place of a model, which explores that
+dataset on its own — no pipeline around it:
+
+```bash
+trainspotting facts wildchat-1m
+trainspotting sources wildchat-1m --json
+trainspotting languages wildchat-1m
+trainspotting classify wildchat-1m --sample 300
+trainspotting ask wildchat-1m "Is the person asking for help with schoolwork?" --slug schoolwork
+```
+
+A dataset is a one-stage target, so every layer except `pretrain` (which needs
+corpora a dataset does not have) works on it unchanged, and its results land in
+`results/wildchat-1m.<kind>.*.json` beside the models'. See
+[Datasets](#datasets).
+
 `ask` judges post-training **prompts**; with `--pretrain` it also judges the
 pretraining **documents** already sampled by `trainspotting pretrain` — reading
 the committed copy under `docs/data/` when `results/` has none, so the samples
@@ -84,14 +125,14 @@ on what fitting the text implies rather than on how a model should respond). It
 reads the committed sample rather than re-drawing, so a second question costs one
 API call and scores exactly the same documents.
 
-`ask` writes `results/<model>.<stage>.ask-<slug>.json` with every sampled
+`ask` writes `results/<target>.<stage>.ask-<slug>.json` with every sampled
 prompt and its yes/no judgment, so the estimate is auditable: read the matched
 prompts and check they mean what you think. The
 [site](https://jss367.github.io/trainspotting/) renders committed ask runs under
 a **Custom questions** heading, one card per question, and every bar (taxonomy
 or ask) clicks open to the literal prompts behind the count.
 
-`languages` writes `results/<model>.<stage>.languages.json` in the same shape,
+`languages` writes `results/<target>.<stage>.languages.json` in the same shape,
 with an ISO 639-1 code per prompt. Detection runs line by line and is weighted
 by length, because a lot of these prompts are mixed — an English translation or
 judge template wrapped around a question in another language. Code fences,
@@ -105,7 +146,7 @@ site renders it as its own card, with English on one scale and every other
 language on its own, and every language clicks open to its prompts.
 
 Because sampling is deterministic, `--from-labels` reads the prompts straight
-out of `results/<model>.<stage>.labels.json` instead of paging HuggingFace
+out of `results/<target>.<stage>.labels.json` instead of paging HuggingFace
 again. It produces byte-identical output and takes about a second.
 
 py3langid covers 97 languages, so anything outside that set lands on its
@@ -325,9 +366,13 @@ sampling run that quietly labels nothing.
   on HuggingFace, which is where the untruncated example lives.
 - `/statistics` truncates frequencies for very high-cardinality columns (e.g.
   `dataset_source` in Dolci-Think-SFT, thousands of values): the returned
-  counts are exact but not exhaustive. Percentages in `sources` output are
-  against the full row count, so a short list that sums well below 100% means
-  the column has a long tail the API did not enumerate.
+  counts are exact but not exhaustive. A short list that sums well below 100%
+  means the column has a long tail the API did not enumerate.
+- On a large dataset `/statistics` also stops after a first slice and says so.
+  `sources` then divides by the rows it actually scanned, not the full split,
+  and prints which — WildChat-1M is counted over 778,133 of its 837,989 rows.
+  The result file carries `counted` and `partial` so the site says the same
+  thing rather than reading the shares as exact.
 - Sampled estimates come with Wilson 95% intervals in `report`; 300 samples
   gives roughly ±5% worst case. Post-training intervals assume independent draws.
   Corpus intervals do not: they are widened by the measured design effect of
@@ -345,7 +390,7 @@ sampling run that quietly labels nothing.
 
 ## Adding a model
 
-Add an entry to `trainspotting/registry.py`. A stage carries either an
+Add an entry to `MODELS` in `trainspotting/registry.py`. A stage carries either an
 `hf_dataset` plus `prompt_path` / `source_columns` schema hints (post-training,
 served by the datasets-server), or a `sample_dataset` pointing at a repo of
 `.jsonl.zst` shards (pretraining, read by range request), or just `tokens` for a
@@ -356,3 +401,21 @@ naming convention added.
 For a post-training stage, then run `python scripts/capture_row_fixtures.py` to
 save a row for it — `tests/test_extract.py` asserts every registry stage has one,
 so the new `prompt_path` and `source_columns` are checked against a real row.
+
+## Adding a dataset
+
+Add an entry to `DATASETS` in the same file — a HuggingFace dataset id, the same
+`prompt_path` / `source_columns` hints a post-training stage carries, and a
+`kind` saying what shape of training example a prompt there sits in (`sft`,
+`dpo`, `rlvr`, or `chat` for a conversation log nothing was fit to). `kind` also
+names the result files.
+
+`registry.resolve` hands a dataset back as a single-stage target, so `sources`,
+`classify`, `languages`, `context`, `ask` and `report` all run on it with no
+special case; only `pretrain` refuses, because a dataset has no corpus behind
+it. Re-run `python scripts/capture_row_fixtures.py` for the row fixture, and
+`python scripts/export_site_data.py` to give it a tab on the site.
+
+A `prompt_path` the dataset needs and `extract.py` doesn't implement is the one
+piece that costs more than a registry entry: WildChat's `conversation` column
+was a four-line branch there.

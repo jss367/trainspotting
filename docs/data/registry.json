@@ -1,5 +1,99 @@
 {
+  "olmo-3-32b-think": {
+    "target": "olmo-3-32b-think",
+    "is_model": true,
+    "hf_model": "allenai/Olmo-3-32B-Think",
+    "stages": [
+      {
+        "stage": "pretrain",
+        "name": "Dolma 3 Mix",
+        "tokens": 5500000000000,
+        "note": "5.50T tokens of the same Dolma 3 Mix recipe as the 7B run (the paper's Table 4 mix applies to both); shares below are the mix's own proportions.",
+        "hf": "allenai/dolma3_mix-6T",
+        "sample_dataset": "allenai/dolma3_mix-6T",
+        "sample_scope": "The primary Dolma 3 6T mix, used to pretrain Olmo 3 32B. No redactions.",
+        "composition": [
+          {
+            "name": "Common Crawl (web)",
+            "tokens": 4510000000000
+          },
+          {
+            "name": "olmOCR science PDFs",
+            "tokens": 805000000000
+          },
+          {
+            "name": "Stack-Edu (code)",
+            "tokens": 409000000000
+          },
+          {
+            "name": "FineMath 3+ (math)",
+            "tokens": 151000000000
+          },
+          {
+            "name": "arXiv (proof-pile)",
+            "tokens": 50900000000
+          },
+          {
+            "name": "Wikipedia & Wikibooks",
+            "tokens": 2510000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "midtrain",
+        "name": "Dolma 3 Dolmino Mix \u00d72",
+        "tokens": 200000000000,
+        "note": "Two separate 100B Dolmino runs (web, code, math, QA, thinking, instruction, PDFs \u2014 heavily synthetic) whose checkpoints were model-merged before the long-context stage.",
+        "hf": "allenai/dolma3_dolmino_mix-100B-1125",
+        "sample_dataset": "allenai/dolma3_dolmino_mix-100B-1125",
+        "sample_scope": "The 100B-token Dolmino mix itself.",
+        "hf_dataset": null
+      },
+      {
+        "stage": "long-context",
+        "name": "Dolma 3 Longmino Mix",
+        "tokens": 100000000000,
+        "note": "Extends context length: midtraining-data replay plus long science PDFs.",
+        "hf": "allenai/dolma3_longmino_mix-100B-1125",
+        "sample_dataset": "allenai/dolma3_longmino_mix-100B-1125",
+        "sample_scope": "The 100B-token Longmino mix.",
+        "hf_dataset": null
+      },
+      {
+        "stage": "sft",
+        "name": "Dolci Think SFT 32B",
+        "hf_dataset": "allenai/Dolci-Think-SFT-32B",
+        "prompt_path": "messages",
+        "source_columns": [
+          "source"
+        ]
+      },
+      {
+        "stage": "dpo",
+        "name": "Dolci Think DPO 32B",
+        "hf_dataset": "allenai/Dolci-Think-DPO-32B",
+        "prompt_path": "prompt",
+        "source_columns": [
+          "dataset",
+          "preference_type"
+        ]
+      },
+      {
+        "stage": "rlvr",
+        "name": "Dolci Think RL 32B",
+        "hf_dataset": "allenai/Dolci-Think-RL-32B",
+        "prompt_path": "prompt",
+        "source_columns": [
+          "dataset_source",
+          "dataset"
+        ]
+      }
+    ]
+  },
   "olmo-3-7b-instruct": {
+    "target": "olmo-3-7b-instruct",
+    "is_model": true,
     "hf_model": "allenai/Olmo-3-7B-Instruct",
     "stages": [
       {
@@ -134,6 +228,8 @@
     ]
   },
   "olmo-3-7b-think": {
+    "target": "olmo-3-7b-think",
+    "is_model": true,
     "hf_model": "allenai/Olmo-3-7B-Think",
     "stages": [
       {
@@ -267,92 +363,25 @@
       }
     ]
   },
-  "olmo-3-32b-think": {
-    "hf_model": "allenai/Olmo-3-32B-Think",
+  "wildchat-1m": {
+    "target": "wildchat-1m",
+    "is_model": false,
+    "hf_model": null,
+    "name": "WildChat-1M",
+    "note": "Real conversations between people and ChatGPT, collected by Ai2 in exchange for free access. Not a training mix: nothing was fit to these responses. Olmo's Dolci mixes draw on it \u2014 the Instruct SFT mix takes 302,406 of its prompts, the Think mixes take regenerated variants \u2014 so it is what a large slice of Olmo's post-training data started as. 837,989 conversations, and `toxic` is false on every one HuggingFace's stats API reached: the toxic conversations are held back in the gated WildChat-1M-Full.",
     "stages": [
       {
-        "stage": "pretrain",
-        "name": "Dolma 3 Mix",
-        "tokens": 5500000000000,
-        "note": "5.50T tokens of the same Dolma 3 Mix recipe as the 7B run (the paper's Table 4 mix applies to both); shares below are the mix's own proportions.",
-        "hf": "allenai/dolma3_mix-6T",
-        "sample_dataset": "allenai/dolma3_mix-6T",
-        "sample_scope": "The primary Dolma 3 6T mix, used to pretrain Olmo 3 32B. No redactions.",
-        "composition": [
-          {
-            "name": "Common Crawl (web)",
-            "tokens": 4510000000000
-          },
-          {
-            "name": "olmOCR science PDFs",
-            "tokens": 805000000000
-          },
-          {
-            "name": "Stack-Edu (code)",
-            "tokens": 409000000000
-          },
-          {
-            "name": "FineMath 3+ (math)",
-            "tokens": 151000000000
-          },
-          {
-            "name": "arXiv (proof-pile)",
-            "tokens": 50900000000
-          },
-          {
-            "name": "Wikipedia & Wikibooks",
-            "tokens": 2510000000
-          }
-        ],
-        "hf_dataset": null
-      },
-      {
-        "stage": "midtrain",
-        "name": "Dolma 3 Dolmino Mix \u00d72",
-        "tokens": 200000000000,
-        "note": "Two separate 100B Dolmino runs (web, code, math, QA, thinking, instruction, PDFs \u2014 heavily synthetic) whose checkpoints were model-merged before the long-context stage.",
-        "hf": "allenai/dolma3_dolmino_mix-100B-1125",
-        "sample_dataset": "allenai/dolma3_dolmino_mix-100B-1125",
-        "sample_scope": "The 100B-token Dolmino mix itself.",
-        "hf_dataset": null
-      },
-      {
-        "stage": "long-context",
-        "name": "Dolma 3 Longmino Mix",
-        "tokens": 100000000000,
-        "note": "Extends context length: midtraining-data replay plus long science PDFs.",
-        "hf": "allenai/dolma3_longmino_mix-100B-1125",
-        "sample_dataset": "allenai/dolma3_longmino_mix-100B-1125",
-        "sample_scope": "The 100B-token Longmino mix.",
-        "hf_dataset": null
-      },
-      {
-        "stage": "sft",
-        "name": "Dolci Think SFT 32B",
-        "hf_dataset": "allenai/Dolci-Think-SFT-32B",
-        "prompt_path": "messages",
+        "stage": "chat",
+        "kind": "chat",
+        "name": "WildChat-1M",
+        "note": "Real conversations between people and ChatGPT, collected by Ai2 in exchange for free access. Not a training mix: nothing was fit to these responses. Olmo's Dolci mixes draw on it \u2014 the Instruct SFT mix takes 302,406 of its prompts, the Think mixes take regenerated variants \u2014 so it is what a large slice of Olmo's post-training data started as. 837,989 conversations, and `toxic` is false on every one HuggingFace's stats API reached: the toxic conversations are held back in the gated WildChat-1M-Full.",
+        "hf_dataset": "allenai/WildChat-1M",
+        "prompt_path": "conversation",
         "source_columns": [
-          "source"
-        ]
-      },
-      {
-        "stage": "dpo",
-        "name": "Dolci Think DPO 32B",
-        "hf_dataset": "allenai/Dolci-Think-DPO-32B",
-        "prompt_path": "prompt",
-        "source_columns": [
-          "dataset",
-          "preference_type"
-        ]
-      },
-      {
-        "stage": "rlvr",
-        "name": "Dolci Think RL 32B",
-        "hf_dataset": "allenai/Dolci-Think-RL-32B",
-        "prompt_path": "prompt",
-        "source_columns": [
-          "dataset_source",
-          "dataset"
+          "model",
+          "language",
+          "country",
+          "redacted"
         ]
       }
     ]
