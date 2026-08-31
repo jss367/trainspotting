@@ -83,8 +83,15 @@ def sample_rows_with_index(
     on a large split and common on a small one, which is exactly where each row
     carries the most weight. Fresh offsets top the sample back up to n.
 
-    Deterministic in (n, seed) as before, and identical to the undeduplicated
-    draw whenever it happened not to collide.
+    Deterministic in (n, seed). Two changes have moved which rows a given seed
+    draws — deduplication, and widening the page-start bound below — so runs are
+    only comparable to each other when they were drawn by the same version. Over
+    the nine Dolci splits at n=300, 8,997 of 9,000 seeds draw exactly what they
+    drew before the bound widened; the exceptions are seed 998 on Dolci-Think-RL-7B
+    and seeds 71 and 764 on Dolci-Instruct-RL. Everything committed under
+    docs/data/ is seed 0, which is unchanged on all nine, so those files still
+    describe the rows they were drawn from. A re-run at a different seed is a
+    different sample and does not join against them.
     """
     total = num_rows(dataset, config, split)
     rng = random.Random(seed)
