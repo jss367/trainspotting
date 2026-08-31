@@ -59,8 +59,33 @@ def test_two_produce_groups_give_an_interval_not_a_sum():
 
 
 def test_the_interval_is_capped_by_the_rows_that_matched_at_all():
-    r = run("rlvr", hits=10, rows=100, groups={"prompt": 0, "response": 8, "reference": 7})
+    r = run("rlvr", hits=10, rows=100, groups={"prompt": 5, "response": 8, "reference": 7})
     assert influence.produced(r) == (8, 10)
+
+
+def test_rows_that_did_not_match_a_prompt_settle_the_interval():
+    # Every matched row matched somewhere, so a row outside the prompt group is
+    # on the produce side. With no prompt match at all the union is exact.
+    r = run("rlvr", hits=180, rows=1_000, groups={"prompt": 0, "response": 100, "reference": 80})
+    assert influence.produced(r) == (180, 180)
+
+
+def test_the_prompt_bound_tightens_without_settling():
+    r = run("rlvr", hits=180, rows=1_000, groups={"prompt": 40, "response": 100, "reference": 80})
+    assert influence.produced(r) == (140, 180)
+
+
+def test_a_produce_only_run_needs_no_prompt_count():
+    # `--field response --field reference`: `matched` is already the union.
+    r = run("rlvr", hits=180, rows=1_000, groups={"response": 100, "reference": 80},
+            fields=["response", "reference"])
+    assert influence.produced(r) == (180, 180)
+
+
+def test_inconsistent_counts_do_not_invert_the_interval():
+    r = run("rlvr", hits=200, rows=1_000, groups={"prompt": 0, "response": 60, "reference": 60})
+    lo, hi = influence.produced(r)
+    assert lo <= hi == 120
 
 
 def test_one_produce_group_is_exact():
@@ -337,7 +362,8 @@ def test_overlapping_produce_side_intervals_are_called_unsettled():
     # 60–120 against an exact 70 over equal row counts: the low ends order them
     # one way and the counts do not settle it.
     runs = [
-        run("rlvr", hits=200, rows=100_000, groups={"prompt": 0, "response": 60, "reference": 60}),
+        run("rlvr", hits=200, rows=100_000,
+            groups={"prompt": 140, "response": 60, "reference": 60}),
         run("dpo", hits=70, rows=100_000, groups={"prompt": 0, "response": 70}),
     ]
     t = influence.compare(runs, THINK)
@@ -547,7 +573,8 @@ def test_an_upper_bound_landing_on_the_leaders_lower_bound_is_a_tie():
     # rlvr's produce side is 50–100 of 100,000; dpo's is exactly 50 of 50,000,
     # so rlvr's upper bound equals dpo's rate and the two could be equal.
     runs = [
-        run("rlvr", hits=200, rows=100_000, groups={"prompt": 0, "response": 50, "reference": 50}),
+        run("rlvr", hits=200, rows=100_000,
+            groups={"prompt": 150, "response": 50, "reference": 50}),
         run("dpo", hits=50, rows=50_000, groups={"prompt": 0, "response": 50}),
     ]
     t = influence.compare(runs, THINK)
@@ -740,3 +767,52 @@ def test_an_ordinary_pattern_is_not_dressed_up():
     runs = [run("rlvr", hits=5, rows=100, groups={"prompt": 5}, pattern="ChatGPT", slug="chatgpt")]
     text = " ".join(influence.render(influence.compare(runs, THINK), "olmo-3-7b-think"))
     assert "trainspotting grep olmo-3-7b-think ChatGPT --slug chatgpt" in text
+
+
+# --- a lift between two floors is not a lift -------------------------------
+
+
+def test_the_produce_side_lift_is_the_one_the_counts_guarantee():
+    # Source floor over stage ceiling. The stage is bounded 100–180 of 10,000
+    # (1.0%–1.8%) and the source has 20 of 100 (20%), so the guaranteed lift is
+    # 20/1.8 ≈ 11×, not 20/1.0 = 20× as two floors would read.
+    runs = [run(
+        "rlvr", hits=180, rows=10_000,
+        groups={"prompt": 80, "response": 100, "reference": 80},
+        sources={"src": 40, "rest": 140},
+        totals={"src": 100, "rest": 9_900},
+        by_source_group={"src": {"prompt": 20, "response": 20, "reference": 20},
+                         "rest": {"prompt": 60, "response": 80, "reference": 60}},
+    )]
+    t = influence.compare(runs, THINK)
+    src = next(s for s in t["best"]["sources"] if s["name"] == "src")
+    assert t["best"]["produced"] == (100, 180)
+    assert src["produced_hits"] == 20 and src["produced_hits_hi"] == 40
+    assert 10 < src["produced_lift"] < 12
+    assert "at least 11× the stage's own rate" in \
+        " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+def test_a_settled_interval_states_the_lift_plainly():
+    runs = [run("rlvr", hits=100, rows=10_000, groups={"prompt": 0, "response": 100},
+                sources={"src": 100}, totals={"src": 500},
+                by_source_group={"src": {"prompt": 0, "response": 100}})]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["produced"] == (100, 100)
+    assert "at least" not in " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+# --- a stage-wide claim needs every stage ----------------------------------
+
+
+def test_a_zero_run_that_never_read_its_produce_side_blocks_the_claim():
+    runs = [
+        run("dpo", hits=100, rows=100_000, groups={"prompt": 100, "response": 0}),
+        run("rlvr", hits=0, rows=100_000, groups={"prompt": 0}, fields=["prompt"],
+            available_fields=["prompt", "response"]),
+    ]
+    t = influence.compare(runs, THINK)
+    assert not t["produce_complete"]
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "cannot say the string is absent from what these stages train the model to write" in text
+    assert "No stage matched on the produce side at all" not in text

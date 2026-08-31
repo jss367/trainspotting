@@ -61,7 +61,25 @@ def produced(result) -> tuple[int, int] | None:
     counts = [by_group.get(g, 0) for g in PRODUCE if g in fields]
     if not counts:
         return None
-    return max(counts), min(result.get("matched", 0), sum(counts))
+    return _union(result.get("matched", 0), by_group.get("prompt", 0), counts)
+
+
+def _union(matched: int, prompt: int, counts: list[int]) -> tuple[int, int]:
+    """Bounds on the rows matching in at least one of `counts`.
+
+    Two lower bounds. The largest single group is one. The other is the rows
+    that did not match the prompt, because every matched row matched somewhere
+    and a row not in the prompt group has nowhere else to be — which settles
+    the interval outright whenever nothing matched a prompt: 100 response and
+    80 reference rows out of 180 with no prompt match are 180 produce-side
+    rows, and reporting 100–180 there would call an ordering unsettled that the
+    counts settle. It reads the same way when the prompt was never searched:
+    `matched` then only counts produce-side rows, and `prompt` is zero.
+    """
+    hi = min(matched, sum(counts))
+    # Clamped, because the two lower bounds only agree on self-consistent
+    # counts and a result file is input rather than an invariant.
+    return min(max(max(counts), matched - prompt), hi), hi
 
 
 def _sources(result) -> list[dict]:
@@ -78,7 +96,7 @@ def _sources(result) -> list[dict]:
     rows = result.get("total_rows") or 0
     stage_rate = (result.get("matched", 0) / rows) if rows else 0
     bounds = produced(result)
-    stage_produced_rate = (bounds[0] / rows) if (bounds and rows) else 0
+    stage_produced_rate_hi = (bounds[1] / rows) if (bounds and rows) else 0
     fields = set(result.get("fields") or [])
     out = []
     for name, hits in (result.get("by_source") or {}).items():
@@ -90,17 +108,24 @@ def _sources(result) -> list[dict]:
         # prompts — none of the evidence the ranking actually ran on.
         per_group = groups.get(name, {})
         p_counts = [per_group.get(g, 0) for g in PRODUCE if g in fields]
-        p_hits = max(p_counts) if (p_counts and per_group) else None
-        p_rate = (p_hits / n) if (p_hits is not None and n) else None
+        p_lo, p_hi = (_union(hits, per_group.get("prompt", 0), p_counts)
+                      if (p_counts and per_group) else (None, None))
+        p_rate = (p_lo / n) if (p_lo is not None and n) else None
         out.append({
             "name": name,
             "hits": hits,
             "rows": n,
             "rate": rate,
             "lift": (rate / stage_rate) if (rate and stage_rate) else None,
-            "produced_hits": p_hits,
+            "produced_hits": p_lo,
+            "produced_hits_hi": p_hi,
             "produced_rate": p_rate,
-            "produced_lift": (p_rate / stage_produced_rate) if (p_rate and stage_produced_rate) else None,
+            # The source's floor over the stage's ceiling, which is the lift the
+            # counts guarantee. Dividing two floors proves nothing: a source
+            # whose two groups overlap and a stage whose do not can show 2× and
+            # be 1.1× in fact.
+            "produced_lift": ((p_rate / stage_produced_rate_hi)
+                              if (p_rate and stage_produced_rate_hi) else None),
             "groups": per_group,
         })
     return sorted(out, key=lambda s: -s["hits"])
@@ -384,7 +409,11 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
         "produce_searched": produce_searched,
         # Every hitting stage read a produce-side column, which is what a claim
         # about the produce side across all of them requires.
-        "produce_complete": all(r["produced"] is not None for r in hitting),
+        # Every stage with a result file, not only the ones that matched: a
+        # zero-hit run that never opened its response column cannot support
+        # "nothing matched on the produce side" either.
+        "produce_complete": all(r["produced"] is not None
+                                for r in searched + inconclusive),
         "understated": understated,
         "best": ranked[0] if ranked else None,
         "runner_up": ranked[1] if len(ranked) > 1 else None,
@@ -467,10 +496,14 @@ def _stage_lines(r: dict) -> list[str]:
         hk, rk, lk = (("hits", "rate", "lift") if side == "all"
                       else ("produced_hits", "produced_rate", "produced_lift"))
         what = "produce side" if side == "produced" else "source"
+        # The produce-side lift divides a floor by a ceiling, so it is the lift
+        # the counts guarantee rather than the lift itself, except where the
+        # interval closed.
+        least = "at least " if (side == "produced" and r["produced"][0] != r["produced"][1]) else ""
         src = r["concentration"]
         if src:
             out.append(f"  - {what} concentrated in `{src['name']}`: {src[hk]:,} of its "
-                       f"{src['rows']:,} rows, {_pct(src[rk])} — {src[lk]:.0f}× the "
+                       f"{src['rows']:,} rows, {_pct(src[rk])} — {least}{src[lk]:.0f}× the "
                        "stage's own rate.")
         elif r["sources"]:
             top = max(r["sources"], key=lambda x: x[hk] or 0)
@@ -574,10 +607,11 @@ def _verdict(t: dict) -> list[str]:
     bounds = best["produced"]
     if src and on_produce:
         span = f"{bounds[0]:,}" if bounds[0] == bounds[1] else f"{bounds[0]:,}–{bounds[1]:,}"
+        least = "at least " if bounds[0] != bounds[1] else ""
         line.append(f"{src['produced_hits']:,} of the {src['rows']:,} `{src['name']}` rows "
-                    f"({_pct(src['produced_rate'])}, {src['produced_lift']:.0f}× the stage) hold "
-                    f"it in a response or a reference answer, out of the stage's {span} "
-                    "produce-side matches.")
+                    f"({_pct(src['produced_rate'])}, {least}{src['produced_lift']:.0f}× the "
+                    f"stage) hold it in a response or a reference answer, out of the stage's "
+                    f"{span} produce-side matches.")
         return _tail(t, best, other, key, measure, line)
     if src:
         line.append(f"{src['hits']:,} of the {src['rows']:,} `{src['name']}` rows "

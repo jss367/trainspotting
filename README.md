@@ -284,10 +284,16 @@ same cut: under the produce-side basis the concentration is computed over
 produce-side rows per source, because a source that supplied only prompts
 supplied none of the evidence the ranking ran on. `by_group` counts rows per
 group and one row can match two, so the union is reported as the interval it is
-(232–235) rather than as the sum — and the interval is carried into the ranking
+(232–235) rather than as the sum — bounded from below by the largest group and
+by the rows that matched no prompt, which settles it outright where nothing
+matched a prompt —  — and the interval is carried into the ranking
 rather than collapsed to its low end. Two stages whose intervals overlap, or
 touch at a single value, are not ordered by these counts, and the verdict says
 so instead of picking one.
+
+Where a source's share rests on that interval its lift is a floor over a
+ceiling, so it reads "at least 5×" rather than "5×", and collapses to the plain
+figure when the interval does.
 
 A run that did not read everything its own mix has on the side being ranked can
 only have undercounted, so its rate is a floor rather than a figure. That is
