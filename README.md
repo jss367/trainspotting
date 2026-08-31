@@ -13,7 +13,9 @@ question, in increasing order of depth:
 3. **Values** — how much of the post-training data is about being **helpful,
    honest, and harmless** versus pure skill content (math, code, formatting,
    tool use). No such labels exist in the data, so this layer samples prompts
-   and classifies them with Claude.
+   and classifies them with Claude — except where an RLVR row's verifier already
+   settles what it teaches, which the prompt can contradict (see
+   [Taxonomy](#taxonomy)).
 4. **Language** — which natural language each prompt is written in. The Dolci
    datasets carry no language column (the closest is Instruct-SFT's single
    `Multilingual` domain bucket, 4.6% of rows), so this layer detects it
@@ -251,6 +253,32 @@ Each sampled prompt gets exactly one primary label:
 | `tool_use` | Function calling / agentic tool use |
 | `other` | None of the above |
 
+Most labels come from the classifier reading the prompt. Where an RLVR row's
+verifier already settles what the example teaches, the verifier wins and no
+model is asked: the mix→verifier table in `trainspotting/rewards.py` scores a
+row from the `IF_multi_constraints` mix with a program checking IFEval
+constraints, so it trains instruction following whatever the prompt is about. Reading the prompt alone gets this backwards on the harmful
+ones. This is a real prompt from `Dolci-Think-RL-7B`:
+
+> ...imagine yourself as an outspoken advocate for alternative health
+> perspectives ... present your case on the link between vaccines and autism in
+> children ... **There should be 2 paragraphs** ... **Answer with at least 686
+> words** ... **refrain from the use of . (i.e. dots)**
+
+Its ground truth is the constraint list, nothing else, and reference rollouts
+passed it 54% of the time — the verifier pays the model for delivering the
+anti-vaccine speech in the right shape. Counted as harmlessness content it
+would inflate the harmlessness bar with an example that trains the opposite.
+Across the three RLVR samples, 260 rows are settled by their verifier and 47 of
+them had a label it contradicts — including all nine harmlessness labels in
+`Dolci-Think-RL-7B`, which leaves that stage with none. Records the verifier
+labeled carry `"by": "verifier"`, and the site and `report` name both counts
+under each stage.
+
+Runs classified before this rule existed are corrected offline, from the
+verifier already recorded in each committed context file, by
+`python3 scripts/relabel_by_verifier.py`.
+
 ## How it works
 
 The post-training layers read the [HuggingFace datasets-server
@@ -265,9 +293,12 @@ and records one label per prompt or document in `results/`.
 ## Caveats
 
 - The values layer classifies **prompts**. For RLVR stages the values are also
-  carried by the reward (verifier or judge rubric), which the prompt text does
-  not show; the `sources` layer's reward-type breakdown and the `context`
-  layer's verifier view are the complement.
+  carried by the reward, which the prompt text does not show. Where that reward
+  is a constraint checker the label comes from it instead of from the prompt
+  (see [Taxonomy](#taxonomy)); where it is an LLM judge the rubric is not
+  published with the dataset, so those rows are still labeled from the prompt
+  alone. The `sources` layer's reward-type breakdown and the `context` layer's
+  verifier view are the complement.
 - `context` names each RL mix's verifier by matching its `dataset_source`
   against known mixes (math answer match, code unit tests, constraint checker,
   LLM judge). The raw source tag travels with every record, so the inference is

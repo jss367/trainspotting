@@ -1269,7 +1269,13 @@ async function renderModel(model, gen){
     h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())} <span class="ds">— ${esc(s.name)}</span>`;
     const sub = document.createElement("p");
     sub.className = "stage-sub";
-    sub.textContent = `${d.dataset} · n=${n} sampled prompts labeled by ${d.classifier}`;
+    // Some RLVR rows are labeled by their own verifier rather than by the
+    // classifier, so say which count is which instead of crediting the model
+    // for labels it was never asked about.
+    const byVerifier = recs.filter(r => r.by === "verifier").length;
+    sub.textContent = byVerifier
+      ? `${d.dataset} · n=${n} sampled prompts — ${n - byVerifier} labeled by ${d.classifier}, ${byVerifier} by their verifier`
+      : `${d.dataset} · n=${n} sampled prompts labeled by ${d.classifier}`;
     hhh.append(h, sub);
     const max = Math.max(...LABELS.map(l => wilson(counts[l]||0, n)[1]), 0.01);
     let lastGrp = null;
