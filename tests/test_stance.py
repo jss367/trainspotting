@@ -121,3 +121,26 @@ def test_every_committed_example_renders_with_its_markup_intact(stage):
         assert len(rendered) <= stance.MAX_EXAMPLE
         for marker in required:
             assert marker in rendered, f"row {rec.get('row')} lost {marker}"
+
+
+def test_a_multi_turn_pair_marks_only_the_branch_as_preferred():
+    """Shared assistant turns must not be labelled PREFERRED / DISPREFERRED.
+
+    Marking text that is identical on both sides as the thing one side was
+    preferred for is the one way to make the judge read a direction into a pair
+    that has none.
+    """
+    shared_reply = turn("assistant", "SHAREDHISTORY")
+    rec = {
+        "kind": "dpo",
+        "chosen": {"turns": [turn("user", "q1"), shared_reply, turn("user", "q2"), turn("assistant", "KEEPTHIS")]},
+        "rejected": {"turns": [turn("user", "q1"), shared_reply, turn("user", "q2"), turn("assistant", "DROPTHIS")]},
+    }
+    rendered = stance.render(rec)
+    preferred = rendered.split("[PREFERRED", 1)[1]
+    assert "SHAREDHISTORY" not in preferred
+    # It is still shown — as the history the pair is judged in, read once.
+    assert rendered.count("SHAREDHISTORY") == 1
+    assert "[PROMPT: assistant]" in rendered
+    assert "KEEPTHIS" in preferred.split("[DISPREFERRED", 1)[0]
+    assert "DROPTHIS" in preferred.split("[DISPREFERRED", 1)[1]

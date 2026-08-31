@@ -359,8 +359,16 @@ mean the same thing, and it is not the size of the dataset:
 |---|---|
 | pretrain / midtrain / long-context | every token — the stage size from the Olmo 3 paper is the answer |
 | sft | the assistant turns, reasoning spans included, not the prompt they read |
-| dpo | both completions; the preference loss is computed over the pair |
+| dpo | both completions past the branch point; the preference loss is computed over the pair |
 | rlvr | rollouts generated during training, which the dataset does not contain |
+
+Both sides of a pair store the whole conversation, so the split is at the point
+the two actually diverge, not by role — `context.branch_point`, the same line
+`search` draws. An assistant turn before the branch is shared history the pair
+is judged in, and counting it once per side charges the stage twice for text
+neither completion was preferred for. That is 12 of the 300 sampled
+Dolci-Instruct-DPO pairs and 5.9% of that stage's fit characters; the think
+mixes are single-turn throughout, so nothing there moves.
 
 RLVR is the honest gap, and the table marks it `*`. The published mix holds
 prompts, verifiers and some reference generations, not the text the policy was
@@ -715,6 +723,11 @@ sampling run that quietly labels nothing.
   characters, and then fits the rendered example into 12,000. A value expressed
   only in the part that was cut is not visible to it. Every view links to the
   untruncated row on HuggingFace.
+- A `budget` total is withheld, in the CLI and on the site, when the stages
+  under one slug were scored against different wordings of the question. A slug
+  is not a question: `--slug` takes any string and a generated one is cut to 60
+  characters, so a collision is possible and a sum across it is a number no
+  single question measured.
 - `stance` and `ask` answer different questions and their counts do not nest.
   An example can be `about` human lives and push `away` from valuing them, which
   is the case the direction layer exists for.

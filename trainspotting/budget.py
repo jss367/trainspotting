@@ -58,7 +58,7 @@ an attribution of behaviour.
 
 import json
 
-from . import extract, paths, registry
+from . import context, extract, paths, registry
 from .stats import cluster_wilson, wilson
 
 # Characters per token, for turning a measured character count into the unit the
@@ -105,10 +105,18 @@ def fit_chars(rec: dict) -> int | None:
     if kind == "sft":
         return sum(_turn_chars(t) for t in rec.get("turns", []) if t.get("role") == "assistant")
     if kind == "dpo":
+        # Only past the branch point. Both sides store the whole conversation,
+        # so an earlier assistant turn is shared history the pair is judged in
+        # rather than either completion the preference loss scores — counting it
+        # once per side charges the stage twice for text it was never preferred
+        # for. See context.branch_point.
+        chosen = (rec.get("chosen") or {}).get("turns", [])
+        rejected = (rec.get("rejected") or {}).get("turns", [])
+        shared = context.branch_point(chosen, rejected)
         return sum(
             _turn_chars(t)
-            for side in ("chosen", "rejected")
-            for t in (rec.get(side) or {}).get("turns", [])
+            for side in (chosen, rejected)
+            for t in side[shared:]
             if t.get("role") == "assistant"
         )
     if kind == "rlvr":

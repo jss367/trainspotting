@@ -144,3 +144,57 @@ def test_a_result_record_joins_to_its_example_by_row_before_prefix():
     assert budget.context_for({"row": 7, "prompt": same}, by_key)["row"] == 7
     # A record from before result files carried a row still resolves.
     assert budget.context_for({"prompt": same}, by_key)["row"] == 3
+
+
+def test_a_multi_turn_pair_branches_where_it_branches_not_by_role():
+    # Both sides store the whole conversation, so an assistant turn before the
+    # branch is shared history: counting it once per side charges the stage
+    # twice for text neither completion was preferred for.
+    shared_user, shared_asst = turn("user", 100), turn("assistant", 900)
+    rec = {
+        "kind": "dpo",
+        "chosen": {"turns": [shared_user, shared_asst, turn("user", 10), turn("assistant", 50)]},
+        "rejected": {"turns": [shared_user, shared_asst, turn("user", 10), turn("assistant", 70)]},
+    }
+    assert budget.fit_chars(rec) == 120
+
+
+def test_an_identical_pair_still_has_two_completions():
+    # Every turn agrees, so a plain prefix scan would call the whole thing
+    # shared and leave the pair with no completions at all. The last turn is a
+    # candidate answer by definition.
+    same = {"turns": [turn("user", 100), turn("assistant", 50)]}
+    assert budget.fit_chars({"kind": "dpo", "chosen": same, "rejected": same}) == 100
+
+
+def test_a_pair_that_never_agrees_is_all_completion():
+    rec = {
+        "kind": "dpo",
+        "chosen": {"turns": [turn("user", 100), turn("assistant", 50)]},
+        "rejected": {"turns": [turn("user", 111), turn("assistant", 70)]},
+    }
+    # Branch at turn 0, so no shared prefix — and the user turns are still not
+    # fit to, because the role filter applies past the branch as well.
+    assert budget.fit_chars(rec) == 120
+
+
+def test_one_slug_over_two_wordings_gets_no_total(capsys):
+    """A slug is not a question.
+
+    `--slug` takes any string and a generated one is truncated to 60
+    characters, so stages sharing a slug can have been scored against different
+    words. Summing them produces a number no single question ever measured, and
+    the ask cards above already split such a collision apart.
+    """
+    from trainspotting.cli import _warn_mixed_questions
+
+    est = {"slug": "s", "question_variants": ["wording one?", "wording two?"]}
+    assert _warn_mixed_questions(est) is True
+    out = capsys.readouterr().out
+    # On stdout, not stderr: the table is what gets piped into a document, and
+    # the caveat has to travel with it.
+    assert "no total is shown" in out.lower()
+    assert "wording one?" in out and "wording two?" in out
+
+    assert _warn_mixed_questions({"slug": "s", "question_variants": []}) is False
+    assert capsys.readouterr().out == ""

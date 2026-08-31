@@ -1087,16 +1087,28 @@ async function budgetCard(main, model, slug){
     body.appendChild(tr);
   }
   const all = est.totals.all;
+  // A slug is not a question. `--slug` takes any string and a generated one is
+  // truncated to 60 characters, so stages sharing a slug can have been scored
+  // against different wordings — which the ask card above already splits into
+  // separate cards. Summing them here would put a number under a total that no
+  // single question produced, so the total is withheld rather than qualified.
+  const mixed = (est.question_variants || []).length > 1;
   const total = document.createElement("tr");
   total.className = "total";
   total.innerHTML = `<td>whole pipeline</td><td>${tokens(all.size_tokens)}</td>`
-    + `<td colspan="2">${all.measured} of ${all.stages} stages measured</td>`
-    + `<td>${tokens(all.matching_tokens)}<span class="est">${shareText(all.share)}</span></td>`;
+    + (mixed
+      ? `<td colspan="3">no single total — these stages were scored against ${est.question_variants.length} different wordings</td>`
+      : `<td colspan="2">${all.measured} of ${all.stages} stages measured</td>`
+        + `<td>${tokens(all.matching_tokens)}<span class="est">${shareText(all.share)}</span></td>`);
   body.appendChild(total);
   t.appendChild(body);
   card.appendChild(t);
 
   const notes = [];
+  if (mixed){
+    notes.push("Stages under this slug were scored against different wordings of the question, "
+      + "so they do not add up to one measurement: " + est.question_variants.map(q => `“${q}”`).join("  ·  "));
+  }
   if (all.measured < all.stages){
     // The single most misleading thing this page could do is show a pipeline
     // total that quietly leaves out 5.93T tokens of pretraining.

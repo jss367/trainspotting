@@ -1137,6 +1137,31 @@ def _fmt_est(n: float | None) -> str:
     return f"{n:.0f}"
 
 
+def _warn_mixed_questions(est: dict) -> bool:
+    """Say so, on stdout, when a slug covers more than one wording — and report
+    whether it does, so callers can withhold the total.
+
+    A slug is not a question: `--slug` takes any string and a generated one is
+    truncated to 60 characters, so stages sharing a slug can have been scored
+    against different words. Summing them produces a number no single question
+    ever measured. The warning goes to stdout with the table rather than to
+    stderr beside it, because the table is what gets piped into a document and
+    the caveat has to travel with it.
+    """
+    variants = est.get("question_variants") or []
+    if len(variants) < 2:
+        return False
+    print(
+        f"WARNING: the stages under slug {est['slug']!r} were scored against"
+        f" {len(variants)} different wordings of the question, so they do not add"
+        " up to one measurement. No total is shown.\n"
+    )
+    for q in variants:
+        print(f"  - {q}")
+    print()
+    return True
+
+
 def _fmt_share(share: float) -> str:
     """A share as a percentage, with enough digits to be a number.
 
@@ -1182,16 +1207,9 @@ def cmd_budget(args):
             f" — run `trainspotting ask {args.target} \"...\" --slug {args.slug}`"
         )
     print(f"# Training budget — {args.target}\n")
-    print(f"question: {est['question']}\n")
-    if est["question_variants"]:
-        print(
-            "warning: these runs were scored against different wordings of the"
-            " question, and are summed here anyway:",
-            file=sys.stderr,
-        )
-        for q in est["question_variants"]:
-            print(f"  - {q}", file=sys.stderr)
-        print(file=sys.stderr)
+    mixed = _warn_mixed_questions(est)
+    if not mixed:
+        print(f"question: {est['question']}\n")
 
     print(BUDGET_COLS)
     print("-" * len(BUDGET_COLS))
@@ -1204,7 +1222,9 @@ def cmd_budget(args):
         if not t["stages"]:
             continue
         line = f"{label:<16}{_fmt_est(t['size_tokens']):>10} fit tokens"
-        if t["measured"]:
+        if mixed:
+            line += "  →  no single total (see above)"
+        elif t["measured"]:
             line += (
                 f"  →  {_fmt_est(t['matching_tokens'])} matching"
                 f"  ({_fmt_share(t['share'])} of it)"
@@ -1378,13 +1398,17 @@ def _report_questions(target_name: str, target: dict) -> None:
         if not any(s.get("measured") for s in est["stages"]):
             continue
         print(f"\n## Training budget — {slug}\n")
+        mixed = _warn_mixed_questions(est)
         print(BUDGET_COLS)
         print("-" * len(BUDGET_COLS))
         for st in est["stages"]:
             print(_budget_row(st))
         t = est["totals"]["all"]
         print(
-            f"\nwhole pipeline: {_fmt_est(t['matching_tokens'])} of"
+            f"\nwhole pipeline: {_fmt_est(t['size_tokens'])} fit tokens — no single"
+            " total, see the warning above"
+            if mixed
+            else f"\nwhole pipeline: {_fmt_est(t['matching_tokens'])} of"
             f" {_fmt_est(t['size_tokens'])} fit tokens ({_fmt_share(t['share'])})"
         )
         if t["measured"] < t["stages"]:

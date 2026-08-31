@@ -52,7 +52,7 @@ would invent a training signal the data does not have, so a `chat` target is an
 error rather than a run.
 """
 
-from . import extract, rewards
+from . import context, extract, rewards
 
 STANCES = ["toward", "away", "neither"]
 
@@ -170,21 +170,27 @@ def _side_parts(rec: dict) -> list[tuple[str, str]]:
     `context` stores each side as the whole conversation, so the shared history
     is on both. Rendering both copies would spend the budget saying the same
     thing twice and bury the difference the pair is about.
+
+    The split is at the branch point, not by role. A multi-turn pair shares
+    assistant turns too, and marking those PREFERRED / DISPREFERRED tells the
+    judge the pair was preferred for text that is identical on both sides — the
+    one thing that would make it read a direction into a pair that has none. 12
+    of the 300 sampled Dolci-Instruct-DPO pairs are multi-turn.
     """
+    chosen = (rec.get("chosen") or {}).get("turns", [])
+    rejected = (rec.get("rejected") or {}).get("turns", [])
+    shared = context.branch_point(chosen, rejected)
     prefix = [
         (f"[PROMPT: {t.get('role', '?')}]", _turn_text(t))
-        for t in (rec.get("chosen") or {}).get("turns", [])
-        if t.get("role") != "assistant"
+        for t in chosen[:shared]
     ]
     sides = [
         (f"[{label}]", "\n\n".join(
-            _turn_text(t)
-            for t in (rec.get(side) or {}).get("turns", [])
-            if t.get("role") == "assistant"
+            _turn_text(t) for t in turns[shared:] if t.get("role") == "assistant"
         ))
-        for side, label in (
-            ("chosen", "PREFERRED — training pushes toward this"),
-            ("rejected", "DISPREFERRED — training pushes away from this"),
+        for turns, label in (
+            (chosen, "PREFERRED — training pushes toward this"),
+            (rejected, "DISPREFERRED — training pushes away from this"),
         )
     ]
     return prefix + sides
