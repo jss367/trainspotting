@@ -837,6 +837,11 @@ function sharedTurns(chosen, rejected){
 }
 const candidateTurns = (side, shared) => (side.turns || []).slice(shared)
   .filter(t => t.role === "assistant");
+// Anything after the branch that is not an assistant turn is context the two
+// candidates do not share — the turn at the branch point differs by definition,
+// so an assistant turn behind one reads different text on each side.
+const postBranchContext = (side, shared) => (side.turns || []).slice(shared)
+  .filter(t => t.role !== "assistant");
 
 // Assistant text on one side of the pair, from the branch point on: `part` picks
 // the answer or the thinking span, both of which DPO scores.
@@ -923,6 +928,9 @@ function demotionReason(rec, reason, shared = 0){
   if (historyCut(rec.chosen, shared) || historyCut(rec.rejected, shared))
     return `the conversation the pair branches from is cut at 4,000 characters, so the panel cannot tell
       that both candidates really do answer the same text.`;
+  if (postBranchContext(rec.chosen, shared).length || postBranchContext(rec.rejected, shared).length)
+    return `the pair branches on a turn the model did not write, so the answers below are replies to
+      different text and cannot cancel however alike they look.`;
   if (reason.a !== reason.b)
     return `DPO scores thinking and answer as one sequence, and the two thinking spans in front of these
       answers differ, so every token of the answer follows different text on each side and none of it
@@ -978,7 +986,8 @@ function gradientSection(rec, shared = 0){
                   b: sideText(rec.rejected, "reasoning", shared)};
   const hasThink = reason.a || reason.b;
   const exact = rawResponseStored(rec.chosen, shared) && rawResponseStored(rec.rejected, shared) &&
-    !historyCut(rec.chosen, shared) && !historyCut(rec.rejected, shared);
+    !historyCut(rec.chosen, shared) && !historyCut(rec.rejected, shared) &&
+    !postBranchContext(rec.chosen, shared).length && !postBranchContext(rec.rejected, shared).length;
   let answers = diffPair(sideText(rec.chosen, "answer", shared), sideText(rec.rejected, "answer", shared));
   const demoted = !exact && opChars(answers, "prefix", "a") > 0
     ? demotionReason(rec, reason, shared) : null;
@@ -1078,13 +1087,18 @@ function renderDPO(rec, dataset){
   }).join("");
 
   const panels = sides.map(s => {
-    const turns = candidateTurns(s.side, shared);
+    // Everything after the branch, not only the assistant turns: where a pair
+    // branches on a user turn, that turn is why the two answers differ and
+    // hiding it would leave the difference unexplained.
+    const turns = (s.side.turns || []).slice(shared);
     return `<div class="side ${s.cls}">
       <div class="sh">
         <div class="verdict"><i style="background:${s.color}"></i>${s.mark} ${esc(s.verdict)}</div>
         <div class="who">written by ${esc(s.side.model || "an unnamed model")}</div>
       </div>
-      <div class="body">${turns.map(t => turnBlock(t, "")).join("") || '<p class="note">no assistant turn stored</p>'}</div>
+      <div class="body">${turns.map(t =>
+        turnBlock(t, t.role === "assistant" ? "" : "context on this side, not a target")).join("")
+        || '<p class="note">no assistant turn stored</p>'}</div>
     </div>`;
   }).join("");
 

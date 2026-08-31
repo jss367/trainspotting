@@ -29,7 +29,7 @@ globalThis.fetch = async () => ({ ok: false });
 eval(js + `
 ;globalThis.PANEL = {diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix,
                      gradientSection, rawResponseStored, renderDPO, sharedTurns,
-                     candidateTurns};`);
+                     candidateTurns, postBranchContext};`);
 const P = globalThis.PANEL;
 
 let failures = 0;
@@ -167,6 +167,26 @@ ok(/shared opening <em>/.test(P.gradientSection(multi, 3).replace(/\s+/g, " ")),
 eq(P.sharedTurns({turns: [{role: "assistant", text: "same", chars: 4}]},
                  {turns: [{role: "assistant", text: "same", chars: 4}]}), 0,
   "the last turn is the candidate answer even when the two lists agree entirely");
+
+// A pair can branch on a turn the model did not write. The answers behind it are
+// then replies to different text, however alike they look, and the turn that
+// made them differ has to be visible.
+const ANSWER = "Use a sourdough starter instead " + LONG;
+const forked = {prompt_full: {text: "q", chars: 1}, row: 3, meta: {},
+  chosen: {model: "big", turns: [convo[0], anyTurn("user", "no yeast, what now?"), anyTurn("assistant", ANSWER)]},
+  rejected: {model: "small", turns: [convo[0], anyTurn("user", "no flour, what now?"), anyTurn("assistant", ANSWER)]}};
+eq(P.sharedTurns(forked.chosen, forked.rejected), 1, "the branch is at the differing user turn");
+eq(P.postBranchContext(forked.chosen, 1).map(t => t.text), ["no yeast, what now?"],
+  "the differing user turn is post-branch context, not part of the response");
+const forkedOut = P.gradientSection(forked, 1).replace(/\s+/g, " ");
+ok(!/shared opening <em>/.test(forkedOut),
+  "identical answers to different questions claim no shared opening");
+ok(!forkedOut.includes("gradient of exactly zero"),
+  "nor zero gradient, though the two answers are byte-identical");
+ok(forkedOut.includes("branches on a turn the model did not write"),
+  "and the reason names the branch turn");
+ok(P.renderDPO(forked, "ds").includes("no yeast, what now?"),
+  "the turn that made the answers differ is rendered, not filtered away");
 
 // --------------------------------------------------- against the real rows ---
 const dataDir = path.join(ROOT, "docs", "data");
