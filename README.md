@@ -281,16 +281,23 @@ the question is why a model *says* something, only the second is evidence, so
 the ranking runs on the produce-side rate and falls back to the overall rate
 only when no run read a produce-side column. `by_group` counts rows per group
 and one row can match two, so the union is reported as the interval it is
-(232–235) rather than as the sum.
+(232–235) rather than as the sum — and the interval is carried into the ranking
+rather than collapsed to its low end. Two stages whose intervals overlap are not
+ordered by these counts, and the verdict says so instead of picking one.
 
 **What was not looked at.** A stage scanned and found empty, a stage nobody
-scanned, and a stage this layer cannot reach are three different answers, and
+scanned, a stage this layer cannot reach, and a stage scanned only over the part
+of the repo the datasets-server converted are four different answers, and
 flattening them into "no hits" is what turns *we did not look* into *it is not
-there*. They are named apart, and a pattern absent from every stage searched
-gets said outright: 0 of N rows, exact over all of them, so a model that
-produces the string anyway did not take it from the data we can see — which
-points at a stage out of reach, at text distilled from another model rather than
-carried across literally, or at generalisation.
+there*. They are named apart. A pattern absent from every stage searched gets
+said outright — 0 of N rows, exact over all of them, so a model that produces
+the string anyway did not take it from the data we can see, which points at a
+stage out of reach, at text distilled from another model rather than carried
+across literally, or at generalisation — and only stages read end to end are
+allowed into that claim. `--field` is per run, so one pattern's stages can also
+disagree about what was read; a stage whose run never opened a produce-side
+column is held out of the produce-side ranking by name rather than sorted to the
+bottom of it as if that side had been searched and found empty.
 
 What the ranking deliberately does not do is weight the stages against each
 other. Identity behaviour is mostly set after pretraining, so the same rate in
@@ -491,9 +498,10 @@ classifier's reply parser, and prompt extraction against one saved row per
 registry stage (`tests/fixtures/rows/`, re-captured by
 `scripts/capture_row_fixtures.py`). `tests/test_influence.py` pins the ways a
 set of counts turns into a wrong story: ranking by hits rather than by rate,
-adding overlapping group counts as if they were a union, naming the largest
-source as the origin when it holds the mix rate, and printing a stage nobody
-scanned as a zero.
+adding overlapping group counts as if they were a union, ordering two stages
+whose intervals overlap, naming the largest source as the origin when it holds
+the mix rate, ranking an unread produce side as an empty one, and printing a
+stage nobody scanned — or one scanned over a partial conversion — as a zero.
 
 `grep` is covered twice over. Its column-to-field mapping runs against one saved
 Parquet schema per stage (`tests/fixtures/schemas/`, re-captured by

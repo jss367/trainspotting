@@ -283,3 +283,91 @@ def test_searched_and_empty_on_the_produce_side_is_not_the_same_as_unsearched():
     text = " ".join(influence.render(t, "olmo-3-7b-think"))
     assert "No stage matched on the produce side at all" in text
     assert "No run on this pattern searched a produce-side column" not in text
+
+
+# --- what a missing measurement is not: zero -------------------------------
+
+
+def test_a_prompt_only_run_is_held_out_of_the_produce_side_ranking():
+    # `--field` is per run, so one pattern's stages can disagree about what was
+    # read. Sorting the unmeasured stage as 0.0 would rank it as though its
+    # produce side had been searched and found empty.
+    runs = [
+        run("dpo", hits=1_000, rows=10_000, groups={"prompt": 1_000}, fields=["prompt"]),
+        run("rlvr", hits=10, rows=100_000, groups={"prompt": 0, "response": 10}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["basis"] == "produced"
+    assert [r["stage"] for r in t["ranked"]] == ["rlvr"]
+    assert [r["stage"] for r in t["unranked"]] == ["dpo"]
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "not in the produce-side ranking: this run read only prompt" in text
+    assert "not in this ranking at all rather than at the bottom of it" in text
+
+
+def test_a_produce_side_searched_and_empty_still_ranks():
+    # The other half of the same distinction: this run did read the response
+    # column, so a zero there is a measurement and belongs in the ranking.
+    runs = [
+        run("dpo", hits=1_000, rows=10_000, groups={"prompt": 1_000, "response": 0}),
+        run("rlvr", hits=10, rows=100_000, groups={"prompt": 0, "response": 10}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert [r["stage"] for r in t["ranked"]] == ["rlvr", "dpo"]
+    assert t["unranked"] == []
+
+
+# --- an interval does not order another interval ---------------------------
+
+
+def test_overlapping_produce_side_intervals_are_called_unsettled():
+    # 60–120 against an exact 70 over equal row counts: the low ends order them
+    # one way and the counts do not settle it.
+    runs = [
+        run("rlvr", hits=200, rows=100_000, groups={"prompt": 0, "response": 60, "reference": 60}),
+        run("dpo", hits=70, rows=100_000, groups={"prompt": 0, "response": 70}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["stage"] == "dpo"
+    assert [r["stage"] for r in t["contenders"]] == ["rlvr"]
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "do not settle the order between them" in text
+
+
+def test_disjoint_intervals_are_not_called_unsettled():
+    # The shipped runs look like this: 232–235 of 102,014 against 39 of 150,000.
+    runs = [
+        run("rlvr", hits=400, rows=102_014, groups={"prompt": 209, "response": 3, "reference": 232}),
+        run("dpo", hits=61, rows=150_000, groups={"prompt": 46, "response": 39}),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["stage"] == "rlvr"
+    assert t["contenders"] == []
+    assert "do not settle the order" not in " ".join(influence.render(t, "olmo-3-7b-think"))
+
+
+# --- a partial conversion cannot produce a zero ----------------------------
+
+
+def test_no_hits_over_a_partial_conversion_is_inconclusive_not_zero():
+    runs = [run("dpo", hits=0, rows=150_000, groups={"prompt": 0, "response": 0}, partial=True)]
+    t = influence.compare(runs, THINK)
+    assert t["searched"] == [] and [r["stage"] for r in t["inconclusive"]] == ["dpo"]
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "inconclusive rather than a zero" in text
+    assert "**Inconclusive.**" in text
+    # The exact-zero reading must not be reached on data that was never read.
+    assert "exact over every one of them" not in text
+    assert "did not take it from the data we can see" not in text
+
+
+def test_a_partial_zero_does_not_join_a_real_zero_in_the_verdict():
+    runs = [
+        run("rlvr", hits=0, rows=102_014, groups={"prompt": 0, "response": 0}),
+        run("dpo", hits=0, rows=150_000, groups={"prompt": 0, "response": 0}, partial=True),
+    ]
+    t = influence.compare(runs, THINK)
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    # The exact claim is made over rlvr's rows alone, not over both stages'.
+    assert "0 of 102,014 rows across rlvr, exact over every one of them" in text
+    assert "dpo matched nothing either, but only over the part of the repo the server converted, so it is outside this claim" in text
