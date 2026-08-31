@@ -119,6 +119,11 @@ def spread_picks(segment_by_shard: list, k: int) -> list[tuple[int, int]]:
     evenly spaced positions across it — rather than the first k of shard 0 —
     returns examples from across the corpus, and stays deterministic so a rerun
     retrieves the same documents. Fewer than k matches returns them all.
+
+    Doubling k refines the spread without moving it: every pick at k is also a
+    pick at 2k (position 2j·total//2k equals j·total//k). Callers lean on that
+    to retry duplicates — re-asking at higher resolution and skipping ranks
+    already tried visits new, still-evenly-spread positions.
     """
     sizes = [(s, hi - lo) for s, (lo, hi) in enumerate(segment_by_shard)]
     total = sum(n for _, n in sizes)
@@ -134,19 +139,6 @@ def spread_picks(segment_by_shard: list, k: int) -> list[tuple[int, int]]:
                 break
             g -= n
     return picks
-
-
-def spread_first(picks: list, stride: int = 3) -> list:
-    """Reorder an overdrawn pick list so its prefix keeps the even spacing.
-
-    A phrase that repeats inside one document resolves several ranks to the
-    same document, so a caller wanting k distinct documents over-draws by
-    `stride` and deduplicates as it fetches. Walking the over-draw in order
-    would spend the first k picks on the front of the range; taking every
-    `stride`-th pick first reproduces exactly the k-pick spacing, and the
-    in-between picks follow only when a duplicate needs backfilling.
-    """
-    return [p for j in range(stride) for p in picks[j::stride]]
 
 
 def snippet(doc: dict) -> str:

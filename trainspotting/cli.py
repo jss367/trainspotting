@@ -703,23 +703,22 @@ def cmd_find(args):
     print(f"occurrences: {count:,}")
 
     # Ranks count occurrences, not documents: a phrase repeated within one
-    # document holds several ranks, all resolving to the same doc_ix. So ranks
-    # are over-drawn and deduplicated by doc_ix while fetching, walked
-    # spread-first so backfilling a duplicate keeps the examples spread across
-    # the index. No fixed over-draw is enough when one document holds most of
-    # the matches, so the spread doubles in resolution until enough distinct
-    # documents are in hand, every match has been tried, or the lookup budget
-    # is spent — bounded so a million-fold-duplicated string costs a bounded
-    # number of API calls, not a crawl of them all.
+    # document holds several ranks, all resolving to the same doc_ix, so picks
+    # are deduplicated by doc_ix while fetching. The first pass asks for
+    # exactly --docs evenly spread picks; each shortfall re-asks at double the
+    # resolution, which refines the spread without moving it (every pick at k
+    # recurs at 2k), so retries visit new, still-evenly-spread ranks whether
+    # or not the match count clamped the draw. The loop ends when enough
+    # distinct documents are in hand, every match has been tried, or the
+    # lookup budget is spent — bounded so a million-fold-duplicated string
+    # costs a bounded number of API calls, not a crawl of them all.
     docs, seen, tried = [], set(), set()
     budget = 10 * args.docs
-    k = 3 * args.docs
+    k = args.docs
     while count and len(docs) < args.docs and len(tried) < budget:
         picks = [
             p
-            for p in infinigram.spread_first(
-                infinigram.spread_picks(found["segment_by_shard"], k)
-            )
+            for p in infinigram.spread_picks(found["segment_by_shard"], k)
             if p not in tried
         ]
         if not picks:

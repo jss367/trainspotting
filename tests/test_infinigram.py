@@ -10,7 +10,7 @@ contract itself.
 import pytest
 
 from trainspotting import infinigram
-from trainspotting.infinigram import doc_provenance, snippet, spread_first, spread_picks
+from trainspotting.infinigram import doc_provenance, snippet, spread_picks
 
 
 def test_spread_picks_spans_shards():
@@ -34,21 +34,23 @@ def test_spread_picks_empty_segments():
     assert spread_picks([], 3) == []
 
 
-def test_spread_first_prefix_is_the_smaller_spread():
-    """The whole point of the reorder: the first k picks of a 3k over-draw are
-    exactly the picks a plain k-draw would have made, so deduplication only
-    changes which extras follow, never the baseline spread."""
+def test_doubling_refines_without_moving():
+    """What the CLI's duplicate-retry loop leans on: every pick at resolution k
+    recurs at 2k, so re-asking at double resolution and skipping already-tried
+    ranks visits only new, still-evenly-spread positions. Checked both where
+    the draw is a strict subset of the matches and where doubling clamps."""
     segments = [[0, 40], [100, 160]]  # 100 matches
 
-    overdraw = spread_first(spread_picks(segments, 15), stride=3)
-
-    assert overdraw[:5] == spread_picks(segments, 5)
-    assert sorted(overdraw) == spread_picks(segments, 15)
+    for k in (3, 5, 25, 80):
+        assert set(spread_picks(segments, k)) <= set(spread_picks(segments, 2 * k))
 
 
-def test_spread_first_ordering():
-    assert spread_first([1, 2, 3, 4, 5, 6, 7], stride=3) == [1, 4, 7, 2, 5, 3, 6]
-    assert spread_first([], stride=3) == []
+def test_spread_picks_clamped_draw_is_all_matches_in_order():
+    """Once k reaches the match count the draw is simply every match, so the
+    retry loop's `no new picks` exit fires the round after."""
+    segments = [[7, 10], [20, 23]]
+
+    assert spread_picks(segments, 99) == [(0, 7), (0, 8), (0, 9), (1, 20), (1, 21), (1, 22)]
 
 
 def test_snippet_marks_matched_spans():
