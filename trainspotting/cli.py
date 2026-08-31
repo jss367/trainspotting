@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import math
 import re
@@ -702,42 +703,74 @@ def cmd_find(args):
     print(f"occurrences: {count:,}")
 
     # Ranks count occurrences, not documents: a phrase repeated within one
-    # document holds several ranks, all resolving to the same doc_ix. Over-draw
-    # 3x and deduplicate while fetching, walking the over-draw spread-first so
-    # backfilling a duplicate keeps the examples spread across the index.
-    picks = infinigram.spread_first(
-        infinigram.spread_picks(found["segment_by_shard"], 3 * args.docs if count else 0)
-    )
-    docs, seen = [], set()
-    for s, rank in picks:
-        if len(docs) >= args.docs:
-            break
-        doc = infinigram.get_doc(args.index, args.phrase, s, rank, args.maxlen)
-        if doc.get("doc_ix") in seen:
-            continue
-        seen.add(doc.get("doc_ix"))
-        prov = infinigram.doc_provenance(doc)
-        docs.append(
-            {
-                "doc_ix": doc.get("doc_ix"),
-                "doc_len": doc.get("doc_len"),
-                "blocked": doc.get("blocked", False),
-                **prov,
-                "snippet": infinigram.snippet(doc),
-            }
-        )
+    # document holds several ranks, all resolving to the same doc_ix. So ranks
+    # are over-drawn and deduplicated by doc_ix while fetching, walked
+    # spread-first so backfilling a duplicate keeps the examples spread across
+    # the index. No fixed over-draw is enough when one document holds most of
+    # the matches, so the spread doubles in resolution until enough distinct
+    # documents are in hand, every match has been tried, or the lookup budget
+    # is spent — bounded so a million-fold-duplicated string costs a bounded
+    # number of API calls, not a crawl of them all.
+    docs, seen, tried = [], set(), set()
+    budget = 10 * args.docs
+    k = 3 * args.docs
+    while count and len(docs) < args.docs and len(tried) < budget:
+        picks = [
+            p
+            for p in infinigram.spread_first(
+                infinigram.spread_picks(found["segment_by_shard"], k)
+            )
+            if p not in tried
+        ]
+        if not picks:
+            break  # every match has been tried
+        for s, rank in picks:
+            if len(docs) >= args.docs or len(tried) >= budget:
+                break
+            tried.add((s, rank))
+            doc = infinigram.get_doc(args.index, args.phrase, s, rank, args.maxlen)
+            if doc.get("doc_ix") in seen:
+                continue
+            seen.add(doc.get("doc_ix"))
+            prov = infinigram.doc_provenance(doc)
+            docs.append(
+                {
+                    "doc_ix": doc.get("doc_ix"),
+                    "doc_len": doc.get("doc_len"),
+                    "blocked": doc.get("blocked", False),
+                    **prov,
+                    "snippet": infinigram.snippet(doc),
+                }
+            )
+        k *= 2
     for d in docs:
         where = " ".join(str(d[k]) for k in ("source", "path", "url") if d.get(k))
         print(f"\n--- doc {d['doc_ix']} ({d['doc_len']:,} tokens) {where}")
         print(d["snippet"] if not d["blocked"] else "[blocked by the index owner]")
-    if count > len(docs):
+    if count and len(docs) < args.docs:
+        # The budget ran out or the matches did — either way, say what was
+        # actually retrieved rather than letting --docs claim a size the
+        # output does not have.
+        print(
+            f"\n(asked for {args.docs} documents; {len(tried):,} lookups"
+            f" yielded {len(docs)} distinct ones)"
+        )
+    elif count > len(docs):
         print(
             f"\n({len(docs)} distinct documents shown out of {count:,} occurrences,"
             " spread evenly across the index)"
         )
 
     if args.json:
-        slug = re.sub(r"[^a-z0-9]+", "-", args.phrase.lower()).strip("-")[:60]
+        # A phrase with no ASCII word characters — Chinese, Arabic, emoji —
+        # derives an empty slug, and every such search would overwrite
+        # results/find..json. Fall back to a hash of the phrase, which is ugly
+        # but distinct; --slug is there to pick a readable name instead.
+        slug = (
+            args.slug
+            or re.sub(r"[^a-z0-9]+", "-", args.phrase.lower()).strip("-")[:60]
+            or hashlib.sha1(args.phrase.encode()).hexdigest()[:12]
+        )
         path = _write_json(
             RESULTS / f"find.{slug}.json",
             {
@@ -864,6 +897,7 @@ def main():
         help="tokens of each document to display around the match",
     )
     p.add_argument("--json", action="store_true", help="also write results/find.<slug>.json")
+    p.add_argument("--slug", help="short name for the result file (default: derived from the phrase)")
     p.set_defaults(fn=cmd_find)
 
     p = sub.add_parser("pretrain", help="sample documents from the Dolma 3 pretraining shards")
