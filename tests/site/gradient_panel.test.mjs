@@ -207,12 +207,37 @@ const tooled = {prompt_full: {text: "q", chars: 1}, row: 4, meta: {},
   rejected: {model: "small", turns: [convo[0], toolTurn, anyTurn("assistant", "the same answer " + LONG)]}};
 const tooledOut = P.gradientSection(tooled, P.sharedTurns(tooled.chosen, tooled.rejected))
   .replace(/\s+/g, " ");
+eq(P.sharedTurns(tooled.chosen, tooled.rejected), 1,
+  "a turn carrying output the record does not keep ends the provable history");
 ok(!/shared opening <em>/.test(tooledOut),
-  "a dropped tool-call turn blocks the shared-opening claim");
+  "a tool-call turn blocks the shared-opening claim");
 ok(!tooledOut.includes("gradient of exactly zero"),
   "and blocks zero gradient, though every stored byte matches");
 ok(P.renderDPO(tooled, "ds").includes("tool_calls"),
   "and the view says which field the turn carried but the record does not keep");
+
+// The reason given has to be the true one. A sole candidate carrying a tool call
+// alongside its text is not truncated, and neither is one whose empty thinking
+// span was normalized away.
+const auxAnswer = {prompt_full: {text: "q", chars: 1}, row: 5, meta: {},
+  chosen: {model: "big", turns: [convo[0],
+    {role: "assistant", text: LONG + " alpha", chars: (LONG + " alpha").length, omitted: ["tool_calls"]}]},
+  rejected: {model: "small", turns: [convo[0], anyTurn("assistant", LONG + " beta")]}};
+const auxOut = P.gradientSection(auxAnswer, 1).replace(/\s+/g, " ");
+ok(!auxOut.includes("one side is cut at 4,000 characters, so whether"),
+  "an answer carrying a tool call is not reported as truncated");
+ok(auxOut.includes("beside its text, which this record does not keep"),
+  "it is reported as carrying output the record does not keep");
+
+const normalized = {prompt_full: {text: "q", chars: 1}, row: 6, meta: {},
+  chosen: {model: "big", turns: [convo[0],
+    {role: "assistant", text: LONG + " alpha", chars: (LONG + " alpha").length}]},
+  rejected: {model: "small", turns: [convo[0], anyTurn("assistant", LONG + " beta")]}};
+const normOut = P.gradientSection(normalized, 1).replace(/\s+/g, " ");
+ok(!normOut.includes("one side is cut at 4,000 characters, so whether"),
+  "a normalized answer is not reported as truncated either");
+ok(normOut.includes("does not hold an answer as written"),
+  "it is reported as normalized");
 
 // --------------------------------------------------- against the real rows ---
 const dataDir = path.join(ROOT, "docs", "data");
@@ -254,7 +279,9 @@ for (const f of files){
       demotions++;
       let matched = false;
       for (const [k, pat] of [["multi-turn after the branch", "more than one turn a side after it branches"],
-                              ["shared history not provable", "was cut or normalized on the way into this record"],
+                              ["branch point not provable", "reaches a turn this record does not hold as written"],
+                              ["answer carries omitted output", "beside its text, which this record does not keep"],
+                              ["answer normalized", "does not hold an answer as written"],
                               ["thinking differs", "two thinking spans in front of these"],
                               ["think markers normalized", "match as stored, but the dataset drops"],
                               ["candidate cut", "whether the responses stay identical past the stored text"]])

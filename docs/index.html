@@ -834,14 +834,20 @@ const uniqueChars = ops => opChars(ops, "chosen", "a") + opChars(ops, "rejected"
 // toward and away from at once. Mirrors `_shared_turns` and its cap in
 // trainspotting/search.py: the last turn is the candidate answer by definition,
 // however far the two lists agree.
-const sameTurn = (x, y) => x.role === y.role && x.text === y.text &&
-  (x.reasoning ? x.reasoning.text : null) === (y.reasoning ? y.reasoning.text : null);
-// `raw` is set by the exporter when a turn's stored text is the content itself.
+// `raw` is set by the exporter when a turn's stored text is the turn as written.
 // Nothing else proves it: a thinking span leaves its markers and surrounding
 // whitespace behind even when the span is empty and no reasoning field remains,
-// and a cut field says nothing about what followed. Absent on older context
-// runs, which therefore make no exactness claims until they are regenerated.
+// a cut field says nothing about what followed, and a turn can carry output the
+// record does not keep at all. Absent on older context runs, which therefore
+// make no exactness claims until they are regenerated.
 const rawTurn = t => t.raw === true;
+// Two turns count as the same only where both are stored as written. A turn
+// carrying output this record does not keep serializes to the same empty text
+// whatever it held, so a call to one tool and a call to another would otherwise
+// read as one shared turn — while `search._shared_turns`, comparing the payloads
+// themselves, branches there.
+const sameTurn = (x, y) => rawTurn(x) && rawTurn(y) && x.role === y.role && x.text === y.text &&
+  (x.reasoning ? x.reasoning.text : null) === (y.reasoning ? y.reasoning.text : null);
 function sharedTurns(chosen, rejected){
   const a = chosen.turns || [], b = rejected.turns || [];
   let n = 0;
@@ -864,9 +870,9 @@ const sideText = (side, part, shared = 0) => candidateTurns(side, shared)
 const cutTurn = t => t.chars > clen(t.text) ||
   (t.reasoning && t.reasoning.chars > clen(t.reasoning.text));
 const sideCut = (side, shared = 0) => candidateTurns(side, shared).some(cutTurn);
-// The shared history is only provably shared if every turn in it is stored as
-// written: a turn that was cut or normalized can differ between the two sides in
-// what the record no longer holds, and the branch point would swallow it.
+// Every shared turn is stored as written, since `sameTurn` will not match one
+// that is not. Checked again here rather than assumed: it is the invariant the
+// exactness claims below rest on, and it costs one pass over a handful of turns.
 const historyProvable = (side, shared) => (side.turns || []).slice(0, shared).every(rawTurn);
 
 function diffPanel(ops){
@@ -939,9 +945,17 @@ function demotionReason(rec, reason, shared = 0){
     return `this pair keeps going for more than one turn a side after it branches, and the panel does not
       model how the scored sequence interleaves with the conversation between them, so it cannot say what
       precedes the answer.`;
-  if (!historyProvable(rec.chosen, shared) || !historyProvable(rec.rejected, shared))
-    return `a turn in the conversation the pair branches from was cut or normalized on the way into this
-      record, so the panel cannot tell that both candidates really do answer the same text.`;
+  // A turn after the branch that is not the candidate answer and is not stored
+  // as written means the branch point itself is a guess: the two completions may
+  // have parted company at that turn, in what the record no longer holds.
+  const branchGuessed = side => {
+    const turns = side.turns || [];
+    return turns.slice(shared, Math.max(shared, turns.length - 1)).some(t => !rawTurn(t));
+  };
+  if (branchGuessed(rec.chosen) || branchGuessed(rec.rejected))
+    return `the conversation reaches a turn this record does not hold as written — cut, normalized, or
+      carrying output kept only in the row upstream — so the panel cannot tell where the two completions
+      actually part company.`;
   if (postBranchContext(rec.chosen, shared).length || postBranchContext(rec.rejected, shared).length)
     return `the pair branches on a turn the model did not write, so the answers below are replies to
       different text and cannot cancel however alike they look.`;
@@ -953,8 +967,19 @@ function demotionReason(rec, reason, shared = 0){
     return `the two thinking spans in front of them match as stored, but the dataset drops the
       <code>&lt;think&gt;</code> markers and the whitespace around them, so the panel cannot establish that
       the raw sequences the model scored were identical.`;
-  return `one side is cut at 4,000 characters, so whether the responses stay identical past the stored
-    text is unknown.`;
+  const answer = side => candidateTurns(side, shared)[0];
+  const carries = side => (answer(side) || {}).omitted;
+  if (carries(rec.chosen) || carries(rec.rejected)){
+    const fields = [...new Set([...(carries(rec.chosen) || []), ...(carries(rec.rejected) || [])])];
+    return `an answer here carries ${fields.map(f => `<code>${esc(f)}</code>`).join(" and ")} beside its
+      text, which this record does not keep, so what the model was scored on is not all here.`;
+  }
+  if (sideCut(rec.chosen, shared) || sideCut(rec.rejected, shared))
+    return `one side is cut at 4,000 characters, so whether the responses stay identical past the stored
+      text is unknown.`;
+  return `this record does not hold an answer as written. Something was normalized on the way in that
+    leaves no trace to point at — an empty thinking span, whose markers go while no reasoning field is
+    left behind — so the two cannot be compared byte for byte.`;
 }
 
 function sharedNote(ops, rec, dead, demoted){

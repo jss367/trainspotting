@@ -222,9 +222,9 @@ counted as response wording on both sides at once.
 
 That covers most of the data. Of 900 sampled pairs, 328 have a continuation that
 opens identically, but only 72 can be called a shared opening: 231 have thinking
-spans in front that differ, 13 branch from a conversation cut at 4,000
-characters or normalized on the way in, and 12 have a candidate cut at 4,000
-characters. Four pairs, all in
+spans in front that differ, 13 reach a turn the record does not hold as written
+so where the two completions part company is a guess, and 12 have a candidate
+cut at 4,000 characters. Four pairs, all in
 Dolci-Instruct-DPO, are byte-identical on both sides and therefore carry no
 gradient at all. Beyond the openings, the two responses have very little wording
 in common — a median of 1–3% of the chosen response — so for most pairs the
