@@ -135,18 +135,19 @@ def sample_rows_with_index(
         # sample rather than an unlucky one. Walk the uncovered pages in order.
         #
         # Only the near-full regime can get here, and there uniformity is moot:
-        # the draw already wants essentially every row. Bail out if the gaps are
-        # far more numerous than the draw itself, because then being short means
-        # something other than bad luck and paging a 2M-row split to find out
-        # would be 200,000 requests.
-        budget = 2 * ((n + chunk - 1) // chunk)
+        # the draw already wants essentially every row.
+        #
+        # Every page listed here is uncovered, so every request adds at least one
+        # row and the walk below stops at the shortfall — a handful of requests,
+        # however many gaps there are. Listing them costs one pass over the page
+        # starts and no network, which is why an earlier attempt to cap the list
+        # was wrong: at 76 rows with n=30 and seed 11 the rounds came back one
+        # row short, the seventh gap exceeded the cap, and the whole fallback was
+        # abandoned with 47 rows still unseen.
         gaps = []
         for off in range(0, total, chunk):
             if not all(i in seen for i in range(off, min(off + chunk, total))):
                 gaps.append(off)
-                if len(gaps) > budget:
-                    gaps = []
-                    break
         # Walk the gaps in random order. Taking them by offset and stopping as
         # soon as the sample is full hands every remaining slot to the front of
         # the split: at 50 rows with n=20 and seed 13 the rounds covered rows

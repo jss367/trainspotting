@@ -602,13 +602,13 @@ def cmd_languages(args):
             print(f"reusing {len(prompts)} prompts from {labels_path.name}", file=sys.stderr)
         else:
             revision = hf.dataset_revision(s["hf_dataset"])
-            # Detection takes seconds, so there is no window for the tree to move
-            # under a fresh draw the way there is under a classification run.
-            moved = None
             # Clip before detecting, not after. A classify run stores the clipped
             # prompt, so detecting the full text here would make --from-labels
             # disagree with this path on the handful of prompts past the cutoff.
             prompts = [extract.clip(p) for p in _sample_prompts(s, args.sample, args.seed)]
+            # Detection is local, but the draw feeding it is thirty paged
+            # requests, so this path has the same republish window as `context`.
+            moved = hf.dataset_revision(s["hf_dataset"])
         records = []
         for p in prompts:
             code, conf = languages.detect(p)
@@ -620,7 +620,10 @@ def cmd_languages(args):
             {
                 "dataset": s["hf_dataset"],
                 **_stamp(s["hf_dataset"], revision=revision),
-                **({"revision_moved_to": moved} if moved else {}),
+                # From a reused run, this is the ambiguity it recorded; from a
+                # fresh draw, movement observed across that draw. Either way it
+                # only appears when there are two known and different readings.
+                **({"revision_moved_to": moved} if moved and moved != revision else {}),
                 "sample": sample,
                 "seed": seed,
                 "detector": "py3langid",
