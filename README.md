@@ -345,8 +345,19 @@ counts, `/statistics` for exact value frequencies of label columns, `/rows`
 for sampling. The pretraining layer reads the Hub tree API for the shard listing
 and then range-requests shard heads directly, because the datasets-server's index
 of those repos is both partial and topic-ordered. Either way no dataset is ever
-downloaded. The classifier sends batches to Claude (`claude-opus-5` by default)
-and records one label per prompt or document in `results/`.
+downloaded. `/rows` pages are drawn from independent random offsets, so two of
+them can overlap; rows are keyed on their absolute index and the repeats
+dropped, because a duplicated row is a duplicated vote in every rate computed
+over the sample. The classifier sends batches to Claude (`claude-opus-5` by
+default) and records one label per prompt or document in `results/`.
+
+Every result file carries the commit it was computed over (`revision`), when it
+was written (`generated`), and a hash of the system prompt that produced its
+labels (`system_sha`). A dataset id alone does not identify what was counted:
+`main` moves, Ai2 has republished these mixes, and rewording a label's
+definition moves every share under it. Runs committed before these fields
+existed keep the older shape, and the site shows nothing where there is nothing
+to show.
 
 ## Tests
 
@@ -397,6 +408,14 @@ sampling run that quietly labels nothing.
   counts are exact but not exhaustive. Percentages in `sources` output are
   against the full row count, so a short list that sums well below 100% means
   the column has a long tail the API did not enumerate.
+- A prompt the classifier never labels — it declined, the API errored, or the
+  reply skipped an index — is re-asked on its own, so what is finally lost is
+  that prompt rather than the nineteen batched beside it. Whatever is still
+  unlabeled is counted in the result file (`unlabeled`, `unlabeled_reasons`),
+  printed by the CLI, and shown next to the sample size on the site. Every share
+  is over the labeled prompts, so this is the part of the sample the numbers do
+  not describe — and refusals land on jailbreak-style prompts, which is the
+  content the harmlessness share is about, so the gap is not random.
 - Sampled estimates come with Wilson 95% intervals in `report`; 300 samples
   gives roughly ±5% worst case. Post-training intervals assume independent draws.
   Corpus intervals do not: they are widened by the measured design effect of
