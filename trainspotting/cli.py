@@ -120,22 +120,32 @@ def _select_stages(args, stages_of, family):
 
 
 def _sample_rows(stage, sample, seed):
-    """(row, prompt) for each row of a deterministic (sample, seed) draw that has one.
+    """(index, row, prompt) for each row of a deterministic (sample, seed) draw
+    that has one.
 
     Rows carrying no user prompt drop out here, so the result is usually shorter
     than `sample`. The row travels with its prompt because part of what an
     example teaches is in the row rather than the text — an RL row's verifier
     settles its taxonomy label outright.
+
+    The index is the row's absolute position in the split, and it is what every
+    result record stores to address its training example. Joining on the prompt
+    instead cannot tell two rows apart that open with the same 400 characters,
+    which is rare in a curated mix and routine in a chat log: 64 of WildChat's
+    299 sampled prompts share an opening with another, 39 of them the same
+    Midjourney prompt-generator preamble in front of 39 different conversations.
     """
     print(f"sampling {sample} rows from {stage['hf_dataset']} ...", file=sys.stderr)
-    rows = hf.sample_rows(stage["hf_dataset"], sample, seed=seed)
-    pairs = ((r, extract.extract_prompt(r, stage["prompt_path"])) for r in rows)
-    return [(r, p) for r, p in pairs if p]
+    rows = hf.sample_rows_with_index(stage["hf_dataset"], sample, seed=seed)
+    triples = (
+        (i, r, extract.extract_prompt(r, stage["prompt_path"])) for i, r in rows
+    )
+    return [(i, r, p) for i, r, p in triples if p]
 
 
 def _sample_prompts(stage, sample, seed):
-    """Just the prompts, for the callers with no use for the row."""
-    return [p for _, p in _sample_rows(stage, sample, seed)]
+    """(index, prompt), for the callers with no use for the row itself."""
+    return [(i, p) for i, _, p in _sample_rows(stage, sample, seed)]
 
 
 def _write_json(path, payload):
@@ -240,10 +250,11 @@ def _label_post_training(args, question=None, slug=None):
     """
     for s in _select_stages(args, registry.post_training_stages, "post-training"):
         rows = _sample_rows(s, args.sample, args.seed)
-        prompts = [p for _, p in rows]
+        indices = [i for i, _, _ in rows]
+        prompts = [p for _, _, p in rows]
         fixed = [
             classify.verifier_label(row, registry.stage_kind(s)) if question is None else None
-            for row, _ in rows
+            for _, row, _ in rows
         ]
         ask = [p for p, f in zip(prompts, fixed) if not f]
         settled = len(prompts) - len(ask)
@@ -272,8 +283,10 @@ def _label_post_training(args, question=None, slug=None):
         }
         if question is None:
             records = []
-            for p, lab, f in zip(prompts, labels, fixed):
-                rec = {"prompt": extract.clip(p), "label": lab}
+            for i, p, lab, f in zip(indices, prompts, labels, fixed):
+                # `row` is what the site joins to the context record. See
+                # _sample_rows: the prompt text is not a key.
+                rec = {"row": i, "prompt": extract.clip(p), "label": lab}
                 if f:
                     rec["by"] = "verifier"
                 records.append(rec)
@@ -284,8 +297,8 @@ def _label_post_training(args, question=None, slug=None):
             print(f"{s['stage']}: {_counts(records)}  -> {path}", file=sys.stderr)
         else:
             records = [
-                {"prompt": extract.clip(p), "match": lab == "yes"}
-                for p, lab in zip(prompts, labels)
+                {"row": i, "prompt": extract.clip(p), "match": lab == "yes"}
+                for i, p, lab in zip(indices, prompts, labels)
                 if lab
             ]
             path = _write_json(
@@ -537,20 +550,27 @@ def cmd_languages(args):
             if not labels_path.exists():
                 sys.exit(f"{labels_path} not found — drop --from-labels to sample from HuggingFace")
             prior = json.loads(labels_path.read_text())
-            prompts = [r["prompt"] for r in prior["records"]]
+            # A classify run written before result records carried their row
+            # index has no row to reuse; those records keep joining to their
+            # context by prompt text, as they did before.
+            pairs = [(r.get("row"), r["prompt"]) for r in prior["records"]]
             sample, seed = prior["sample"], prior["seed"]
-            print(f"reusing {len(prompts)} prompts from {labels_path.name}", file=sys.stderr)
+            print(f"reusing {len(pairs)} prompts from {labels_path.name}", file=sys.stderr)
         else:
             # Clip before detecting, not after. A classify run stores the clipped
             # prompt, so detecting the full text here would make --from-labels
             # disagree with this path on the handful of prompts past the cutoff.
-            prompts = [extract.clip(p) for p in _sample_prompts(s, args.sample, args.seed)]
+            pairs = [
+                (i, extract.clip(p))
+                for i, p in _sample_prompts(s, args.sample, args.seed)
+            ]
         records = []
-        for p in prompts:
+        for i, p in pairs:
             code, conf = languages.detect(p)
-            records.append(
-                {"prompt": p, "label": code, "confidence": round(conf, 3)}
-            )
+            rec = {"prompt": p, "label": code, "confidence": round(conf, 3)}
+            if i is not None:
+                rec = {"row": i, **rec}
+            records.append(rec)
         path = _write_json(
             RESULTS / f"{args.target}.{s['stage']}.languages.json",
             {

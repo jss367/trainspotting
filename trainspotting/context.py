@@ -87,9 +87,11 @@ def build(row: dict, kind: str, prompt: str, row_index: int) -> dict:
     of the training example, which for a model stage is its pipeline position
     and for a standalone dataset is what the registry declares it to be.
 
-    `key` is the prompt prefix that joins this record to a labeled prompt in a
-    classify or ask run. Two rows sharing a 400-character opening join to the
-    first of them, which is close enough for a drill-down.
+    `row` is the join: a result record stores the same index, and the site looks
+    the context up by it. `key` is the older prompt-prefix join, kept for runs
+    committed before result records carried a row — two rows sharing a
+    400-character opening collapse to the first of them under it, which a
+    curated mix mostly gets away with and a chat log does not.
     """
     rec = {
         "key": prompt[:KEY_CHARS],

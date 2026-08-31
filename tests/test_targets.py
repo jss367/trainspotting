@@ -142,3 +142,28 @@ def test_an_unknown_target_exits_with_the_registry_message(monkeypatch):
     with pytest.raises(SystemExit) as exc:
         cli.main()
     assert "Unknown model or dataset" in str(exc.value)
+
+
+def test_a_sampled_row_travels_with_its_index():
+    """The index is what a result record stores to address its training example.
+    Joining on the prompt cannot separate two rows that open with the same 400
+    characters — rare in a curated mix, routine in a chat log."""
+    from trainspotting import cli, hf
+
+    stage = registry.post_training_stages(registry.resolve("wildchat-1m"))[0]
+    rows = [
+        (7, {"conversation": [{"role": "user", "content": "shared opening"}]}),
+        (9, {"conversation": [{"role": "user", "content": "shared opening"}]}),
+        (11, {"conversation": [{"role": "assistant", "content": "no user turn"}]}),
+    ]
+    original = hf.sample_rows_with_index
+    hf.sample_rows_with_index = lambda *a, **k: rows
+    try:
+        got = cli._sample_rows(stage, 3, 0)
+        prompts = cli._sample_prompts(stage, 3, 0)
+    finally:
+        hf.sample_rows_with_index = original
+
+    # The prompt-less row drops; the two identical prompts stay distinguishable.
+    assert [i for i, _, _ in got] == [7, 9]
+    assert prompts == [(7, "shared opening"), (9, "shared opening")]

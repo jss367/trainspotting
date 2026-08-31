@@ -834,7 +834,7 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
             const nav = NAV;
             b.disabled = true;
             b.textContent = "loading…";
-            let rec = await contextFor(ctx.model, ctx.stage, r.prompt);
+            let rec = await contextFor(ctx.model, ctx.stage, r);
             // Any hash move (nav moved on) or a closed drill-down (button
             // detached) mid-download makes this modal stale — drop it.
             if (nav !== NAV || !b.isConnected) return;
@@ -923,15 +923,30 @@ async function getData(name){
 const KEY_CHARS = 400;  // must match trainspotting/context.py
 const ctxFile = (model, stage) => `${model}.${stage}.context.json`;
 
-async function contextFor(model, stage, prompt){
+// Two joins, and the row is the real one. The prompt-prefix map cannot tell
+// apart two rows that open with the same 400 characters, and it keeps the first
+// — rare in a curated mix, routine in a chat log, where 64 of WildChat's 299
+// sampled prompts share an opening and 39 of them are the same Midjourney
+// preamble in front of 39 different conversations. Result records now carry the
+// sampled row index; the prefix map stays for runs committed before they did.
+async function ctxMaps(model, stage){
   const f = ctxFile(model, stage);
   if (!CTXMAPS[f]){
     const d = await getData(f);
-    const m = new Map();
-    for (const r of (d ? d.records : [])) if (!m.has(r.key)) m.set(r.key, r);
-    CTXMAPS[f] = m;
+    const byKey = new Map(), byRow = new Map();
+    for (const r of (d ? d.records : [])){
+      if (!byKey.has(r.key)) byKey.set(r.key, r);
+      if (r.row != null) byRow.set(r.row, r);
+    }
+    CTXMAPS[f] = {byKey, byRow};
   }
-  return CTXMAPS[f].get(prompt.slice(0, KEY_CHARS));
+  return CTXMAPS[f];
+}
+
+async function contextFor(model, stage, rec){
+  const {byKey, byRow} = await ctxMaps(model, stage);
+  if (rec.row != null && byRow.has(rec.row)) return byRow.get(rec.row);
+  return byKey.get(rec.prompt.slice(0, KEY_CHARS));
 }
 // Deep links address a training example by its HuggingFace row number.
 async function contextRowFor(model, stage, row){
@@ -1802,9 +1817,13 @@ async function applyHashState(nav){
     // A context file covers the whole stage, so a stale/edited row number can
     // resolve to a record behind a DIFFERENT bar (e.g. a capability record
     // under a helpfulness link). Only honor rows that belong to the bar this
-    // hash names: its records carry the prompts, and context records are
-    // keyed by the same KEY_CHARS prompt prefix (see contextFor).
-    if (rec && !el._records.some(r => r.prompt.slice(0, KEY_CHARS) === rec.key)) rec = null;
+    // hash names. Match on the row when the bar's records carry one, and fall
+    // back to the prompt prefix for runs committed before they did — the prefix
+    // is ambiguous across duplicate openings, which is exactly why it is the
+    // fallback and not the test.
+    if (rec && !el._records.some(r => r.row != null
+          ? r.row === rec.row
+          : r.prompt.slice(0, KEY_CHARS) === rec.key)) rec = null;
     const s = REG[model] && REG[model].stages.find(x => x.stage === st.stage);
     if (rec && s) openContext(rec, st.stage, s.hf_dataset, s.name, [VIEW, st.stage, st.key, "row-" + st.row]);
     // Lookup failed (stale/edited hash naming a row that no longer exists):
