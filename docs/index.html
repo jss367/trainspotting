@@ -491,8 +491,16 @@ const escAttr = s => esc(s).replace(/"/g,"&quot;");
 // A dataset id does not say which version was counted: `main` moves. Result
 // files written since the sampler was fixed carry the commit they read, so link
 // it where the count is shown; older files simply have nothing to link.
+const treeLink = (dataset, sha) =>
+  `<a href="https://huggingface.co/datasets/${escAttr(dataset)}/tree/${escAttr(sha)}" target="_blank" rel="noopener"><code>${esc(String(sha).slice(0,7))}</code></a>`;
+// A run long enough to outlast a republish records where the dataset went. The
+// rows may then come from either tree, and showing only the first SHA would
+// present exactly the ambiguity the field exists to record as a settled fact —
+// so show both, in the order they happened.
 const revLink = d => d.revision
-  ? ` <a href="https://huggingface.co/datasets/${escAttr(d.dataset)}/tree/${escAttr(d.revision)}" target="_blank" rel="noopener"><code>${esc(String(d.revision).slice(0,7))}</code></a>`
+  ? ` ${treeLink(d.dataset, d.revision)}` + (d.revision_moved_to
+      ? ` <span title="the dataset moved while this run was in flight; its rows may come from either tree">→ ${treeLink(d.dataset, d.revision_moved_to)}</span>`
+      : "")
   : "";
 
 // Mix labels are a mix of real HuggingFace dataset ids and bare internal names.
