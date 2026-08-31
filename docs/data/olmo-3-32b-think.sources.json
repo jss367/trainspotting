@@ -1,7 +1,11 @@
 {
   "sft": {
     "dataset": "allenai/Dolci-Think-SFT-32B",
+    "generated": "2026-08-31T19:23:13+00:00",
+    "revision": "7668c638cc84100951973b456069a1a462d6d915",
     "total": 2253684,
+    "counted": 144470,
+    "partial": true,
     "columns": {
       "source": {
         "Dolci Think OpenThoughts3 Math": 50199,
@@ -24,7 +28,11 @@
   },
   "dpo": {
     "dataset": "allenai/Dolci-Think-DPO-32B",
+    "generated": "2026-08-31T19:23:14+00:00",
+    "revision": "0898aac9657c0fa79b02c0e91627b370bed2a127",
     "total": 200000,
+    "counted": 200000,
+    "partial": false,
     "columns": {
       "dataset": {
         "ultrafeedback_cleaned_olmo2_7b": 32778,
@@ -60,7 +68,11 @@
   },
   "rlvr": {
     "dataset": "allenai/Dolci-Think-RL-32B",
+    "generated": "2026-08-31T19:23:15+00:00",
+    "revision": "d581ecde5cb4bb2a550c2499a7408a3b8dca79f6",
     "total": 102026,
+    "counted": 102026,
+    "partial": false,
     "columns": {
       "dataset_source": {
         "hamishivi/math_rlvr_mixture_dpo": 30182,

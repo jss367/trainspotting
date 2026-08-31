@@ -15,6 +15,7 @@ The column shapes come from the same place `context.py` reads them, one stage at
 a time:
 
     sft   messages       -> prompt (user/system turns), response (assistant turns)
+    chat  conversation   -> prompt, reply (a log: nothing was fit to either)
     dpo   chosen/rejected-> prompt (the shared turns), chosen, rejected
     rlvr  prompt         -> prompt, verifier (what is checked), rollout (reference
                             generations — no response is stored for these rows)
@@ -42,6 +43,7 @@ INPUT_TURN_FIELDS = ("functions",)
 # non-match rather than one that could not be read.
 COLUMNS = {
     "sft": ("messages",),
+    "chat": ("conversation",),
     "dpo": ("prompt", "chosen", "rejected"),
     "rlvr": (
         "prompt",
@@ -60,6 +62,7 @@ COLUMNS = {
 # it leaves both uncertain.
 SIDE_COLUMNS = {
     "sft": {"prompt": ("messages",), "response": ("messages",)},
+    "chat": {"prompt": ("conversation",), "reply": ("conversation",)},
     "dpo": {
         # The shared turns are read off the completions, so prompt text can be
         # cut in any of the three.
@@ -79,6 +82,11 @@ SIDE_COLUMNS = {
 # `rejected` are both assistant turns, and that is the whole distinction.
 SIDES = {
     "sft": ("prompt", "response"),
+    # A chat log's assistant turns are `reply`, not `response`: nothing was fit
+    # to them. They are what the collected model said, which is the whole reason
+    # to search them — "I am ChatGPT" is a fact about WildChat, and only a claim
+    # about a mix that drew on it.
+    "chat": ("prompt", "reply"),
     "dpo": ("prompt", "chosen", "rejected"),
     "rlvr": ("prompt", "verifier", "rollout"),
 }
@@ -197,6 +205,9 @@ def fields(row: dict, stage: str) -> list[dict]:
     if stage == "sft":
         for i, role, text in _turns(row.get("messages")):
             add(_side_of(role, "response"), role, "messages", text, i)
+    elif stage == "chat":
+        for i, role, text in _turns(row.get("conversation")):
+            add(_side_of(role, "reply"), role, "conversation", text, i)
     elif stage == "dpo":
         chosen, rejected = row.get("chosen"), row.get("rejected")
         # A pair's last turn is its candidate answer by definition, so it is

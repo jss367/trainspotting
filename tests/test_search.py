@@ -14,43 +14,45 @@ from conftest import row_fixture
 from trainspotting import registry, search
 
 STAGES = [
-    (model_name, stage["stage"])
-    for model_name, model in registry.MODELS.items()
-    for stage in registry.post_training_stages(model)
+    (target_name, stage)
+    for target_name in registry.targets()
+    for stage in registry.post_training_stages(registry.resolve(target_name))
 ]
-STAGE_IDS = [f"{m}.{s}" for m, s in STAGES]
+STAGE_IDS = [f"{t}.{s['stage']}" for t, s in STAGES]
 
-# The side that carries text beyond the prompt, per stage. RL rows store no
+# The side that carries text beyond the prompt, per kind. RL rows store no
 # response at all, so the most this can promise there is the answer key.
-NON_PROMPT_SIDE = {"sft": "response", "dpo": "chosen", "rlvr": "verifier"}
+NON_PROMPT_SIDE = {"sft": "response", "dpo": "chosen", "rlvr": "verifier", "chat": "reply"}
 
 
 def compile_(pattern, case_sensitive=False):
     return re.compile(pattern, 0 if case_sensitive else re.IGNORECASE)
 
 
-@pytest.mark.parametrize(("model_name", "stage"), STAGES, ids=STAGE_IDS)
-def test_every_stage_yields_more_than_its_prompt(model_name, stage):
+@pytest.mark.parametrize(("target_name", "stage"), STAGES, ids=STAGE_IDS)
+def test_every_stage_yields_more_than_its_prompt(target_name, stage):
     """The canary for the whole layer: if a stage's fields are prompt-only, a
     search of it is the prompt-only search this exists to replace."""
-    row = row_fixture(model_name, stage)["row"]
-    sides = {f["side"] for f in search.fields(row, stage)}
+    row = row_fixture(target_name, stage["stage"])["row"]
+    kind = registry.stage_kind(stage)
+    sides = {f["side"] for f in search.fields(row, kind)}
 
     assert "prompt" in sides
-    assert NON_PROMPT_SIDE[stage] in sides, f"{model_name}/{stage}: only found {sides}"
-    assert sides <= set(search.SIDES[stage])
+    assert NON_PROMPT_SIDE[kind] in sides, f"{target_name}/{kind}: only found {sides}"
+    assert sides <= set(search.SIDES[kind])
 
 
-@pytest.mark.parametrize(("model_name", "stage"), STAGES, ids=STAGE_IDS)
-def test_a_response_string_is_found_in_a_real_row(model_name, stage):
+@pytest.mark.parametrize(("target_name", "stage"), STAGES, ids=STAGE_IDS)
+def test_a_response_string_is_found_in_a_real_row(target_name, stage):
     """Take a phrase out of a non-prompt field of a saved row and search for it:
     it comes back, on the side it was taken from."""
-    row = row_fixture(model_name, stage)["row"]
-    side = NON_PROMPT_SIDE[stage]
-    field = next(f for f in search.fields(row, stage) if f["side"] == side)
+    row = row_fixture(target_name, stage["stage"])["row"]
+    kind = registry.stage_kind(stage)
+    side = NON_PROMPT_SIDE[kind]
+    field = next(f for f in search.fields(row, kind) if f["side"] == side)
     phrase = field["text"][20:60]
 
-    hits = search.search_row(row, stage, compile_(re.escape(phrase)))
+    hits = search.search_row(row, kind, compile_(re.escape(phrase)))
 
     assert side in {h["side"] for h in hits}
 
@@ -303,10 +305,11 @@ def test_list_valued_cells_are_searched_as_text():
     assert search.search_row(row, "rlvr", compile_("beta"))
 
 
-def test_every_stage_declares_its_sides():
-    """Pinned to the stages the registry has, so a fourth arrives with its own
-    side names rather than falling into the RL branch by default."""
-    assert set(search.SIDES) == {s for _, s in STAGES}
+def test_every_kind_declares_its_sides():
+    """Pinned to the registry's kinds, so a fifth arrives with its own side
+    names rather than falling into the RL branch by default."""
+    assert set(search.SIDES) == set(registry.KINDS)
+    assert set(search.COLUMNS) == set(registry.KINDS)
 
 
 def test_a_pattern_that_matches_the_empty_string_is_counted_not_collected():
@@ -644,6 +647,9 @@ def test_the_column_on_a_field_is_the_one_its_side_declares(stage):
     column that map does not list for its side would make the two disagree."""
     rows = {
         "sft": {"messages": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "yo"}]},
+        "chat": {
+            "conversation": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "yo"}]
+        },
         "dpo": {
             "prompt": "a different prompt",
             "chosen": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "yes"}],
@@ -665,3 +671,19 @@ def test_the_column_on_a_field_is_the_one_its_side_declares(stage):
     assert seen, stage
     for side, column in seen:
         assert column in search.SIDE_COLUMNS[stage][side], (stage, side, column)
+
+
+def test_a_chat_log_has_replies_rather_than_responses():
+    """WildChat is a log of what ChatGPT said, not a mix anything was fit to —
+    so its assistant turns are `reply`, and "I am ChatGPT" there is a fact about
+    the log rather than a claim about what a model was trained toward."""
+    row = {
+        "conversation": [
+            {"role": "user", "content": "who are you?"},
+            {"role": "assistant", "content": "I am ChatGPT, made by OpenAI."},
+        ]
+    }
+
+    hits = search.search_row(row, "chat", compile_("i am chatgpt"))
+
+    assert [(h["side"], h["column"], h["turn"]) for h in hits] == [("reply", "conversation", 1)]

@@ -59,7 +59,13 @@ if missing:
     )
 
 
-(out / "registry.json").write_text(json.dumps(registry.MODELS, indent=2))
+# Models and standalone datasets in one map, each already resolved to the
+# {is_model, hf_model, stages} shape the page reads — so a dataset renders
+# through the same code as a model, and the cross-model compare has the flag it
+# needs to leave datasets out of an axis they don't belong on.
+(out / "registry.json").write_text(
+    json.dumps({name: registry.resolve(name) for name in registry.targets()}, indent=2)
+)
 # The site labels language bars with these; keeping the map here means the CLI
 # and the page can never disagree about what "gu" is called.
 (out / "language-names.json").write_text(json.dumps(languages.NAMES, indent=2))

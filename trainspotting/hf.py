@@ -41,8 +41,17 @@ def num_rows(dataset: str, config: str = "default", split: str = "train") -> int
 
 def column_frequencies(
     dataset: str, columns: list[str], config: str = "default", split: str = "train"
-) -> dict[str, dict[str, int]]:
-    """Exact value counts for string-label columns, precomputed by HF."""
+) -> tuple[dict[str, dict[str, int]], int, bool]:
+    """Value counts for string-label columns, precomputed by HF.
+
+    Returns (frequencies, counted, partial). On a big dataset the server stops
+    after a first slice and sets `partial`; the counts are then over `counted`
+    rows rather than the whole split, and `counted` is the only honest
+    denominator for them. WildChat-1M is the first registry entry where this
+    fires — 778,133 of its 837,989 rows — and dividing by the full row count
+    would quietly report every share about 7% low, under a heading that says
+    "exact".
+    """
     j = _get("statistics", dataset=dataset, config=config, split=split)
     out = {}
     for col in j.get("statistics", []):
@@ -52,7 +61,7 @@ def column_frequencies(
                 out[col["column_name"]] = dict(
                     sorted(freq.items(), key=lambda kv: -kv[1])
                 )
-    return out
+    return out, j.get("num_examples", 0), bool(j.get("partial"))
 
 
 # Top-up rounds when the draw comes back short of n distinct rows. Bounded so a
