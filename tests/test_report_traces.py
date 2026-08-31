@@ -69,6 +69,26 @@ def test_distinct_slugs_are_not_reported_as_a_collision(tmp_path, monkeypatch):
     assert not any(split for _, split, _ in out)
 
 
+def test_a_renamed_file_takes_the_slug_from_its_new_name(tmp_path, monkeypatch):
+    """Collision recovery moves the file; the payload still names the old slug.
+
+    The filename decides the group and `--slug` decides the filename, so a
+    stale embedded slug would send the suggested rerun straight back into the
+    contested group it was just moved out of.
+    """
+    write(tmp_path, "olmo-3-7b-think", "dpo", "identity-1")
+    path = tmp_path / "olmo-3-7b-think.dpo.grep-identity-1.json"
+    payload = json.loads(path.read_text())
+    payload["slug"] = "identity"          # what the run was originally given
+    path.write_text(json.dumps(payload))
+    _, split, trace = traces(tmp_path, monkeypatch)[0]
+    assert not split and trace["slug"] == "identity-1"
+    from trainspotting import influence
+    text = " ".join(influence.render(trace, "olmo-3-7b-think"))
+    assert "--slug identity-1" in text
+    assert "--slug identity " not in text
+
+
 def test_a_run_written_before_the_slug_was_recorded_takes_it_from_its_name(tmp_path, monkeypatch):
     write(tmp_path, "olmo-3-7b-think", "dpo", "chatgpt")
     path = tmp_path / "olmo-3-7b-think.dpo.grep-chatgpt.json"

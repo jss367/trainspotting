@@ -382,7 +382,9 @@ a filename from. Collision is judged per slug, so an uncontested one keeps its
 own. The free slug travels with the renames that make it work: `_grep_traces`
 groups by slug, so scanning the missing stage under a new one without moving the
 existing files just opens a third group. The report names the renames and leaves
-them to the reader rather than rewriting `results/` itself.
+them to the reader rather than rewriting `results/` itself; the filename is then
+the authority for a run's slug, since `--slug` is what decides the filename and a
+moved file still carries the contested one in its payload.
 
 What the ranking deliberately does not do is weight the stages against each
 other. Identity behaviour is mostly set after pretraining, so the same rate in

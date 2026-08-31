@@ -732,8 +732,12 @@ def _grep_traces(model_name, model):
     for path in sorted(RESULTS.glob(f"{model_name}.*.grep-*.json")):
         slug = path.name.split(".grep-", 1)[1][: -len(".json")]
         run = json.loads(path.read_text())
-        # Runs written before the slug was recorded still have it in their name.
-        run.setdefault("slug", slug)
+        # The filename wins over the recorded slug, which is only a note of what
+        # was passed. Grouping keys on the filename and `--slug` is what decides
+        # the filename, so a rerun needs the name to land back in this group —
+        # and after a collision rename the payload still carries the contested
+        # slug it was moved away from.
+        run["slug"] = slug
         key = (slug, run.get("pattern"), bool(run.get("regex")), bool(run.get("case_sensitive")))
         groups.setdefault(key, []).append(run)
     # Collision is a property of one slug, not of the directory: marking every
