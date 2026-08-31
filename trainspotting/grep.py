@@ -25,6 +25,7 @@ times counts once. That is the unit the training run sees.
 
 import hashlib
 import heapq
+from collections import Counter
 import os
 import re
 import sys
@@ -276,12 +277,17 @@ def byte_cost(con, urls: list[str], leaves: list[tuple[str, str | None]]) -> int
     rows = con.execute(
         f"SELECT path_in_schema, total_compressed_size FROM parquet_metadata({urls!r})"
     ).fetchall()
+    # A leaf listed twice is read twice, and costs twice — the source label
+    # column is, once by the scan and once by the denominators query. The break
+    # stays so that a chunk matched by two different leaf specs is not double
+    # counted; multiplicity comes from the count, not from the iteration.
+    wanted = Counter(leaves)
     total = 0
     for path, size in rows:
         parts = [p.strip() for p in path.split(",")]
-        for col, sub in leaves:
+        for (col, sub), times in wanted.items():
             if parts[0] == col and (sub is None or parts[-1] == sub):
-                total += size
+                total += size * times
                 break
     return total
 
@@ -499,10 +505,20 @@ def snippet(
         except re.error:
             m = None
         start, length = (m.start(), len(m.group(0))) if m else (0, 0)
-    lead = max(0, start - (SNIPPET_CHARS - (length or 0)) // 2)
-    out = text[lead:lead + SNIPPET_CHARS]
+    length = length or 0
+    # Context each side, and the width needed to hold the match itself. A match
+    # longer than SNIPPET_CHARS used to make the context negative, so the crop
+    # started *inside* the match and returned its middle 240 characters — which
+    # for a literal over 240 characters does not contain the literal, and past
+    # 8,000 walked off the end of the window and returned two ellipses. A pattern
+    # that long is a real thing to search for; the wrapper-template one here is
+    # already 32 characters and a boilerplate paragraph would be hundreds.
+    context = max(0, (SNIPPET_CHARS - length) // 2)
+    width = max(SNIPPET_CHARS, min(length + 2 * context, SNIPPET_SOURCE_CHARS))
+    lead = max(0, min(start - context, max(0, len(text) - 1)))
+    out = text[lead:lead + width]
     cut_before = lead > 0 or window_start > 1
-    return ("…" if cut_before else "") + out + ("…" if lead + SNIPPET_CHARS < len(text) else "")
+    return ("…" if cut_before else "") + out + ("…" if lead + width < len(text) else "")
 
 
 def _pick(kept: list, by_snippet: dict, limit: int, text: str | None, record: dict) -> None:

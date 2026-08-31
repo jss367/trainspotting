@@ -735,3 +735,64 @@ def test_dotall_stays_available_to_a_pattern_that_asks_for_it(con):
                       (grep._element_test("(?s)a.b", True, False), "t")):
         got = con.execute(f"SELECT {expr} FROM (SELECT ? AS {col})", [text]).fetchone()[0]
         assert got in (1, True), got
+
+
+# --- review round 5 ---------------------------------------------------------
+
+
+def test_a_match_longer_than_the_snippet_still_appears_whole():
+    """A long literal is a real thing to search for — a boilerplate paragraph is
+    hundreds of characters. The crop used to compute negative context, start
+    *inside* the match, and return its middle 240 characters, which for a literal
+    over 240 does not contain the literal."""
+    needle = "X" * 600
+    text = "a" * 2000 + needle + "b" * 2000
+    out = grep.snippet(text, needle, regex=False, case_sensitive=False)
+    assert needle in out
+
+
+def test_a_match_longer_than_the_sql_window_does_not_walk_off_the_end():
+    """Past 8,000 the old lead advanced beyond `text` and the snippet was two
+    ellipses and nothing else."""
+    text = "Y" * (grep.SNIPPET_SOURCE_CHARS + 2000)
+    out = grep.snippet(text, text, regex=False, case_sensitive=False)
+    assert out.strip("…")
+    assert len(out.strip("…")) >= grep.SNIPPET_CHARS
+
+
+def test_an_ordinary_match_is_cropped_exactly_as_before():
+    """The widening must not move any committed snippet: for a match shorter than
+    SNIPPET_CHARS the context and width are what they always were."""
+    text = "q" * 5000 + "ChatGPT" + "r" * 5000
+    out = grep.snippet(text, "ChatGPT", regex=False, case_sensitive=False)
+    assert len(out) == grep.SNIPPET_CHARS + 2      # both ellipses
+    assert "ChatGPT" in out
+
+
+def test_a_leaf_read_twice_costs_twice(con, tmp_path):
+    """The source label column is read once by the scan and once by the
+    denominators query. `byte_cost` broke on the first matching leaf, so listing
+    it twice was silently a no-op."""
+    path = tmp_path / "cost.parquet"
+    con.execute(
+        f"COPY (SELECT 'p' AS prompt, 'src' AS dataset_source) TO '{path}' (FORMAT parquet)"
+    )
+    urls = [str(path)]
+    once = grep.byte_cost(con, urls, [("dataset_source", None)])
+    twice = grep.byte_cost(con, urls, [("dataset_source", None), ("dataset_source", None)])
+    assert once > 0
+    assert twice == 2 * once
+
+
+def test_overlapping_leaf_specs_still_count_a_chunk_once(con, tmp_path):
+    """Multiplicity must come from the count, not from iterating: a chunk matched
+    by both `(col, None)` and `(col, sub)` is one read."""
+    path = tmp_path / "overlap.parquet"
+    con.execute(
+        f"COPY (SELECT [{{'role': 'user', 'content': 'hello'}}] AS messages)"
+        f" TO '{path}' (FORMAT parquet)"
+    )
+    urls = [str(path)]
+    both = grep.byte_cost(con, urls, [("messages", None), ("messages", "content")])
+    just_col = grep.byte_cost(con, urls, [("messages", None)])
+    assert both == just_col

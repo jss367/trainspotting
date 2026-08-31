@@ -596,11 +596,15 @@ def _grep_plan(con, args, stages):
         )
         if args.by and not source:
             sys.exit(f"{s['stage']}: no text column {args.by!r} in {s['hf_dataset']}")
-        # The per-source denominators are a second pass over the source label
-        # column, so it belongs in the quoted cost even though it is a rounding
-        # error next to the text.
+        # The source label column is read twice when a stage has any match: once
+        # by the scan, which projects it beside the snippets, and once by the
+        # separate `source_totals` query for the denominators. Charge for both.
+        # It is a rounding error either way — 0.22 MB against 1.39 GB for the
+        # Think DPO mix — but the plan is what a `--max-gb` decision is made on,
+        # and a number that is only nearly what the scan pays is the same defect
+        # as leaving the role chunks out was.
         if source_column:
-            leaves = [*leaves, (source_column, None)]
+            leaves = [*leaves, (source_column, None), (source_column, None)]
         plan.append({
             "stage": s,
             "listing": listing,

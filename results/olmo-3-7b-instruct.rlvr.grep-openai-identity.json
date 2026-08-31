@@ -13,7 +13,7 @@
   "revision": "5327da53e02eb4cc0fa6a2d8860f6c9c3df3fcda",
   "partial": false,
   "shards": 3,
-  "bytes_read": 431856895,
+  "bytes_read": 431858733,
   "unsearched_columns": [],
   "total_rows": 169964,
   "rows_by_source": {
