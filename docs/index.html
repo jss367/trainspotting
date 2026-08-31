@@ -821,14 +821,34 @@ function demotePrefix(ops){
 const opChars = (ops, t, side) => ops.reduce((n, o) => n + (o.t === t ? clen(o[side]) : 0), 0);
 const uniqueChars = ops => opChars(ops, "chosen", "a") + opChars(ops, "rejected", "b");
 
-// Assistant text on one side of the pair: `part` picks the answer or the
-// thinking span, both of which DPO scores.
-const sideText = (side, part) => (side.turns || [])
-  .filter(t => t.role === "assistant")
+// Where a multi-turn pair branches. Everything before that point is the
+// conversation both candidates answer in, not either candidate — counting it as
+// response wording would report the shared history as text the model is pushed
+// toward and away from at once. Mirrors `_shared_turns` and its cap in
+// trainspotting/search.py: the last turn is the candidate answer by definition,
+// however far the two lists agree.
+const sameTurn = (x, y) => x.role === y.role && x.text === y.text &&
+  (x.reasoning ? x.reasoning.text : null) === (y.reasoning ? y.reasoning.text : null);
+function sharedTurns(chosen, rejected){
+  const a = chosen.turns || [], b = rejected.turns || [];
+  let n = 0;
+  while (n < a.length && n < b.length && sameTurn(a[n], b[n])) n++;
+  return Math.min(n, Math.max(0, a.length - 1), Math.max(0, b.length - 1));
+}
+const candidateTurns = (side, shared) => (side.turns || []).slice(shared)
+  .filter(t => t.role === "assistant");
+
+// Assistant text on one side of the pair, from the branch point on: `part` picks
+// the answer or the thinking span, both of which DPO scores.
+const sideText = (side, part, shared = 0) => candidateTurns(side, shared)
   .map(t => part === "reasoning" ? (t.reasoning ? t.reasoning.text : "") : t.text)
   .filter(Boolean).join("\n\n");
-const sideCut = side => (side.turns || []).some(t =>
-  t.chars > clen(t.text) || (t.reasoning && t.reasoning.chars > clen(t.reasoning.text)));
+const cutTurn = t => t.chars > clen(t.text) ||
+  (t.reasoning && t.reasoning.chars > clen(t.reasoning.text));
+const sideCut = (side, shared = 0) => candidateTurns(side, shared).some(cutTurn);
+// A cut in the shared history hides whether the two candidates really do read
+// the same text, so it costs the same claims a cut candidate does.
+const historyCut = (side, shared) => (side.turns || []).slice(0, shared).some(cutTurn);
 
 function diffPanel(ops){
   const sides = [
@@ -894,12 +914,15 @@ function diffPanel(ops){
 // independent generations rather than an edit of one response, so the
 // almost-nothing-in-common case is the common one and gets its own sentence.
 // Why a matching answer opening cannot be called cancellation on this row.
-function demotionReason(rec, reason){
-  const many = side => (side.turns || []).filter(t => t.role === "assistant").length > 1;
+function demotionReason(rec, reason, shared = 0){
+  const many = side => candidateTurns(side, shared).length > 1;
   if (many(rec.chosen) || many(rec.rejected))
-    return `this pair has more than one assistant turn a side, and the panel does not model how the
-      scored sequence interleaves with the conversation between them, so it cannot say what precedes
-      the answer.`;
+    return `this pair keeps going for more than one turn a side after it branches, and the panel does not
+      model how the scored sequence interleaves with the conversation between them, so it cannot say what
+      precedes the answer.`;
+  if (historyCut(rec.chosen, shared) || historyCut(rec.rejected, shared))
+    return `the conversation the pair branches from is cut at 4,000 characters, so the panel cannot tell
+      that both candidates really do answer the same text.`;
   if (reason.a !== reason.b)
     return `DPO scores thinking and answer as one sequence, and the two thinking spans in front of these
       answers differ, so every token of the answer follows different text on each side and none of it
@@ -945,17 +968,20 @@ function sharedNote(ops, rec, dead, demoted){
 // <think> markers and strips the whitespace around them — and cutting every
 // field at 4,000 characters. Either step means the panel cannot compare what
 // DPO actually scored, so it stops claiming cancellation and reports overlap.
-function rawResponseStored(side){
-  const turns = (side.turns || []).filter(t => t.role === "assistant");
+function rawResponseStored(side, shared = 0){
+  const turns = candidateTurns(side, shared);
   return turns.length === 1 && !turns[0].reasoning && turns[0].chars === clen(turns[0].text);
 }
 
-function gradientSection(rec){
-  const reason = {a: sideText(rec.chosen, "reasoning"), b: sideText(rec.rejected, "reasoning")};
+function gradientSection(rec, shared = 0){
+  const reason = {a: sideText(rec.chosen, "reasoning", shared),
+                  b: sideText(rec.rejected, "reasoning", shared)};
   const hasThink = reason.a || reason.b;
-  const exact = rawResponseStored(rec.chosen) && rawResponseStored(rec.rejected);
-  let answers = diffPair(sideText(rec.chosen, "answer"), sideText(rec.rejected, "answer"));
-  const demoted = !exact && opChars(answers, "prefix", "a") > 0 ? demotionReason(rec, reason) : null;
+  const exact = rawResponseStored(rec.chosen, shared) && rawResponseStored(rec.rejected, shared) &&
+    !historyCut(rec.chosen, shared) && !historyCut(rec.rejected, shared);
+  let answers = diffPair(sideText(rec.chosen, "answer", shared), sideText(rec.rejected, "answer", shared));
+  const demoted = !exact && opChars(answers, "prefix", "a") > 0
+    ? demotionReason(rec, reason, shared) : null;
   if (!exact) answers = demotePrefix(answers);
   // A thinking span is itself a reason exactness is unknown, so a thinking diff
   // never claims an opening either.
@@ -964,9 +990,9 @@ function gradientSection(rec){
   // stored response — not "the diff found nothing unique", which a whitespace-
   // tolerant match can satisfy — and it needs that stored text to be the raw one.
   const deadPair = exact &&
-    sideText(rec.chosen, "answer") === sideText(rec.rejected, "answer") &&
+    sideText(rec.chosen, "answer", shared) === sideText(rec.rejected, "answer", shared) &&
     reason.a === reason.b;
-  const cut = sideCut(rec.chosen) || sideCut(rec.rejected);
+  const cut = sideCut(rec.chosen, shared) || sideCut(rec.rejected, shared);
 
   const flow = `<div class="flow">
     <div class="step"><div class="t">1 · score</div><div class="v">sum the log-probability of each response's tokens</div></div>
@@ -1034,9 +1060,15 @@ function renderDPO(rec, dataset){
     {key: "chosen", side: rec.chosen, cls: "pos", mark: "✓", verdict: "chosen — trained toward this", color: "var(--series-1)"},
     {key: "rejected", side: rec.rejected, cls: "neg", mark: "✗", verdict: "rejected — trained away from this", color: "var(--neg)"},
   ];
-  const maxLen = Math.max(...sides.map(s => assistantChars(s.side)), 1);
+  const shared = sharedTurns(rec.chosen, rec.rejected);
+  // Every pair shares its opening user turn, which the prompt section already
+  // shows. Only a shared *assistant* turn means there is conversation here that
+  // would otherwise go unseen — or, before this, be read as response wording.
+  const sharedHistory = rec.chosen.turns.slice(0, shared).some(t => t.role === "assistant");
+  const candidateChars = side => candidateTurns(side, shared).reduce((a, t) => a + turnChars(t), 0);
+  const maxLen = Math.max(...sides.map(s => candidateChars(s.side)), 1);
   const lens = sides.map(s => {
-    const n = assistantChars(s.side);
+    const n = candidateChars(s.side);
     return `<div class="lenrow">
       <div class="lbl">${s.mark} ${s.key}</div>
       <div><div class="lenbar" style="width:${n/maxLen*100}%;background:${s.color}"
@@ -1046,7 +1078,7 @@ function renderDPO(rec, dataset){
   }).join("");
 
   const panels = sides.map(s => {
-    const turns = (s.side.turns || []).filter(t => t.role === "assistant");
+    const turns = candidateTurns(s.side, shared);
     return `<div class="side ${s.cls}">
       <div class="sh">
         <div class="verdict"><i style="background:${s.color}"></i>${s.mark} ${esc(s.verdict)}</div>
@@ -1066,8 +1098,18 @@ function renderDPO(rec, dataset){
         mainly in length teaches length.</p>
     </section>
     ${promptSection(rec)}
+    ${sharedHistory ? `<section class="ctxsec">
+      <h3>the conversation both answers continue</h3>
+      <p class="note">The two completions of this pair are identical for their first ${shared}
+        turn${shared > 1 ? "s" : ""} and branch after them. Those turns are the conversation both
+        candidates answer in, so they are shown once here rather than inside each side — counting them as
+        response wording would make the same text something the model is pushed toward and away from at
+        once. This follows the split the search layer uses (<code>_shared_turns</code> in
+        <code>trainspotting/search.py</code>).</p>
+      ${rec.chosen.turns.slice(0, shared).map(t => turnBlock(t, "")).join("")}
+    </section>` : ""}
     <section class="ctxsec">
-      <h3>the pair</h3>
+      <h3>${sharedHistory ? "the branch" : "the pair"}</h3>
       <div class="pair">${panels}</div>
     </section>
     <section class="ctxsec">
@@ -1075,7 +1117,7 @@ function renderDPO(rec, dataset){
       <button class="ctxbtn" data-toggle="gradpanel"
         data-more="show how this pair updates the model ›"
         data-less="hide the update ⌄">show how this pair updates the model ›</button>
-      ${gradientSection(rec)}
+      ${gradientSection(rec, shared)}
     </section>`;
 }
 

@@ -212,14 +212,22 @@ about what followed, so neither can be compared with the sequence the model
 actually scored. Everywhere else the panel reports overlap and character counts
 and says which of those reasons applies.
 
-That covers most of the data. Of 900 sampled pairs, 337 have an answer that
-opens identically, but only 73 can be called a shared opening: 241 have thinking
-spans in front that differ, 12 have more than one assistant turn a side, and 11
-are cut at 4,000 characters. Four pairs, all in Dolci-Instruct-DPO, are
-byte-identical on both sides and therefore carry no gradient at all. Beyond the
-openings, the two responses have very little wording in common — a median of
-1–3% of the chosen response — so for most pairs the update acts on nearly every
-token of both.
+A multi-turn pair branches somewhere and shares every turn before that, its
+assistant turns included. Those are the conversation both candidates answer in,
+not either candidate, so the view shows them once under their own heading and
+diffs only the continuation — the same split `_shared_turns` makes in
+`trainspotting/search.py`. Twelve of the 900 sampled pairs carry shared
+assistant history, and it accounts for 65,414 characters that would otherwise be
+counted as response wording on both sides at once.
+
+That covers most of the data. Of 900 sampled pairs, 328 have a continuation that
+opens identically, but only 72 can be called a shared opening: 231 have thinking
+spans in front that differ, 13 branch from a conversation cut at 4,000
+characters, and 12 have a candidate cut at 4,000 characters. Four pairs, all in
+Dolci-Instruct-DPO, are byte-identical on both sides and therefore carry no
+gradient at all. Beyond the openings, the two responses have very little wording
+in common — a median of 1–3% of the chosen response — so for most pairs the
+update acts on nearly every token of both.
 
 Two smaller things the claim depends on. Character counts are code points, to
 match the `chars` values the exporter writes with Python's `len()`; counting

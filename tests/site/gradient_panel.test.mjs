@@ -28,7 +28,8 @@ globalThis.location = { hash: "" };
 globalThis.fetch = async () => ({ ok: false });
 eval(js + `
 ;globalThis.PANEL = {diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix,
-                     gradientSection, rawResponseStored, renderDPO};`);
+                     gradientSection, rawResponseStored, renderDPO, sharedTurns,
+                     candidateTurns};`);
 const P = globalThis.PANEL;
 
 let failures = 0;
@@ -139,6 +140,34 @@ ok(!claimsZero(panel(pair([WS_A], [WS_B]))), "but that pair is not called zero-g
 ok(!claimsZero(panel(pair(["identical text", {chars: 9000}], ["identical text", {chars: 9000}]))),
   "nor is an identical-looking pair that was cut");
 
+// ------------------------------------------------------ the branch point ---
+// A multi-turn pair shares its leading turns with itself; those are the
+// conversation both candidates answer in, not either candidate.
+const anyTurn = (role, text) => ({role, text, chars: text.length});
+const convo = [
+  anyTurn("user", "how do I bake bread?"),
+  anyTurn("assistant", "Mix flour, water, salt and yeast, then prove it twice."),
+  anyTurn("user", "and if I have no yeast?"),
+];
+const multi = {prompt_full: {text: "how do I bake bread?", chars: 20}, row: 2, meta: {},
+  chosen: {model: "big", turns: [...convo, anyTurn("assistant", "Use a sourdough starter instead " + LONG)]},
+  rejected: {model: "small", turns: [...convo, anyTurn("assistant", "Use a sourdough starter instead and hope")]}};
+eq(P.sharedTurns(multi.chosen, multi.rejected), 3, "the branch point is after the shared turns");
+eq(P.candidateTurns(multi.chosen, 3).length, 1, "one candidate turn follows the branch");
+eq(P.sideText(multi.chosen, "answer", 3), "Use a sourdough starter instead " + LONG,
+  "only the continuation counts as the chosen response");
+ok(!P.sideText(multi.chosen, "answer", 3).includes("Mix flour"),
+  "the shared assistant turn is not part of either response");
+ok(P.renderDPO(multi, "ds").includes("the conversation both answers continue"),
+  "and it is rendered once, as the conversation the pair branches from");
+// with the shared history excluded the pair is one untruncated turn a side, so
+// the opening it does share is claimable
+ok(/shared opening <em>/.test(P.gradientSection(multi, 3).replace(/\s+/g, " ")),
+  "a multi-turn pair can still show an opening in its continuation");
+eq(P.sharedTurns({turns: [{role: "assistant", text: "same", chars: 4}]},
+                 {turns: [{role: "assistant", text: "same", chars: 4}]}), 0,
+  "the last turn is the candidate answer even when the two lists agree entirely");
+
 // --------------------------------------------------- against the real rows ---
 const dataDir = path.join(ROOT, "docs", "data");
 const files = fs.readdirSync(dataDir).filter(f => f.includes(".dpo.context."));
@@ -162,30 +191,35 @@ for (const f of files){
     ok(!/NaN|Infinity|undefined/.test(markup) || rows < 0,
        `row ${rec.row} in ${f}: markup carries no bad numbers`);
 
-    const stored = P.rawResponseStored(rec.chosen) && P.rawResponseStored(rec.rejected);
+    const shared = P.sharedTurns(rec.chosen, rec.rejected);
+    const stored = P.rawResponseStored(rec.chosen, shared) && P.rawResponseStored(rec.rejected, shared);
     if (claimsOpening(flat)){
       openings++;
       ok(stored, `row ${rec.row}: an opening is claimed only with the raw response stored`);
     }
     if (claimsZero(flat)){
       zeros++;
-      ok(stored && !P.sideCut(rec.chosen) && !P.sideCut(rec.rejected) &&
-         P.sideText(rec.chosen, "answer") === P.sideText(rec.rejected, "answer") &&
-         P.sideText(rec.chosen, "reasoning") === P.sideText(rec.rejected, "reasoning"),
+      ok(stored && !P.sideCut(rec.chosen, shared) && !P.sideCut(rec.rejected, shared) &&
+         P.sideText(rec.chosen, "answer", shared) === P.sideText(rec.rejected, "answer", shared) &&
+         P.sideText(rec.chosen, "reasoning", shared) === P.sideText(rec.rejected, "reasoning", shared),
          `row ${rec.row}: zero gradient is claimed only on byte-exact untruncated equality`);
     }
     if (flat.includes("that is not a shared opening")){
       demotions++;
-      for (const [k, pat] of [["multi-turn", "more than one assistant turn a side"],
+      let matched = false;
+      for (const [k, pat] of [["multi-turn after the branch", "more than one turn a side after it branches"],
+                              ["shared history cut", "the pair branches from is cut at 4,000"],
                               ["thinking differs", "two thinking spans in front of these"],
                               ["think markers normalized", "match as stored, but the dataset drops"],
-                              ["truncated", "whether the responses stay identical past the stored text"]])
-        if (flat.includes(pat)){ reasons[k] = (reasons[k] || 0) + 1; break; }
+                              ["candidate cut", "whether the responses stay identical past the stored text"]])
+        if (flat.includes(pat)){ reasons[k] = (reasons[k] || 0) + 1; matched = true; break; }
+      ok(matched, `row ${rec.row}: a withheld opening names one of the known reasons`);
     }
     // each panel shows its own side's text
-    const ops = P.diffPair(P.sideText(rec.chosen, "answer"), P.sideText(rec.rejected, "answer"));
-    ok(sideOf(ops, "a") === P.sideText(rec.chosen, "answer") &&
-       sideOf(ops, "b") === P.sideText(rec.rejected, "answer"),
+    const ops = P.diffPair(P.sideText(rec.chosen, "answer", shared),
+                           P.sideText(rec.rejected, "answer", shared));
+    ok(sideOf(ops, "a") === P.sideText(rec.chosen, "answer", shared) &&
+       sideOf(ops, "b") === P.sideText(rec.rejected, "answer", shared),
        `row ${rec.row}: neither side's text is rewritten`);
   }
 }
