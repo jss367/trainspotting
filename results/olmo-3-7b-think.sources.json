@@ -1,18 +1,29 @@
 {
   "sft": {
     "dataset": "allenai/Dolci-Think-SFT-7B",
+    "generated": "2026-08-31T19:23:09+00:00",
+    "revision": "72ec0fe32428bada1ec686a9168a0681eecd2094",
     "total": 2268178,
+    "counted": 174480,
+    "partial": true,
     "columns": {
       "dataset_source": {
         "saumyamalik/OpenThoughts3-full-filtered-math-decontam-v2": 91426,
         "allenai/tulu_v3.9_wildchat_100k_english-r1-final-content-filtered": 46312,
         "allenai/wildchat-r1-p2-repetition-filter": 36742
       }
+    },
+    "links": {
+      "saumyamalik/OpenThoughts3-full-filtered-math-decontam-v2": "https://huggingface.co/datasets/saumyamalik/OpenThoughts3-full-filtered-math-decontam-v2"
     }
   },
   "dpo": {
     "dataset": "allenai/Dolci-Think-DPO-7B",
+    "generated": "2026-08-31T19:23:10+00:00",
+    "revision": "f27fa9b8e9f315f01fbc25b4d6d7763e0f6e25cb",
     "total": 150000,
+    "counted": 150000,
+    "partial": false,
     "columns": {
       "dataset_source": {
         "ultrafeedback_cleaned_olmo2_7b": 23202,
@@ -43,11 +54,16 @@
       "preference_type": {
         "delta_learning": 150000
       }
-    }
+    },
+    "links": {}
   },
   "rlvr": {
     "dataset": "allenai/Dolci-Think-RL-7B",
+    "generated": "2026-08-31T19:23:12+00:00",
+    "revision": "0fb6466d31ef3a9dd16985ef635e6429e05a6491",
     "total": 102014,
+    "counted": 102014,
+    "partial": false,
     "columns": {
       "dataset_source": {
         "hamishivi/math_rlvr_mixture_dpo": 30180,
@@ -55,6 +71,12 @@
         "hamishivi/code_rlvr_mixture_dpo": 21385,
         "hamishivi/rlvr_general_mix": 20636
       }
+    },
+    "links": {
+      "hamishivi/math_rlvr_mixture_dpo": "https://huggingface.co/datasets/hamishivi/math_rlvr_mixture_dpo",
+      "hamishivi/IF_multi_constraints_upto5_filtered_dpo_0625_filter": "https://huggingface.co/datasets/hamishivi/IF_multi_constraints_upto5_filtered_dpo_0625_filter",
+      "hamishivi/code_rlvr_mixture_dpo": "https://huggingface.co/datasets/hamishivi/code_rlvr_mixture_dpo",
+      "hamishivi/rlvr_general_mix": "https://huggingface.co/datasets/hamishivi/rlvr_general_mix"
     }
   }
 }

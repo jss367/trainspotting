@@ -1,16 +1,20 @@
 """Pull the full training context out of a sampled row.
 
 A prompt is half of a training example. What the model is actually trained
-toward differs by stage, so each stage yields a different record:
+toward differs by the kind of example, so each kind yields a different record:
 
     sft   the target conversation — the model is fit to the assistant turns
     dpo   a preferred and a dispreferred response, plus where each came from
     rlvr  no stored response at all — a verifier, what it checks, and how often
           rollouts from the reference model passed it
+    chat  a conversation log, where nothing was trained on anything — the other
+          side of the exchange is what was said, not a target
 
 Records are keyed by the same prompt text the classifier saw, so the site can
 join them onto committed label and ask results without re-running any model.
 """
+
+from trainspotting import rewards
 
 MAX_TEXT = 4000  # per field; the full row stays one click away on HuggingFace
 KEY_CHARS = 400  # prompt prefix that joins a context record to a labeled prompt
@@ -54,46 +58,13 @@ def _meta(row: dict, keys: list[str]) -> dict:
     return {k: row[k] for k in keys if row.get(k) not in (None, "", [], {})}
 
 
-# What the reward actually checks, by which mix the prompt came from. The raw
-# dataset_source travels with the record so the inference stays checkable.
-REWARD_KINDS = [
-    (
-        ("if_multi_constraints", "constraint"),
-        "constraint checker",
-        "A program checks the response against the constraints listed below. "
-        "Reward 1 when every constraint holds, 0 otherwise.",
-    ),
-    (
-        ("acecoder", "code_rlvr", "python"),
-        "unit tests",
-        "The response's code is executed against test cases. Reward is the fraction "
-        "of tests that pass.",
-    ),
-    (
-        ("math", "omega", "polaris", "orz", "dapo", "gsm"),
-        "exact answer match",
-        "The final answer is extracted from the response and compared to the ground "
-        "truth below. Reward 1 on a match, 0 otherwise.",
-    ),
-    (
-        ("general_mix", "general-mix", "wildchat", "chat"),
-        "LLM judge",
-        "A judge model scores the response. The rubric it uses is not published with "
-        "the dataset, so the prompt text is all this tool can show you.",
-    ),
-]
-
-
 def _reward(row: dict) -> dict:
-    tags = " ".join(
-        str(row.get(k) or "").lower()
-        for k in ("dataset_source", "data_source", "original_dataset", "ability", "constraint_type")
-    )
-    kind, explain = "unknown", "This mix's reward function isn't identifiable from the row's own fields."
-    for needles, k, e in REWARD_KINDS:
-        if any(n in tags for n in needles):
-            kind, explain = k, e
-            break
+    # What the reward checks comes from the mix→verifier table in rewards.py.
+    # The raw dataset_source travels with the record so the inference stays
+    # checkable; the site re-derives the explanation from the kind, so the
+    # baked text here only serves offline readers of the JSON.
+    kind = rewards.kind_for(row)
+    explain = rewards.KINDS[kind]["explain"]
     rm = row.get("reward_model") or {}
     gt = row.get("ground_truth")
     if isinstance(gt, list):
@@ -109,12 +80,18 @@ def _reward(row: dict) -> dict:
     }
 
 
-def build(row: dict, stage: str, prompt: str, row_index: int) -> dict:
-    """One stage-appropriate context record for an already-sampled row.
+def build(row: dict, kind: str, prompt: str, row_index: int) -> dict:
+    """One kind-appropriate context record for an already-sampled row.
 
-    `key` is the prompt prefix that joins this record to a labeled prompt in a
-    classify or ask run. Two rows sharing a 400-character opening join to the
-    first of them, which is close enough for a drill-down.
+    `kind` is `registry.stage_kind` of the stage the row came from — the shape
+    of the training example, which for a model stage is its pipeline position
+    and for a standalone dataset is what the registry declares it to be.
+
+    `row` is the join: a result record stores the same index, and the site looks
+    the context up by it. `key` is the older prompt-prefix join, kept for runs
+    committed before result records carried a row — two rows sharing a
+    400-character opening collapse to the first of them under it, which a
+    curated mix mostly gets away with and a chat log does not.
     """
     rec = {
         "key": prompt[:KEY_CHARS],
@@ -122,11 +99,19 @@ def build(row: dict, stage: str, prompt: str, row_index: int) -> dict:
         "row": row_index,
         "id": row.get("id") or row.get("prompt_id") or row.get("custom_id"),
     }
-    if stage == "sft":
+    if kind == "sft":
         rec["kind"] = "sft"
         rec["turns"] = _turns(row.get("messages"))
         rec["meta"] = _meta(row, ["source_dataset", "domain", "dataset_source"])
-    elif stage == "dpo":
+    elif kind == "chat":
+        # A log, not a training example: no turn here is a target, so the record
+        # is the exchange and the metadata the collector recorded around it.
+        rec["kind"] = "chat"
+        rec["turns"] = _turns(row.get("conversation"))
+        rec["meta"] = _meta(
+            row, ["model", "language", "country", "state", "turn", "toxic", "redacted"]
+        )
+    elif kind == "dpo":
         rec["kind"] = "dpo"
         rec["chosen"] = {"model": row.get("chosen_model"), "turns": _turns(row.get("chosen"))}
         rec["rejected"] = {"model": row.get("rejected_model"), "turns": _turns(row.get("rejected"))}

@@ -1,21 +1,78 @@
 {
   "sft": {
     "dataset": "allenai/Dolci-Think-SFT-32B",
+    "generated": "2026-08-31T19:23:13+00:00",
+    "revision": "7668c638cc84100951973b456069a1a462d6d915",
     "total": 2253684,
-    "columns": {}
+    "counted": 144470,
+    "partial": true,
+    "columns": {
+      "source": {
+        "Dolci Think OpenThoughts3 Math": 50199,
+        "Dolci Think Python Algorithms": 30554,
+        "Persona Precise IF": 14595,
+        "Dolci Think Precise IF": 8958,
+        "Nemotron Code": 7427,
+        "SYNTHETIC-2-SFT-Verified": 7106,
+        "Dolci Think OpenThoughts3 STEM": 6678,
+        "Aya": 6421,
+        "Dolci Think OpenThoughts3 Code": 5902,
+        "WildJailbreak": 2703,
+        "WildGuardMix": 2488,
+        "CoCoNot": 650,
+        "OpenAssistant": 448,
+        "TableGPT": 341
+      }
+    },
+    "links": {}
   },
   "dpo": {
     "dataset": "allenai/Dolci-Think-DPO-32B",
+    "generated": "2026-08-31T19:23:14+00:00",
+    "revision": "0898aac9657c0fa79b02c0e91627b370bed2a127",
     "total": 200000,
+    "counted": 200000,
+    "partial": false,
     "columns": {
+      "dataset": {
+        "ultrafeedback_cleaned_olmo2_7b": 32778,
+        "flan_v2_converted": 19660,
+        "OpenThoughts3-full-filtered-science-no-cot": 19023,
+        "filtered_wc_sample_500k": 18106,
+        "valpy_if_qwq_reasoning_verified_no_reasoning": 15836,
+        "Wildchat-1M-gpt-4.1-regenerated-english": 15803,
+        "correct-python-sft-187k": 13236,
+        "tulu-3-sft-personas-math": 10657,
+        "evol_codealpaca_heval_decontaminated": 7634,
+        "Wildchat-1m-gpt-4.1-regeneration-not-english": 6792,
+        "tulu_v3.9_wildjailbreak_decontaminated_50k": 5616,
+        "tulu_v3.9_synthetic_finalresp_wildguardmixtrain_decontaminated_50k": 5338,
+        "tulu_v3.9_aya_100k": 4078,
+        "tulu-3-sft-personas-math-grade": 3681,
+        "tulu_v3.9_open_math_2_gsm8k_50k": 3615,
+        "IF_sft_data_verified_permissive": 3529,
+        "tulu-3-sft-personas-instruction-following-o3": 3486,
+        "personahub_code_v2_34999": 2514,
+        "tulu_v3.9_sciriff_10k": 2253,
+        "oasst1_converted": 1762,
+        "tulu-3-sft-personas-algebra": 1417,
+        "tulu_v3.9_table_gpt_5k": 1170,
+        "DaringAnteater-prefs_olmo2_7b": 1089,
+        "tulu-3-sft-coconot-regenerated": 927
+      },
       "preference_type": {
         "delta_learning": 200000
       }
-    }
+    },
+    "links": {}
   },
   "rlvr": {
     "dataset": "allenai/Dolci-Think-RL-32B",
+    "generated": "2026-08-31T19:23:15+00:00",
+    "revision": "d581ecde5cb4bb2a550c2499a7408a3b8dca79f6",
     "total": 102026,
+    "counted": 102026,
+    "partial": false,
     "columns": {
       "dataset_source": {
         "hamishivi/math_rlvr_mixture_dpo": 30182,
@@ -23,6 +80,10 @@
         "saurabh5/code_rlvr_mixture_dpo": 21289,
         "allenai/rlvr_general_mix-keyword-filtered-topic-chars-char-filt-topic-filtered": 20708
       }
+    },
+    "links": {
+      "hamishivi/math_rlvr_mixture_dpo": "https://huggingface.co/datasets/hamishivi/math_rlvr_mixture_dpo",
+      "saurabh5/code_rlvr_mixture_dpo": "https://huggingface.co/datasets/saurabh5/code_rlvr_mixture_dpo"
     }
   }
 }

@@ -1,7 +1,11 @@
 {
   "sft": {
     "dataset": "allenai/Dolci-Instruct-SFT",
+    "generated": "2026-08-31T19:23:04+00:00",
+    "revision": "bd3c8f3a9b2cc5a9682e44b96ddd0bb2ff027221",
     "total": 2152112,
+    "counted": 2152112,
+    "partial": false,
     "columns": {
       "domain": {
         "Coding": 328614,
@@ -40,11 +44,16 @@
         "SciRiff": 4557,
         "Hardcoded Data": 69
       }
-    }
+    },
+    "links": {}
   },
   "dpo": {
     "dataset": "allenai/Dolci-Instruct-DPO",
+    "generated": "2026-08-31T19:23:04+00:00",
+    "revision": "aed155cf32e809b590490b6c3577ee4b0d0a5019",
     "total": 259922,
+    "counted": 259922,
+    "partial": false,
     "columns": {
       "preference_type": {
         "llm_judged": 124980,
@@ -52,11 +61,16 @@
         "multiturn_synthetic_context": 5000,
         "multiturn_self_talk": 5000
       }
-    }
+    },
+    "links": {}
   },
   "rlvr": {
     "dataset": "allenai/Dolci-Instruct-RL",
+    "generated": "2026-08-31T19:23:08+00:00",
+    "revision": "1a8d79b1012d77e4bb1fd7f699c5c7eb33ef931e",
     "total": 169964,
+    "counted": 169964,
+    "partial": false,
     "columns": {
       "data_source": {
         "math_dapo": 7000
@@ -71,6 +85,14 @@
         "hamishivi/MathSub-30K_filtered": 8998,
         "hamishivi/DAPO-Math-17k-Processed_filtered": 7000
       }
+    },
+    "links": {
+      "hamishivi/omega-combined-no-boxed_filtered": "https://huggingface.co/datasets/hamishivi/omega-combined-no-boxed_filtered",
+      "hamishivi/rlvr_acecoder_filtered_filtered": "https://huggingface.co/datasets/hamishivi/rlvr_acecoder_filtered_filtered",
+      "hamishivi/polaris_53k": "https://huggingface.co/datasets/hamishivi/polaris_53k",
+      "hamishivi/rlvr_orz_math_57k_collected_filtered": "https://huggingface.co/datasets/hamishivi/rlvr_orz_math_57k_collected_filtered",
+      "hamishivi/MathSub-30K_filtered": "https://huggingface.co/datasets/hamishivi/MathSub-30K_filtered",
+      "hamishivi/DAPO-Math-17k-Processed_filtered": "https://huggingface.co/datasets/hamishivi/DAPO-Math-17k-Processed_filtered"
     }
   }
 }
