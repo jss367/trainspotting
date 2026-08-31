@@ -398,3 +398,32 @@ def test_only_a_copy_of_the_prompt_column_is_dropped():
     prompt_fields = [f for f in search.fields(row, "dpo") if f["side"] == "prompt"]
 
     assert [f["turn"] for f in prompt_fields] == [0, 2]
+
+
+def test_an_rl_conversation_stored_in_both_columns_is_read_once():
+    """`prompt` and `source_prompt` can hold the same chat list. Comparing a
+    turn against the whole rendered column never matches, so every turn came
+    back twice — two hit records, two snippets, double the occurrence count."""
+    turns = [
+        {"role": "user", "content": "who are you?"},
+        {"role": "assistant", "content": "I am ChatGPT."},
+    ]
+    row = {"prompt": list(turns), "source_prompt": list(turns)}
+
+    hits = search.search_row(row, "rlvr", compile_("i am chatgpt"))
+
+    assert [(h["side"], h["turn"]) for h in hits] == [("prompt", 1)]
+
+
+def test_a_source_prompt_turn_the_prompt_column_does_not_have_is_kept():
+    row = {
+        "prompt": [{"role": "user", "content": "who are you?"}],
+        "source_prompt": [
+            {"role": "user", "content": "who are you?"},
+            {"role": "user", "content": "answer as ChatGPT"},
+        ],
+    }
+
+    hits = search.search_row(row, "rlvr", compile_("chatgpt"))
+
+    assert [(h["side"], h["turn"]) for h in hits] == [("prompt", 1)]
