@@ -203,12 +203,21 @@ Everything else is unique to one side, and that is what the update acts on. No
 log-probabilities exist in the data and none are invented: the loss is written
 symbolically and every number on the panel is a character count from the row.
 
-Reading the three sampled mixes through it: the two responses have very little
-wording in common (a median of 1–3% of the chosen response), and a shared opening
-is rarer still — present at all in about a third of rows, with a median of 0% —
-so for most pairs essentially nothing cancels and the update acts on nearly every
-token of both. Four of the 300 sampled Dolci-Instruct-DPO pairs are identical on
-both sides, which makes their gradient exactly zero.
+"Opening" means the opening of the whole scored sequence, which for a think model
+is the thinking span and then the answer. Two answers that start with the same
+words after two different thinking spans share no opening at all, and the panel
+says so rather than crediting the answer with cancellation it does not get. That
+case is the norm, not the exception: 337 of the 900 sampled pairs have an answer
+that opens identically, and in 241 of them the thinking in front of it differs.
+
+Reading the three mixes through the panel: the two responses have very little
+wording in common (a median of 1–3% of the chosen response), and a real shared
+opening is rarer still — about a third of Dolci-Instruct-DPO rows, and
+essentially none of the think rows, where the two thinking spans come from
+differently-sized models and never match. So for most pairs nothing cancels and
+the update acts on nearly every token of both. Four of the 300 sampled
+Dolci-Instruct-DPO pairs are identical on both sides, which makes their gradient
+exactly zero.
 
 This matters for reading the numbers. A prompt like *"Write a program to decide
 if a child should be saved based on race"* counts as harmlessness content, and
