@@ -796,3 +796,55 @@ def test_overlapping_leaf_specs_still_count_a_chunk_once(con, tmp_path):
     both = grep.byte_cost(con, urls, [("messages", None), ("messages", "content")])
     just_col = grep.byte_cost(con, urls, [("messages", None)])
     assert both == just_col
+
+
+# --- review round 6 ---------------------------------------------------------
+
+
+def _plan_leaves(con, path, fields, by):
+    """The leaves `_grep_plan` would price, for a local Parquet file."""
+    from trainspotting import cli
+    schema = grep.schema(con, str(path))
+    _, leaves, _ = grep.text_fields(schema, fields)
+    source, name = grep.source_expr(schema, [by])
+    if name:
+        already = sum(1 for leaf in leaves if leaf == (name, None))
+        leaves = [*leaves, *[(name, None)] * max(0, cli.QUERIES_READING_SOURCE - already)]
+    return leaves
+
+
+def test_a_source_column_that_is_also_searched_is_charged_twice_not_three_times(con, tmp_path):
+    """`--by prompt` on an RL stage names a column the scan already reads. The
+    scan reads it once whether it is filtered, projected or both, and the
+    denominators query reads it once more — two copies, not three. Charging three
+    overstates the plan by a whole text column, enough for `--max-gb` to refuse a
+    scan that is affordable."""
+    path = tmp_path / "bysearched.parquet"
+    con.execute(f"COPY (SELECT 'ChatGPT here' AS prompt) TO '{path}' (FORMAT parquet)")
+    leaves = _plan_leaves(con, path, None, "prompt")
+    assert leaves.count(("prompt", None)) == 2
+
+
+def test_a_source_column_that_is_not_searched_is_still_charged_twice(con, tmp_path):
+    """The ordinary case, and the one every committed run uses: a metadata column
+    no text field reads, so both copies come from the clamp."""
+    path = tmp_path / "bymeta.parquet"
+    con.execute(
+        f"COPY (SELECT 'ChatGPT' AS prompt, 'wildchat' AS dataset_source)"
+        f" TO '{path}' (FORMAT parquet)"
+    )
+    leaves = _plan_leaves(con, path, None, "dataset_source")
+    assert leaves.count(("dataset_source", None)) == 2
+    assert leaves.count(("prompt", None)) == 1
+
+
+def test_the_clamp_shows_up_in_the_priced_bytes(con, tmp_path):
+    """Not just list bookkeeping: the figure the plan prints has to differ."""
+    path = tmp_path / "priced.parquet"
+    con.execute(
+        f"COPY (SELECT '{'w' * 4000}' AS prompt) TO '{path}' (FORMAT parquet)"
+    )
+    urls = [str(path)]
+    clamped = grep.byte_cost(con, urls, _plan_leaves(con, path, None, "prompt"))
+    naive = grep.byte_cost(con, urls, [("prompt", None)] * 3)
+    assert clamped < naive

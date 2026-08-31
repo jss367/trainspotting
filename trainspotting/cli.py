@@ -22,6 +22,10 @@ def _positive_int(value: str) -> int:
     return n
 
 
+# The scan and the denominators query. Both read the source label column once.
+QUERIES_READING_SOURCE = 2
+
+
 def _nonnegative_int(value: str) -> int:
     """argparse type for `--examples`. Zero is meaningful — count without keeping
     any evidence — but a negative limit reaches the example heap with nothing in
@@ -596,15 +600,21 @@ def _grep_plan(con, args, stages):
         )
         if args.by and not source:
             sys.exit(f"{s['stage']}: no text column {args.by!r} in {s['hf_dataset']}")
-        # The source label column is read twice when a stage has any match: once
-        # by the scan, which projects it beside the snippets, and once by the
-        # separate `source_totals` query for the denominators. Charge for both.
-        # It is a rounding error either way — 0.22 MB against 1.39 GB for the
-        # Think DPO mix — but the plan is what a `--max-gb` decision is made on,
-        # and a number that is only nearly what the scan pays is the same defect
-        # as leaving the role chunks out was.
+        # Multiplicity in `leaves` counts *queries that read the column*, not
+        # roles it plays. Two queries touch the source label column: the scan,
+        # which projects it beside the snippets, and the separate `source_totals`
+        # query for the denominators. So its multiplicity is two — and clamping
+        # rather than appending matters when `--by` names a column that is also
+        # searched (`--by prompt` on an RL stage). The scan still reads that
+        # column once whether it is filtered, projected or both, so appending two
+        # on top of the one `text_fields` already added would charge three copies
+        # and overstate the plan by a whole text column, which for the Think RL
+        # mix is a large enough share to make `--max-gb` refuse an affordable
+        # scan. Under-counting was the round-one defect; over-counting is the
+        # same defect with the sign flipped.
         if source_column:
-            leaves = [*leaves, (source_column, None), (source_column, None)]
+            already = sum(1 for leaf in leaves if leaf == (source_column, None))
+            leaves = [*leaves, *[(source_column, None)] * max(0, QUERIES_READING_SOURCE - already)]
         plan.append({
             "stage": s,
             "listing": listing,
