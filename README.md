@@ -103,6 +103,9 @@ trainspotting pretrain olmo-3-7b-think --sample 300
 
 # Score those documents against the same question as the post-training stages
 trainspotting ask olmo-3-7b-think "..." --slug my-question --pretrain
+
+# Exact occurrence count + example documents for a phrase, via infini-gram
+trainspotting find "the mitochondria is the powerhouse of the cell"
 ```
 
 Every command also takes a **dataset** in place of a model, which explores that
@@ -274,10 +277,37 @@ documents show a placeholder where the model saw real text. The 32B mix
 ### What this does and doesn't answer
 
 Sampling answers "what is in here" — the unconditional question, with a rate and
-a confidence interval. [OLMoTrace](https://allenai.org/blog/olmotrace) /
-infini-gram answers "is this specific string in here", which needs a query you
-already have. They are complements; for "did this exact document train the
-model", use OLMoTrace.
+a confidence interval. The pointed question — "is this specific string in here,
+and how many times" — needs an index, not a sample, and `trainspotting find`
+answers it through Ai2's [infini-gram](https://infini-gram.io) API: exact
+occurrence counts and document retrieval over suffix-array indexes of open
+corpora, no download, no API key. The count doubles as a duplication count,
+which matters on its own — memorization scales with how many times a string
+appears in training.
+
+```bash
+trainspotting find "climate change is a hoax" --docs 5
+```
+
+prints how the phrase tokenized (matches align to token boundaries, so a
+surprising count is sometimes a surprising tokenization), the exact count, and
+example documents spread evenly across the index, each with its source, shard
+path, and URL where the corpus recorded one. `--json` writes the run to
+`results/find.<index>.<slug>.json` — the index is in the name because the same
+phrase has a different count in every corpus, and the derived slug carries a
+hash of the exact phrase because normalization folds distinct phrases together
+(`--slug` picks a readable name instead).
+
+The honest limitation: the public API has **no Dolma 3 / OLMo 3 index** yet.
+The default index (`v4_olmo-2-0325-32b-instruct_llama`) is the closest
+available — OLMo 2 32B's full training data, pretraining through post-training,
+~4.6T tokens. Dolma 3 re-filters largely the same upstream sources, so a hit
+there is real evidence the string is in the ecosystem's training text, but it
+is not a count over what OLMo 3 saw, and the command says so on every run.
+`--index` takes any infini-gram index name, so a Dolma 3 index works the day
+Ai2 publishes one. For "did this exact document train OLMo 3", use
+[OLMoTrace](https://allenai.org/blog/olmotrace) in the Ai2 Playground, which
+runs against the OLMo 3 corpora but is not a public API.
 
 The bias sampling leaves is positional. A range request only reaches the front of
 a shard, so each sampled document comes from its shard's first few hundred (one
@@ -332,12 +362,15 @@ API](https://huggingface.co/docs/dataset-viewer) — `/info` for schemas and row
 counts, `/statistics` for exact value frequencies of label columns, `/rows`
 for sampling. The pretraining layer reads the Hub tree API for the shard listing
 and then range-requests shard heads directly, because the datasets-server's index
-of those repos is both partial and topic-ordered. Either way no dataset is ever
-downloaded. `/rows` pages are drawn from independent random offsets, so two of
-them can overlap; rows are keyed on their absolute index and the repeats
-dropped, because a duplicated row is a duplicated vote in every rate computed
-over the sample. The classifier sends batches to Claude (`claude-opus-5` by
-default) and records one label per prompt or document in `results/`.
+of those repos is both partial and topic-ordered. `find` posts to the
+[infini-gram API](https://infini-gram.readthedocs.io/en/latest/api.html), which
+serves counts and documents from prebuilt suffix-array indexes. Either way no
+dataset is ever downloaded. `/rows` pages are drawn from independent random
+offsets, so two of them can overlap; rows are keyed on their absolute index and
+the repeats dropped, because a duplicated row is a duplicated vote in every rate
+computed over the sample. The classifier sends batches to Claude
+(`claude-opus-5` by default) and records one label per prompt or document in
+`results/`.
 
 Every result file carries the commit it was computed over (`revision`), when it
 was written (`generated`), and a hash of the system prompt that produced its
@@ -352,7 +385,7 @@ to show.
 ```bash
 pip install -e ".[dev]"
 pytest                  # offline, no API key
-pytest --live           # also fetch one row per dataset from the datasets-server
+pytest --live           # also hit the datasets-server (one row per dataset) and the infini-gram API
 ```
 
 The offline suite covers the pure code: the clustered Wilson interval and its
@@ -408,6 +441,10 @@ sampling run that quietly labels nothing.
 - The pretraining sampler only sees documents a range request can reach — the
   first few hundred in each shard, one drawn uniformly from those. Shards are
   drawn properly; position within a shard is not corrected for.
+- `find` searches the closest public infini-gram index, which is OLMo 2's
+  training data, not OLMo 3's — no Dolma 3 index exists on the public API yet.
+  Matches also align to token boundaries: querying `a` counts the token ` a`,
+  not the letter.
 - Registry facts (token counts) are from the Olmo 3 paper
   ([arXiv:2512.13961](https://arxiv.org/abs/2512.13961)) and the
   [release blog](https://allenai.org/blog/olmo3).
