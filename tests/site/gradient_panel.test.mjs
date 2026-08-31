@@ -49,26 +49,29 @@ const sideOf = (ops, f) => ops.map(o => o[f]).join("");
 eq(P.diffPair("", ""), [], "empty pair diffs to nothing");
 eq(P.diffPair(LONG, LONG), [{t: "prefix", a: LONG, b: LONG}], "identical text is all opening");
 eq(P.diffPair("", "x y"), [{t: "rejected", a: "", b: "x y"}], "an empty side is all rejected");
+// The opening stops before the delimiter: tokenizers usually give that space to
+// the word after it, which differs, so it goes into the divergence instead.
 eq(P.diffPair(LONG + " alpha", LONG + " beta"),
-  [{t: "prefix", a: LONG + " ", b: LONG + " "}, {t: "chosen", a: "alpha", b: ""},
-   {t: "rejected", a: "", b: "beta"}],
-  "a shared head then one differing word");
+  [{t: "prefix", a: LONG, b: LONG}, {t: "chosen", a: " ", b: ""}, {t: "rejected", a: "", b: " "},
+   {t: "chosen", a: "alpha", b: ""}, {t: "rejected", a: "", b: "beta"}],
+  "a shared head, then the delimiter and the differing word");
 eq(P.diffPair("prefix " + LONG, "other " + LONG).map(o => o.t), ["chosen", "rejected", "same"],
   "a shared tail is matched wording, not an opening");
 // "world" matches on both sides but is far too short to mean anything, so it
 // folds back into each side; the byte-exact "hello " opening is kept, since
 // however short, its two terms really do cancel.
-eq(P.diffPair("hello there world", "hello brave world").map(o => o.t),
-  ["prefix", "chosen", "rejected", "chosen", "rejected"],
-  "coincidental matches fold back into both sides, a short opening is kept");
+eq(P.diffPair("hello there world", "hello brave world").map(o => o.a).join(""), "hello there world",
+  "coincidental matches fold back into both sides without losing text");
+eq(P.opChars(P.diffPair("hello there world", "hello brave world"), "prefix", "a"), "hello".length,
+  "a short opening is kept, minus the delimiter");
 
 // The opening is a claim about token sequences, so whitespace counts.
 const CODE_A = "def f(x):\n    return x  # a long enough matched run of code here\n";
 const CODE_B = "def f(x):\n\t\treturn x  # a long enough matched run of code here\n";
 eq(P.diffPair(CODE_A, CODE_B).map(o => o.t), ["prefix", "chosen", "rejected", "same"],
   "indentation that differs ends the opening");
-eq(P.opChars(P.diffPair(CODE_A, CODE_B), "prefix", "a"), "def f(x):\n".length,
-  "the opening stops at the first differing byte");
+eq(P.opChars(P.diffPair(CODE_A, CODE_B), "prefix", "a"), "def f(x):".length,
+  "the opening stops before the whitespace ahead of the first differing byte");
 
 // Neither panel may show the other side's text: 165 of the committed rows have a
 // matched span whose two sides differ in whitespace alone.
@@ -78,6 +81,15 @@ for (const [a, b] of [[CODE_A, CODE_B], ["one two three four", "one two zzz four
   ok(sideOf(ops, "a") === a, `chosen side rejoins byte for byte: ${JSON.stringify(a.slice(0, 24))}`);
   ok(sideOf(ops, "b") === b, `rejected side rejoins byte for byte: ${JSON.stringify(b.slice(0, 24))}`);
 }
+
+// Python's len() counts code points; every length here must agree with it.
+eq(P.opChars([{t: "same", a: "a\u{1F600}b", b: "a\u{1F600}b"}], "same", "a"), 3,
+  "an emoji counts as one character, as the exported chars do");
+ok(P.gradientSection({prompt_full: {text: "p", chars: 1}, row: 1, meta: {},
+     chosen: {model: "b", turns: [{role: "assistant", text: "hi \u{1F600} there friend", chars: 17}]},
+     rejected: {model: "s", turns: [{role: "assistant", text: "hi \u{1F600} there pal", chars: 14}]}})
+   .replace(/\s+/g, " ").includes("shared opening <em>"),
+  "a pair with an emoji is not mistaken for a truncated one");
 
 eq(P.demotePrefix([{t: "prefix", a: "abc", b: "abc"}, {t: "same", a: "def", b: "def"},
                    {t: "chosen", a: "x", b: ""}]),
@@ -164,10 +176,10 @@ for (const f of files){
     }
     if (flat.includes("that is not a shared opening")){
       demotions++;
-      for (const [k, pat] of [["multi-turn", "more than one assistant turn"],
+      for (const [k, pat] of [["multi-turn", "more than one assistant turn a side"],
                               ["thinking differs", "two thinking spans in front of these"],
-                              ["think markers dropped", "drops the"],
-                              ["truncated", "cut at 4,000 characters, so whether"]])
+                              ["think markers normalized", "match as stored, but the dataset drops"],
+                              ["truncated", "whether the responses stay identical past the stored text"]])
         if (flat.includes(pat)){ reasons[k] = (reasons[k] || 0) + 1; break; }
     }
     // each panel shows its own side's text

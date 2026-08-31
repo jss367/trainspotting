@@ -515,6 +515,14 @@ function wireTips(root){
   root.querySelectorAll("[data-tip]").forEach(el => hover(el, el.dataset.tip));
 }
 
+// Every `chars` in a context record comes from Python's len(), which counts code
+// points. JavaScript's .length counts UTF-16 units, so an emoji counts twice —
+// enough to make a stored field look truncated when it is not, or truncated when
+// it is not. Any length compared against `chars`, or shown to a reader, uses this.
+const clen = s => /[\uD800-\uDBFF]/.test(s)
+  ? s.length - (s.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g) || []).length
+  : s.length;
+
 const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;");
 const escAttr = s => esc(s).replace(/"/g,"&quot;");
 // A dataset id does not say which version was counted: `main` moves. Result
@@ -583,8 +591,8 @@ const assistantChars = side =>
   (side.turns || []).filter(t => t.role === "assistant").reduce((a,t) => a + turnChars(t), 0);
 
 function textBlock(text, chars){
-  const cut = chars > text.length
-    ? `<p class="note">showing the first ${num(text.length)} of ${num(chars)} characters</p>` : "";
+  const cut = chars > clen(text)
+    ? `<p class="note">showing the first ${num(clen(text))} of ${num(chars)} characters</p>` : "";
   return `<div class="ctxtext">${esc(text)}</div>${cut}`;
 }
 
@@ -734,6 +742,11 @@ function commonPrefix(a, b){
   while (i < n && a[i] === b[i]) i++;
   if (i === a.length && i === b.length) return i;   // identical throughout
   while (i > 0 && !/\s/.test(a[i - 1])) i--;
+  // Most tokenizers attach the space to the word after it, so the delimiter
+  // between "To solve" and "To find" belongs to the differing token. Stop the
+  // opening before it: the whitespace goes into the divergence, where it can
+  // make no false promise.
+  while (i > 0 && /\s/.test(a[i - 1])) i--;
   return i;
 }
 
@@ -781,7 +794,7 @@ function coalesce(ops){
     else out.push({t, a, b});
   };
   for (const o of ops){
-    if (o.t === "same" && (o.a.trim().length < MIN_SAME || o.b.trim().length < MIN_SAME)){
+    if (o.t === "same" && (clen(o.a.trim()) < MIN_SAME || clen(o.b.trim()) < MIN_SAME)){
       push("chosen", o.a, ""); push("rejected", "", o.b);
     } else push(o.t, o.a, o.b);
   }
@@ -805,7 +818,7 @@ function demotePrefix(ops){
 }
 
 // Characters of one op kind on one side, counted in that side's own text.
-const opChars = (ops, t, side) => ops.reduce((n, o) => n + (o.t === t ? o[side].length : 0), 0);
+const opChars = (ops, t, side) => ops.reduce((n, o) => n + (o.t === t ? clen(o[side]) : 0), 0);
 const uniqueChars = ops => opChars(ops, "chosen", "a") + opChars(ops, "rejected", "b");
 
 // Assistant text on one side of the pair: `part` picks the answer or the
@@ -815,7 +828,7 @@ const sideText = (side, part) => (side.turns || [])
   .map(t => part === "reasoning" ? (t.reasoning ? t.reasoning.text : "") : t.text)
   .filter(Boolean).join("\n\n");
 const sideCut = side => (side.turns || []).some(t =>
-  t.chars > t.text.length || (t.reasoning && t.reasoning.chars > t.reasoning.text.length));
+  t.chars > clen(t.text) || (t.reasoning && t.reasoning.chars > clen(t.reasoning.text)));
 
 function diffPanel(ops){
   const sides = [
@@ -824,7 +837,7 @@ function diffPanel(ops){
   ];
   const KINDS = [
     {t: "prefix", k: "shared opening", c: "var(--muted)",
-     why: "conditioned on identical text on both sides, so its two terms cancel exactly"},
+     why: "byte-identical on both sides, so every token inside it reads the same context and its two terms cancel"},
     {t: "same", k: "matched later", c: "var(--baseline)",
      why: "the same words, but after a different prefix on each side — overlap, not cancellation"},
   ];
@@ -913,7 +926,8 @@ function sharedNote(ops, rec, dead, demoted){
   if (demoted) return `The two answers open with the same ${num(ovl)} characters of wording, but that is
     not a shared opening: ${demoted} It is counted here as overlap.`;
   const parts = [];
-  if (pre) parts.push(`a shared opening of ${num(pre)} characters, where the two sides cancel exactly`);
+  if (pre) parts.push(`a shared opening of ${num(pre)} characters, byte-identical on both sides, so the
+    tokens inside it read the same context and their two terms cancel`);
   if (ovl) parts.push(`${num(ovl)} characters of wording that reappears after they diverge, which the
     loss does not see as the same tokens at all — each copy follows a different prefix`);
   if (!parts.length) return `The two responses have no wording in common beyond incidental short matches.
@@ -933,7 +947,7 @@ function sharedNote(ops, rec, dead, demoted){
 // DPO actually scored, so it stops claiming cancellation and reports overlap.
 function rawResponseStored(side){
   const turns = (side.turns || []).filter(t => t.role === "assistant");
-  return turns.length === 1 && !turns[0].reasoning && turns[0].chars === turns[0].text.length;
+  return turns.length === 1 && !turns[0].reasoning && turns[0].chars === clen(turns[0].text);
 }
 
 function gradientSection(rec){
@@ -986,7 +1000,7 @@ update ∝ σ(−margin) · [ ∇ log π(chosen) − ∇ log π(rejected) ]</div
     <h4>how much of this pair the update acts on</h4>
     <p class="kv">Add a constant to both log-probabilities and the margin does not move: the loss sees only
       the gap between the two responses. Where the pair shares an opening, both sides are conditioned on
-      identical text, those terms cancel one for one, and that span carries no signal. Once the responses
+      identical text, so the tokens inside it cancel one for one and that span carries no signal. Once the responses
       diverge that stops holding — wording that reappears on both sides sits after a different prefix on
       each, so it is the same words but not the same training signal, and matching text on its own says
       nothing about how much of it cancels. Each response is scored as one sequence, thinking span first
@@ -1001,8 +1015,11 @@ update ∝ σ(−margin) · [ ∇ log π(chosen) − ∇ log π(rejected) ]</div
     <h4>what this view approximates</h4>
     <p class="note">The diff is over words and the model is scored over tokens, so the spans above are an
       approximation of the sequences it actually sees, and matches shorter than ${MIN_SAME} characters are
-      counted as coincidence rather than shared wording. Only the shared opening is a claim about
-      cancellation, and the panel makes it only where the stored row is the whole raw response: one
+      counted as coincidence rather than shared wording. The panel cannot see token boundaries, so a shared
+      opening is cut back to the last character before the whitespace that separates it from the divergence
+      — tokenizers usually give that space to the word after it — and the claim covers the tokens lying
+      inside the span, not whichever token straddles its end. It is the only claim about cancellation, and
+      the panel makes it only where the stored row is the whole raw response: one
       assistant turn a side, no thinking span (splitting one out drops the
       <code>&lt;think&gt;</code> markers and the whitespace around them), and nothing cut at 4,000
       characters. Everywhere else it reports overlap and character counts. No log-probabilities, gradients

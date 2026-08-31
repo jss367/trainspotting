@@ -213,13 +213,20 @@ actually scored. Everywhere else the panel reports overlap and character counts
 and says which of those reasons applies.
 
 That covers most of the data. Of 900 sampled pairs, 337 have an answer that
-opens identically, but only 68 can be called a shared opening: 241 have thinking
-spans in front that differ, 16 have thinking spans that match as stored but were
-normalized on the way in, and 12 have more than one assistant turn a side. Four
-pairs, all in Dolci-Instruct-DPO, are byte-identical on both sides and therefore
-carry no gradient at all. Beyond the openings, the two responses have very
-little wording in common — a median of 1–3% of the chosen response — so for most
-pairs the update acts on nearly every token of both.
+opens identically, but only 73 can be called a shared opening: 241 have thinking
+spans in front that differ, 12 have more than one assistant turn a side, and 11
+are cut at 4,000 characters. Four pairs, all in Dolci-Instruct-DPO, are
+byte-identical on both sides and therefore carry no gradient at all. Beyond the
+openings, the two responses have very little wording in common — a median of
+1–3% of the chosen response — so for most pairs the update acts on nearly every
+token of both.
+
+Two smaller things the claim depends on. Character counts are code points, to
+match the `chars` values the exporter writes with Python's `len()`; counting
+UTF-16 units instead would double every emoji, and 107 of the 900 rows contain
+one. And a shared opening stops before the whitespace separating it from the
+divergence, since tokenizers usually attach that space to the word after it,
+which differs.
 
 `tests/site/gradient_panel.test.mjs` holds the panel to this, checking every
 committed DPO row (run by `pytest` via `tests/test_gradient_panel.py`, skipped
