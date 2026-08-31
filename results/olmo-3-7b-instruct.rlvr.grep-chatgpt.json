@@ -1,0 +1,199 @@
+{
+  "dataset": "allenai/Dolci-Instruct-RL",
+  "stage": "rlvr",
+  "pattern": "ChatGPT",
+  "regex": false,
+  "case_sensitive": false,
+  "fields": [
+    "prompt",
+    "response",
+    "reference"
+  ],
+  "source_column": "dataset_source",
+  "revision": "5327da53e02eb4cc0fa6a2d8860f6c9c3df3fcda",
+  "partial": false,
+  "shards": 3,
+  "bytes_read": 431854404,
+  "unsearched_columns": [],
+  "total_rows": 169964,
+  "rows_by_source": {
+    "hamishivi/rlvr_orz_math_57k_collected_filtered": 14000,
+    "allenai/IF_multi_constraints_upto5_filtered_dpo_0625_filter-keyword-filtered-topic-char-topic-filtered": 37568,
+    "hamishivi/omega-combined-no-boxed_filtered": 20000,
+    "hamishivi/polaris_53k": 14000,
+    "hamishivi/DAPO-Math-17k-Processed_filtered": 7000,
+    "hamishivi/MathSub-30K_filtered": 8998,
+    "hamishivi/rlvr_acecoder_filtered_filtered": 20000,
+    "allenai/rlvr_general_mix-keyword-filtered-topic-chars-char-filt-topic-filtered": 48398
+  },
+  "matched": 189,
+  "by_source": {
+    "allenai/rlvr_general_mix-keyword-filtered-topic-chars-char-filt-topic-filtered": 84,
+    "allenai/IF_multi_constraints_upto5_filtered_dpo_0625_filter-keyword-filtered-topic-char-topic-filtered": 78,
+    "hamishivi/rlvr_acecoder_filtered_filtered": 27
+  },
+  "by_group": {
+    "prompt": 92,
+    "response": 71,
+    "reference": 47
+  },
+  "by_source_group": {
+    "hamishivi/rlvr_acecoder_filtered_filtered": {
+      "prompt": 0,
+      "response": 0,
+      "reference": 27
+    },
+    "allenai/IF_multi_constraints_upto5_filtered_dpo_0625_filter-keyword-filtered-topic-char-topic-filtered": {
+      "prompt": 11,
+      "response": 71,
+      "reference": 2
+    },
+    "allenai/rlvr_general_mix-keyword-filtered-topic-chars-char-filt-topic-filtered": {
+      "prompt": 81,
+      "response": 0,
+      "reference": 18
+    }
+  },
+  "examples": [
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026o, World!'\", \"assert strip_long_text('Python programming', 15) == 'Python program\\u2026'\", \"assert strip_long_text('ChatGPT', 10) == 'ChatGPT'\", \"assert strip_long_text('LeetCode', 8) == 'LeetCode'\", \"assert strip_long_text('', 10) == ''\", \u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026'World') == 'HelloWorld'\", \"assert joinStrings('Python', 'Rocks') == 'PythonRocks'\", \"assert joinStrings('OpenAI', 'ChatGPT') == 'OpenAIChatGPT'\", \"assert joinStrings('Data', 'Science') == 'DataScience'\", \"assert joinStrings('Leet', 'Code')\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026trings(['first', 'second', 'third'], ['first', 'last']) == ['second', 'third']\", \"assert filter_strings(['openai', 'chatgpt'], ['chat', 'open']) == []\", \"assert filter_strings(['hello', 'hello', 'world'], ['hello']) == ['world']\", \"assert f\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026, \"assert is_shorter_than('AI', 3) == True\", \"assert is_shorter_than('data', 4) == False\", \"assert is_shorter_than('chatgpt', 9) == True\", \"assert is_shorter_than('short', 6) == True\", \"assert is_shorter_than('list', 5) == True\", \"assert is\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026 'bc'\", \"assert extract_middle('abcde') == 'c'\", \"assert extract_middle('abcdef') == 'cd'\", \"assert extract_middle('ChatGPT') == 't'\", \"assert extract_middle('') == 'Invalid input'\", \"assert extract_middle(3.14) == 'Invalid input'\", \"assert\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026se', 'for', 'function')) == {'test': 4, 'case': 4, 'for': 3, 'function': 8}\", \"assert create_length_map(('openai', 'chatgpt')) == {'openai': 6, 'chatgpt': 7}\", \"assert create_length_map(('apple',)) == {'apple': 5}\", \"assert create_length_ma\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026s('123', '456') == '123456'\", \"assert concat_strings('abc', 'def') == 'abcdef'\", \"assert concat_strings('OpenAI', ' ChatGPT') == 'OpenAI ChatGPT'\", \"assert concat_strings('Rope', ' DataStructure') == 'Rope DataStructure'\", \"assert concat_st\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026verse_strings(['racecar', 'level', 'rotor']) == ['racecar', 'level', 'rotor']\", \"assert reverse_strings(['openai', 'chatgpt']) == ['ianepo', 'tpgtahc']\", \"assert reverse_strings(['reverse', 'this', 'please']) == ['esrever', 'siht', 'esaelp'\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026OGRAMMING'\", \"assert remove_character('DATA STRUCTURES', 'A') == 'DT STRUCTURES'\", \"assert remove_character('OPENAI CHATGPT', 'A') == 'OPENI CHTGPT'\", \"assert remove_character('EXAMPLE TEXT', 'E') == 'XAMPL TXT'\", \"assert remove_character('\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026ert replace_last('python programming', 'java', 'javascript') == 'python programming'\", \"assert replace_last('openai chatgpt', 'openai', 'closedai') == 'closedai chatgpt'\", \"assert replace_last('', 'empty', 'full') == ''\", \"assert replace_la\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026y', 'words', 'no', 'empty', 'strings') == 'Only words no empty strings'\", \"assert log_message('Hello', '', 'from', 'ChatGPT') == 'Hello from ChatGPT'\", \"assert log_message('') == ''\", \"assert log_message('One', 'two', 'three', 'four', 'five\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026ech\n    \"apple\", \"google\", \"microsoft\", \"amazon\", \"tesla\", \"facebook\",\n    \"meta\", \"netflix\", \"twitter\", \"openai\", \"chatgpt\",\n    \"samsung\", \"sony\", \"intel\", \"ibm\", \"dell\", \"hp\", \"hewlett packard\",\n    \"lenovo\", \"oracle\", \"nvidia\", \"adobe\",\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026 \"assert generate_black_color('AI', 8, (200, 200), 'vertical') == 'hsl(0,100%, 1%)'\", \"assert generate_black_color('ChatGPT', 20, (300, 300), 'horizontal') == 'hsl(0,100%, 1%)'\", \"assert generate_black_color('Code', 10, (400, 400), 'vertica\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026) == 'DataScience'\", \"assert connect_strings('Open', 'AI') == 'OpenAI'\", \"assert connect_strings('Chat', 'GPT') == 'ChatGPT'\", \"assert connect_strings('This is', ' a test.') == 'This is a test.'\", \"assert connect_strings('123', '456') == '1\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026= {'!': 1, '@': 1, '#': 1, '$': 1, '%': 1, '^': 1, '&': 1, '*': 1, '(': 1, ')': 1}\", \"assert char_frequency('OpenAI ChatGPT') == {'O': 1, 'p': 1, 'e': 1, 'n': 1, 'A': 1, 'I': 1, ' ': 1, 'C': 1, 'h': 1, 'a': 1, 't': 1, 'G': 1, 'T': 1, 'P': 1\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026m_concat('A1B2', 'C3D4') == 'A1B2C3D4'\", \"assert custom_concat('X', 'Y') == 'XY'\", \"assert custom_concat('OpenAI', 'ChatGPT') == 'OpenAIChatGPT'\", \"assert custom_concat(' ', 'space') == ' space'\", \"assert custom_concat('Hello ', 'World') ==\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026': '1', 'MYAPP_TWO': '2'}, ['MYAPP_ONE', 'MYAPP_THREE']) == {'MYAPP_ONE': '1'}\", \"assert manage_env({'MYAPP_NAME': 'ChatGPT', 'VERSION': '1.0'}, ['MYAPP_NAME', 'VERSION']) == {'MYAPP_NAME': 'ChatGPT'}\", \"assert manage_env({'MYAPP_X': 'x', '\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026tive') == False\", \"assert contains_substring('case sensitive', 'case') == True\", \"assert contains_substring('OpenAI ChatGPT', 'ChatGPT') == True\", \"assert contains_substring('OpenAI ChatGPT', 'chatgpt') == False\", \"assert contains_substring\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026 'nohtyP gnimmargorP'\", \"assert reverseWords('Leetcode is fun') == 'edocteeL si nuf'\", \"assert reverseWords('OpenAI ChatGPT') == 'IAnepO TPGtahC'\", \"assert reverseWords('Reverse this string') == 'esreveR siht gnirts'\", \"assert reverseWords(\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_acecoder_filtered_filtered",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "[\"assert modified_string('Goodbye', 'Everyone', 2) == 'GoEveodbye'\", \"assert modified_string('OpenAI', 'ChatGPT', 0) == 'ChaOpenAI'\", \"assert modified_string('Hello', 'World', 7) == 'Impractical index value'\", \"assert modified_string('Apple\u2026"
+    }
+  ]
+}

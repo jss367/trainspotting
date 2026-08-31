@@ -2,7 +2,7 @@
 
 Spot what's in a model's training data. Audits what a fully open model was
 trained on — currently the OLMo 3 pipelines (Ai2), whose pretraining (Dolma 3)
-and post-training (Dolci) data are public. The tool answers five kinds of
+and post-training (Dolci) data are public. The tool answers six kinds of
 question, in increasing order of depth:
 
 1. **Facts** — stage sizes for a model's whole training pipeline (pretrain →
@@ -24,6 +24,12 @@ question, in increasing order of depth:
    response the model is fit to (SFT), the pair it is pushed between (DPO), or
    the verifier that scores it (RL). A prompt on its own can read as the
    opposite of what it teaches, so every count clicks through to this.
+6. **Strings** — how many rows of a mix contain a given string, exactly, over
+   every row rather than a sample. The five layers above all estimate an
+   unconditional rate from 300 prompts; this one answers the question you have
+   once you know what you are looking for, which a sample that size cannot: a
+   pattern in 0.1% of a mix is expected to miss it entirely. See
+   [Searching for a string](#searching-for-a-string).
 
 The pretraining corpora get their own path, because the datasets-server cannot
 sample them: exact composition from the shard listing, readable random documents,
@@ -37,7 +43,8 @@ document has no surrounding training example, it *is* the example. See
 pip install -e .
 ```
 
-The `values` layer needs an Anthropic API key (`ANTHROPIC_API_KEY`).
+The `values` layer needs an Anthropic API key (`ANTHROPIC_API_KEY`). The `grep`
+layer needs DuckDB (`pip install -e '.[grep]'`); nothing else does.
 
 ## Usage
 
@@ -73,6 +80,9 @@ trainspotting pretrain olmo-3-7b-think --sample 300
 
 # Score those documents against the same question as the post-training stages
 trainspotting ask olmo-3-7b-think "..." --slug my-question --pretrain
+
+# Exact count of the rows of each mix containing a string (needs DuckDB)
+trainspotting grep olmo-3-7b-think "ChatGPT" --stage dpo
 ```
 
 `ask` judges post-training **prompts**; with `--pretrain` it also judges the
@@ -137,6 +147,91 @@ if a child should be saved based on race"* counts as harmlessness content, and
 only the pair behind it shows the model is trained toward refusing it.
 
 Registered models: `olmo-3-7b-instruct`, `olmo-3-7b-think`, `olmo-3-32b-think`.
+
+## Searching for a string
+
+`trainspotting grep <model> <pattern>` counts the rows of every post-training
+mix whose text contains a pattern. Exactly, over all of them — not a sample:
+
+```
+$ trainspotting grep olmo-3-7b-think "ChatGPT" --stage dpo
+# grep 'ChatGPT' — 1 stage(s), 1.39 GB to read
+
+- dpo      150,000 rows    1.39 GB  prompt/response  (allenai/Dolci-Think-DPO-7B)
+
+scanning dpo (1.39 GB) ...
+dpo: 773/150,000 rows = 0.515%
+  prompt     647
+  response   521
+      434 /    17,596 =  2.47% of it  filtered_wc_sample_500k
+      192 /     5,220 =  3.68% of it  Wildchat-1m-gpt-4.1-regeneration-not-english
+      105 /    13,955 =  0.75% of it  Wildchat-1M-gpt-4.1-regenerated-english
+       24 /    23,202 =  0.10% of it  ultrafeedback_cleaned_olmo2_7b
+        6 /     3,884 =  0.15% of it  tulu_v3.9_synthetic_finalresp_wildguardmixtrain_decontaminated_50k
+      … seven more sources, one to four rows each
+```
+
+That question cannot be asked of a sample. `classify` and `ask` draw 300 prompts
+per stage; at 0.5% they would expect one or two matches, and at the rates the
+rarer patterns come in they would expect none — with no interval around zero
+saying whether the thing is absent or just rare.
+
+The route is the datasets-server's own Parquet conversion of each repo, scanned
+in place by DuckDB over HTTP range requests. Parquet is columnar, so the scan
+pays for the columns it searches and skips the rest: the Think RL mix is 1.9 GB
+on disk but 1.1 GB of that is the reference rollouts, which `--field prompt`
+never reads. Nothing is downloaded to disk. The two cheaper routes do not work
+here — `/search` and `/filter` both need a server-side index that is not built
+for any Dolci repo (they answer "the dataset index is loading", or 502,
+indefinitely), and `/statistics` counts whole values of a column rather than
+looking inside one.
+
+**Rows, not occurrences.** A row saying "ChatGPT" four times counts once, which
+is the unit a training run sees. A row matching in two groups counts once in the
+total and once in each group, so the group numbers sum to more than the total.
+
+**Which part of the example matched.** Every column is mapped to the part of the
+training example it holds, and the counts are broken down by it — the same cut
+the `context` layer draws:
+
+| Field | What it is | Columns |
+|---|---|---|
+| `prompt` | what the model is asked | `prompt`, the user and system turns of `messages` / `chosen` / `rejected` / `source_prompt`, a tool schema in `functions` |
+| `response` | what it is fit to, or pushed between | the assistant turns of those message lists, `function_calls`, an RL mix's reference `outputs` |
+| `reference` | what scores it | `ground_truth`, `reward_model.ground_truth`, `solution`, `constraint` |
+
+This is the distinction that matters for identity text, and the one the values
+layer cannot make: `classify` and `ask` read prompts, so a phrase that only ever
+appears in the response or in an RL reference answer is invisible to them.
+
+`--field` narrows the search to a subset. It saves bytes only where a column
+belongs to one group: an SFT or DPO mix keeps both sides of the conversation in
+one `messages` column chunk, so `--field prompt` there costs exactly what
+searching all of it costs. The printed plan shows the real figure either way.
+
+**Cost is printed before anything is read**, from the shard footers, and a plan
+over 5 GB stops rather than starting a long transfer by surprise (`--max-gb`,
+`--yes`). The SFT mixes are the expensive ones: 36 GB of message text for
+`Dolci-Think-SFT-7B` against 1.4 for its DPO mix.
+
+**Exactness.** The count is over every row of the revision named in the result
+file, which is the Parquet branch's commit rather than a moving `main`. Two
+things qualify it: a repo the server converted only part of is flagged and its
+counts are a lower bound (none of the Dolci mixes are, today), and any top-level
+text column the layer does not recognise as prompt, response or reference is
+printed as unsearched rather than quietly skipped. Inside a message list only
+`content` and the two tool subfields are read — Dolci-Instruct-DPO's `chosen`
+struct also carries the WildChat request's `country`, `state`, `language` and
+hashed IP, which are request metadata rather than training text and are not
+searched. `tests/test_grep.py` fails if a saved schema stops mapping the way it
+did, so an upstream rename cannot silently shrink a count.
+
+Results land in `results/<model>.<stage>.grep-<slug>.json` with the per-source
+breakdown and `--examples` snippets centred on the match, because a count is
+only worth what reading its matches says. Of the 134 matches in
+`Dolci-Think-RL-7B`, 12 are unit-test string literals asserting on
+`'OpenAI ChatGPT'` — which the snippets say and the number does not. The site
+does not render `grep` runs yet.
 
 ## Pretraining data
 
@@ -304,9 +399,17 @@ classifier's reply parser, and prompt extraction against one saved row per
 registry stage (`tests/fixtures/rows/`, re-captured by
 `scripts/capture_row_fixtures.py`).
 
-`--live` re-runs the extraction checks against rows fetched right now. That is
-the canary for an upstream schema change, which otherwise shows up only as a
-sampling run that quietly labels nothing.
+`grep` is covered twice over. Its column-to-field mapping runs against one saved
+Parquet schema per stage (`tests/fixtures/schemas/`, re-captured by
+`scripts/capture_parquet_schemas.py`), and the query it builds runs for real
+against small Parquet files written in the test — locally, so the counts,
+the role split, the null handling and the byte accounting are checked without a
+network. Those tests need DuckDB, which `[dev]` installs.
+
+`--live` re-runs the extraction checks against rows fetched right now, and
+checks each saved Parquet schema against the current one. That is the canary for
+an upstream schema change, which otherwise shows up only as a sampling run that
+quietly labels nothing, or a string search that quietly counts less.
 
 ## Caveats
 
@@ -339,6 +442,16 @@ sampling run that quietly labels nothing.
 - The pretraining sampler only sees documents a range request can reach — the
   first few hundred in each shard, one drawn uniformly from those. Shards are
   drawn properly; position within a shard is not corrected for.
+- `grep` reads the datasets-server's Parquet conversion of a mix, not the repo
+  files themselves, and covers only the post-training mixes. The pretraining
+  corpora are not converted (the same partial index that stops the sampler), so
+  for an exact string count over Dolma 3 use
+  [OLMoTrace](https://allenai.org/blog/olmotrace) / infini-gram.
+- A `grep` count is over the text, which is not the same as over the tokens the
+  model saw. A phrase split across two message turns, spelled with styled
+  Unicode characters (`𝗖𝗵𝗮𝘁𝗚𝗣𝗧` is in the DPO mix), or transliterated will not
+  match. Every count is a lower bound on the concept and an exact figure only
+  for the pattern.
 - Registry facts (token counts) are from the Olmo 3 paper
   ([arXiv:2512.13961](https://arxiv.org/abs/2512.13961)) and the
   [release blog](https://allenai.org/blog/olmo3).

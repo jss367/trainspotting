@@ -1,0 +1,24 @@
+{
+  "model": "olmo-3-7b-think",
+  "stage": "sft",
+  "dataset": "allenai/Dolci-Think-SFT-7B",
+  "shards": 156,
+  "partial": false,
+  "schema": {
+    "messages": "STRUCT(\"content\" VARCHAR, \"role\" VARCHAR)[]",
+    "dataset_source": "VARCHAR",
+    "id": "VARCHAR"
+  },
+  "groups": {
+    "prompt": 1,
+    "response": 1
+  },
+  "leaves": [
+    [
+      "messages",
+      "content"
+    ]
+  ],
+  "unsearched": [],
+  "source_column": "dataset_source"
+}

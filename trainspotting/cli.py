@@ -5,7 +5,7 @@ import re
 import sys
 from pathlib import Path
 
-from . import classify, context, extract, hf, languages, pretrain, registry
+from . import classify, context, extract, grep, hf, languages, pretrain, registry
 
 RESULTS = Path(__file__).resolve().parent.parent / "results"
 # The committed half of the bulk artifacts: gitignored under results/, shipped
@@ -559,6 +559,146 @@ def cmd_context(args):
         print(f"{s['stage']}: {len(records)} records -> {path} ({path.stat().st_size / 1e6:.1f} MB)", file=sys.stderr)
 
 
+def _fmt_bytes(n: int) -> str:
+    return f"{n / 1e9:.2f} GB" if n >= 1e9 else f"{n / 1e6:.0f} MB"
+
+
+def _grep_plan(con, args, stages):
+    """What each selected stage would cost to scan, before anything is read.
+
+    Resolving the whole plan first is what lets the byte cap be one decision
+    rather than a surprise partway through: a Think SFT mix is tens of gigabytes
+    of message text where the DPO and RL mixes are one or two, and the difference
+    only shows up here.
+    """
+    plan = []
+    for s in stages:
+        listing = grep.parquet_listing(s["hf_dataset"])
+        schema = grep.schema(con, listing["urls"][0])
+        exprs, leaves, unsearched = grep.text_fields(schema, args.field)
+        if not exprs:
+            sys.exit(
+                f"{s['stage']}: no text columns for field(s) {', '.join(args.field or grep.GROUPS)}"
+                f" in {s['hf_dataset']}"
+            )
+        source, source_column = grep.source_expr(
+            schema, [args.by] if args.by else s["source_columns"]
+        )
+        if args.by and not source:
+            sys.exit(f"{s['stage']}: no text column {args.by!r} in {s['hf_dataset']}")
+        # The per-source denominators are a second pass over the source label
+        # column, so it belongs in the quoted cost even though it is a rounding
+        # error next to the text.
+        if source_column:
+            leaves = [*leaves, (source_column, None)]
+        plan.append({
+            "stage": s,
+            "listing": listing,
+            "schema": schema,
+            "exprs": exprs,
+            "source": source,
+            "source_column": source_column,
+            "unsearched": unsearched,
+            "rows": grep.total_rows(con, listing["urls"]),
+            "bytes": grep.byte_cost(con, listing["urls"], leaves),
+        })
+    return plan
+
+
+def cmd_grep(args):
+    """Count rows of every post-training mix whose text contains a pattern.
+
+    Exact, over all rows, which is the half of the question sampling cannot do.
+    `classify` and `ask` estimate an unconditional rate from 300 prompts; a
+    pattern that occurs in 0.1% of a mix is expected to miss such a sample
+    entirely, and no interval around zero tells you it is there.
+    """
+    con = grep.connect()
+    stages = _select_stages(args, registry.post_training_stages, "post-training")
+    plan = _grep_plan(con, args, stages)
+
+    total_bytes = sum(p["bytes"] for p in plan)
+    print(f"# grep {args.pattern!r} — {len(plan)} stage(s), {_fmt_bytes(total_bytes)} to read\n", file=sys.stderr)
+    for p in plan:
+        fields = "/".join(p["exprs"])
+        print(
+            f"- {p['stage']['stage']:6s} {p['rows']:>9,} rows  {_fmt_bytes(p['bytes']):>9}"
+            f"  {fields}  ({p['stage']['hf_dataset']})",
+            file=sys.stderr,
+        )
+    cap = int(args.max_gb * 1e9)
+    if total_bytes > cap and not args.yes:
+        sys.exit(
+            f"\nthat is {_fmt_bytes(total_bytes)}, over the {args.max_gb} GB cap, and nothing has been "
+            f"read yet. Narrow it (--stage, --field) or allow it (--max-gb {total_bytes / 1e9:.1f}, or --yes)."
+        )
+
+    slug = args.slug or grep.slugify(args.pattern)
+    for p in plan:
+        s = p["stage"]
+        if p["listing"]["partial"]:
+            print(
+                f"\n{s['stage']}: WARNING — the server converted only part of this repo, "
+                "so every count below is a lower bound",
+                file=sys.stderr,
+            )
+        if p["unsearched"]:
+            print(
+                f"\n{s['stage']}: not searched: {', '.join(p['unsearched'])}"
+                " — text columns this layer does not recognise as prompt, response or reference",
+                file=sys.stderr,
+            )
+        print(f"\nscanning {s['stage']} ({_fmt_bytes(p['bytes'])}) ...", file=sys.stderr)
+        result = grep.scan(
+            con,
+            grep.read_parquet_sql(p["listing"]["urls"]),
+            p["exprs"],
+            p["source"],
+            args.pattern,
+            regex=args.regex,
+            case_sensitive=args.case_sensitive,
+            examples=args.examples,
+        )
+        rows = p["rows"]
+        k = result["matched"]
+        print(f"{s['stage']}: {k:,}/{rows:,} rows = {k / rows * 100 if rows else 0:.3f}%", file=sys.stderr)
+        for group, n in result["by_group"].items():
+            print(f"  {group:10s} {n:,}", file=sys.stderr)
+        totals = (
+            grep.source_totals(con, grep.read_parquet_sql(p["listing"]["urls"]), p["source"])
+            if p["source"] and k else {}
+        )
+        shown = list(result["by_source"].items())[:12]
+        for src, n in shown:
+            of = totals.get(src)
+            rate = f" = {n / of * 100:5.2f}% of it" if of else ""
+            print(f"  {n:>7,} / {of or rows:>9,}{rate}  {src}", file=sys.stderr)
+        if len(result["by_source"]) > len(shown):
+            rest = len(result["by_source"]) - len(shown)
+            print(f"  … and {rest} more source(s), all of them in the result file", file=sys.stderr)
+        path = _write_json(
+            RESULTS / f"{args.model}.{s['stage']}.grep-{slug}.json",
+            {
+                "dataset": s["hf_dataset"],
+                "stage": s["stage"],
+                "pattern": args.pattern,
+                "regex": args.regex,
+                "case_sensitive": args.case_sensitive,
+                "fields": list(p["exprs"]),
+                "source_column": p["source_column"],
+                "revision": p["listing"]["revision"],
+                "partial": p["listing"]["partial"],
+                "shards": len(p["listing"]["urls"]),
+                "bytes_read": p["bytes"],
+                "unsearched_columns": p["unsearched"],
+                "total_rows": rows,
+                "rows_by_source": totals,
+                **result,
+            },
+        )
+        print(f"  -> {path}", file=sys.stderr)
+
+
 def cmd_report(args):
     model = registry.get_model(args.model)
     print(f"# Training-data audit: {args.model}\n")
@@ -667,6 +807,34 @@ def main():
     p.add_argument("--from-labels", action="store_true",
                    help="read prompts from the committed classify run instead of re-sampling HuggingFace")
     p.set_defaults(fn=cmd_languages)
+
+    p = sub.add_parser("grep", help="exact string search over every row of each post-training mix")
+    p.add_argument("model")
+    p.add_argument("pattern", help="literal substring, or a regex with --regex")
+    p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
+    p.add_argument(
+        "--field",
+        action="append",
+        choices=list(grep.GROUPS),
+        help="which part of the example to search; repeatable, default all three",
+    )
+    p.add_argument(
+        "--by",
+        help="column to break the counts down by; default is the registry's "
+        "source_columns, so the breakdown matches `sources`",
+    )
+    p.add_argument("--regex", action="store_true", help="treat the pattern as an RE2 regex")
+    p.add_argument("--case-sensitive", action="store_true")
+    p.add_argument("--examples", type=int, default=20, help="matching snippets to keep in the result file")
+    p.add_argument(
+        "--max-gb",
+        type=float,
+        default=5.0,
+        help="refuse to read more than this over the network; the plan is printed either way",
+    )
+    p.add_argument("--yes", action="store_true", help="scan whatever it costs")
+    p.add_argument("--slug", help="short name for the result files (default: derived from the pattern)")
+    p.set_defaults(fn=cmd_grep)
 
     p = sub.add_parser("classify")
     p.add_argument("model")

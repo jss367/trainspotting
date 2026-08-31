@@ -1,0 +1,31 @@
+{
+  "model": "olmo-3-7b-instruct",
+  "stage": "dpo",
+  "dataset": "allenai/Dolci-Instruct-DPO",
+  "shards": 4,
+  "partial": false,
+  "schema": {
+    "chosen": "STRUCT(annotations INTEGER, audio INTEGER, \"content\" VARCHAR, country VARCHAR, created INTEGER, function_call INTEGER, hashed_ip VARCHAR, \"header\" STRUCT(\"accept-language\" VARCHAR, \"user-agent\" VARCHAR), \"language\" VARCHAR, openai_id INTEGER, reasoning_content INTEGER, redacted BOOLEAN, refusal INTEGER, \"role\" VARCHAR, state VARCHAR, system_fingerprint INTEGER, temperature INTEGER, \"timestamp\" INTEGER, token_counter INTEGER, tool_calls INTEGER[], top_p INTEGER, toxic BOOLEAN, turn_identifier BIGINT, usage INTEGER)[]",
+    "rejected": "STRUCT(annotations INTEGER, audio INTEGER, \"content\" VARCHAR, country VARCHAR, created INTEGER, function_call INTEGER, hashed_ip VARCHAR, \"header\" STRUCT(\"accept-language\" VARCHAR, \"user-agent\" VARCHAR), \"language\" VARCHAR, openai_id INTEGER, reasoning_content INTEGER, redacted BOOLEAN, refusal INTEGER, \"role\" VARCHAR, state VARCHAR, system_fingerprint INTEGER, temperature INTEGER, \"timestamp\" INTEGER, token_counter INTEGER, tool_calls INTEGER[], top_p INTEGER, toxic BOOLEAN, turn_identifier BIGINT, usage INTEGER)[]",
+    "chosen_model": "VARCHAR",
+    "rejected_model": "VARCHAR",
+    "prompt_id": "VARCHAR",
+    "preference_type": "VARCHAR"
+  },
+  "groups": {
+    "prompt": 2,
+    "response": 2
+  },
+  "leaves": [
+    [
+      "chosen",
+      "content"
+    ],
+    [
+      "rejected",
+      "content"
+    ]
+  ],
+  "unsearched": [],
+  "source_column": "preference_type"
+}

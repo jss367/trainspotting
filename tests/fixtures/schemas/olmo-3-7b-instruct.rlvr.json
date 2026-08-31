@@ -1,0 +1,76 @@
+{
+  "model": "olmo-3-7b-instruct",
+  "stage": "rlvr",
+  "dataset": "allenai/Dolci-Instruct-RL",
+  "shards": 3,
+  "partial": false,
+  "schema": {
+    "ground_truth": "VARCHAR[]",
+    "dataset": "VARCHAR[]",
+    "solution": "VARCHAR",
+    "id": "VARCHAR",
+    "difficulty": "BIGINT",
+    "difficulty_explanation": "VARCHAR",
+    "dataset_source": "VARCHAR",
+    "input_ids_prompt": "BIGINT[]",
+    "prompt": "VARCHAR",
+    "setting_key": "VARCHAR",
+    "setting_name": "VARCHAR",
+    "data_source": "VARCHAR",
+    "source_prompt": "STRUCT(\"content\" VARCHAR, \"role\" VARCHAR)[]",
+    "ability": "VARCHAR",
+    "reward_model": "STRUCT(ground_truth VARCHAR, style VARCHAR)",
+    "extra_info": "STRUCT(\"index\" VARCHAR)",
+    "key": "VARCHAR",
+    "constraint_type": "VARCHAR",
+    "constraint": "VARCHAR",
+    "custom_id": "VARCHAR",
+    "original_dataset": "VARCHAR",
+    "outputs": "VARCHAR[]",
+    "total_rollouts": "BIGINT",
+    "total_correct_rollouts": "DOUBLE",
+    "passrate": "DOUBLE",
+    "topic": "VARCHAR",
+    "characters": "VARCHAR[]",
+    "conversation_hash": "VARCHAR",
+    "model": "VARCHAR",
+    "predicted_label": "VARCHAR"
+  },
+  "groups": {
+    "prompt": 2,
+    "response": 2,
+    "reference": 4
+  },
+  "leaves": [
+    [
+      "ground_truth",
+      null
+    ],
+    [
+      "solution",
+      null
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "source_prompt",
+      "content"
+    ],
+    [
+      "reward_model",
+      "ground_truth"
+    ],
+    [
+      "constraint",
+      null
+    ],
+    [
+      "outputs",
+      null
+    ]
+  ],
+  "unsearched": [],
+  "source_column": "dataset_source"
+}

@@ -1,0 +1,37 @@
+{
+  "model": "olmo-3-32b-think",
+  "stage": "dpo",
+  "dataset": "allenai/Dolci-Think-DPO-32B",
+  "shards": 9,
+  "partial": false,
+  "schema": {
+    "prompt": "VARCHAR",
+    "chosen": "STRUCT(\"content\" VARCHAR, \"role\" VARCHAR)[]",
+    "rejected": "STRUCT(\"content\" VARCHAR, \"role\" VARCHAR)[]",
+    "chosen_model": "VARCHAR",
+    "rejected_model": "VARCHAR",
+    "dataset": "VARCHAR",
+    "prompt_id": "VARCHAR",
+    "preference_type": "VARCHAR"
+  },
+  "groups": {
+    "prompt": 3,
+    "response": 2
+  },
+  "leaves": [
+    [
+      "prompt",
+      null
+    ],
+    [
+      "chosen",
+      "content"
+    ],
+    [
+      "rejected",
+      "content"
+    ]
+  ],
+  "unsearched": [],
+  "source_column": "dataset"
+}

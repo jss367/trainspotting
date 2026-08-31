@@ -1,0 +1,48 @@
+{
+  "model": "olmo-3-32b-think",
+  "stage": "rlvr",
+  "dataset": "allenai/Dolci-Think-RL-32B",
+  "shards": 4,
+  "partial": false,
+  "schema": {
+    "ground_truth": "VARCHAR[]",
+    "dataset": "VARCHAR[]",
+    "custom_id": "VARCHAR",
+    "original_dataset": "VARCHAR",
+    "outputs": "VARCHAR[]",
+    "dataset_source": "VARCHAR",
+    "prompt": "VARCHAR",
+    "id": "VARCHAR",
+    "key": "VARCHAR",
+    "constraint_type": "VARCHAR",
+    "constraint": "VARCHAR",
+    "conversation_hash": "VARCHAR",
+    "model": "VARCHAR",
+    "predicted_label": "VARCHAR"
+  },
+  "groups": {
+    "prompt": 1,
+    "response": 1,
+    "reference": 2
+  },
+  "leaves": [
+    [
+      "ground_truth",
+      null
+    ],
+    [
+      "outputs",
+      null
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "constraint",
+      null
+    ]
+  ],
+  "unsearched": [],
+  "source_column": "dataset_source"
+}

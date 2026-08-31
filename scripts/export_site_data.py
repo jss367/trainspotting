@@ -35,6 +35,12 @@ DERIVED = (".corpus.json",)
 # manifest, and the site stops asking for them.
 COMMITTED = BULK + DERIVED
 
+# Result files with no reader on the page. The site draws a card per labels/ask/
+# languages run and ignores anything it does not recognise, so exporting these
+# would only add unread weight to what the page ships. Drop the prefix here when
+# the page learns to render an exact string count.
+UNRENDERED = (".grep-",)
+
 out = ROOT / "docs" / "data"
 out.mkdir(parents=True, exist_ok=True)
 
@@ -70,6 +76,8 @@ if missing:
 
 copied, total = [], 0
 for f in sorted((ROOT / "results").glob("*.json")):
+    if any(marker in f.name for marker in UNRENDERED):
+        continue
     if f.name.endswith(BULK):
         (out / f.name).write_text(json.dumps(json.loads(f.read_text()), separators=(",", ":")))
     else:

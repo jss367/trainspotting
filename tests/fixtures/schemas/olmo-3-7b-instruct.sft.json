@@ -1,0 +1,33 @@
+{
+  "model": "olmo-3-7b-instruct",
+  "stage": "sft",
+  "dataset": "allenai/Dolci-Instruct-SFT",
+  "shards": 15,
+  "partial": false,
+  "schema": {
+    "id": "VARCHAR",
+    "messages": "STRUCT(\"content\" VARCHAR, function_calls VARCHAR, \"functions\" VARCHAR, \"role\" VARCHAR)[]",
+    "source_dataset": "VARCHAR",
+    "domain": "VARCHAR"
+  },
+  "groups": {
+    "prompt": 2,
+    "response": 2
+  },
+  "leaves": [
+    [
+      "messages",
+      "content"
+    ],
+    [
+      "messages",
+      "functions"
+    ],
+    [
+      "messages",
+      "function_calls"
+    ]
+  ],
+  "unsearched": [],
+  "source_column": "domain"
+}

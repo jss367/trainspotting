@@ -1,0 +1,197 @@
+{
+  "dataset": "allenai/Dolci-Think-DPO-7B",
+  "stage": "dpo",
+  "pattern": "You behavior is same like ChatGPT",
+  "regex": false,
+  "case_sensitive": false,
+  "fields": [
+    "prompt"
+  ],
+  "source_column": "dataset_source",
+  "revision": "bed3a9f759ed1ced7d59a9a1d8f76ca2ae331602",
+  "partial": false,
+  "shards": 7,
+  "bytes_read": 1388302296,
+  "unsearched_columns": [],
+  "total_rows": 150000,
+  "rows_by_source": {
+    "personahub_code_v2_34999": 1736,
+    "tulu-3-sft-personas-math-grade": 2520,
+    "tulu-3-sft-personas-algebra": 930,
+    "tulu-3-sft-personas-math": 7252,
+    "valpy_if_qwq_reasoning_verified_no_reasoning": 11101,
+    "tulu-3-sft-coconot-regenerated": 790,
+    "IF_sft_data_verified_permissive": 2482,
+    "oasst1_converted": 1259,
+    "tulu_v3.9_open_math_2_gsm8k_50k": 2561,
+    "Wildchat-1M-gpt-4.1-regenerated-english": 13955,
+    "Wildchat-1m-gpt-4.1-regeneration-not-english": 5220,
+    "flan_v2_converted": 14057,
+    "tulu_v3.9_synthetic_finalresp_wildguardmixtrain_decontaminated_50k": 3884,
+    "ultrafeedback_cleaned_olmo2_7b": 23202,
+    "tulu_v3.9_table_gpt_5k": 834,
+    "tulu_v3.9_wildjailbreak_decontaminated_50k": 3885,
+    "tulu-3-sft-personas-instruction-following-o3": 2447,
+    "filtered_wc_sample_500k": 17596,
+    "evol_codealpaca_heval_decontaminated": 5171,
+    "correct-python-sft-187k": 9005,
+    "tulu_v3.9_sciriff_10k": 1554,
+    "DaringAnteater-prefs_olmo2_7b": 729,
+    "OpenThoughts3-full-filtered-science-no-cot": 14967,
+    "tulu_v3.9_aya_100k": 2863
+  },
+  "matched": 278,
+  "by_source": {
+    "filtered_wc_sample_500k": 278
+  },
+  "by_group": {
+    "prompt": 278
+  },
+  "by_source_group": {
+    "filtered_wc_sample_500k": {
+      "prompt": 278
+    }
+  },
+  "examples": [
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nbigyan mo ako nang 10 halimbawa nang the reverse ultimatum"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nro zoming \ud83d\uddff\ud83d\uddff"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nla r\u00e9fraction de la lumi\u00e8re remarque"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nqui est le nouveau pr\u00e9sident de l'ensembl\u00e9 nationale en rdc"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nles marque  de t\u00e9l\u00e9phone redmi Xiaomi"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nwhat does 530 mean"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nc'est quoi int\u00e9gration \u00e9conomique"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nAlphab\u00e9 englais et prononciation"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nReply to this message in a cool way [\u00b0^\u00b0] \"Keep it up dude. Women likes men in style, if ya get what I mean, \u2026"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nque signifie Jeannette"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\npourquoi les clubs hors des 5 grands championnats europ\u00e9ens ne remportent pas la LDC"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nen quel ann\u00e9e Android est sortie ?"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\ntr\u00e9bucher veux dire Quoi"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nOr if you can come know problem traduit \u00e7a en fran\u00e7ais"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nque signifie rivalite"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nwhat kind of name is kenlie navacilla jugarap"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\ncomment jouer valheim en \u00e9cran partager"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nsite moi quelques langage de programmation"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\ntu viens chez nous"
+    },
+    {
+      "source": "filtered_wc_sample_500k",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\npourquoi 1+1=2"
+    }
+  ]
+}
