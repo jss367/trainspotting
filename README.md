@@ -373,9 +373,13 @@ rerun one stage under the same slug with a refined regex and the directory holds
 two searches with one name. The group key is the slug *and* the pattern and
 matching flags, so those render separately and `compare()` raises rather than
 ranking one search's counts against another's under whichever pattern sorted
-first. The suggested rerun commands then drop the `--slug`, because
-`results/<model>.<stage>.grep-<slug>.json` is a write path and pasting the
-colliding one back would overwrite the other search's saved stage.
+first. The suggested rerun commands then carry a free slug rather
+than the contested one, because `results/<model>.<stage>.grep-<slug>.json` is a
+write path and pasting the shared one back would overwrite the other search's
+saved stage. Dropping the flag is not enough: two searches differing only in
+`--regex` or `--case-sensitive` share a pattern, and that is what `grep` derives
+a filename from. Collision is judged per slug, so an uncontested one keeps its
+own.
 
 What the ranking deliberately does not do is weight the stages against each
 other. Identity behaviour is mostly set after pretraining, so the same rate in

@@ -101,14 +101,47 @@ def test_the_qualifier_is_absent_when_every_conversion_is_complete(tmp_path, mon
     assert "converted subset alone" not in capsys.readouterr().out
 
 
-def test_split_traces_are_marked_so_the_slug_is_not_pasted_back(tmp_path, monkeypatch):
+def test_split_traces_get_free_slugs_rather_than_the_colliding_one(tmp_path, monkeypatch):
     write(tmp_path, "olmo-3-7b-think", "dpo", "identity", pattern="I am ChatGPT")
     write(tmp_path, "olmo-3-7b-think", "rlvr", "identity", pattern="I am GPT-4")
     out = traces(tmp_path, monkeypatch)
     assert all(t["slug_collides"] for _, _, t in out)
+    assert {t["slug_suggest"] for _, _, t in out} == {"identity-1", "identity-2"}
     from trainspotting import influence
     for _, _, t in out:
-        assert "--slug identity" not in " ".join(influence.render(t, "olmo-3-7b-think"))
+        text = " ".join(influence.render(t, "olmo-3-7b-think"))
+        assert f"--slug {t['slug_suggest']}" in text
+
+
+def test_a_flag_only_collision_still_gets_distinct_slugs(tmp_path, monkeypatch):
+    # Same pattern, so dropping `--slug` would derive the same filename twice.
+    write(tmp_path, "olmo-3-7b-think", "dpo", "chatgpt")
+    write(tmp_path, "olmo-3-7b-think", "rlvr", "chatgpt", case_sensitive=True)
+    out = traces(tmp_path, monkeypatch)
+    suggested = {t["slug_suggest"] for _, _, t in out}
+    assert len(suggested) == 2 and "chatgpt" not in suggested
+
+
+def test_a_suggested_slug_skips_one_already_on_disk(tmp_path, monkeypatch):
+    write(tmp_path, "olmo-3-7b-think", "dpo", "identity", pattern="a")
+    write(tmp_path, "olmo-3-7b-think", "rlvr", "identity", pattern="b")
+    write(tmp_path, "olmo-3-7b-think", "sft", "identity-1", pattern="c")
+    out = traces(tmp_path, monkeypatch)
+    suggested = {t["slug_suggest"] for _, _, t in out if t["slug_collides"]}
+    assert suggested == {"identity-2", "identity-3"}
+
+
+def test_an_unrelated_slug_keeps_its_own(tmp_path, monkeypatch):
+    # One contested slug must not strip `--slug` from every other trace.
+    write(tmp_path, "olmo-3-7b-think", "dpo", "identity", pattern="a")
+    write(tmp_path, "olmo-3-7b-think", "rlvr", "identity", pattern="b")
+    write(tmp_path, "olmo-3-7b-think", "sft", "chatgpt", pattern="ChatGPT")
+    from trainspotting import influence
+    for slug, _, t in traces(tmp_path, monkeypatch):
+        if slug != "chatgpt":
+            continue
+        assert not t["slug_collides"]
+        assert "--slug chatgpt" in " ".join(influence.render(t, "olmo-3-7b-think"))
 
 
 def test_an_uncontested_slug_is_not_marked(tmp_path, monkeypatch):

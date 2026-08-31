@@ -543,7 +543,7 @@ def _source_rate(src: dict, side: str) -> str:
     return _span(src["produced_rate"], src["produced_rate_hi"])
 
 
-def _stage_lines(r: dict) -> list[str]:
+def _stage_lines(r: dict, hoisted: bool = False) -> list[str]:
     if r["status"] == INCONCLUSIVE:
         why = "; ".join(r["coverage_gaps"])
         return [f"- **{r['stage']}** — nothing matched in the {r['rows']:,} rows read, and that "
@@ -581,7 +581,7 @@ def _stage_lines(r: dict) -> list[str]:
             # were read. A produce column left unopened can hold matches in
             # other sources, which moves the denominator and the ordering.
             gap = _understated(r, "rows" if side == "all" else "produced")
-            if gap and gap != UNRECORDED:
+            if gap and not (gap == UNRECORDED and hoisted):
                 where = "produce columns" if side == "produced" else "columns"
                 out.append(f"    over the {where} this run read, and {gap} — a column "
                            "it did not open could hold matches in other sources.")
@@ -621,9 +621,10 @@ def _gap_lines(t: dict, cmd: str) -> list[str]:
         # rather than a flag repeated into a command that would silently
         # search only the last of them.
         again = f", then the same for {', '.join(stages[1:])}" if len(stages) > 1 else ""
-        note = (" The `--slug` is dropped from that command on purpose: it names more than one "
-                "search here, and re-running under it would overwrite the other one's results."
-                if t.get("slug_collides") else "")
+        note = (f" The slug in that command is not this trace's: `{t['slug']}` names more than "
+                "one search here, and re-running under it would overwrite the other one's "
+                "results, so the suggestion carries a free one."
+                if t.get("slug_collides") and t.get("slug_suggest") else "")
         out.append(f"- **{', '.join(stages)}** — not searched. That is not a zero: no row of "
                    f"{'these stages' if len(stages) > 1 else 'this stage'} has been "
                    f"read for this pattern (`{cmd} --stage {stages[0]}`{again}).{note}")
@@ -702,7 +703,7 @@ def _verdict(t: dict) -> list[str]:
                     f"the stage) hold it in a response or a reference answer, out of the "
                     f"stage's {span} produce-side matches.")
         gap = _understated(best, "produced")
-        if gap and gap != UNRECORDED:
+        if gap and not (gap == UNRECORDED and t["coverage_unrecorded"]):
             line.append(f"That attribution is over the produce columns the run read, and {gap}, "
                         "so a column it did not open could move it.")
         return _tail(t, best, other, key, measure, line)
@@ -726,7 +727,7 @@ def _verdict(t: dict) -> list[str]:
     else:
         line.append("none of them on the produce side: the string is in text the model was "
                     "trained to read rather than in text it was trained to write.")
-    if rows_gap and rows_gap != UNRECORDED:
+    if rows_gap and not (rows_gap == UNRECORDED and t["coverage_unrecorded"]):
         # The all-hits attribution is over whatever columns were opened, the
         # same way the produce-side one is.
         line.append(f"That attribution is over the columns the run read, and {rows_gap}, so a "
@@ -746,7 +747,9 @@ def _tail(t, best, other, key, measure, line):
     # a guarantee — and printing one here contradicts the floor caveat that
     # follows two clauses later.
     ceiling = _ceiling(other, t["basis"]) if other else 0
-    bounded = other and not _understated(other, t["basis"])
+    # Any ranked stage below the leader can be the one whose unread columns
+    # overturn the order, not only the one being quoted against.
+    bounded = other and not any(_understated(r, t["basis"]) for r in t["ranked"][1:])
     if bounded and ceiling and best[key] and best[key] / ceiling > 1:
         ratio = best[key] / ceiling
         exact = best[key] == _ceiling(best, t["basis"]) and other[key] == ceiling
@@ -816,14 +819,16 @@ def render(t: dict, model: str, note: bool = False) -> list[str]:
     # A slug naming two searches must not be pasted back: `grep` writes
     # `results/<model>.<stage>.grep-<slug>.json`, so re-running under it would
     # overwrite the other search's saved stage — a scan that can cost hours.
-    # Dropping the flag lets the slug be derived from the pattern instead.
-    reuse_slug = t.get("slug") and not t.get("slug_collides")
+    # Dropping the flag is not enough either, because two searches differing
+    # only in `--regex` or `--case-sensitive` share a pattern and `grep` derives
+    # the filename from that. The caller supplies a free slug instead.
+    use = t.get("slug_suggest") if t.get("slug_collides") else t.get("slug")
     flags = "".join([
         " --regex" if t["regex"] else "",
         " --case-sensitive" if t["case_sensitive"] else "",
-        # Without the slug a re-run derives its own from the pattern and lands
+        # Without a slug a re-run derives its own from the pattern and lands
         # in a different group, which is how a trace ends up split in two.
-        f" --slug {shlex.quote(t['slug'])}" if reuse_slug else "",
+        f" --slug {shlex.quote(use)}" if use else "",
     ])
     # Quoted as the shell will read it. A pattern is arbitrary text and these
     # are regexes: `$`, a backtick or a quote inside naive double quotes either
@@ -834,7 +839,7 @@ def render(t: dict, model: str, note: bool = False) -> list[str]:
         out += [BASIS_NOTE, ""]
     for r in t["stages"]:
         if r["status"] in (HITS, ZERO, INCONCLUSIVE):
-            out += _stage_lines(r)
+            out += _stage_lines(r, t["coverage_unrecorded"])
     out += _gap_lines(t, cmd)
     if t["coverage_unrecorded"]:
         out.append("- *None of these runs records which sides its mix holds, so none can show it "

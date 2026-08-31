@@ -736,14 +736,30 @@ def _grep_traces(model_name, model):
         run.setdefault("slug", slug)
         key = (slug, run.get("pattern"), bool(run.get("regex")), bool(run.get("case_sensitive")))
         groups.setdefault(key, []).append(run)
-    split = len({slug for slug, *_ in groups}) != len(groups)
+    # Collision is a property of one slug, not of the directory: marking every
+    # trace because some other slug is contested would strip a valid `--slug`
+    # from commands that need it to land in their own group.
+    per_slug = {}
+    for slug, *_ in groups:
+        per_slug[slug] = per_slug.get(slug, 0) + 1
+    taken = {slug for slug, *_ in groups}
+
     out = []
     for key, runs in sorted(groups.items(), key=lambda kv: (kv[0][0], str(kv[0][1]))):
+        slug = key[0]
         trace = influence.compare(runs, model["stages"])
-        # A colliding slug is a write path shared by two searches, so the
-        # rendered rerun commands must not carry it.
-        trace["slug_collides"] = split
-        out.append((key[0], split, trace))
+        trace["slug_collides"] = per_slug[slug] > 1
+        if trace["slug_collides"]:
+            # Dropping `--slug` is not enough: two searches differing only in
+            # `--regex` or `--case-sensitive` share a pattern, so `grep` would
+            # derive the same filename for both. Hand out a free one instead,
+            # skipping any slug already on disk.
+            n = 1
+            while f"{slug}-{n}" in taken:
+                n += 1
+            trace["slug_suggest"] = f"{slug}-{n}"
+            taken.add(trace["slug_suggest"])
+        out.append((slug, trace["slug_collides"], trace))
     return out
 
 

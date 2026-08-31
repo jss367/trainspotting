@@ -1229,12 +1229,15 @@ def test_a_bounded_competitor_still_gets_a_multiplier():
 # --- a colliding slug is a shared write path ------------------------------
 
 
-def test_a_colliding_slug_is_kept_out_of_the_rerun_command():
+def test_a_colliding_slug_is_replaced_not_merely_dropped():
+    # Dropping it would leave `grep` to derive one from the pattern, which two
+    # searches differing only in `--regex` share.
     runs = [run("rlvr", hits=5, rows=100, groups={"prompt": 5}, slug="identity")]
     t = influence.compare(runs, THINK)
-    t["slug_collides"] = True
+    t["slug_collides"], t["slug_suggest"] = True, "identity-1"
     text = " ".join(influence.render(t, "olmo-3-7b-think"))
-    assert "--slug identity" not in text
+    assert "--slug identity-1" in text
+    assert "--slug identity " not in text
     assert "re-running under it would overwrite the other one's results" in text
 
 
@@ -1243,3 +1246,50 @@ def test_a_unique_slug_is_still_carried():
     text = " ".join(influence.render(influence.compare(runs, THINK), "olmo-3-7b-think"))
     assert "--slug identity" in text
     assert "overwrite the other one's results" not in text
+
+
+def test_any_understated_competitor_suppresses_the_multiple():
+    # Three stages: the leader is exact, the runner-up by ceiling is exact, and
+    # a third has unread columns whose matches could overturn the order. The
+    # guarantee has to range over every competitor, not the one being quoted.
+    runs = [
+        run("sft", hits=500, rows=1_000, groups={"prompt": 0, "response": 500}),
+        run("dpo", hits=20, rows=1_000, groups={"prompt": 0, "response": 20}),
+        run("rlvr", hits=10, rows=1_000, groups={"prompt": 0, "response": 10},
+            fields=["prompt", "response"],
+            available_fields=["prompt", "response", "reference"]),
+    ]
+    t = influence.compare(runs, THINK)
+    assert t["best"]["stage"] == "sft" and t["runner_up"]["stage"] == "dpo"
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "Highest produce-side rate" not in text
+    assert "rlvr's rate is a floor rather than a figure" in text
+
+
+def test_all_bounded_competitors_keep_the_multiple():
+    runs = [
+        run("sft", hits=500, rows=1_000, groups={"prompt": 0, "response": 500}),
+        run("dpo", hits=20, rows=1_000, groups={"prompt": 0, "response": 20}),
+        run("rlvr", hits=10, rows=1_000, groups={"prompt": 0, "response": 10}),
+    ]
+    assert "25.0× dpo's" in " ".join(
+        influence.render(influence.compare(runs, THINK), "olmo-3-7b-think"))
+
+
+def test_a_legacy_winner_keeps_its_caveat_in_a_mixed_vintage_trace():
+    # The global note only prints when every run is limited that way. Here one
+    # records its coverage, so the winner's own caveat must stay inline.
+    runs = [
+        run("rlvr", hits=100, rows=100_000, groups={"prompt": 0, "response": 100},
+            available_fields=[], sources={"src": 100}, totals={"src": 1_000},
+            by_source_group={"src": {"prompt": 0, "response": 100}}),
+        run("dpo", hits=10, rows=100_000, groups={"prompt": 0, "response": 10},
+            fields=["prompt", "response", "reference"],
+            available_fields=["prompt", "response", "reference"]),
+    ]
+    t = influence.compare(runs, THINK)
+    assert not t["coverage_unrecorded"] and t["best"]["stage"] == "rlvr"
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "None of these runs records" not in text
+    assert influence.UNRECORDED in text
+    assert "so a column it did not open could move it" in text
