@@ -96,17 +96,20 @@ def sample_rows_with_index(
     seen: dict[int, dict] = {}
     offsets = draw((n + chunk - 1) // chunk)
     for _ in range(MAX_SAMPLE_ROUNDS):
-        before = len(seen)
         for off in offsets:
+            # Every row this page would return is already held, so the request
+            # would spend a round trip to learn nothing. Skipping it is not the
+            # same as stopping: a later offset in the same round can still be
+            # fresh, and a round that happens to redraw covered ground says
+            # nothing about whether the split has more rows to give.
+            if all(i in seen for i in range(off, min(off + chunk, total))):
+                continue
             j = _get(
                 "rows", dataset=dataset, config=config, split=split, offset=off, length=chunk
             )
             for i, r in enumerate(j["rows"]):
                 seen.setdefault(off + i, r["row"])
-        # A round that adds nothing new means the split is smaller than the
-        # request, not that we were unlucky: stop and return a short sample
-        # rather than spending five more rounds of requests to prove it.
-        if len(seen) >= min(n, total) or len(seen) == before:
+        if len(seen) >= min(n, total):
             break
         shortfall = n - len(seen)
         offsets = draw((shortfall + chunk - 1) // chunk)
