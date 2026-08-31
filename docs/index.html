@@ -1923,13 +1923,41 @@ function searchFields(rec){
 const MAX_HITS_PER_FILE = 40;   // rendered, not found; the count above them is the truth
 const SNIPPET_PAD = 110;
 
+// Where `needle` first matches `text`, case-insensitively, as an index into
+// `text` itself. Folding the whole string and searching that gives an offset
+// into the folded copy, which is not the same number: lowercasing changes
+// UTF-16 length for some characters — "İ".toLowerCase() is two code units, an
+// "i" and a combining dot — so one Turkish capital before the match shifted
+// every later offset by one and the highlight marked the character after the
+// match instead. These prompts are full of Turkish.
+//
+// So fold one candidate window at a time and keep the original index. The scan
+// has already established that the needle is in there, so this walks at most
+// until it finds it.
+function matchIndex(text, needle){
+  if (!needle) return -1;
+  for (let i = 0; i + needle.length <= text.length; i++){
+    // Compare a slice of the original, folded, against the folded needle.
+    // Folding changes length in both directions — "İ" folds to two code units,
+    // so a two-unit needle can match a one-unit slice, and a longer slice can
+    // fold down to a shorter needle — so widths either side of the natural one
+    // are tried too.
+    for (let w = Math.max(1, needle.length - 2); w <= needle.length + 2 && i + w <= text.length; w++){
+      if (text.slice(i, i + w).toLowerCase() === needle) return {at: i, len: w};
+    }
+  }
+  return -1;
+}
+
 // One `…text <mark>match</mark> text…` line per matching field.
 function snippet(text, needle){
-  const at = text.toLowerCase().indexOf(needle);
-  const from = Math.max(0, at - SNIPPET_PAD), to = Math.min(text.length, at + needle.length + SNIPPET_PAD);
+  const found = matchIndex(text, needle);
+  if (found === -1) return esc(text.slice(0, SNIPPET_PAD * 2)) + (text.length > SNIPPET_PAD * 2 ? "…" : "");
+  const {at, len} = found;
+  const from = Math.max(0, at - SNIPPET_PAD), to = Math.min(text.length, at + len + SNIPPET_PAD);
   return (from ? "…" : "") + esc(text.slice(from, at))
-    + `<mark>${esc(text.slice(at, at + needle.length))}</mark>`
-    + esc(text.slice(at + needle.length, to)) + (to < text.length ? "…" : "");
+    + `<mark>${esc(text.slice(at, at + len))}</mark>`
+    + esc(text.slice(at + len, to)) + (to < text.length ? "…" : "");
 }
 
 // Records whose text contains `needle`, with the fields that matched.
