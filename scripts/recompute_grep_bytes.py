@@ -15,7 +15,11 @@ listings = {}
 changed = []
 for path in sorted(glob.glob("results/*.grep-*.json")):
     run = json.loads(open(path).read())
-    ds, rev = run["dataset"], run["revision"]
+    # The Parquet-branch revision, not `revision`. Since the merge with main,
+    # `revision` is the *dataset* commit that `_stamp` records, and substituting
+    # it into a Parquet-branch URL 404s — which is how this was caught, loudly,
+    # rather than by silently pricing the wrong tree.
+    ds, rev = run["dataset"], run["parquet_revision"]
     if ds not in listings:
         listings[ds] = grep.parquet_listing(ds)
     live = listings[ds]

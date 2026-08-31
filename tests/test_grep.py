@@ -964,3 +964,13 @@ def test_an_explicit_slug_cannot_escape_the_results_directory(slug, expected):
     from trainspotting import cli
     assert cli._filename_part(slug) == expected
     assert "/" not in cli._filename_part(slug)
+
+
+def test_the_recompute_script_pins_the_parquet_revision():
+    """Since the merge with main, `revision` in a run file is the *dataset*
+    commit `_stamp` records, and the Parquet-branch commit is `parquet_revision`.
+    Substituting the wrong one into a shard URL 404s, which is how this was
+    caught — but a silent version of the same slip would price the wrong tree."""
+    source = pathlib.Path("scripts/recompute_grep_bytes.py").read_text()
+    assert 'run["parquet_revision"]' in source
+    assert 'run["revision"]' not in source
