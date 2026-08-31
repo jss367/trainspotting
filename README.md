@@ -193,11 +193,12 @@ from, so a tool name is findable and a hit in a call reads differently from a
 hit in the prose. `functions` is searched as prompt text whatever turn it hangs
 off — it is the menu of tools the model was offered, not anything it said.
 
-A default result file is named after the pattern, with a hash of it appended
-unless the pattern is already exactly its own slug: punctuation in a regex is
-syntax, so `a.b` and `a+b` are different searches that both reduce to `a-b`, and
-one silently overwriting the other is not a naming problem but a lost result.
-`--slug` gives a run a readable name instead.
+A default result file is named after the pattern, with a hash of the pattern and
+its case mode appended unless the pattern is already exactly its own slug and
+the search was case-insensitive. Punctuation in a regex is syntax, so `a.b` and
+`a+b` are different searches that both reduce to `a-b`, and `--case-sensitive`
+makes a third; one silently overwriting another is not a naming problem but a
+lost result. `--slug` gives a run a readable name instead.
 
 The default `--sample 300 --seed 0` is the draw every other layer uses, so a hit
 is a row those runs already labeled and its whole example is in the committed
@@ -409,8 +410,11 @@ sampling run that quietly labels nothing.
   the training data", use OLMoTrace / infini-gram, which indexes the whole thing.
 - The datasets-server shortens a very large cell to fit its response limit, and a
   hit past the cut cannot be found. Each search result file records how many
-  sampled rows had a shortened cell (`truncated_rows`), so a search over long
-  responses says when its count is a lower bound.
+  sampled rows had a shortened cell (`truncated_rows`) and how many of those
+  showed no hit at all (`censored`). A censored row is unknown rather than a
+  non-match, so it is not counted as evidence against the string: `matched` is a
+  lower bound, and the interval's upper end is computed as if every censored row
+  had been a hit. With nothing censored that is the ordinary Wilson interval.
 - `/statistics` truncates frequencies for very high-cardinality columns (e.g.
   `dataset_source` in Dolci-Think-SFT, thousands of values): the returned
   counts are exact but not exhaustive. Percentages in `sources` output are

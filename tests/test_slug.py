@@ -50,9 +50,19 @@ def test_a_pattern_that_is_already_its_own_slug_keeps_the_readable_name():
 
 
 def test_a_pattern_slug_is_disambiguated_once_not_twice():
-    """`_slug` already appends a hash when the reduction is empty or truncated;
-    a second one would just be noise."""
+    """One hash, whichever reduction lost the information."""
     from trainspotting.cli import _pattern_slug
 
     assert _pattern_slug("").count("-") == 1
     assert len(_pattern_slug("我是ChatGPT").split("-")) == 2
+    assert len(_pattern_slug("x " * 200).split("-")) == 31  # 30 x's plus the hash
+
+
+def test_case_sensitivity_names_a_different_run():
+    """The same pattern with and without --case-sensitive is two regexes, so it
+    cannot be two writes to one file."""
+    from trainspotting.cli import _pattern_slug
+
+    assert _pattern_slug("ChatGPT") != _pattern_slug("ChatGPT", case_sensitive=True)
+    assert _pattern_slug("i-cannot") == "i-cannot"
+    assert _pattern_slug("i-cannot", case_sensitive=True) != "i-cannot"

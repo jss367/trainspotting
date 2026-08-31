@@ -471,19 +471,26 @@ def _slug(text: str) -> str:
     return slug
 
 
-def _pattern_slug(pattern: str) -> str:
+def _pattern_slug(pattern: str, case_sensitive: bool = False) -> str:
     """The same name for a regex, which cannot afford the readable reduction.
 
     Punctuation in a regex is syntax, not spelling: `a.b` and `a+b` match
-    different text and reduce to the same `a-b`, and so does `a b` with one
-    space or two. So a pattern keeps the plain slug only when it already *is*
-    that slug; anything the reduction touched carries a hash of the original.
-    Pass `--slug` for a readable name.
+    different text, and so does `a b` with one space or two. Case matters the
+    same way — the same pattern run with and without `--case-sensitive` is two
+    different searches. So a pattern keeps the plain slug only when it already
+    *is* that slug and the search was case-insensitive; anything else carries a
+    hash of the pattern and the mode it ran in. Pass `--slug` for a readable
+    name.
     """
-    slug, digest = _slug(pattern), hashlib.sha1(pattern.encode()).hexdigest()[:8]
-    if pattern == slug or slug.endswith(digest):
-        return slug  # already exact, or already disambiguated by `_slug`
-    return f"{slug}-{digest}"
+    base = re.sub(r"[^a-z0-9]+", "-", pattern.lower()).strip("-")
+    if base and pattern == base and not case_sensitive:
+        return base  # the empty pattern is not its own name
+    digest = hashlib.sha1(
+        f"{pattern}\n{'cs' if case_sensitive else 'ci'}".encode()
+    ).hexdigest()[:8]
+    if not base:
+        return f"pattern-{digest}"
+    return f"{base[:60].rstrip('-')}-{digest}"
 
 
 def cmd_ask(args):
@@ -737,7 +744,7 @@ def cmd_search(args):
         pattern = re.compile(args.pattern, 0 if args.case_sensitive else re.IGNORECASE)
     except re.error as e:
         sys.exit(f"bad pattern {args.pattern!r}: {e}")
-    slug = args.slug or _pattern_slug(args.pattern)
+    slug = args.slug or _pattern_slug(args.pattern, args.case_sensitive)
     for s in _select_stages(args, registry.post_training_stages, "post-training"):
         # Before the draw, like every other sampling path: a lookup afterwards
         # could name a tree published while the paging ran.
@@ -745,11 +752,16 @@ def cmd_search(args):
         print(f"searching {args.sample} sampled rows from {s['hf_dataset']} ...", file=sys.stderr)
         rows = hf.sample_rows_with_truncation(s["hf_dataset"], args.sample, seed=args.seed)
         moved = hf.dataset_revision(s["hf_dataset"])
-        records, shortened = [], 0
+        records, shortened, censored = [], 0, 0
         for row_index, row, truncated_cells in rows:
             if truncated_cells:
                 shortened += 1
             hits = search.search_row(row, s["stage"], pattern)
+            if truncated_cells and not hits:
+                # The server cut part of this row's text away, and what is left
+                # does not match. That is not a non-match, it is a row this run
+                # could not read.
+                censored += 1
             if hits:
                 # Rows carrying no prompt are searched like any other — a hit in
                 # a response is a hit — so the join key can be empty.
@@ -764,7 +776,13 @@ def cmd_search(args):
                 )
         sides = search.side_counts(records, s["stage"])
         k, n = len(records), len(rows)
-        lo, hi = _wilson(k, n)
+        # A censored row is unknown, not a confirmed non-match, so it cannot
+        # count as evidence against the string. The lower endpoint uses the
+        # confirmed hits; the upper endpoint assumes every censored row could
+        # have been one. With nothing censored the two agree and this is the
+        # ordinary Wilson interval.
+        lo, _ = _wilson(k, n)
+        _, hi = _wilson(k + censored, n)
         payload = {
             "pattern": args.pattern,
             "case_sensitive": args.case_sensitive,
@@ -779,9 +797,12 @@ def cmd_search(args):
             "ci": [lo, hi],
             "sides": sides,
             # Rows the datasets-server shortened to fit its response limit. A
-            # string past the cut is unfindable, so a non-zero count means this
-            # is a lower bound rather than a count of the sample.
+            # string past the cut is unfindable, so `matched` is a lower bound
+            # rather than a count of the sample; `censored` is the part of that
+            # the interval had to widen for — shortened rows with no visible
+            # hit, which could have been hits in the text this run never saw.
             "truncated_rows": shortened,
+            "censored": censored,
             "records": records,
         }
         if s["stage"] == "dpo":
@@ -800,7 +821,13 @@ def cmd_search(args):
         if shortened:
             print(
                 f"  note: {shortened} row(s) had a cell shortened by the datasets-server"
-                " — a hit past the cut is invisible here",
+                f" — a hit past the cut is invisible here"
+                + (
+                    f"; {censored} of them show no hit at all, so the interval's"
+                    " upper end assumes each could be one"
+                    if censored
+                    else ""
+                ),
                 file=sys.stderr,
             )
         for rec in records[: max(0, args.show)]:
