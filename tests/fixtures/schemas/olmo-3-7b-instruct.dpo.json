@@ -14,7 +14,8 @@
   },
   "groups": {
     "prompt": 2,
-    "response": 2
+    "chosen": 1,
+    "rejected": 1
   },
   "leaves": [
     [

@@ -979,11 +979,19 @@ def cmd_grep(args):
     # where a string most plausibly entered the model, which is a different
     # question from how many rows hold it — and one that needs the stages
     # nobody scanned named as such rather than left out.
-    model = registry.resolve(args.target)
-    trace = influence.compare(written, model["stages"])
-    print("", file=sys.stderr)
-    for line in influence.render(trace, args.target, note=True):
-        print(line, file=sys.stderr)
+    target = registry.resolve(args.target)
+    # Only for a model. A dataset target is a corpus, not a pipeline: nothing was
+    # trained on WildChat's chat log, so ranking its one stage as where a phrase
+    # entered a model produced "Most plausibly chat" — a training-origin verdict
+    # about a target that has no training. The counts above are exactly as useful
+    # for a corpus; it is the ranking that has nothing to rank.
+    if target["is_model"]:
+        trace = influence.compare(written, target["stages"])
+        print("", file=sys.stderr)
+        for line in influence.render(trace, args.target, note=True):
+            print(line, file=sys.stderr)
+
+
 def _phrase_slug(phrase: str) -> str:
     """A filename-safe slug that two different phrases cannot share.
 
@@ -1381,6 +1389,8 @@ def cmd_report(args):
             print(f"- undetermined: {und / n * 100:.1f}%  ({und}/{n}) — too short, too much code, or too evenly mixed to call")
         print()
 
+    if not target["is_model"]:
+        return
     traces = _grep_traces(args.target, target)
     print("\n## String traces\n")
     if not traces:

@@ -41,7 +41,14 @@ PARQUET_BRANCH = "refs/convert/parquet"
 # the cut the `context` layer draws: what the model is asked, what it is fit to
 # (or pushed between), and what scores it.
 #
-# `rollout` is the fourth and exists to stay *out* of the third. An RL row's
+# `chosen` and `rejected` are separate for the same reason, and it is the
+# sharpest case: the same string in each teaches opposite things. "I am ChatGPT"
+# in a chosen completion trains the model toward saying it; in the rejected one
+# it trains the model away. Adding the two into one `response` count is worse
+# than not counting — it let a phrase that only ever appears in rejected text
+# rank DPO as where the model learned to say it.
+#
+# `rollout` exists to stay *out* of the produce side too. An RL row's
 # `outputs` are reference-model generations kept to compute a passrate for
 # difficulty filtering — the context view says so in as many words, and an RL row
 # stores no response at all. Counting them as response made a hit in text the
@@ -49,7 +56,7 @@ PARQUET_BRANCH = "refs/convert/parquet"
 # what `influence` ranks a stage's origin on: a phrase appearing only in
 # rollouts could rank RLVR as where the model learned to say it. They stay
 # searchable, in their own group, outside `influence.PRODUCE`.
-GROUPS = ("prompt", "response", "reference", "rollout")
+GROUPS = ("prompt", "response", "chosen", "rejected", "reference", "rollout")
 
 # Turn roles whose content the model is fit to *produce*. Everything else in a
 # message list is text it conditions on, which includes the tool turns: a tool
@@ -210,7 +217,12 @@ def _message_exprs(col: str, typ: str) -> list[tuple[str, str, tuple[str, ...]]]
     if "content" in typ:
         emitted = f"lower(coalesce(m.role, '')) IN ({roles})"
         both = ("content", "role")
-        out.append(("response", f"list_transform(list_filter({q}, m -> {emitted}), m -> m.content)", both))
+        # A DPO pair's two completions are two different claims about the same
+        # prompt, so the produced side takes the column's own name. Everything
+        # else produced is `response`. The input side is shared — a pair's user
+        # turns are the same turns — so it stays `prompt` either way.
+        produced = col if col in ("chosen", "rejected") else "response"
+        out.append((produced, f"list_transform(list_filter({q}, m -> {emitted}), m -> m.content)", both))
         out.append(("prompt", f"list_transform(list_filter({q}, m -> NOT ({emitted})), m -> m.content)", both))
     for sub, group in MESSAGE_EXTRAS.items():
         if f'"{sub}"' in typ or f" {sub} " in typ:

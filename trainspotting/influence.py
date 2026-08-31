@@ -41,7 +41,12 @@ from .grep import GROUPS
 # opposed to text it only conditions on. `reference` belongs here for RL: it is
 # the ground truth a verifier scores against, so the gradient points at it even
 # though no response is stored.
-PRODUCE = ("response", "reference")
+# The sides a hit is evidence the model was pushed *toward*. `rejected` is
+# deliberately absent and is the whole reason the group exists: DPO trains away
+# from it, so a phrase found only there is evidence against that stage being
+# where the model learned it, not for. `rollout` is absent for the adjacent
+# reason — a reference generation is not a training target at all.
+PRODUCE = ("response", "chosen", "reference")
 
 # Why a run's coverage is unknown rather than known-partial. Result files
 # written before they recorded the sides their mix has cannot show they read all

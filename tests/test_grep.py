@@ -220,11 +220,12 @@ def test_scan_counts_rows_not_occurrences(con, dpo_parquet):
     assert result["by_source"] == {"wildchat": 1, "math": 1}
 
 
-def test_scan_splits_prompt_from_response(con, dpo_parquet):
-    """Row 1 has it on both sides, row 2 only in the assistant turns."""
+def test_scan_splits_a_pair_into_chosen_and_rejected(con, dpo_parquet):
+    """A DPO pair's two completions are opposite claims, so they are counted
+    apart: the same string chosen trains toward it and rejected trains away."""
     result, _, _ = _run(con, dpo_parquet, "ChatGPT")
-    assert result["by_group"] == {"prompt": 1, "response": 2}
-    assert result["by_source_group"]["math"] == {"prompt": 0, "response": 1}
+    assert result["by_group"] == {"prompt": 1, "chosen": 2, "rejected": 0}
+    assert result["by_source_group"]["math"] == {"prompt": 0, "chosen": 1, "rejected": 0}
 
 
 def test_scan_narrowed_to_prompts_misses_the_response_only_row(con, dpo_parquet):
@@ -261,7 +262,7 @@ def test_no_match_is_an_empty_result_not_an_error(con, dpo_parquet):
     result, _, _ = _run(con, dpo_parquet, "Gemini")
     assert result["matched"] == 0
     assert result["by_source"] == {} and result["examples"] == []
-    assert result["by_group"] == {"prompt": 0, "response": 0}
+    assert result["by_group"] == {"prompt": 0, "chosen": 0, "rejected": 0}
 
 
 def test_row_count_and_byte_cost_come_from_the_footers(con, dpo_parquet):
@@ -974,3 +975,51 @@ def test_the_recompute_script_pins_the_parquet_revision():
     source = pathlib.Path("scripts/recompute_grep_bytes.py").read_text()
     assert 'run["parquet_revision"]' in source
     assert 'run["revision"]' not in source
+
+
+# --- review round 9 ---------------------------------------------------------
+
+
+def test_a_rejected_completion_is_not_produce_side_evidence():
+    """The sharpest case for keeping sides apart: the same string in each
+    completion of a DPO pair teaches opposite things. Counting them together let
+    a phrase that only ever appears in rejected text rank DPO as where the model
+    learned to say it."""
+    from trainspotting import influence
+    assert "chosen" in influence.PRODUCE
+    assert "rejected" not in influence.PRODUCE
+    assert "rollout" not in influence.PRODUCE
+
+
+def test_a_pair_is_mapped_to_its_own_sides():
+    typ = 'STRUCT("content" VARCHAR, "role" VARCHAR)[]'
+    exprs, _, _ = grep.text_fields({"chosen": typ, "rejected": typ, "prompt": "VARCHAR"})
+    assert set(exprs) == {"prompt", "chosen", "rejected"}
+    assert '"chosen"' in exprs["chosen"][0] and '"rejected"' in exprs["rejected"][0]
+    # both pairs' user turns are the same turns, so the input side stays shared
+    assert len(exprs["prompt"]) == 3
+
+
+def test_an_sft_message_list_keeps_the_plain_response_group():
+    typ = 'STRUCT("content" VARCHAR, "role" VARCHAR)[]'
+    exprs, _, _ = grep.text_fields({"messages": typ})
+    assert set(exprs) == {"prompt", "response"}
+
+
+def test_reference_rollouts_are_their_own_group():
+    """An RL row's `outputs` are reference generations kept for a passrate, not
+    anything the objective pushes the model to emit."""
+    exprs, _, _ = grep.text_fields({"outputs": "VARCHAR[]", "ground_truth": "VARCHAR[]"})
+    assert exprs["rollout"] and exprs["reference"]
+    assert "response" not in exprs
+
+
+def test_a_dataset_target_gets_no_training_origin_verdict():
+    """`wildchat-1m` is a corpus, not a pipeline. Ranking its one stage as where
+    a phrase entered a model produced "Most plausibly chat" — a verdict about
+    training for a target that has no training."""
+    from trainspotting import registry
+    assert registry.resolve("wildchat-1m")["is_model"] is False
+    assert registry.resolve("olmo-3-7b-think")["is_model"] is True
+    source = pathlib.Path("trainspotting/cli.py").read_text()
+    assert 'if target["is_model"]:\n        trace = influence.compare(' in source

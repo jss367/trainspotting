@@ -1140,7 +1140,7 @@ def test_a_legacy_run_covering_every_group_needs_no_available_fields():
     # GROUPS when RL reference generations stopped being counted as responses,
     # so a run has to hold it too before it counts as a full sweep.
     r = run("rlvr", hits=0, rows=100,
-            groups={"prompt": 0, "response": 0, "reference": 0, "rollout": 0},
+            groups={g: 0 for g in influence.GROUPS},
             available_fields=[])
     assert influence.coverage_gaps(r) == []
     t = influence.compare([r], THINK)
@@ -1148,10 +1148,16 @@ def test_a_legacy_run_covering_every_group_needs_no_available_fields():
     assert "exact over every one of them" in " ".join(influence.render(t, "olmo-3-7b-think"))
 
 
-def test_a_legacy_run_holding_both_produce_groups_is_not_understated():
+def test_a_legacy_run_holding_every_produce_group_is_not_understated():
+    """`chosen` joined PRODUCE when a DPO pair's two completions stopped being
+    counted together, so holding `response` and `reference` is no longer holding
+    all of it. A run that does hold all three is still not understated — and a
+    legacy run that cannot say which sides its mix has now has one more side it
+    cannot account for, which is the flag working rather than a regression."""
     runs = [
         run("rlvr", hits=100, rows=100_000,
-            groups={"prompt": 0, "response": 60, "reference": 60}, available_fields=[]),
+            groups={"prompt": 0, "response": 60, "chosen": 0, "reference": 60},
+            available_fields=[]),
         run("dpo", hits=10, rows=100_000, groups={"prompt": 0, "response": 10},
             available_fields=[]),
     ]
@@ -1167,7 +1173,7 @@ def test_a_legacy_run_holding_both_produce_groups_is_not_understated():
 
 def test_an_unrecognised_column_still_counts_against_a_full_sweep():
     r = run("rlvr", hits=0, rows=100,
-            groups={"prompt": 0, "response": 0, "reference": 0, "rollout": 0},
+            groups={g: 0 for g in influence.GROUPS},
             available_fields=[], unsearched_columns=["rationale"])
     assert influence.coverage_gaps(r) == ["rationale went unsearched"]
     assert influence._understated(influence.stage_trace(r), "produced") == \
