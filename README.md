@@ -415,7 +415,10 @@ sampling run that quietly labels nothing.
   sampled rows had *searched* text shortened (`truncated_rows`) and how many of
   those showed no hit at all (`censored`). A row cut only in a column the stage
   never reads — an RL row's token arrays are the longest cells on it — is
-  unaffected and counts as the confirmed non-match it is. A censored row is unknown rather than a
+  unaffected and counts as the confirmed non-match it is. The per-side counts
+  are lower bounds for the same reason, so `sides_unknown` says how many
+  matching rows had that side's text cut: a zero beside a non-zero there means
+  "not seen", not "not there". A censored row is unknown rather than a
   non-match, so it is not counted as evidence against the string: `matched` is a
   lower bound, and the interval's upper end is computed as if every censored row
   had been a hit. With nothing censored that is the ordinary Wilson interval.

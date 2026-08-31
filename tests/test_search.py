@@ -556,3 +556,44 @@ def test_a_reward_model_that_is_not_a_mapping_is_still_searched():
     row = {"prompt": "q", "reward_model": "chatgpt_judge"}
 
     assert [h["role"] for h in search.search_row(row, "rlvr", compile_("chatgpt"))] == ["reward_model"]
+
+
+@pytest.mark.parametrize("stage", sorted(search.SIDE_COLUMNS))
+def test_every_searched_column_belongs_to_a_side(stage):
+    """`SIDE_COLUMNS` decides which side a shortened cell leaves uncertain, so a
+    column missing from it makes a cut invisible and one that does not exist
+    makes an uncertainty out of nothing."""
+    covered = {c for columns in search.SIDE_COLUMNS[stage].values() for c in columns}
+
+    assert covered == set(search.COLUMNS[stage])
+    assert set(search.SIDE_COLUMNS[stage]) == set(search.SIDES[stage])
+
+
+def test_a_side_whose_text_was_cut_is_unknown_not_zero():
+    """An RL row matching on its prompt with the verifier cell shortened has not
+    been shown to lack a verifier hit — nobody read the verifier."""
+    row = {"prompt": "who are you, ChatGPT?", "reward_model": {"style": "..."}}
+    rec = {
+        "hits": search.search_row(row, "rlvr", compile_("chatgpt")),
+        "truncated": ["reward_model"],
+    }
+
+    assert search.side_counts([rec], "rlvr") == {"prompt": 1, "verifier": 0, "rollout": 0}
+    assert search.unknown_sides([rec], "rlvr") == {"prompt": 0, "verifier": 1, "rollout": 0}
+
+
+def test_one_cut_column_can_leave_two_sides_unknown():
+    """SFT reads both its sides out of `messages`, so cutting it hides whichever
+    role the rest of the conversation held."""
+    row = {"messages": [{"role": "assistant", "content": "I am ChatGPT."}]}
+    rec = {"hits": search.search_row(row, "sft", compile_("chatgpt")), "truncated": ["messages"]}
+
+    assert search.side_counts([rec], "sft") == {"prompt": 0, "response": 1}
+    assert search.unknown_sides([rec], "sft") == {"prompt": 1, "response": 0}
+
+
+def test_nothing_is_unknown_when_nothing_was_cut():
+    row = {"messages": [{"role": "assistant", "content": "I am ChatGPT."}]}
+    rec = {"hits": search.search_row(row, "sft", compile_("chatgpt"))}
+
+    assert search.unknown_sides([rec], "sft") == {"prompt": 0, "response": 0}

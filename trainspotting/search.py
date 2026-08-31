@@ -54,6 +54,26 @@ COLUMNS = {
     ),
 }
 
+# Which columns carry which side. A side whose columns were shortened could hold
+# a hit nobody read, so a per-side count of a row like that is a lower bound
+# rather than a zero — and on SFT both sides come out of one column, so cutting
+# it leaves both uncertain.
+SIDE_COLUMNS = {
+    "sft": {"prompt": ("messages",), "response": ("messages",)},
+    "dpo": {
+        # The shared turns are read off the completions, so prompt text can be
+        # cut in any of the three.
+        "prompt": ("prompt", "chosen", "rejected"),
+        "chosen": ("chosen",),
+        "rejected": ("rejected",),
+    },
+    "rlvr": {
+        "prompt": ("prompt", "source_prompt"),
+        "verifier": ("ground_truth", "solution", "constraint", "reward_model"),
+        "rollout": ("outputs",),
+    },
+}
+
 # Every side a stage can produce, in reporting order. Sides are named for what
 # the example does with the text, not for the column it sits in: `chosen` and
 # `rejected` are both assistant turns, and that is the whole distinction.
@@ -297,6 +317,25 @@ def side_counts(records: list[dict], stage: str) -> dict[str, int]:
     for rec in records:
         for side in {h["side"] for h in rec["hits"]}:
             counts[side] = counts.get(side, 0) + 1
+    return counts
+
+
+def unknown_sides(records: list[dict], stage: str) -> dict[str, int]:
+    """Per side, matching rows where that side shows nothing but was cut short.
+
+    `side_counts` can only count what it read. A row that matched on its prompt
+    while the server shortened its `reward_model` is not a row without a
+    verifier hit; it is a row whose verifier text nobody saw. Counting it as a
+    clean zero turns unread text into evidence, so the missing part is reported
+    beside the count rather than folded into it.
+    """
+    counts = {side: 0 for side in SIDES[stage]}
+    for rec in records:
+        sides = {h["side"] for h in rec["hits"]}
+        cut = set(rec.get("truncated") or ())
+        for side in SIDES[stage]:
+            if side not in sides and cut & set(SIDE_COLUMNS[stage][side]):
+                counts[side] += 1
     return counts
 
 

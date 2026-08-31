@@ -792,6 +792,9 @@ def cmd_search(args):
                     }
                 )
         sides = search.side_counts(records, s["stage"])
+        # Per side, matching rows whose text for that side was cut short: a
+        # zero next to one of these is "not seen", not "not there".
+        sides_unknown = search.unknown_sides(records, s["stage"])
         k, n = len(records), len(rows)
         # A censored row is unknown, not a confirmed non-match, so it cannot
         # count as evidence against the string. The lower endpoint uses the
@@ -813,6 +816,7 @@ def cmd_search(args):
             "matched": k,
             "ci": [lo, hi],
             "sides": sides,
+            "sides_unknown": sides_unknown,
             # Rows whose *searched* text the datasets-server shortened to fit
             # its response limit — a row cut only in a column this stage never
             # reads is unaffected and is not counted here. A
@@ -828,7 +832,10 @@ def cmd_search(args):
             payload["pair_split"] = search.pair_split(records)
         path = _write_json(RESULTS / f"{args.model}.{s['stage']}.search-{slug}.json", payload)
         _print_match_rate(s["stage"], k, n, lo, hi, path)
-        breakdown = ", ".join(f"{side} {count}" for side, count in sides.items())
+        breakdown = ", ".join(
+            f"{side} {count}" + (f" (+{sides_unknown[side]} unread)" if sides_unknown[side] else "")
+            for side, count in sides.items()
+        )
         if s["stage"] == "dpo":
             split = payload["pair_split"]
             breakdown += (
