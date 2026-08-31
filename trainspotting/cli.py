@@ -449,6 +449,11 @@ def cmd_classify(args):
     _label_post_training(args)
 
 
+# Characters of a derived name kept before the disambiguating hash. Well under
+# the 255-byte basename limit once the model, stage and suffix are added.
+MAX_SLUG_CHARS = 60
+
+
 def _slug(text: str) -> str:
     """A filename-safe short name derived from a question or a search pattern.
 
@@ -466,8 +471,8 @@ def _slug(text: str) -> str:
     digest = hashlib.sha1(text.encode()).hexdigest()[:8]
     if not slug:
         return f"pattern-{digest}"
-    if len(slug) > 60:
-        return f"{slug[:60].rstrip('-')}-{digest}"
+    if len(slug) > MAX_SLUG_CHARS:
+        return f"{slug[:MAX_SLUG_CHARS].rstrip('-')}-{digest}"
     return slug
 
 
@@ -483,14 +488,18 @@ def _pattern_slug(pattern: str, case_sensitive: bool = False) -> str:
     name.
     """
     base = re.sub(r"[^a-z0-9]+", "-", pattern.lower()).strip("-")
-    if base and pattern == base and not case_sensitive:
-        return base  # the empty pattern is not its own name
+    # The readable shortcut still has to produce a filename: the empty pattern
+    # is not a name, and a 300-character literal is its own slug but not a
+    # basename any filesystem will take — which would spend the whole sampling
+    # run and then fail on the write.
+    if base and pattern == base and len(base) <= MAX_SLUG_CHARS and not case_sensitive:
+        return base
     digest = hashlib.sha1(
         f"{pattern}\n{'cs' if case_sensitive else 'ci'}".encode()
     ).hexdigest()[:8]
     if not base:
         return f"pattern-{digest}"
-    return f"{base[:60].rstrip('-')}-{digest}"
+    return f"{base[:MAX_SLUG_CHARS].rstrip('-')}-{digest}"
 
 
 def cmd_ask(args):

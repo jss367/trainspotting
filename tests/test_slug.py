@@ -66,3 +66,15 @@ def test_case_sensitivity_names_a_different_run():
     assert _pattern_slug("ChatGPT") != _pattern_slug("ChatGPT", case_sensitive=True)
     assert _pattern_slug("i-cannot") == "i-cannot"
     assert _pattern_slug("i-cannot", case_sensitive=True) != "i-cannot"
+
+
+def test_a_long_plain_pattern_is_still_a_filename():
+    """A 300-character literal is its own slug, so the readable shortcut would
+    hand back a basename no filesystem accepts — after the whole sampling run
+    had already been paid for."""
+    from trainspotting.cli import MAX_SLUG_CHARS, _pattern_slug
+
+    long_a, longer_a = _pattern_slug("a" * 300), _pattern_slug("a" * 301)
+
+    assert len(long_a) <= MAX_SLUG_CHARS + 9
+    assert long_a != longer_a
