@@ -435,6 +435,12 @@ A stage the question was never asked of prints `not measured` rather than
 dropping out. A total that silently excluded 5.93T tokens of pretraining is the
 error this command exists to prevent.
 
+While any stage is unasked the pipeline share is a **lower bound**, and both the
+CLI and the site print it as `at least`. The denominator is every sized stage,
+measured or not, so with only post-training scored the figure is matching tokens
+over 6.1T — not a share of the 18.4B that was actually read. Those differ by
+three orders of magnitude, and asking the corpora can only add matches.
+
 ### A worked question
 
 `scripts/human_life_value.sh` runs the whole battery behind one question — how

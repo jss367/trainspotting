@@ -1239,15 +1239,29 @@ def cmd_budget(args):
         if not t["stages"]:
             continue
         line = f"{label:<16}{_fmt_est(t['size_tokens']):>10} fit tokens"
+        partial = t["measured"] < t["stages"]
         if mixed:
             line += "  →  no single total (see above)"
         elif t["measured"]:
+            # The denominator is every sized stage, asked or not, so with one
+            # still unasked this is a lower bound on the whole pipeline — not a
+            # share of the part that was measured. Saying "at least" is the
+            # difference between a number and a wrong number: the corpora are
+            # 99.7% of these tokens.
             line += (
                 f"  →  {_fmt_est(t['matching_tokens'])} matching"
-                f"  ({_fmt_share(t['share'])} of it)"
+                f"  ({'at least ' if partial else ''}{_fmt_share(t['share'])} of it)"
             )
-        if t["measured"] < t["stages"]:
-            line += f"  [{t['stages'] - t['measured']} stage(s) not measured]"
+        if partial:
+            line += f"  [{t['stages'] - t['measured']} stage(s) not measured"
+            # Naming the measured size is what stops the share above reading as
+            # a share of the whole thing — but with nothing measured at all,
+            # "0 of it was" is noise on top of "not measured".
+            line += (
+                f"; {_fmt_est(t['measured_size_tokens'])} of it was]"
+                if t["measured"]
+                else "]"
+            )
         print(line)
 
     floors = est["totals"]["all"]["floor"]
@@ -1368,24 +1382,34 @@ def _report_questions(target_name: str, target: dict) -> None:
         print("\n## Custom questions (sampled)\n")
         for slug, stages in asks.items():
             data = {st: budget.load(f"{target_name}.{st}.ask-{slug}.json") for st in stages}
-            first = next(iter(d for d in data.values() if d), None)
             print(f"### {slug}\n")
-            if first:
-                print(f"> {first['question']}\n")
+            # Grouped by the wording each run actually stored, not by slug. A
+            # slug is not a question — see `_warn_mixed_questions` — and
+            # printing one question over every stage's rate attributes the
+            # others' measurements to words they were never scored against.
+            groups: dict[str, list[str]] = {}
             for st in sorted(stages, key=lambda x: order.index(x) if x in order else 99):
-                d = data[st]
-                if not d:
-                    continue
-                records = d["records"]
-                k, n = sum(bool(r["match"]) for r in records), len(records)
-                # A corpus run stores its own cluster-corrected interval; the
-                # binomial one would be too narrow for documents drawn by shard.
-                lo, hi = d["ci"] if d.get("ci") else _wilson(k, n)
+                if data[st]:
+                    groups.setdefault(data[st]["question"], []).append(st)
+            for question, group in groups.items():
+                print(f"> {question}\n")
+                for st in group:
+                    d = data[st]
+                    records = d["records"]
+                    k, n = sum(bool(r["match"]) for r in records), len(records)
+                    # A corpus run stores its own cluster-corrected interval; the
+                    # binomial one would be too narrow for documents drawn by shard.
+                    lo, hi = d["ci"] if d.get("ci") else _wilson(k, n)
+                    print(
+                        f"- {st:14s} {k / n * 100 if n else 0:5.1f}%  ({k}/{n},"
+                        f" 95% CI {lo * 100:.1f}–{hi * 100:.1f}%)"
+                    )
+                print()
+            if len(groups) > 1:
                 print(
-                    f"- {st:14s} {k / n * 100 if n else 0:5.1f}%  ({k}/{n},"
-                    f" 95% CI {lo * 100:.1f}–{hi * 100:.1f}%)"
+                    f"({len(groups)} wordings share the slug {slug!r}; the rates above"
+                    " are grouped under the words each stage was actually scored against.)\n"
                 )
-            print()
 
     if stances:
         print("\n## Which way each example pushes (whole examples, sampled)\n")
@@ -1416,12 +1440,14 @@ def _report_questions(target_name: str, target: dict) -> None:
         for st in est["stages"]:
             print(_budget_row(st))
         t = est["totals"]["all"]
+        partial = t["measured"] < t["stages"]
         print(
             f"\nwhole pipeline: {_fmt_est(t['size_tokens'])} fit tokens — no single"
             " total, see the warning above"
             if mixed
             else f"\nwhole pipeline: {_fmt_est(t['matching_tokens'])} of"
-            f" {_fmt_est(t['size_tokens'])} fit tokens ({_fmt_share(t['share'])})"
+            f" {_fmt_est(t['size_tokens'])} fit tokens"
+            f" ({'at least ' if partial else ''}{_fmt_share(t['share'])})"
         )
         if t["measured"] < t["stages"]:
             print(

@@ -229,3 +229,23 @@ def test_a_corpus_rate_is_not_weighed_by_length_a_second_time():
     # The length note is for stages that actually reweigh; it would be a
     # non-sequitur here.
     assert out["notes"] == []
+
+
+def test_a_partial_total_names_what_was_actually_measured():
+    """The share's denominator is the whole pipeline, not the measured part.
+
+    With the corpora unasked those differ by three orders of magnitude, so the
+    share is a lower bound and `measured_size_tokens` is what stops it reading
+    as "0.0006% of the training we looked at".
+    """
+    stages = [
+        {"stage": "pretrain", "family": "pretrain", "measured": False, "size_tokens": 5_930_000_000_000},
+        {"stage": "sft", "family": "post-training", "measured": True, "size_tokens": 1_000_000,
+         "matching_tokens": 10_000, "matching_tokens_ci": [5_000, 20_000]},
+    ]
+    t = budget.totals(stages)["all"]
+    assert t["size_tokens"] == 5_930_001_000_000
+    assert t["measured_size_tokens"] == 1_000_000
+    assert t["measured"] == 1 and t["stages"] == 2
+    # Divided by the whole pipeline — a lower bound, not 1% of what was read.
+    assert t["share"] == pytest.approx(10_000 / 5_930_001_000_000)

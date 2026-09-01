@@ -1095,11 +1095,15 @@ async function budgetCard(main, model, slug){
   const mixed = (est.question_variants || []).length > 1;
   const total = document.createElement("tr");
   total.className = "total";
+  // The denominator is every sized stage, asked or not, so with one still
+  // unasked this is a lower bound on the whole pipeline — not a share of the
+  // part that was measured. The two differ by three orders of magnitude here.
+  const partial = all.measured < all.stages;
   total.innerHTML = `<td>whole pipeline</td><td>${tokens(all.size_tokens)}</td>`
     + (mixed
       ? `<td colspan="3">no single total — these stages were scored against ${est.question_variants.length} different wordings</td>`
       : `<td colspan="2">${all.measured} of ${all.stages} stages measured</td>`
-        + `<td>${tokens(all.matching_tokens)}<span class="est">${shareText(all.share)}</span></td>`);
+        + `<td>${tokens(all.matching_tokens)}<span class="est">${partial ? "≥ " : ""}${shareText(all.share)}</span></td>`);
   body.appendChild(total);
   t.appendChild(body);
   card.appendChild(t);
@@ -1109,15 +1113,16 @@ async function budgetCard(main, model, slug){
     notes.push("Stages under this slug were scored against different wordings of the question, "
       + "so they do not add up to one measurement: " + est.question_variants.map(q => `“${q}”`).join("  ·  "));
   }
-  if (all.measured < all.stages){
+  if (partial){
     // The single most misleading thing this page could do is show a pipeline
     // total that quietly leaves out 5.93T tokens of pretraining.
     const missing = est.stages.filter(st => !st.measured);
     const unasked = missing.reduce((a, st) => a + (st.size_tokens || 0), 0);
     notes.push(`${missing.map(st => st.stage).join(", ")} ${missing.length > 1 ? "were" : "was"} never asked `
       + `this question, so ${tokens(unasked)} of the ${tokens(all.size_tokens)} fit tokens above `
-      + `— ${shareText(unasked / all.size_tokens)} of the pipeline — are unmeasured, and the total `
-      + `is a share of the rest.`);
+      + `— ${shareText(unasked / all.size_tokens)} of the pipeline — are unmeasured. The share is still `
+      + `over the whole pipeline, which makes it a lower bound: only ${tokens(all.measured_size_tokens)} `
+      + `of it was looked at, and asking the rest can only add matches.`);
   }
   if (all.floor.length){
     notes.push(`${all.floor.join(", ")} sized at one reference rollout per prompt — a floor. `
@@ -1193,8 +1198,16 @@ function stanceGroup(main, slug, rows, ctxFor, post, showQuestion){
     of the whole example — the response the model is fit to,
     which side of a preference pair is preferred, what the verifier pays for — so the answer can be
     negative. Judged by ${esc(rows[0].d.classifier)}.</p>`;
-  const max = Math.max(...rows.flatMap(r => ["toward","away"].map(k => r.d.counts[k] / r.d.records.length)), 0.01);
-  for (const {stage, d} of rows){
+  // A run where every example was refused or errored writes a valid file with
+  // no records. Dividing by that n gives NaN, which spreads silently into the
+  // scale, the bar widths, the percentages and the intervals — the ask and HHH
+  // cards already show a no-labels state for it instead.
+  for (const {stage} of rows.filter(r => !r.d.records.length)){
+    noLabels(card, `${stage.toUpperCase()} — every sampled example went unjudged, so there is no direction to show`);
+  }
+  const scored = rows.filter(r => r.d.records.length);
+  const max = Math.max(...scored.flatMap(r => ["toward","away"].map(k => r.d.counts[k] / r.d.records.length)), 0.01);
+  for (const {stage, d} of scored){
     const n = d.records.length;
     const s = post.find(p => p.stage === stage) || {stage, hf_dataset: d.dataset, name: d.dataset};
     const head = document.createElement("div");

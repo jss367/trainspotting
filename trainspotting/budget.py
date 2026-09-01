@@ -441,6 +441,13 @@ def totals(stages: list[dict]) -> dict:
 
     A stage whose size is unknown is summed into neither, and counted in
     `unsized` so the share it reports is visibly a share of what was measured.
+
+    `share` divides by the size of every *sized* stage, measured or not. With a
+    stage still unasked that makes it a lower bound on the whole pipeline rather
+    than a share of the part that was measured — those are very different
+    numbers here, since the corpora are 99.7% of the tokens — so
+    `measured_size_tokens` says what the measured part actually was and callers
+    print the share as "at least" whenever `measured < stages`.
     """
     out = {}
     for family in ("pretrain", "post-training", "all"):
@@ -451,6 +458,7 @@ def totals(stages: list[dict]) -> dict:
         matching = sum(s["matching_tokens"] for s in priced)
         out[family] = {
             "size_tokens": size,
+            "measured_size_tokens": sum(s["size_tokens"] for s in priced),
             "matching_tokens": matching,
             "share": matching / size if size else 0.0,
             "matching_tokens_ci": [
