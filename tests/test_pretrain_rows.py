@@ -496,6 +496,96 @@ def test_the_long_document_note_matches_the_weighting_that_was_applied(monkeypat
     assert not any("still counts once" in n for n in rows["notes"])
 
 
+def test_the_weighting_follows_the_route_that_drew_the_documents(monkeypatch):
+    """A stage's route can be repointed; a stored run's cannot.
+
+    `sample_via` is registry configuration, and flipping it is how a corpus the
+    viewer starts serving whole moves onto the better route. Reading it when a
+    stored run is rolled up would reinterpret that run under a design that did
+    not produce it, switching its rate between document-count and
+    length weighting without re-sampling anything. The route the run recorded
+    wins over the registry's current one, in both directions.
+    """
+    lengths = ([200] * 10, [2000] * 90)
+    # The registry says rows; the run says it was drawn by shard, and shard
+    # draws are already token-weighted.
+    drawn_by_shard = {**_corpus_ask(*lengths), "route": "shards"}
+    out = _budget_stage(monkeypatch, PILE_STAGE, drawn_by_shard)
+    assert out["rate"] == pytest.approx(0.10)
+    assert out["weighting"].startswith("none")
+
+    # And the other way round: a run drawn by rows keeps its length weighting
+    # even where the registry now names the shard route.
+    drawn_by_rows = {**_corpus_ask(*lengths), "route": "rows"}
+    out = _budget_stage(monkeypatch, DOLMA_STAGE, drawn_by_rows)
+    assert out["rate"] == pytest.approx(2_000 / 182_000)
+    assert out["weighting"].startswith("fit characters")
+
+    # A run written before `route` was carried across has nothing to say, and
+    # falls back to the registry exactly as this did before.
+    assert "route" not in _corpus_ask(*lengths)
+    assert _budget_stage(monkeypatch, PILE_STAGE, _corpus_ask(*lengths))[
+        "weighting"
+    ].startswith("fit characters")
+    assert _budget_stage(monkeypatch, DOLMA_STAGE, _corpus_ask(*lengths))[
+        "weighting"
+    ].startswith("none")
+
+
+def test_an_ask_run_carries_its_samples_route_and_moved_revision(tmp_path, monkeypatch):
+    """The two facts about the draw that only the document sample knows.
+
+    `ask --pretrain` scores a stored sample rather than drawing one, so anything
+    about *how* it was drawn has to be copied across or it is lost: the route
+    that decides the budget weighting, and the republish the draw straddled,
+    which is the whole content of the site's "may come from either tree" warning
+    on the run's revision link.
+    """
+    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    monkeypatch.setattr(paths, "RESULTS", tmp_path)
+    monkeypatch.setattr(paths, "SITE_DATA", tmp_path)
+    monkeypatch.setattr(classify, "classify_prompts", lambda prompts, **k: (["yes"], {}))
+    records = [
+        {
+            "id": "row-5",
+            "row": 5,
+            "text": "a document",
+            "chars": 10,
+            "source": "",
+            "topic": "",
+            "shard": "",
+            "cluster": "page-0",
+            "metadata": {},
+        }
+    ]
+    _write_docs(
+        tmp_path / "pythia-12b-deduped.pretrain.docs.json",
+        records,
+        route="rows",
+        revision="a" * 40,
+        revision_moved_to="b" * 40,
+        rows_total=134_318_121,
+    )
+    args = type("A", (), {"target": "pythia-12b-deduped", "classifier": "test-model"})()
+
+    cli._label_pretrain_docs(args, "q", "slug")
+
+    scored = json.loads((tmp_path / "pythia-12b-deduped.pretrain.ask-slug.json").read_text())
+    assert scored["route"] == "rows"
+    assert scored["revision"] == "a" * 40
+    assert scored["revision_moved_to"] == "b" * 40
+
+    # A sample that did not straddle anything stamps nothing, so the field on an
+    # ask run means what it does on the sample it came from.
+    _write_docs(
+        tmp_path / "pythia-12b-deduped.pretrain.docs.json", records, route="shards"
+    )
+    cli._label_pretrain_docs(args, "q", "slug")
+    scored = json.loads((tmp_path / "pythia-12b-deduped.pretrain.ask-slug.json").read_text())
+    assert scored["route"] == "shards"
+    assert "revision_moved_to" not in scored
+
+
 def test_a_rows_draw_records_a_revision_that_moved_under_it(monkeypatch):
     """Thirty /rows requests served from `main` can straddle a republish.
 

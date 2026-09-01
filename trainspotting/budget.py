@@ -46,8 +46,9 @@ a one-line prompt does not — so the rate is weighed by fit characters:
     rate  =  Σ fit chars over matching examples  /  Σ fit chars over all judged
 
 **Corpus documents depend on the route.** Being a corpus is not the property
-that decides this; how the documents were drawn is, and `registry.sample_route`
-is where that is recorded.
+that decides this; how the documents were drawn is, and the ask run records the
+route it was drawn by (falling back to `registry.sample_route` for a run written
+before it did).
 
 A **shard**-drawn corpus needs no weighting. `pretrain.sample_documents` draws
 shards with probability proportional to compressed size and takes one document
@@ -580,7 +581,9 @@ def _pretrain_stage(target_name: str, stage: dict, slug: str) -> dict:
     # Which weighting is right is a property of how the corpus was *drawn*, not
     # of it being a corpus — the one thing this layer got wrong when a second
     # route arrived. See `_corpus_weighting` and the module docstring.
-    rate, weighting, why = _corpus_weighting(stage, count_rate, char_rate, total_chars)
+    rate, weighting, why = _corpus_weighting(
+        _corpus_route(stage, ask), count_rate, char_rate, total_chars
+    )
     out.update(
         {
             "measured": True,
@@ -636,13 +639,31 @@ _SHARD_WEIGHTING = "none — shards are already drawn proportional to size"
 _ROWS_WEIGHTING = "fit characters — rows are drawn uniformly over documents"
 
 
+def _corpus_route(stage: dict, ask: dict) -> str:
+    """Which route drew the documents an ask run scored.
+
+    From the run, not from the registry as it stands now. `ask --pretrain`
+    copies `route` out of the document sample it judged, because the route is a
+    property of the draw: flipping a stage's `sample_via` changes what
+    `registry.sample_route` answers today, and consulting that here would
+    reweigh every stored run — between document-count and length weighting, in
+    either direction — over documents that were drawn under the other design.
+
+    A run written before the field existed falls back to the registry, which is
+    what this did before and is right for every committed run: none of them has
+    had its route changed.
+    """
+    return ask.get("route") or registry.sample_route(stage)
+
+
 def _corpus_weighting(
-    stage: dict, count_rate: float, char_rate: float, total_chars: float
+    route: str, count_rate: float, char_rate: float, total_chars: float
 ) -> tuple[float, str, str]:
     """The rate a corpus stage should multiply its token budget by, and why.
 
-    `registry.sample_route` decides, because the routes make opposite sampling
-    guarantees and only one of them makes the document rate a token rate:
+    The route the documents were drawn by decides, because the routes make
+    opposite sampling guarantees and only one of them makes the document rate a
+    token rate:
 
     "shards" draws shards with probability proportional to compressed size and
     takes one document from each, so a sampled document already stands for a
@@ -661,7 +682,7 @@ def _corpus_weighting(
     than to a zero built out of a division by nothing, and says so: a run written
     before `chars` existed is the case, and none of the committed ones are.
     """
-    if registry.sample_route(stage) != "rows":
+    if route != "rows":
         return count_rate, _SHARD_WEIGHTING, ""
     if not total_chars:
         return (
