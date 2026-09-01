@@ -267,3 +267,26 @@ def test_a_url_identifies_a_document_when_the_file_does_not(monkeypatch):
 
     assert len(out["documents"]) == 1
     assert out["documents"][0]["occurrences_drawn"] == 2
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://marginalrevolution.com/post",
+        "https://marginalrevolution.com:443/post",       # explicit port
+        "http://marginalrevolution.com:8080/post",
+        "https://user:pw@marginalrevolution.com/post",   # userinfo
+        "https://WWW.MarginalRevolution.COM/post",       # case and www.
+    ],
+    ids=["plain", "https-port", "http-port", "userinfo", "shouty-www"],
+)
+def test_a_site_is_the_same_site_however_the_url_is_written(url):
+    """`casestudy.run` compares this domain against the subject's site by
+    string equality, and that comparison decides `on_subject_site` — the
+    study's headline. A port or a login in the URL must not make a page
+    somebody else's."""
+    rec = lookup.normalize(
+        {"doc_ix": 1, "spans": [["t", None]], "metadata": json.dumps({"metadata": {"metadata": {"url": url}}})}
+    )
+
+    assert rec["domain"] == "marginalrevolution.com"

@@ -236,7 +236,12 @@ def normalize(doc: dict) -> dict:
     # CCNet's recorded `source_domain` keeps the prefix, a domain parsed out of
     # a URL may not — and left alone that splits one site across two rows of
     # every tally, which reads as two smaller sources instead of one large one.
-    domain = deep.get("source_domain") or (urlsplit(url).netloc if url else None)
+    # `hostname`, not `netloc`: the latter keeps a port and any userinfo, so a
+    # URL like https://marginalrevolution.com:443/x would compare unequal to the
+    # subject's site and be tallied as somebody else's — which is the study's
+    # headline number. `hostname` also lowercases, which the fold below then
+    # only has to strip `www.` from.
+    domain = deep.get("source_domain") or (urlsplit(url).hostname if url else None)
     domain = domain.lower().removeprefix("www.") if domain else None
 
     # How much of the page survived line-level filtering. This is the number
