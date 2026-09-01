@@ -1,7 +1,8 @@
 """Re-capture the saved dataset rows that tests/test_extract.py checks against.
 
-One row per (model, stage) in the registry, pulled from the datasets-server at a
-fixed offset so a re-run of this script is a no-op unless the dataset changed.
+One row per (target, stage) in the registry — every model stage and every
+standalone dataset — pulled from the datasets-server at a fixed offset so a
+re-run of this script is a no-op unless the dataset changed.
 
 The fixtures are what makes an upstream schema change a test failure instead of
 a silently empty sample: the golden `prompt_*` fields below record what
@@ -45,8 +46,9 @@ def shrink(value):
 
 def main():
     FIXTURES.mkdir(parents=True, exist_ok=True)
-    for model_name, model in registry.MODELS.items():
-        for stage in registry.post_training_stages(model):
+    for target_name in registry.targets():
+        target = registry.resolve(target_name)
+        for stage in registry.post_training_stages(target):
             dataset = stage["hf_dataset"]
             j = hf._get(
                 "rows",
@@ -63,11 +65,11 @@ def main():
                     f"{dataset}: prompt_path {stage['prompt_path']!r} extracted nothing"
                     f" from row {ROW_OFFSET} (columns: {', '.join(sorted(row))})"
                 )
-            path = FIXTURES / f"{model_name}.{stage['stage']}.json"
+            path = FIXTURES / f"{target_name}.{stage['stage']}.json"
             path.write_text(
                 json.dumps(
                     {
-                        "model": model_name,
+                        "target": target_name,
                         "stage": stage["stage"],
                         "dataset": dataset,
                         "prompt_path": stage["prompt_path"],
