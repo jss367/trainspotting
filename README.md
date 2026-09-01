@@ -465,6 +465,8 @@ in here?* tab reads. As of 2026-08-31:
   else typed it into their own prose. What looks like heavy duplication of a writer
   is mostly other people's copies.
 
+<!-- figures: case-study.marginal-revolution fafae6ef6cb3 -->
+
 The study labels every query group with how it was chosen. Queries picked from
 knowing the blog can measure coverage; queries found by reading documents that
 were already sampled out of the corpus are present by construction and can only

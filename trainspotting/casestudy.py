@@ -20,6 +20,8 @@ the reason each field exists:
 """
 
 import datetime
+import hashlib
+import json
 
 from . import lookup
 
@@ -200,3 +202,46 @@ def run(slug: str, indexes: list[str] | None = None, progress=None) -> dict:
             "on_subject_site": on_site,
         },
     }
+
+
+def quoted_figures(study: dict) -> dict:
+    """Every number from a study that prose is likely to repeat.
+
+    A study runs against a live index with no revision to pin, so re-running it
+    moves its numbers and any paragraph quoting them goes stale with nothing to
+    catch it. The date alone cannot catch it either: two runs on one day differ,
+    and a date can be bumped without reading the figures under it.
+
+    So the export fingerprints these fields and the README carries the
+    fingerprint. Changing any of them fails the export until someone re-reads
+    the paragraph and pastes in the new one, which is the point — the
+    fingerprint means a person checked the prose against this data, not that a
+    file was regenerated.
+    """
+    return {
+        "run_on": study["run_on"],
+        "probe": {
+            "occurrences": study["probe"]["occurrences"],
+            "documents": len(study["probe"]["documents"]),
+            "exhaustive": study["probe"]["exhaustive"],
+        },
+        "spread": {
+            "occurrences": study["spread"]["occurrences"],
+            "drawn": study["spread"]["drawn"],
+            "documents": len(study["spread"]["documents"]),
+            "on_subject_site": study["spread"]["on_subject_site"],
+        },
+        # Per-query, per-index counts: the headline "333 occurrences in Dolma
+        # 1.7, 883 in DCLM-baseline" comes straight out of here.
+        "counts": {
+            row["q"]: {idx: by["occurrences"] for idx, by in row["by_index"].items()}
+            for group in study["groups"]
+            for row in group["rows"]
+        },
+    }
+
+
+def fingerprint(study: dict) -> str:
+    """A short digest of `quoted_figures`, for the README to carry."""
+    blob = json.dumps(quoted_figures(study), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(blob.encode()).hexdigest()[:12]
