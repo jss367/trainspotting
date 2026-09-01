@@ -1191,24 +1191,34 @@ async function stanceCard(main, model, slug, stages, ctxFor, post, askKeys){
     if (d) loaded.push({stage, d});
   }
   if (!loaded.length) return false;
-  // Group by the question actually stored in each file, exactly as the ask
+  // Group by the instrument actually stored in each file, exactly as the ask
   // cards above do. A slug is not a question — `--slug` takes any string and a
   // generated one is cut to 60 characters — so stages sharing one can have been
   // judged against different words. A single card headed "the same question"
   // over files that disagree is the claim the grouping exists to prevent.
-  const byQuestion = new Map();
+  //
+  // The rubric is part of the key here, as it is in the CLI report: stance.SYSTEM
+  // is what tells the judge that a DISPREFERRED completion means the model is
+  // trained *out* of that text, so rewording it moves toward/away labels with
+  // the question and the classifier untouched — and a net is signed, so two
+  // rubrics reading as one instrument is worse than it would be for a rate.
+  const byInstrument = new Map();
   for (const row of loaded){
-    const key = `${row.d.question}\u0000${row.d.classifier}`;
-    if (!byQuestion.has(key)) byQuestion.set(key, []);
-    byQuestion.get(key).push(row);
+    const key = `${row.d.question}\u0000${row.d.classifier}\u0000${row.d.system_sha || ""}`;
+    if (!byInstrument.has(key)) byInstrument.set(key, []);
+    byInstrument.get(key).push(row);
   }
   // "The same question" is a claim, so only make it when it has been checked
   // against the ask cards above. A slug with one stance file can still hold a
   // different wording — or the same wording judged by a different model — than
   // the ask results it is rendered under, and comparing stance files only to
-  // each other cannot see that.
-  for (const [key, rows] of byQuestion)
-    stanceGroup(main, slug, rows, ctxFor, post, byQuestion.size > 1 || !askKeys.has(key));
+  // each other cannot see that. The ask key deliberately omits the rubric: an
+  // ask run and a stance run never share one, so including it would report
+  // every stance card as unmatched.
+  for (const rows of byInstrument.values()){
+    const askKey = `${rows[0].d.question}\u0000${rows[0].d.classifier}`;
+    stanceGroup(main, slug, rows, ctxFor, post, byInstrument.size > 1 || !askKeys.has(askKey));
+  }
   return true;
 }
 
@@ -1256,8 +1266,8 @@ function stanceGroup(main, slug, rows, ctxFor, post, showQuestion){
     const p2 = document.createElement("p");
     p2.className = "note";
     p2.textContent = "The wording is spelled out because it is not simply the question asked above — "
-      + "either other stages under this slug were judged against different words, or this run used "
-      + "a wording or a classifier that no ask card here matches.";
+      + "either other stages under this slug were judged against a different wording, classifier or "
+      + "rubric, or this run used a wording or a classifier that no ask card here matches.";
     card.appendChild(p2);
   }
   main.appendChild(card);

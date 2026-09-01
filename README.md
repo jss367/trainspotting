@@ -771,7 +771,10 @@ sampling run that quietly labels nothing.
   only means anything within one dataset revision. Both result files carry the
   revision they were drawn at, and a known disagreement leaves the stage
   unusable rather than joined — Ai2 has republished these mixes, and after a
-  republish the same index is different text. The row count comes from a third
+  republish the same index is different text. A run that straddled a republish
+  mid-sample is refused for the same reason: both producers stamp
+  `revision_moved_to` when they detect one, and which rows came from which tree
+  is not recorded, so no part of that join can be trusted. The row count comes from a third
   run (`sources`) which can be staler still; when it names a different revision
   the stage keeps its rate, which is a share, and loses its token figure, which
   is a count.

@@ -252,6 +252,29 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
     # being unknown (every run committed before the field existed) is not
     # evidence of a mismatch, so only a known disagreement stops it.
     ask_rev, ctx_rev = ask.get("revision"), ctx.get("revision")
+    # A run that straddled a republish is not addressable by row either, and
+    # comparing the two starting revisions cannot see it: both halves can begin
+    # at the same tree and cross at different pages. Both producers already
+    # detect this and stamp `revision_moved_to` — `_label_post_training` even
+    # prints "rows may straddle both" — so the stamp is the answer rather than
+    # something to infer. Which rows came from which tree is exactly what is not
+    # recorded, so there is no safe subset to keep.
+    straddled = [
+        who
+        for who, art in (("ask run", ask), ("stored examples", ctx))
+        if art.get("revision_moved_to")
+    ]
+    if straddled:
+        out["measured"] = False
+        out["unusable"] = (
+            f"the {' and the '.join(straddled)} straddled a republish while sampling,"
+            " so a row index does not address one tree"
+        )
+        out["notes"].append(
+            "re-run both against a settled revision; which rows came from which tree"
+            " is not recorded, so no part of the join can be trusted"
+        )
+        return out
     if ask_rev and ctx_rev and ask_rev != ctx_rev:
         out["measured"] = False
         out["unusable"] = (

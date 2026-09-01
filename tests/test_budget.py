@@ -467,3 +467,43 @@ def test_a_stale_sources_run_unsizes_the_stage_but_keeps_the_rate():
     assert any("re-run" in note and "sources" in note for note in out["notes"])
     # And exactly one size note, not the stale one plus the generic one.
     assert sum("stage size unknown" in n for n in out["notes"]) == 1
+
+
+def test_a_run_that_straddled_a_republish_cannot_be_joined():
+    """Two runs starting at one revision can still cross it at different pages.
+
+    Both producers already detect this and stamp `revision_moved_to` — the
+    labeling path even prints "rows may straddle both" — so the stamp is the
+    answer rather than something to infer from the starting revisions, which
+    match in exactly this case.
+    """
+    import trainspotting.budget as b
+
+    def files(**extra):
+        f = {
+            "m.sft.ask-q.json": {"question": "Q?", "revision": "a" * 40, "classifier": "c",
+                                 "records": [{"row": 0, "prompt": "p", "match": True}]},
+            "m.sft.context.json": {"revision": "a" * 40,
+                                   "records": [{"row": 0, "key": "p", "kind": "sft",
+                                                "turns": [{"role": "assistant", "text": "x", "chars": 10}]}]},
+            "m.sources.json": {"sft": {"total": 100, "revision": "a" * 40, "dataset": "x/y"}},
+        }
+        for k, v in extra.items():
+            f[k].update(v)
+        return f
+
+    stage = {"stage": "sft", "name": "SFT", "hf_dataset": "x/y", "kind": "sft"}
+    saved = b.load
+    try:
+        # Same starting revision on both, so the round-7 check passes.
+        b.load = lambda name: files()[name]
+        assert b._post_training_stage("m", stage, "q")["measured"] is True
+
+        for who in ("m.sft.ask-q.json", "m.sft.context.json"):
+            b.load = lambda name, w=who: files(**{w: {"revision_moved_to": "b" * 40}})[name]
+            out = b._post_training_stage("m", stage, "q")
+            assert out["measured"] is False, who
+            assert "straddled a republish" in out["unusable"]
+            assert "matching_tokens" not in out
+    finally:
+        b.load = saved
