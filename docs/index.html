@@ -1901,10 +1901,22 @@ function searchFields(rec){
   // carries the true length beside the text, so a search can tell "not in this
   // sample" from "not in the first 4,000 characters of it" — which are
   // different claims, and only the first is the one the page used to make.
+  // `chars` is Python's len() — Unicode code points. JavaScript's `.length` is
+  // UTF-16 code units, which is larger for anything outside the BMP. Comparing
+  // them directly missed every cut field whose kept prefix is emoji-heavy: 4,100
+  // code points truncated to 4,000 exports a string whose `.length` is 8,000, so
+  // `4100 > 8000` is false and the field read as complete. WildChat is full of
+  // emoji, and so is the wrapper-template prompt this whole search started from.
   const push = (field, text, chars) => {
     if (!text || seen.has(text)) return;
     seen.add(text);
-    out.push({field, text, cut: typeof chars === "number" && chars > text.length});
+    // Spread only when the cheap comparison cannot settle it. Code points are
+    // never more than code units, so `chars > units` already proves a cut.
+    const units = text.length;
+    const cut = typeof chars !== "number" ? false
+      : chars > units ? true
+      : chars > [...text].length;
+    out.push({field, text, cut});
   };
   const cell = (v, field) => v && push(field, v.text, v.chars);
   cell(rec.prompt_full, "prompt");
