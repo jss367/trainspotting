@@ -262,6 +262,20 @@
   }
   .ci::before { left: 0; } .ci::after { right: 0; }
   .note { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+
+  /* ---- budget table: every stage on one scale, so it is a table not bars ---- */
+  .budget { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .budget th {
+    text-align: right; font-weight: 550; font-size: 11px; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--muted); padding: 0 0 7px; border-bottom: 1px solid var(--grid);
+  }
+  .budget th:first-child, .budget td:first-child { text-align: left; }
+  .budget td { text-align: right; padding: 7px 0; border-bottom: 1px solid var(--track); }
+  .budget td:first-child { color: var(--text-secondary); }
+  .budget tr.unmeasured td { color: var(--muted); }
+  .budget tr.total td { border-bottom: none; border-top: 1px solid var(--grid); font-weight: 600; padding-top: 9px; }
+  .budget td + td { padding-left: 14px; }
+  .budget .est { display: block; color: var(--muted); font-size: 11px; line-height: 1.4; }
   .row.clickable { cursor: pointer; transition: background .12s; }
   .row.clickable:hover { background: var(--track); }
   .drill {
@@ -1016,6 +1030,286 @@ function jumpToStage(stage){
 
 // A divider between the two halves of the pipeline, so the page reads top to
 // bottom in the same order as the tiles at the top of it.
+// Mirrors cli._fmt_est: three significant figures at most, because these are a
+// 300-draw rate times a mean length and anything more claims precision the
+// sample has nowhere near.
+function tokens(n){
+  if (n == null) return "—";
+  for (const [scale, suffix] of [[1e12,"T"],[1e9,"B"],[1e6,"M"],[1e3,"K"]]){
+    if (n >= scale){
+      const v = n / scale;
+      return (v >= 100 ? v.toFixed(0) : String(+v.toFixed(1))) + suffix;
+    }
+  }
+  return n.toFixed(0);
+}
+
+// A question answered only over post-training is a rounding error against 5.93T
+// pretraining tokens. "0.00%" would read as "none" rather than as the
+// three-orders-of-magnitude gap that is the actual finding.
+const shareText = f => (f * 100 >= 0.01 || f === 0) ? (f*100).toFixed(2)+"%" : (f*100).toPrecision(2)+"%";
+
+// What made two runs under one slug incomparable. "Two wordings" and "one
+// wording, two judges" read very differently to someone deciding whether the
+// withheld total was worth withholding.
+function mixedWhat(est){
+  const parts = [];
+  if ((est.question_variants || []).length > 1) parts.push("wordings of the question");
+  if ((est.classifiers || []).length > 1) parts.push("classifiers");
+  if ((est.rubric_conflict || []).length) parts.push(`rubrics within the ${est.rubric_conflict.join(", ")} stages`);
+  return parts.length ? parts.join(" and ") : "judging instruments";
+}
+
+// One card per question, rolling every stage onto the scale the question is
+// actually about: tokens the model was fit to. The per-stage rates above this
+// are not comparable to each other — a share of DPO rows and a share of Dolma 3
+// documents are different denominators — and this is where they become one
+// number. Built by scripts/export_site_data.py from the committed ask runs, so
+// it cannot disagree with the bars above it.
+async function budgetCard(main, model, slug){
+  const est = await getData(`${model}.budget-${slug}.json`);
+  if (!est) return;
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<h2>How much training is that?</h2>
+    <p class="sub">Each stage's rate times its size, in tokens the model was fit to —
+    the assistant turns of an SFT example, both completions of a preference pair,
+    every token of a corpus. Not the size of the dataset.</p>`;
+  const t = document.createElement("table");
+  t.className = "budget";
+  t.innerHTML = `<thead><tr><th>stage</th><th>fit tokens</th><th>sampled</th>
+    <th>rate</th><th>matching tokens</th></tr></thead>`;
+  const body = document.createElement("tbody");
+  for (const st of est.stages){
+    const tr = document.createElement("tr");
+    if (!st.measured) tr.className = "unmeasured";
+    const size = tokens(st.size_tokens) + (st.size_is_floor ? "*" : "");
+    if (!st.measured){
+      // "never asked" and "asked, but nothing came back that could be weighed"
+      // are different facts about the stage.
+      tr.innerHTML = `<td>${esc(st.stage)}</td><td>${size}</td>`
+        + `<td colspan="3">${esc(st.unusable || "never asked this question")}</td>`;
+    } else {
+      const ci = st.matching_tokens_ci
+        ? `<span class="est">${tokens(st.matching_tokens_ci[0])}–${tokens(st.matching_tokens_ci[1])}</span>` : "";
+      tr.innerHTML = `<td>${esc(st.stage)}</td><td>${size}</td>`
+        + `<td>${st.matched}/${st.n} · ${pct(st.count_rate)}</td>`
+        + `<td>${pct(st.rate)}</td>`
+        + `<td>${tokens(st.matching_tokens)}${ci}</td>`;
+    }
+    body.appendChild(tr);
+  }
+  const all = est.totals.all;
+  // A slug is not a question. `--slug` takes any string and a generated one is
+  // truncated to 60 characters, so stages sharing a slug can have been scored
+  // against different wordings — which the ask card above already splits into
+  // separate cards. Summing them here would put a number under a total that no
+  // single question produced, so the total is withheld rather than qualified.
+  const mixed = !!est.mixed;
+  const total = document.createElement("tr");
+  total.className = "total";
+  // The denominator is every sized stage, asked or not, so with one still
+  // unasked this is a lower bound on the whole pipeline — not a share of the
+  // part that was measured. The two differ by three orders of magnitude here.
+  // Three cases, and only one of them is a bound.
+  //
+  // Every stage sized and measured: the share, flat. Every stage sized with
+  // some unmeasured: a genuine lower bound — those stages are already in the
+  // denominator, so measuring one can only add matches. Some stage unsized:
+  // not a bound in either direction, because `totals()` drops an unsized stage
+  // from the denominator *and* the numerator, so sizing it later moves both and
+  // the share falls if that stage's own rate is below this aggregate.
+  const unsized = (all.unsized || []).length > 0;
+  const bounded = !unsized && all.measured < all.stages;
+  const partial = unsized || all.measured < all.stages;
+  total.innerHTML = `<td>whole pipeline</td><td>${tokens(all.size_tokens)}</td>`
+    + (mixed
+      ? `<td colspan="3">no single total — these stages were scored with different ${mixedWhat(est)}</td>`
+      : `<td colspan="2">${all.measured} of ${all.stages} stages measured</td>`
+        + `<td>${tokens(all.matching_tokens)}<span class="est">${bounded ? "≥ " : ""}${shareText(all.share)}`
+          + `${unsized ? " of what could be sized" : ""}</span></td>`);
+  body.appendChild(total);
+  t.appendChild(body);
+  card.appendChild(t);
+
+  const notes = [];
+  if (mixed){
+    const detail = (est.question_variants || []).length > 1
+      ? ": " + est.question_variants.map(q => `“${q}”`).join("  ·  ")
+      : ((est.classifiers || []).length > 1 ? ": " + est.classifiers.join(", ") : "");
+    notes.push(`Stages under this slug were scored with different ${mixedWhat(est)}, `
+      + `so they do not add up to one measurement${detail}.`);
+  }
+  // Declared out here because the unsized-only note below reads it too. Left
+  // inside the `if` it was block-scoped, and `unsized && !missing.length` threw
+  // a ReferenceError the moment any stage was unsized — taking the whole card
+  // down with it, since budgetCard throws before it appends anything.
+  const missing = est.stages.filter(st => !st.measured);
+  // Keyed on `missing`, not on `partial`. `partial` is also true when every
+  // stage was measured and one could not be sized, and this note would then
+  // announce that nothing at all was unmeasured: ", so 0 of 6.1T fit tokens
+  // above — 0.00% of the pipeline — are unmeasured".
+  if (missing.length){
+    // The single most misleading thing this page could do is show a pipeline
+    // total that quietly leaves out 5.93T tokens of pretraining.
+    //
+    // "Never asked" and "asked, and nothing usable came back" are different
+    // facts, and the row above already prints `unusable` for the second. Saying
+    // "never asked" about those too contradicts the same card two lines up, and
+    // tells someone to run a question they have already run.
+    const unasked = missing.filter(st => !st.unusable);
+    const unusable = missing.filter(st => st.unusable);
+    const missingTokens = missing.reduce((a, st) => a + (st.size_tokens || 0), 0);
+    const said = [];
+    if (unasked.length)
+      said.push(`${unasked.map(st => st.stage).join(", ")} ${unasked.length > 1 ? "were" : "was"} never asked this question`);
+    if (unusable.length)
+      said.push(`${unusable.map(st => st.stage).join(", ")} ${unusable.length > 1 ? "were" : "was"} asked but produced nothing usable (see the row above)`);
+    const tail = unsized
+      ? `The share beside it is over the stages that could be sized only, so it is not a bound in either `
+        + `direction: sizing ${all.unsized.join(", ")} would move the matching total and the denominator both.`
+      : `The share is still over the whole pipeline, which makes it a lower bound: only `
+        + `${tokens(all.measured_size_tokens)} of it was looked at, and measuring the rest can only add matches.`;
+    notes.push(`${said.join("; ")}, so ${tokens(missingTokens)} of the ${tokens(all.size_tokens)} fit tokens above `
+      + `— ${shareText(missingTokens / all.size_tokens)} of the pipeline — are unmeasured. ${tail}`);
+  }
+  if (unsized && !missing.length){
+    notes.push(`${all.unsized.join(", ")} could not be sized, so the share above is over the stages that `
+      + `could be — not over the whole pipeline, and not a bound on it.`);
+  }
+  if (all.floor.length){
+    notes.push(`${all.floor.join(", ")} sized at one reference rollout per prompt — a floor. `
+      + `The rollouts the policy was actually fit to are not in the published mix.`);
+  }
+  if (all.unsized.length) notes.push(`No size for ${all.unsized.join(", ")}; excluded from the total.`);
+  for (const st of est.stages) for (const n of (st.notes || [])) notes.push(`${st.stage}: ${n}`);
+  // The rate column is not one rule, because the two halves sample differently
+  // and the correction that is right for one double-counts on the other.
+  const rules = [...new Set(est.stages.filter(st => st.weighting).map(st => st.weighting))];
+  if (rules.length){
+    notes.push("Rate: post-training rows are drawn uniformly, so their rate is weighed by fit characters — "
+      + "otherwise it answers what fraction of examples rather than what fraction of training. Corpus documents "
+      + "come from shards drawn with probability proportional to size, which already weights by tokens, so their "
+      + "document rate is used unchanged; weighing it by length would apply that a second time.");
+  }
+  notes.push(`Fit characters are converted at ${est.chars_per_token} per token. This weighs tokens, not learning: `
+    + `a post-training token and a pretraining token are not equally formative, and nothing here corrects for that.`);
+  for (const text of notes){
+    const p = document.createElement("p");
+    p.className = "note";
+    p.textContent = text;
+    card.appendChild(p);
+  }
+  main.appendChild(card);
+}
+
+// The colour a direction gets. `away` takes the diverging pole the page already
+// reserves for "trained away from" — a stage where the dispreferred completion
+// is the one that serves the question is the finding, and it should not read as
+// just another category next to `toward`.
+const STANCE_COLOR = {
+  toward: "var(--series-1)",
+  away: "var(--neg)",
+  neither: "var(--baseline)",
+};
+const STANCE_TIP = {
+  toward: "fitting this example makes the behaviour more likely",
+  away: "fitting it makes the behaviour less likely — the preferred side, or the reward, points the other way",
+  neither: "the example does not bear on the question either way",
+};
+
+// `trainspotting stance`: the same question asked of whole examples instead of
+// prompts, so the answer can be signed. A yes/no over prompts cannot say that a
+// stage contains training pushing the other way, and this data has some.
+async function stanceCard(main, model, slug, stages, ctxFor, post, askKeys){
+  const loaded = [];
+  for (const stage of stages){
+    const d = await getData(`${model}.${stage}.stance-${slug}.json`);
+    if (d) loaded.push({stage, d});
+  }
+  if (!loaded.length) return false;
+  // Group by the instrument actually stored in each file, exactly as the ask
+  // cards above do. A slug is not a question — `--slug` takes any string and a
+  // generated one is cut to 60 characters — so stages sharing one can have been
+  // judged against different words. A single card headed "the same question"
+  // over files that disagree is the claim the grouping exists to prevent.
+  //
+  // The rubric is part of the key here, as it is in the CLI report: stance.SYSTEM
+  // is what tells the judge that a DISPREFERRED completion means the model is
+  // trained *out* of that text, so rewording it moves toward/away labels with
+  // the question and the classifier untouched — and a net is signed, so two
+  // rubrics reading as one instrument is worse than it would be for a rate.
+  const byInstrument = new Map();
+  for (const row of loaded){
+    const key = `${row.d.question}\u0000${row.d.classifier}\u0000${row.d.system_sha || ""}`;
+    if (!byInstrument.has(key)) byInstrument.set(key, []);
+    byInstrument.get(key).push(row);
+  }
+  // "The same question" is a claim, so only make it when it has been checked
+  // against the ask cards above. A slug with one stance file can still hold a
+  // different wording — or the same wording judged by a different model — than
+  // the ask results it is rendered under, and comparing stance files only to
+  // each other cannot see that. The ask key deliberately omits the rubric: an
+  // ask run and a stance run never share one, so including it would report
+  // every stance card as unmatched.
+  for (const rows of byInstrument.values()){
+    const askKey = `${rows[0].d.question}\u0000${rows[0].d.classifier}`;
+    stanceGroup(main, slug, rows, ctxFor, post, byInstrument.size > 1 || !askKeys.has(askKey));
+  }
+  return true;
+}
+
+function stanceGroup(main, slug, rows, ctxFor, post, showQuestion){
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<h2>Which way does it push?</h2>
+    <p class="sub">${showQuestion ? `“${esc(rows[0].d.question)}” — asked` : "The same question asked"}
+    of the whole example — the response the model is fit to,
+    which side of a preference pair is preferred, what the verifier pays for — so the answer can be
+    negative. Judged by ${esc(rows[0].d.classifier)}.</p>`;
+  // A run where every example was refused or errored writes a valid file with
+  // no records. Dividing by that n gives NaN, which spreads silently into the
+  // scale, the bar widths, the percentages and the intervals — the ask and HHH
+  // cards already show a no-labels state for it instead.
+  for (const {stage} of rows.filter(r => !r.d.records.length)){
+    noLabels(card, `${stage.toUpperCase()} — every sampled example went unjudged, so there is no direction to show`);
+  }
+  const scored = rows.filter(r => r.d.records.length);
+  const max = Math.max(...scored.flatMap(r => ["toward","away"].map(k => r.d.counts[k] / r.d.records.length)), 0.01);
+  for (const {stage, d} of scored){
+    const n = d.records.length;
+    const s = post.find(p => p.stage === stage) || {stage, hf_dataset: d.dataset, name: d.dataset};
+    const head = document.createElement("div");
+    head.className = "lbl";
+    head.style.cssText = "font-size:12px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);margin:14px 0 4px";
+    head.textContent = `${stage.toUpperCase()} — ${d.dataset.split("/")[1]} · net ${d.net > 0 ? "+" : ""}${d.net}`;
+    card.appendChild(head);
+    for (const k of ["toward", "away", "neither"]){
+      const c = d.counts[k], [lo, hi] = wilson(c, n);
+      barRow(card, k, c/n, lo, hi, k === "neither" ? 1 : max,
+        `<b>${k}</b> — ${esc(STANCE_TIP[k])}<br>${c} of ${n} judged examples (${pct(c/n)})`
+        + `<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to read them`,
+        false, d.records.filter(x => x.stance === k),
+        {...ctxFor(s), linkKey: `stance-${slug}-${k}`}, STANCE_COLOR[k]);
+    }
+  }
+  const p1 = document.createElement("p");
+  p1.className = "note";
+  p1.textContent = "“neither” is drawn on its own scale — it is the answer for most of any mix, "
+    + "and putting it beside the other two would flatten them to nothing. The headline is the net, "
+    + "toward minus away.";
+  card.appendChild(p1);
+  if (showQuestion){
+    const p2 = document.createElement("p");
+    p2.className = "note";
+    p2.textContent = "The wording is spelled out because it is not simply the question asked above — "
+      + "either other stages under this slug were judged against a different wording, classifier or "
+      + "rubric, or this run used a wording or a classifier that no ask card here matches.";
+    card.appendChild(p2);
+  }
+  main.appendChild(card);
+}
+
 function part(title, note){
   const h = document.createElement("h2");
   h.className = "part";
@@ -1527,7 +1821,21 @@ async function renderModel(model, gen){
     const [, stage, rest] = f.match(/^[^.]+\.([^.]+)\.ask-(.+)\.json$/) || [];
     if (stage) (bySlug[rest] ||= []).push([stage, f]);
   }
+  // A stance run is optional and lands per stage under the same slug, so index
+  // them once here rather than re-scanning the manifest inside the loop.
+  const stanceStages = {};
+  for (const f of MANIFEST){
+    if (!f.startsWith(model + ".")) continue;
+    const [, stage, slug] = f.match(/^[^.]+\.([^.]+)\.stance-(.+)\.json$/) || [];
+    if (stage) (stanceStages[slug] ||= []).push(stage);
+  }
+  for (const slug in stanceStages){
+    const order = m.stages.map(x => x.stage);
+    stanceStages[slug].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  }
+
   let askDivider = false;   // only if a card actually renders — the files may all fail to load
+  const askSlugsSeen = new Set();
   for (const [slug, files] of Object.entries(bySlug)){
     // Pipeline order, not just post-training order — a question asked with
     // --pretrain puts corpus stages in the same card, and they come first.
@@ -1603,6 +1911,40 @@ async function renderModel(model, gen){
       }
       main.appendChild(card);
     }
+    // After the bars, not instead of them: the bars are what was measured and
+    // the budget is what it adds up to. One per slug, however many wordings the
+    // slug turned out to cover.
+    askSlugsSeen.add(slug);
+    if (askDivider){
+      // Direction first, then the budget: which way it pushes, then how much of
+      // it there is. A total is only worth reading once the sign is settled.
+      // The instruments the ask cards for this slug were drawn from, keyed the
+      // same way the stance files are, so a stance run that used other words or
+      // another judge can be told apart from one that matches.
+      const askKeys = new Set([...buckets.values()].map(b => `${b.question}\u0000${b.classifier}`));
+      await stanceCard(main, model, slug, stanceStages[slug] || [], ctxFor, post, askKeys);
+      if (gen !== GEN) return;
+      await budgetCard(main, model, slug);
+    }
+    if (gen !== GEN) return;
+  }
+
+  // A stance run does not require an ask run — `stance` reads the committed
+  // context records, not an ask file, and the CLI report shows stance-only
+  // slugs. Iterating `bySlug` alone indexes those files and then never draws
+  // them, so anything asked only of whole examples would silently not exist on
+  // this page. They have no ask bucket to compare against, so every one states
+  // its own wording.
+  for (const slug of Object.keys(stanceStages)){
+    if (askSlugsSeen.has(slug)) continue;
+    if (!askDivider){
+      main.appendChild(part("Custom questions", "asked of whichever stages you ran them against"));
+      askDivider = true;
+    }
+    await stanceCard(main, model, slug, stanceStages[slug], ctxFor, post, new Set());
+    if (gen !== GEN) return;
+    await budgetCard(main, model, slug);
+    if (gen !== GEN) return;
   }
 
   // Every destination is mounted now, so honor a tile clicked while data was loading.

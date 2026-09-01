@@ -54,6 +54,49 @@ def _turns(messages) -> list[dict]:
     return out
 
 
+def _turn_key(turn: dict) -> tuple:
+    """A stored turn reduced to what makes it the same turn as another.
+
+    `text` is cut at MAX_TEXT and `chars` is not, so two different turns that
+    agree on their first 4,000 characters still differ here.
+    """
+    reasoning = turn.get("reasoning") or {}
+    return (
+        turn.get("role"),
+        turn.get("text"),
+        turn.get("chars"),
+        reasoning.get("text"),
+        reasoning.get("chars"),
+    )
+
+
+def branch_point(chosen: list[dict], rejected: list[dict]) -> int:
+    """How many leading turns of a stored pair are shared history.
+
+    A multi-turn pair branches somewhere and shares everything before it,
+    assistant turns included. Those shared turns are the conversation the pair
+    is judged in, not either candidate answer, so splitting the pair by role
+    puts earlier assistant turns on both sides — text neither completion is
+    being preferred for. `search` draws the same line on raw rows
+    (`search._shared_turns`); this is it for the records `context` stores.
+
+    The last turn of each side is its candidate answer by definition and is
+    never shared however far the two lists agree, so a pair whose completions
+    are identical branches at the final turn rather than having no completions
+    at all.
+
+    12 of the 300 sampled Dolci-Instruct-DPO pairs are multi-turn, and counting
+    their shared history on both sides inflates the stage's fit characters by
+    5.9%. The think mixes are single-turn throughout, so nothing there moves.
+    """
+    n = 0
+    for a, b in zip(chosen or [], rejected or []):
+        if _turn_key(a) != _turn_key(b):
+            break
+        n += 1
+    return min(n, max(0, len(chosen or []) - 1), max(0, len(rejected or []) - 1))
+
+
 def _meta(row: dict, keys: list[str]) -> dict:
     return {k: row[k] for k in keys if row.get(k) not in (None, "", [], {})}
 
