@@ -767,6 +767,11 @@ sampling run that quietly labels nothing.
   characters, and then fits the rendered example into 12,000. A value expressed
   only in the part that was cut is not visible to it. Every view links to the
   untruncated row on HuggingFace.
+- A `budget` stage joins its ask run to its stored examples by row index, which
+  only means anything within one dataset revision. Both result files carry the
+  revision they were drawn at, and a known disagreement leaves the stage
+  unusable rather than joined — Ai2 has republished these mixes, and after a
+  republish the same index is different text.
 - The corpus rate assumes shard-proportional sampling did the token weighting,
   which is true between shards and only approximately true within one: a
   document is drawn uniformly from its shard's reachable head rather than by

@@ -174,7 +174,13 @@ def context_records(target_name: str, stage: str) -> list[dict]:
 
 
 def load_context(target_name: str, stage: str) -> dict:
-    """Context records for a stage, keyed both ways a result record can address one.
+    """`index_context` over a stage's stored examples, for callers with no use
+    for the envelope around them."""
+    return index_context(context_records(target_name, stage))
+
+
+def index_context(records: list[dict]) -> dict:
+    """Context records keyed both ways a result record can address one.
 
     Newer result records carry the row's absolute index; ones committed before
     that join on the first 400 characters of the prompt. Both keys go in the same
@@ -182,7 +188,7 @@ def load_context(target_name: str, stage: str) -> dict:
     `context.build`.
     """
     out = {}
-    for rec in context_records(target_name, stage):
+    for rec in records:
         if rec.get("row") is not None:
             out[("row", rec["row"])] = rec
         out.setdefault(("key", rec["key"]), rec)
@@ -232,8 +238,28 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
         out["measured"] = False
         return out
     records = ask["records"]
-    all_examples = context_records(target_name, name)
-    by_key = load_context(target_name, name)
+    ctx = load(f"{target_name}.{name}.context.json") or {}
+    # A row index addresses a position in a split, not a document. Ai2 has
+    # republished these mixes, and after a republish the same index is different
+    # text — so joining an old ask run to a freshly drawn context sample would
+    # weigh a match label by an unrelated example's length and size the stage
+    # from it. Both stamps have to agree before the join means anything; either
+    # being unknown (every run committed before the field existed) is not
+    # evidence of a mismatch, so only a known disagreement stops it.
+    ask_rev, ctx_rev = ask.get("revision"), ctx.get("revision")
+    if ask_rev and ctx_rev and ask_rev != ctx_rev:
+        out["measured"] = False
+        out["unusable"] = (
+            f"the ask run was drawn at {ask_rev[:7]} and the stored examples at"
+            f" {ctx_rev[:7]}; a row index means different text across a republish"
+        )
+        out["notes"].append(
+            "re-run `trainspotting context` and `trainspotting ask` against the same"
+            " revision to join them"
+        )
+        return out
+    all_examples = ctx.get("records", [])
+    by_key = index_context(all_examples)
     joined = [(r, context_for(r, by_key)) for r in records]
     unjoined = sum(1 for _, c in joined if c is None)
     fit = [(r, fit_chars(c)) for r, c in joined if c is not None]
@@ -371,6 +397,18 @@ def _pretrain_stage(target_name: str, stage: dict, slug: str) -> dict:
         return out
     records = ask["records"]
     n = len(records)
+    if not n:
+        # The same guard `_post_training_stage` got, which this path did not.
+        # A corpus stage is trillions of tokens: letting an all-refused run
+        # report rate 0 with a [0, 0] interval puts a definite, confident zero
+        # into the pipeline total across 99.7% of it.
+        out["measured"] = False
+        out["unusable"] = "the ask run judged no document"
+        out["notes"].append(
+            "an ask run exists but judged nothing, so the stage is left unmeasured"
+            " rather than counted as zero across its whole token budget"
+        )
+        return out
     k = sum(bool(r["match"]) for r in records)
     # The corpus interval is cluster-corrected and the `ask` run already stored
     # it. Recompute only for a run written before that field existed, and say so

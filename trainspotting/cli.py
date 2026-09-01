@@ -1432,19 +1432,38 @@ def _report_questions(target_name: str, target: dict) -> None:
         print("\n## Which way each example pushes (whole examples, sampled)\n")
         for slug, stages in stances.items():
             print(f"### {slug}\n")
+            # Grouped by the instrument each run recorded, the same way the ask
+            # section and the site's stance cards are. Printing every stage
+            # under the slug alone lets two nets scored against different words,
+            # or by different judges, read as one answer — and a net is signed,
+            # so averaging incompatible ones by eye is worse than a rate.
+            groups: dict[tuple, list[tuple[str, dict]]] = {}
             for st in sorted(stages, key=lambda x: order.index(x) if x in order else 99):
                 d = budget.load(f"{target_name}.{st}.stance-{slug}.json")
-                if not d:
-                    continue
-                c = d["counts"]
-                n = len(d["records"])
-                lo, hi = _wilson(c["toward"], n)
+                if d:
+                    groups.setdefault((d["question"], d.get("classifier")), []).append((st, d))
+            for (question, classifier), group in groups.items():
+                print(f"> {question}\n")
+                if classifier:
+                    print(f"judged by {classifier}\n")
+                for st, d in group:
+                    c = d["counts"]
+                    n = len(d["records"])
+                    if not n:
+                        print(f"- {st:14s} every sampled example went unjudged — no direction to show")
+                        continue
+                    lo, hi = _wilson(c["toward"], n)
+                    print(
+                        f"- {st:14s} toward {c['toward']}/{n} = {c['toward'] / n * 100:.1f}%"
+                        f" (95% CI {lo * 100:.1f}–{hi * 100:.1f}%), away {c['away']},"
+                        f" net {d['net']:+d}"
+                    )
+                print()
+            if len(groups) > 1:
                 print(
-                    f"- {st:14s} toward {c['toward']}/{n} = {c['toward'] / n * 100 if n else 0:.1f}%"
-                    f" (95% CI {lo * 100:.1f}–{hi * 100:.1f}%), away {c['away']},"
-                    f" net {d['net']:+d}"
+                    f"({len(groups)} instruments share the slug {slug!r}; the nets above are"
+                    " grouped under the one that produced them and do not combine.)\n"
                 )
-            print()
 
     for slug in asks:
         est = budget.estimate(target_name, slug)

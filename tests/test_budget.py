@@ -375,3 +375,60 @@ def test_a_rescaled_bound_cannot_exceed_the_stage():
     lo, hi = out["matching_tokens_ci"]
     assert 0 <= lo <= hi <= 1_000
     assert hi == 1_000  # clamped, not 3,204
+
+
+def test_an_ask_run_and_a_context_run_from_different_revisions_do_not_join(tmp_path, monkeypatch):
+    """A row index addresses a position in a split, not a document.
+
+    Ai2 has republished these mixes. After a republish the same index is
+    different text, so joining an old ask run to a freshly drawn context sample
+    weighs a match label by an unrelated example's length — and sizes the whole
+    stage from it.
+    """
+    files = {
+        "m.sft.ask-q.json": {"question": "Q?", "revision": "a" * 40, "classifier": "c",
+                             "records": [{"row": 0, "prompt": "p", "match": True}]},
+        "m.sft.context.json": {"revision": "b" * 40,
+                               "records": [{"row": 0, "key": "p", "kind": "sft",
+                                            "turns": [{"role": "assistant", "text": "x", "chars": 10}]}]},
+    }
+    monkeypatch.setattr(budget, "load", lambda name: files.get(name))
+    monkeypatch.setattr(budget, "stage_rows", lambda *_: 1000)
+    out = budget._post_training_stage(
+        "m", {"stage": "sft", "name": "SFT", "hf_dataset": "x/y", "kind": "sft"}, "q"
+    )
+    assert out["measured"] is False
+    assert "republish" in out["unusable"]
+    assert "matching_tokens" not in out
+
+    # Either stamp being unknown is not evidence of a mismatch — every run
+    # committed before the field existed records None.
+    files["m.sft.context.json"]["revision"] = None
+    out = budget._post_training_stage(
+        "m", {"stage": "sft", "name": "SFT", "hf_dataset": "x/y", "kind": "sft"}, "q"
+    )
+    assert out["measured"] is True
+
+
+def test_a_corpus_run_that_judged_nothing_is_not_a_confident_zero():
+    """The guard the post-training path got, on the path where it matters most.
+
+    A corpus stage is trillions of tokens. An all-refused run reporting rate 0
+    with a [0, 0] interval puts a definite zero into the pipeline total across
+    99.7% of it.
+    """
+    import trainspotting.budget as b
+
+    saved = b.load
+    b.load = lambda name: ({"question": "Q?", "records": [], "dataset": "d"}
+                           if ".ask-" in name else None)
+    try:
+        out = b._pretrain_stage(
+            "m", {"stage": "pretrain", "name": "Dolma", "tokens": 5_930_000_000_000,
+                  "sample_dataset": "x/y"}, "q"
+        )
+    finally:
+        b.load = saved
+    assert out["measured"] is False
+    assert out["unusable"] == "the ask run judged no document"
+    assert "matching_tokens" not in out
