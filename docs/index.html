@@ -1815,8 +1815,9 @@ function caseStudyCards(main, d){
   spread.innerHTML = `<h2>Where the copies actually live</h2>
     <p class="sub"><code>${esc(d.spread.query)}</code> appears ${num(d.spread.occurrences)} times in
       ${esc(spreadIndex.label)}. ${esc(d.spread.explain)}
-      Shares below are over the ${num(d.spread.drawn)} occurrences drawn, so a site that reposts the
-      text on several pages counts once per page.</p>`;
+      Shares below are over the ${num(d.spread.drawn)} occurrences drawn, weighted by occurrence
+      rather than by page: a site that reposts the text on several pages counts once per page, and a
+      page that repeats it counts once per repeat.</p>`;
   // The long tail is a finding, not noise — but twenty rows all reading 1.7%
   // spend the card's whole height saying one thing. Name the sites that came up
   // more than once, then roll the rest into a single row that keeps the count.
