@@ -261,20 +261,34 @@ def normalize(doc: dict) -> dict:
     # this one fails to find is a document that falls into "(no url recorded)"
     # and drops out of `domain_shares`, which is what the study's headline
     # "0 of 60 are on the blog" is computed over.
-    url = (
-        inner.get("url")
-        or inner.get("WARC-Target-URI")
-        or deep.get("url")
-        or deep.get("WARC-Target-URI")
-        or (inner.get("id") if str(inner.get("id", "")).startswith("http") else None)
+    # The first candidate that is actually a URL, not the first that is merely
+    # truthy. Only a string is a URL: a subset that recorded an integer id or a
+    # nested object under one of these keys would otherwise put that object in
+    # the record, where the site renders it as a link and `_identity` puts it in
+    # a dict key, which a dict is not allowed to be.
+    #
+    # Validating inside the chain rather than after it. Filtering afterwards let
+    # a truthy non-string in an early slot win the `or` and then become None,
+    # discarding a perfectly good URL in a later slot — the document lost both
+    # its URL and its domain and was misfiled in `domain_shares`. These five
+    # slots exist precisely because the subsets disagree about where provenance
+    # lives, so an early slot holding something unusable is the case the chain
+    # is for, not an anomaly.
+    def _usable(value, prefix=""):
+        return value if isinstance(value, str) and value.startswith(prefix) else None
+
+    url = next(
+        (u for u in (
+            _usable(inner.get("url")),
+            _usable(inner.get("WARC-Target-URI")),
+            _usable(deep.get("url")),
+            _usable(deep.get("WARC-Target-URI")),
+            # An `id` is only a URL when it looks like one; most subsets put a
+            # hash here.
+            _usable(inner.get("id"), "http"),
+        ) if u),
+        None,
     )
-    # Only a string is a URL. A subset that recorded an integer id or a nested
-    # object under one of these keys would otherwise put that object in the
-    # record — where the site renders it as a link and `_identity` puts it in a
-    # dict key, which a dict is not allowed to be. Unreadable is unavailable
-    # here as everywhere else in this function.
-    if not isinstance(url, str) or not url:
-        url = None
     # Fold `www.` here rather than at each call site. The subsets disagree —
     # CCNet's recorded `source_domain` keeps the prefix, a domain parsed out of
     # a URL may not — and left alone that splits one site across two rows of

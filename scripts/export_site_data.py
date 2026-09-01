@@ -339,11 +339,18 @@ for name in sorted(n for n in copied if n.startswith("case-study.")):
         )
     # In this study's own section, not anywhere in the file. Two studies run on
     # one day would otherwise satisfy each other's check, and the second could
-    # carry no date at all — or a stale one — while the export passed. The
-    # section is the text after the marker line the fingerprint check just
-    # confirmed, up to the next one, which is what makes the marker do double
-    # duty as a section boundary.
-    section = readme.split(marker)[0].rsplit("<!-- figures: ", 1)[-1]
+    # carry no date at all — or a stale one — while the export passed.
+    #
+    # The section runs from the nearest boundary above the marker to the marker
+    # itself. Two things can be that boundary: the previous study's marker, or
+    # the heading this study sits under. Both are needed. Taking only the
+    # previous marker left the *first* study unbounded — there is none above it,
+    # so the "section" was the whole README prefix and the check was global
+    # again, which is the bug this is here to fix and which the only study in
+    # the file today would have hit.
+    before = readme.split(marker)[0]
+    start = max(before.rfind("<!-- figures: "), before.rfind("\n#"))
+    section = before[start:] if start >= 0 else before
     if f"As of {d['run_on']}" not in section.replace("\n", " "):
         sys.exit(
             f"{study.name} was run on {d['run_on']}, which its own README section "
