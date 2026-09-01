@@ -451,6 +451,45 @@
   .tmap > div.lightink, .tmap > div.lightink > b { color: #fff; }
   @media (max-width: 640px) { .tmap { height: 420px; } }
 
+  /* ---- lookup study ---- */
+  /* One count per corpus per query. A table rather than the bar rows used
+     everywhere else, because these five corpora are not parts of one whole:
+     there is no total here to take a share of, and a bar would invent one. */
+  .lutwrap { overflow-x: auto; margin: 0 0 4px; }
+  .lut { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .lut th, .lut td { padding: 7px 10px; border-bottom: 1px solid var(--grid); text-align: right; vertical-align: top; }
+  .lut th:first-child, .lut td:first-child { text-align: left; padding-left: 0; }
+  .lut thead th {
+    font-size: 11px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
+  }
+  .lut tbody tr:last-child td { border-bottom: none; }
+  .lut td.q { color: var(--text-primary); }
+  .lut td.q code { font-size: 12px; }
+  .lut td.q small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; max-width: 340px; }
+  .lut td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  /* Absent is a result, not a gap. Muted so it reads as measured rather than
+     missing, which an empty cell would not. */
+  .lut td.n.zero { color: var(--muted); }
+  .selbadge {
+    display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--text-secondary); margin-left: 8px;
+    vertical-align: 2px; font-weight: 500;
+  }
+  .selbadge.biased { border-color: var(--neg); color: var(--neg); }
+  .lutgrp { margin: 18px 0 2px; font-size: 13px; font-weight: 650; }
+  .lutgrp:first-of-type { margin-top: 6px; }
+  .lookup .row { grid-template-columns: 210px 1fr 104px; }
+  .findings { display: grid; gap: 10px; margin: 4px 0 14px; }
+  .finding { border-left: 2px solid var(--series-1); padding: 0 0 0 12px; }
+  .finding .n { font-size: 22px; font-weight: 650; line-height: 1.15; }
+  .finding .t { font-size: 13px; color: var(--text-secondary); }
+  @media (min-width: 620px) { .findings { grid-template-columns: repeat(3, 1fr); } }
+  .cmdline {
+    display: block; background: var(--track); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; font-size: 12px; overflow-x: auto;
+    white-space: pre; margin: 0 0 8px;
+  }
   footer {
     color: var(--muted); font-size: 13px; margin-top: 32px;
     padding-top: 18px; border-top: 1px solid var(--grid);
@@ -638,8 +677,14 @@
     counts as English; a prompt split evenly between two languages is left
     undetermined rather than assigned to one.
     Data: Ai2's <a href="https://allenai.org/blog/olmo3">OLMo 3</a> release
-    (Dolma 3 / Dolci). Regenerate with <code>trainspotting classify</code>,
-    <code>trainspotting context</code> + <code>scripts/export_site_data.py</code>.
+    (Dolma 3 / Dolci), except the <em>is my writing in here?</em> tab, which counts
+    exact strings in the older public corpora that have an
+    <a href="https://infini-gram.io">infini-gram</a> index — Dolma 1.7,
+    DCLM-baseline, RedPajama, C4 and the Pile. No public index covers Dolma 3, so
+    that tab describes neighbouring corpora rather than what OLMo 3 read.
+    Regenerate with <code>trainspotting classify</code>,
+    <code>trainspotting context</code>, <code>trainspotting case-study</code>
+    + <code>scripts/export_site_data.py</code>.
   </footer>
 </div>
 <div id="tip" role="tooltip"></div>
@@ -3956,6 +4001,273 @@ async function renderModel(model, gen){
 const MODEL_COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)"];
 const shortName = m => m.replace(/^olmo-3-/, "");
 
+// ---- lookup study ----
+// The one view that is not about a model. Every other card answers what a
+// corpus contains, at what rate; this answers whether it contains one specific
+// text — the question someone asks about their own writing, and the one
+// sampling can never reach, since a whole blog is a rounding error in a mix
+// this size. The corpora here are the ones with a public suffix-array index,
+// none of which is Dolma 3, so every table names the corpus it is about.
+
+const isCaseFile = f => f.startsWith("case-study.") && f.endsWith(".json");
+
+// Only the subject's own pages become links. The rest of these documents sit on
+// bookmark mirrors and SEO spam, and the finding is that they exist — handing
+// them an outbound link from a published page is not part of reporting it.
+function lookupDocBlock(rec, site, exhaustive){
+  const tags = [];
+  if (rec.domain) tags.push(`<span class="prov">${esc(rec.domain)}</span>`);
+  if (rec.subset) tags.push(`<span>${esc(rec.subset)}</span>`);
+  if (rec.snapshot) tags.push(`<span>${esc(rec.snapshot)}</span>`);
+  if (rec.tokens != null) tags.push(`<span>${num(rec.tokens)} tokens</span>`);
+  if (rec.quality != null) tags.push(`<span>quality ${rec.quality.toFixed(2)}</span>`);
+  // The number that explains why a long post is a short training document.
+  if (rec.lines_kept != null && rec.lines_original)
+    tags.push(`<span>${num(rec.lines_kept)} of ${num(rec.lines_original)} lines kept</span>`);
+  // Same number, two different meanings. Where the list is exhaustive it is how
+  // many times the string occurs in this document; where it is sampled it is how
+  // many random draws happened to land here, which says nothing about the page.
+  if (rec.occurrences_drawn > 1)
+    tags.push(`<span>${rec.occurrences_drawn} ${exhaustive ? "occurrences in this document" : "draws landed here"}</span>`);
+  const text = rec.excerpt || "";
+  const head = text.slice(0, 150).replace(/\s+/g, " ").trim() || "(no text returned)";
+  const own = rec.domain === site;
+  const link = rec.url
+    ? (own
+        ? `<a class="shard" href="${escAttr(rec.url)}" target="_blank" rel="noopener">${esc(rec.url)} ›</a>`
+        : `<span class="shard">${esc(rec.url)}</span>`)
+    : "";
+  return `<div class="doc">
+    <div class="doctags">${tags.join("")}</div>
+    <details><summary>${esc(head)}${text.length > 150 ? "…" : ""}</summary>
+      <p class="note" style="margin:6px 0 0">A window the index centres on the match, so it
+        starts mid-document rather than at the top of the page.</p>
+      <pre>${esc(text)}</pre>
+      ${link}
+    </details>
+  </div>`;
+}
+
+function caseStudyCards(main, d){
+  const ids = d.indexes.map(i => i.id);
+  const byId = Object.fromEntries(d.indexes.map(i => [i.id, i]));
+  const probeIndex = byId[d.probe.index] || {label: d.probe.index};
+  const spreadIndex = byId[d.spread.index] || {label: d.spread.index};
+  // The ceiling row: the first independently chosen query, in the probe's
+  // corpus. Read off the data rather than hardcoded, so re-running the study
+  // moves the headline with the table under it.
+  const ceiling = (d.groups.find(g => g.selection === "independent") || {rows: []}).rows[0];
+
+  // A draw whose document had unreadable metadata has no domain — `normalize`
+  // leaves it unset and `domain_shares` groups it as "(no url recorded)". It is
+  // excluded from `on_subject_site`, which does not make it somebody else's page.
+  const unknownDomain = (d.spread.domains.find(x => !x.domain || x.domain === "(no url recorded)") || {}).occurrences || 0;
+  const anyApprox = d.groups.some(g => g.rows.some(r => Object.values(r.by_index).some(v => v.approx)))
+    || d.probe.approx || d.spread.approx;
+  const head = document.createElement("section");
+  head.className = "card lookup";
+  head.innerHTML = `<h2>${esc(d.title)}</h2>
+    <p class="sub">${esc(d.subject)} — ${esc(d.byline)} · <code>${esc(d.site)}</code>.
+      Counted ${esc(d.run_on)} against <a href="https://infini-gram.io" target="_blank" rel="noopener">infini-gram</a>,
+      a suffix-array index over these corpora.</p>
+    <p style="margin:0 0 14px;font-size:14px"><b>${esc(d.question)}</b>
+      <span style="color:var(--text-secondary)">${esc(d.answer)}</span></p>
+    <div class="findings">
+      <div class="finding">
+        <div class="n">${num(d.probe.documents.length)}</div>
+        <div class="t">documents in ${esc(probeIndex.label)} hold one particular post —
+          ${d.probe.exhaustive
+            ? "every copy of it the corpus has."
+            : `a sample of the copies the corpus has, drawn from ${num(d.probe.drawn)} draws. The index
+               answered with fewer than the whole occurrence list, so this is not all of them.`}</div>
+      </div>
+      <div class="finding">
+        <div class="n">${num(d.spread.on_subject_site)} of ${num(d.spread.drawn)}</div>
+        <div class="t">randomly drawn copies of the blog's own name sit on the blog.
+          ${unknownDomain
+            ? `${num(d.spread.drawn - d.spread.on_subject_site - unknownDomain)} are on other people's pages,
+               and ${num(unknownDomain)} came back with no readable URL, so where they sit is unknown.`
+            : "The rest are other people's pages."}</div>
+      </div>
+      ${ceiling ? `<div class="finding">
+        <div class="n">${num(ceiling.by_index[d.probe.index].occurrences)}</div>
+        <div class="t">occurrences of <code>${esc(ceiling.q)}</code> — a ceiling on how many posts using it are present at all.</div>
+      </div>` : ""}
+    </div>
+    <p class="scope">${esc(d.caveat)}</p>`;
+  main.appendChild(head);
+
+  // ---- counts ----
+  // Two things the prose above and below must not assume: that every drawn
+  // occurrence has a readable domain, and that every count is exact. Both are
+  // recorded per result, so read them rather than writing around them.
+  const counts = document.createElement("section");
+  counts.className = "card lookup";
+  counts.innerHTML = `<h2>The counts</h2>
+    <p class="sub">Occurrences of each exact string, per corpus. Nothing is sampled here — a
+      suffix array counts every occurrence it holds.${anyApprox
+        ? ` A count marked <code>~</code> is the index's own estimate: it stops counting a string this
+            common and reports an approximation, which it flags and this passes through.`
+        : ""}</p>`;
+  for (const g of d.groups){
+    const h = document.createElement("p");
+    h.className = "lutgrp";
+    // The badge is the load-bearing part of this table. Queries found by
+    // reading documents already pulled out of the corpus are present by
+    // construction, and letting them share a table with independently chosen
+    // ones without saying so would report a 100% hit rate as a finding.
+    const biased = g.selection !== "independent";
+    h.innerHTML = `${esc(g.name)}<span class="selbadge${biased ? " biased" : ""}">${
+      biased ? "found in the corpus — present by construction" : "chosen independently"}</span>`;
+    counts.appendChild(h);
+    const note = document.createElement("p");
+    note.className = "note";
+    note.style.margin = "2px 0 6px";
+    note.textContent = g.explain;
+    counts.appendChild(note);
+
+    const wrap = document.createElement("div");
+    wrap.className = "lutwrap";
+    const rows = g.rows.map(r => `<tr>
+        <td class="q"><code>${esc(r.q)}</code><small>${esc(r.note)}</small></td>
+        ${ids.map(i => {
+          const c = r.by_index[i] || {};
+          const n = c.occurrences ?? 0;
+          return `<td class="n${n ? "" : " zero"}">${n ? num(n) + (c.approx ? "~" : "") : "absent"}</td>`;
+        }).join("")}
+      </tr>`).join("");
+    wrap.innerHTML = `<table class="lut">
+      <thead><tr><th>string</th>${ids.map(i => `<th>${esc(byId[i].label)}</th>`).join("")}</tr></thead>
+      <tbody>${rows}</tbody></table>`;
+    counts.appendChild(wrap);
+  }
+  const legend = document.createElement("p");
+  legend.className = "note";
+  legend.textContent = d.indexes.map(i => `${i.label}: ${i.note}`).join("  ");
+  counts.appendChild(legend);
+  main.appendChild(counts);
+
+  // ---- the probe ----
+  const probe = document.createElement("section");
+  probe.className = "card lookup";
+  probe.innerHTML = `<h2>What one post looks like when it is in there</h2>
+    <p class="sub"><code>${esc(d.probe.query)}</code> in ${esc(probeIndex.label)}:
+      ${num(d.probe.occurrences)} occurrence${d.probe.occurrences === 1 ? "" : "s"}
+      across ${num(d.probe.documents.length)} document${d.probe.documents.length === 1 ? "" : "s"}.
+      ${d.probe.exhaustive
+        ? esc(d.probe.explain)
+        : `The index answered with fewer than the whole occurrence list, so these documents are a
+           sample of ${num(d.probe.drawn)} draws rather than every copy the corpus holds.`}</p>`;
+  for (const rec of d.probe.documents)
+    probe.insertAdjacentHTML("beforeend", lookupDocBlock(rec, d.site, d.probe.exhaustive));
+  main.appendChild(probe);
+
+  // ---- the spread ----
+  const spread = document.createElement("section");
+  spread.className = "card lookup";
+  spread.innerHTML = `<h2>Where the copies actually live</h2>
+    <p class="sub"><code>${esc(d.spread.query)}</code> appears ${num(d.spread.occurrences)}${d.spread.approx ? "~" : ""} times in
+      ${esc(spreadIndex.label)}${d.spread.approx ? ", which the index reports as an estimate rather than a count — it stops counting a string this common" : ""}. ${esc(d.spread.explain)}
+      Shares below are over the ${num(d.spread.drawn)} occurrences drawn, weighted by occurrence
+      rather than by page: a site that reposts the text on several pages counts once per page, and a
+      page that repeats it counts once per repeat.</p>`;
+  // The long tail is a finding, not noise — but twenty rows all reading 1.7%
+  // spend the card's whole height saying one thing. Name the sites that came up
+  // more than once, then roll the rest into a single row that keeps the count.
+  // The subject's own site always gets its own row however rare it is: whether
+  // it is there at all is the question this section answers.
+  // "(no url recorded)" is not a site. It rides in `domains` because that is
+  // where `domain_shares` puts a draw whose document had no readable URL, and
+  // rolling it into the tail would count it as one more site holding a copy —
+  // contradicting the headline and the conclusion, which both say its location
+  // is unknown. It gets its own row.
+  const isUnknown = x => !x.domain || x.domain === "(no url recorded)";
+  const sites = d.spread.domains.filter(x => !isUnknown(x));
+  const named = sites.filter(x => x.occurrences > 1 || x.domain === d.site);
+  const tail = sites.filter(x => !named.includes(x));
+  const max = Math.max(...d.spread.domains.map(x => x.share), 0.01);
+  const bar = (label, share, count, tip, bold) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `<div class="lbl"${bold ? ' style="color:var(--text-primary);font-weight:600"' : ""}>${esc(label)}</div>
+      <div class="trackbar"><div class="fill" style="width:${share / max * 100}%"></div></div>
+      <div class="val">${pct(share)} <small>${num(count)}</small></div>`;
+    hover(row.querySelector(".trackbar"), tip);
+    spread.appendChild(row);
+  };
+  for (const x of named)
+    bar(x.domain, x.share, x.occurrences,
+      `<b>${esc(x.domain)}</b><br>${num(x.occurrences)} of ${num(d.spread.drawn)} drawn occurrences`,
+      x.domain === d.site);
+  if (tail.length)
+    bar(`${tail.length} more sites, one copy each`,
+      tail.reduce((a, x) => a + x.share, 0), tail.length,
+      `<b>${tail.length} sites</b> each holding one drawn occurrence<br>${
+        tail.slice(0, 12).map(x => esc(x.domain)).join("<br>")}${tail.length > 12 ? "<br>…" : ""}`);
+  if (unknownDomain)
+    bar("no readable URL", unknownDomain / d.spread.drawn, unknownDomain,
+      `<b>${num(unknownDomain)} drawn occurrence${unknownDomain === 1 ? "" : "s"}</b> whose document `
+      + `carried no usable URL — the corpus recorded none, or its metadata would not parse. Which `
+      + `site ${unknownDomain === 1 ? "it sits" : "they sit"} on is unknown, not elsewhere.`);
+  const sn = document.createElement("p");
+  sn.className = "note";
+  // `on_subject_site` counts draws whose domain was readable and matched. A
+  // draw with no readable URL is evidence of nothing, so it cannot be folded
+  // into either side of this sentence.
+  const placed = d.spread.drawn - unknownDomain;
+  sn.textContent = d.spread.on_subject_site === 0
+    ? `Not one of the ${num(placed)} drawn copies whose page could be identified is on ${d.site}. Its own pages are in the corpus — the post above is one — but the site's heading is a nav line, and line-level filtering drops nav lines. What survives is the name as other people typed it into their own prose.`
+      + (unknownDomain ? ` The other ${num(unknownDomain)} came back with no readable URL and could be anywhere.` : "")
+    : `${d.spread.on_subject_site} of the ${num(placed)} drawn copies whose page could be identified are on ${d.site} itself.`
+      + (unknownDomain ? ` ${num(unknownDomain)} more came back with no readable URL.` : "");
+  spread.appendChild(sn);
+  const det = document.createElement("details");
+  det.innerHTML = `<summary class="stage-sub" style="cursor:pointer;margin:12px 0 0">read the ${num(d.spread.documents.length)} distinct documents drawn</summary>`;
+  det.insertAdjacentHTML("beforeend",
+    d.spread.documents.map(r => lookupDocBlock(r, d.site, d.spread.exhaustive)).join(""));
+  spread.appendChild(det);
+  main.appendChild(spread);
+}
+
+async function renderLookup(gen){
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === "lookup"));
+
+  const intro = document.createElement("section");
+  intro.className = "card lookup";
+  intro.innerHTML = `<h2>Is my writing in the pretraining data?</h2>
+    <p class="sub">The rest of this site samples: it draws documents and reports what share of a
+      corpus looks like one thing or another. That cannot answer a question about one particular
+      text, because any single blog is a rounding error in a mix of trillions of tokens and no
+      sample will ever land on it. An exact-substring index can. Below is one blog run through
+      that index, and what its counts turned out to mean.</p>`;
+  main.appendChild(intro);
+
+  for (const f of MANIFEST.filter(isCaseFile)){
+    const d = await getData(f);
+    if (gen !== GEN) return;   // a tab switch mid-fetch, same guard as the model view
+    if (d) caseStudyCards(main, d);
+  }
+
+  const how = document.createElement("section");
+  how.className = "card lookup";
+  how.innerHTML = `<h2>Run it on your own writing</h2>
+    <p class="sub">Pick a sentence of yours distinctive enough that nobody else would write it, and
+      count it. A phrase you use often gives a ceiling on how many of your pages are present; a
+      sentence from one page tells you whether that page is.</p>
+    <code class="cmdline">trainspotting lookup "a sentence only you would have written" --docs 10</code>
+    <p class="note">There is no search box on this page on purpose. The index's API sends no
+      CORS headers, so a browser cannot call it from here — a box would need a proxy server, and
+      this site is static files with nothing behind them. The command above runs the same queries
+      locally, and <a href="https://huggingface.co/spaces/liujch1998/infini-gram" target="_blank" rel="noopener">infini-gram's
+      own demo</a> is the hosted version.</p>
+    <p class="note">For the opposite direction — take something a model wrote and find the training
+      documents behind it — use <a href="https://allenai.org/blog/olmotrace" target="_blank" rel="noopener">OLMoTrace</a>.
+      Neither tool covers Dolma 3: no public index does, so nothing here describes what OLMo 3 read.</p>`;
+  main.appendChild(how);
+}
+
 async function renderCompare(gen){
   // Models only. A dataset has no pipeline to line up stage-by-stage against
   // one, and putting it on this axis would read as a fourth model.
@@ -4187,7 +4499,7 @@ async function route(){
   if (suppress){ suppress--; return; }
   const st = parseHash();
   const v = st.view;
-  const view = v && (REG[v] || v === "compare") ? v : Object.keys(REG)[0];
+  const view = v && (REG[v] || v === "compare" || v === "lookup") ? v : Object.keys(REG)[0];
   // An open modal this hash does not keep (no row segment, or a different
   // view) belongs to the outgoing state: clear its backlink and close it
   // BEFORE any await, so closing the still-visible dialog mid-render can't
@@ -4196,7 +4508,9 @@ async function route(){
   if (view !== VIEW){
     VIEW = view;
     const gen = ++GEN;
-    await (view === "compare" ? renderCompare(gen) : renderModel(view, gen));
+    await (view === "compare" ? renderCompare(gen)
+         : view === "lookup"  ? renderLookup(gen)
+         : renderModel(view, gen));
     if (gen !== GEN) return;   // a newer view render took over mid-await
     RENDERED = gen;
     // The hash may have moved within this view while the render was in
@@ -4258,6 +4572,9 @@ async function applyHashState(nav){
     fetchJSON("registry.json"), fetchJSON("manifest.json"), fetchJSON("language-names.json"),
     fetchJSON("reward-kinds.json")]);
   const tabs = document.getElementById("tabs");
+  // A tab label that is not just the view name. Held here rather than inlined
+  // in the loop so a third group does not have to grow another ternary.
+  const TAB_LABEL = {compare: "compare models", lookup: "is my writing in here?"};
   // Two groups, not one row of look-alike pills: a model tab is a training
   // pipeline someone was fit to, a dataset tab is a corpus nothing was trained
   // on, and the answers they give mean different things. `compare` belongs to
@@ -4276,7 +4593,7 @@ async function applyHashState(nav){
     g.appendChild(l);
     for (const name of names){
       const b = document.createElement("button");
-      b.textContent = name === "compare" ? "compare models" : name;
+      b.textContent = TAB_LABEL[name] || name;
       b.dataset.m = name;
       if (cls) b.className = cls;
       b.onclick = () => { if (name !== VIEW) location.hash = "#" + name; };
@@ -4289,6 +4606,11 @@ async function applyHashState(nav){
   group("datasets", "A dataset on its own, with no model around it: one stage, no pretraining " +
         "behind it, and no response any model was fit to.",
         Object.keys(REG).filter(k => REG[k].is_model === false), "ds");
+  // The lookup study is about corpora rather than any one model or dataset
+  // in the registry, so it is its own group at the end rather than a pill
+  // sitting among things it is not comparable to.
+  group("corpora", "Public pretraining corpora with an exact-string index. Asks whether one " +
+        "particular text is in one — the question sampling cannot reach.", ["lookup"]);
   syncStickyHeight();
   if (window.ResizeObserver) new ResizeObserver(syncStickyHeight).observe(tabs);
   window.addEventListener("resize", syncStickyHeight);

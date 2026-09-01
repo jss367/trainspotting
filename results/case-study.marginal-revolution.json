@@ -1,0 +1,1788 @@
+{
+  "slug": "marginal-revolution",
+  "title": "Is one blogger's work in the pretraining data?",
+  "subject": "Marginal Revolution",
+  "byline": "Tyler Cowen and Alex Tabarrok, daily since 2003",
+  "site": "marginalrevolution.com",
+  "question": "Take a blog that has published every day for two decades. Is all of it in there? Once each, or a hundred times?",
+  "answer": "Not all of it, about once each where it is there at all, and most of what looks like duplication belongs to somebody else's site.",
+  "run_on": "2026-08-31",
+  "api": "https://api.infini-gram.io/",
+  "caveat": "Counts are occurrences of the exact string, not documents: one page that repeats a phrase contributes more than one. Documents behind a count are complete only where the count is at or under ten, which is the index's per-call cap; above it the index draws occurrences at random and a re-run returns different ones. None of these corpora is Dolma 3, so none of this describes what OLMo 3 was trained on \u2014 no public index covers Dolma 3.",
+  "indexes": [
+    {
+      "id": "v4_dolma-v1_7_llama",
+      "label": "Dolma 1.7",
+      "note": "Ai2's open pretraining corpus, the OLMo 2 generation."
+    },
+    {
+      "id": "v4_dclm-baseline_llama",
+      "label": "DCLM-baseline",
+      "note": "A heavily model-filtered Common Crawl derivative."
+    },
+    {
+      "id": "v4_rpj_llama_s4",
+      "label": "RedPajama v1",
+      "note": "Together's open reproduction of the LLaMA 1 mix."
+    },
+    {
+      "id": "v4_c4train_llama",
+      "label": "C4",
+      "note": "Google's cleaned Common Crawl, one 2019 snapshot."
+    },
+    {
+      "id": "v4_piletrain_llama",
+      "label": "The Pile",
+      "note": "EleutherAI's mix, mostly curated sources rather than open web."
+    }
+  ],
+  "groups": [
+    {
+      "name": "Phrases the blog repeats",
+      "selection": "independent",
+      "explain": "Chosen from how the blog writes, before looking at any corpus. Each occurrence is one post's use of the phrase, so the count is a ceiling on how many such posts are present.",
+      "rows": [
+        {
+          "q": "For the pointer I thank",
+          "note": "The standard credit line when a reader sends in a link.",
+          "by_index": {
+            "v4_dolma-v1_7_llama": {
+              "occurrences": 333,
+              "approx": false,
+              "tokens": [
+                "\u2581For",
+                "\u2581the",
+                "\u2581pointer",
+                "\u2581I",
+                "\u2581thank"
+              ]
+            },
+            "v4_dclm-baseline_llama": {
+              "occurrences": 883,
+              "approx": false,
+              "tokens": [
+                "\u2581For",
+                "\u2581the",
+                "\u2581pointer",
+                "\u2581I",
+                "\u2581thank"
+              ]
+            },
+            "v4_rpj_llama_s4": {
+              "occurrences": 114,
+              "approx": false,
+              "tokens": [
+                "\u2581For",
+                "\u2581the",
+                "\u2581pointer",
+                "\u2581I",
+                "\u2581thank"
+              ]
+            },
+            "v4_c4train_llama": {
+              "occurrences": 15,
+              "approx": false,
+              "tokens": [
+                "\u2581For",
+                "\u2581the",
+                "\u2581pointer",
+                "\u2581I",
+                "\u2581thank"
+              ]
+            },
+            "v4_piletrain_llama": {
+              "occurrences": 12,
+              "approx": false,
+              "tokens": [
+                "\u2581For",
+                "\u2581the",
+                "\u2581pointer",
+                "\u2581I",
+                "\u2581thank"
+              ]
+            }
+          }
+        },
+        {
+          "q": "Solve for the equilibrium",
+          "note": "A recurring one-line post, and a phrase the wider web has since borrowed.",
+          "by_index": {
+            "v4_dolma-v1_7_llama": {
+              "occurrences": 336,
+              "approx": false,
+              "tokens": [
+                "\u2581Sol",
+                "ve",
+                "\u2581for",
+                "\u2581the",
+                "\u2581equilibrium"
+              ]
+            },
+            "v4_dclm-baseline_llama": {
+              "occurrences": 1276,
+              "approx": false,
+              "tokens": [
+                "\u2581Sol",
+                "ve",
+                "\u2581for",
+                "\u2581the",
+                "\u2581equilibrium"
+              ]
+            },
+            "v4_rpj_llama_s4": {
+              "occurrences": 79,
+              "approx": false,
+              "tokens": [
+                "\u2581Sol",
+                "ve",
+                "\u2581for",
+                "\u2581the",
+                "\u2581equilibrium"
+              ]
+            },
+            "v4_c4train_llama": {
+              "occurrences": 6,
+              "approx": false,
+              "tokens": [
+                "\u2581Sol",
+                "ve",
+                "\u2581for",
+                "\u2581the",
+                "\u2581equilibrium"
+              ]
+            },
+            "v4_piletrain_llama": {
+              "occurrences": 5,
+              "approx": false,
+              "tokens": [
+                "\u2581Sol",
+                "ve",
+                "\u2581for",
+                "\u2581the",
+                "\u2581equilibrium"
+              ]
+            }
+          }
+        },
+        {
+          "q": "Assorted links",
+          "note": "The near-daily link roundup, published under this heading for twenty years.",
+          "by_index": {
+            "v4_dolma-v1_7_llama": {
+              "occurrences": 585,
+              "approx": false,
+              "tokens": [
+                "\u2581Ass",
+                "orted",
+                "\u2581links"
+              ]
+            },
+            "v4_dclm-baseline_llama": {
+              "occurrences": 10510,
+              "approx": false,
+              "tokens": [
+                "\u2581Ass",
+                "orted",
+                "\u2581links"
+              ]
+            },
+            "v4_rpj_llama_s4": {
+              "occurrences": 493,
+              "approx": false,
+              "tokens": [
+                "\u2581Ass",
+                "orted",
+                "\u2581links"
+              ]
+            },
+            "v4_c4train_llama": {
+              "occurrences": 8,
+              "approx": false,
+              "tokens": [
+                "\u2581Ass",
+                "orted",
+                "\u2581links"
+              ]
+            },
+            "v4_piletrain_llama": {
+              "occurrences": 9,
+              "approx": false,
+              "tokens": [
+                "\u2581Ass",
+                "orted",
+                "\u2581links"
+              ]
+            }
+          }
+        },
+        {
+          "q": "That was then, this is now",
+          "note": "A recurring series, and also an ordinary English sentence \u2014 a reminder that a common phrase measures nothing.",
+          "by_index": {
+            "v4_dolma-v1_7_llama": {
+              "occurrences": 7841,
+              "approx": false,
+              "tokens": [
+                "\u2581That",
+                "\u2581was",
+                "\u2581then",
+                ",",
+                "\u2581this",
+                "\u2581is",
+                "\u2581now"
+              ]
+            },
+            "v4_dclm-baseline_llama": {
+              "occurrences": 29065,
+              "approx": false,
+              "tokens": [
+                "\u2581That",
+                "\u2581was",
+                "\u2581then",
+                ",",
+                "\u2581this",
+                "\u2581is",
+                "\u2581now"
+              ]
+            },
+            "v4_rpj_llama_s4": {
+              "occurrences": 4362,
+              "approx": false,
+              "tokens": [
+                "\u2581That",
+                "\u2581was",
+                "\u2581then",
+                ",",
+                "\u2581this",
+                "\u2581is",
+                "\u2581now"
+              ]
+            },
+            "v4_c4train_llama": {
+              "occurrences": 577,
+              "approx": false,
+              "tokens": [
+                "\u2581That",
+                "\u2581was",
+                "\u2581then",
+                ",",
+                "\u2581this",
+                "\u2581is",
+                "\u2581now"
+              ]
+            },
+            "v4_piletrain_llama": {
+              "occurrences": 638,
+              "approx": false,
+              "tokens": [
+                "\u2581That",
+                "\u2581was",
+                "\u2581then",
+                ",",
+                "\u2581this",
+                "\u2581is",
+                "\u2581now"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Individual posts",
+      "selection": "found-in-corpus",
+      "explain": "Post titles taken from blog pages that were already sampled out of the corpus, so every one of them is present by construction. These measure what a present post looks like, not how often a post is present.",
+      "rows": [
+        {
+          "q": "There is no great stagnation, cereal edition",
+          "note": "A November 2012 link post.",
+          "by_index": {
+            "v4_dolma-v1_7_llama": {
+              "occurrences": 2,
+              "approx": false,
+              "tokens": [
+                "\u2581There",
+                "\u2581is",
+                "\u2581no",
+                "\u2581great",
+                "\u2581st",
+                "agn",
+                "ation",
+                ",",
+                "\u2581c",
+                "ere",
+                "al",
+                "\u2581edition"
+              ]
+            },
+            "v4_dclm-baseline_llama": {
+              "occurrences": 3,
+              "approx": false,
+              "tokens": [
+                "\u2581There",
+                "\u2581is",
+                "\u2581no",
+                "\u2581great",
+                "\u2581st",
+                "agn",
+                "ation",
+                ",",
+                "\u2581c",
+                "ere",
+                "al",
+                "\u2581edition"
+              ]
+            },
+            "v4_rpj_llama_s4": {
+              "occurrences": 0,
+              "approx": false,
+              "tokens": [
+                "\u2581There",
+                "\u2581is",
+                "\u2581no",
+                "\u2581great",
+                "\u2581st",
+                "agn",
+                "ation",
+                ",",
+                "\u2581c",
+                "ere",
+                "al",
+                "\u2581edition"
+              ]
+            },
+            "v4_c4train_llama": {
+              "occurrences": 0,
+              "approx": false,
+              "tokens": [
+                "\u2581There",
+                "\u2581is",
+                "\u2581no",
+                "\u2581great",
+                "\u2581st",
+                "agn",
+                "ation",
+                ",",
+                "\u2581c",
+                "ere",
+                "al",
+                "\u2581edition"
+              ]
+            },
+            "v4_piletrain_llama": {
+              "occurrences": 0,
+              "approx": false,
+              "tokens": [
+                "\u2581There",
+                "\u2581is",
+                "\u2581no",
+                "\u2581great",
+                "\u2581st",
+                "agn",
+                "ation",
+                ",",
+                "\u2581c",
+                "ere",
+                "al",
+                "\u2581edition"
+              ]
+            }
+          }
+        },
+        {
+          "q": "The Inuit ear-pulling game",
+          "note": "A December 2012 link post.",
+          "by_index": {
+            "v4_dolma-v1_7_llama": {
+              "occurrences": 2,
+              "approx": false,
+              "tokens": [
+                "\u2581The",
+                "\u2581In",
+                "uit",
+                "\u2581ear",
+                "-",
+                "pull",
+                "ing",
+                "\u2581game"
+              ]
+            },
+            "v4_dclm-baseline_llama": {
+              "occurrences": 0,
+              "approx": false,
+              "tokens": [
+                "\u2581The",
+                "\u2581In",
+                "uit",
+                "\u2581ear",
+                "-",
+                "pull",
+                "ing",
+                "\u2581game"
+              ]
+            },
+            "v4_rpj_llama_s4": {
+              "occurrences": 4,
+              "approx": false,
+              "tokens": [
+                "\u2581The",
+                "\u2581In",
+                "uit",
+                "\u2581ear",
+                "-",
+                "pull",
+                "ing",
+                "\u2581game"
+              ]
+            },
+            "v4_c4train_llama": {
+              "occurrences": 0,
+              "approx": false,
+              "tokens": [
+                "\u2581The",
+                "\u2581In",
+                "uit",
+                "\u2581ear",
+                "-",
+                "pull",
+                "ing",
+                "\u2581game"
+              ]
+            },
+            "v4_piletrain_llama": {
+              "occurrences": 0,
+              "approx": false,
+              "tokens": [
+                "\u2581The",
+                "\u2581In",
+                "uit",
+                "\u2581ear",
+                "-",
+                "pull",
+                "ing",
+                "\u2581game"
+              ]
+            }
+          }
+        },
+        {
+          "q": "Garett Jones on the top economic stories of 2012",
+          "note": "A December 2012 link post.",
+          "by_index": {
+            "v4_dolma-v1_7_llama": {
+              "occurrences": 3,
+              "approx": false,
+              "tokens": [
+                "\u2581G",
+                "are",
+                "tt",
+                "\u2581Jones",
+                "\u2581on",
+                "\u2581the",
+                "\u2581top",
+                "\u2581economic",
+                "\u2581stories",
+                "\u2581of",
+                "\u2581",
+                "2",
+                "0",
+                "1",
+                "2"
+              ]
+            },
+            "v4_dclm-baseline_llama": {
+              "occurrences": 2,
+              "approx": false,
+              "tokens": [
+                "\u2581G",
+                "are",
+                "tt",
+                "\u2581Jones",
+                "\u2581on",
+                "\u2581the",
+                "\u2581top",
+                "\u2581economic",
+                "\u2581stories",
+                "\u2581of",
+                "\u2581",
+                "2",
+                "0",
+                "1",
+                "2"
+              ]
+            },
+            "v4_rpj_llama_s4": {
+              "occurrences": 2,
+              "approx": false,
+              "tokens": [
+                "\u2581G",
+                "are",
+                "tt",
+                "\u2581Jones",
+                "\u2581on",
+                "\u2581the",
+                "\u2581top",
+                "\u2581economic",
+                "\u2581stories",
+                "\u2581of",
+                "\u2581",
+                "2",
+                "0",
+                "1",
+                "2"
+              ]
+            },
+            "v4_c4train_llama": {
+              "occurrences": 0,
+              "approx": false,
+              "tokens": [
+                "\u2581G",
+                "are",
+                "tt",
+                "\u2581Jones",
+                "\u2581on",
+                "\u2581the",
+                "\u2581top",
+                "\u2581economic",
+                "\u2581stories",
+                "\u2581of",
+                "\u2581",
+                "2",
+                "0",
+                "1",
+                "2"
+              ]
+            },
+            "v4_piletrain_llama": {
+              "occurrences": 0,
+              "approx": false,
+              "tokens": [
+                "\u2581G",
+                "are",
+                "tt",
+                "\u2581Jones",
+                "\u2581on",
+                "\u2581the",
+                "\u2581top",
+                "\u2581economic",
+                "\u2581stories",
+                "\u2581of",
+                "\u2581",
+                "2",
+                "0",
+                "1",
+                "2"
+              ]
+            }
+          }
+        },
+        {
+          "q": "Pseudo-placebo effects in RCTs",
+          "note": "A December 2012 link post.",
+          "by_index": {
+            "v4_dolma-v1_7_llama": {
+              "occurrences": 3,
+              "approx": false,
+              "tokens": [
+                "\u2581Pse",
+                "udo",
+                "-",
+                "place",
+                "bo",
+                "\u2581effects",
+                "\u2581in",
+                "\u2581R",
+                "CT",
+                "s"
+              ]
+            },
+            "v4_dclm-baseline_llama": {
+              "occurrences": 2,
+              "approx": false,
+              "tokens": [
+                "\u2581Pse",
+                "udo",
+                "-",
+                "place",
+                "bo",
+                "\u2581effects",
+                "\u2581in",
+                "\u2581R",
+                "CT",
+                "s"
+              ]
+            },
+            "v4_rpj_llama_s4": {
+              "occurrences": 2,
+              "approx": false,
+              "tokens": [
+                "\u2581Pse",
+                "udo",
+                "-",
+                "place",
+                "bo",
+                "\u2581effects",
+                "\u2581in",
+                "\u2581R",
+                "CT",
+                "s"
+              ]
+            },
+            "v4_c4train_llama": {
+              "occurrences": 0,
+              "approx": false,
+              "tokens": [
+                "\u2581Pse",
+                "udo",
+                "-",
+                "place",
+                "bo",
+                "\u2581effects",
+                "\u2581in",
+                "\u2581R",
+                "CT",
+                "s"
+              ]
+            },
+            "v4_piletrain_llama": {
+              "occurrences": 0,
+              "approx": false,
+              "tokens": [
+                "\u2581Pse",
+                "udo",
+                "-",
+                "place",
+                "bo",
+                "\u2581effects",
+                "\u2581in",
+                "\u2581R",
+                "CT",
+                "s"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "probe": {
+    "query": "There is no great stagnation, cereal edition",
+    "index": "v4_dolma-v1_7_llama",
+    "explain": "Few enough occurrences that the index returns every one of them, so this is the whole of what the corpus holds for this post.",
+    "occurrences": 2,
+    "approx": false,
+    "tokens": [
+      "\u2581There",
+      "\u2581is",
+      "\u2581no",
+      "\u2581great",
+      "\u2581st",
+      "agn",
+      "ation",
+      ",",
+      "\u2581c",
+      "ere",
+      "al",
+      "\u2581edition"
+    ],
+    "drawn": 2,
+    "exhaustive": true,
+    "documents": [
+      {
+        "doc_ix": 1391093561,
+        "tokens": 1869,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0109.json.gz",
+        "url": "https://marginalrevolution.com/marginalrevolution/2012/11/page/3",
+        "domain": "marginalrevolution.com",
+        "title": "November 2012 - Page 3 of 11 - Marginal REVOLUTION",
+        "snapshot": "CC-MAIN-2020-24",
+        "crawled": "2020-06-04T15:20:27Z",
+        "quality": 0.32081,
+        "lines_kept": 87,
+        "lines_original": 270,
+        "excerpt": "and the tradeoff between extensive and intensive labor margins to explore the effects of these features on post-1990 employment dynamics. I find that the benefit costs\u2019 rising trend, cyclicality, and interactions with financial conditions have contributed significantly to the observed slow employment growth following the three most recent recessions in the U.S. This paper offers two main improvements over the standard model, which lacks such arrangements: (1) delivering 2-to-7-quarter delays relative to NBER business cycle troughs for the employment recoveries from the 1990, 2001, and 2007 recessions while generating no delay for the pre-1990 period, which is in line with the data; and (2) explaining 40-90 percent of employment volatility and harmonizing with that of output and per worker hours.\nI would like to see more testing of this against alternative explanations, but still this is provocative and important work.\nYucat\u00e1n, the quietest state, is statistically as safe as Finland.\nIt was an extraordinary moment. Fresh from arranging terms with the bankers of Europe over a debt that was threatening the foundation of the French nation, Thomas Jefferson found himself in negotiations",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 638994733,
+        "tokens": 105,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0231.json.gz",
+        "url": "https://marginalrevolution.com/marginalrevolution/2012/11/assorted-links-625.html",
+        "domain": "marginalrevolution.com",
+        "title": "Assorted links - Marginal REVOLUTION",
+        "snapshot": "CC-MAIN-2021-10",
+        "crawled": "2021-03-01T01:55:59Z",
+        "quality": 0.94262,
+        "lines_kept": 7,
+        "lines_original": 76,
+        "excerpt": "1.There is no great stagnation, cereal edition.\n2. 72-year-old man models teen girl clothes.\n3. How high should the marginal tax rate be? Criticism of the 70%-plus proposals.\n4. States and counties are not persons.\n5. How to make Taleb stronger, and stronger yet. I have canceled my pre-order.\n6. Scott Sumner on Singapore.",
+        "occurrences_drawn": 1
+      }
+    ]
+  },
+  "spread": {
+    "query": "Marginal REVOLUTION",
+    "index": "v4_dolma-v1_7_llama",
+    "draws": 60,
+    "explain": "The site's own title, as it renders in the page. Too common for an exhaustive list, so the index draws occurrences at random and this is where they turned out to live.",
+    "occurrences": 2469,
+    "approx": false,
+    "tokens": [
+      "\u2581Marg",
+      "inal",
+      "\u2581RE",
+      "V",
+      "OL",
+      "UT",
+      "ION"
+    ],
+    "drawn": 60,
+    "exhaustive": false,
+    "documents": [
+      {
+        "doc_ix": 219076841,
+        "tokens": 280,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0275.json.gz",
+        "url": "https://fxgen.info/the-new-covid-strain-and-its-policy-implications/",
+        "domain": "fxgen.info",
+        "title": "The new Covid strain and its policy implications - FxGen \u043e \u043d\u043e\u0432\u043e\u0441\u0442\u044f\u0445 \u0432 \u0420\u043e\u0441\u0441\u0438\u0438 \u0438 \u0432 \u043c\u0438\u0440\u0435. \u0427\u0438\u0442\u0430\u0439\u0442\u0435 \u043d\u043e\u0432\u043e\u0441\u0442\u0438 \u043d\u0430 fxgen.info",
+        "snapshot": "CC-MAIN-2021-21",
+        "crawled": "2021-05-13T12:42:59Z",
+        "quality": 0.68562,
+        "lines_kept": 14,
+        "lines_original": 95,
+        "excerpt": "Note also it is very likely the new mutation already has spread well beyond the UK. And with compounding, an R increase of 0.4 is really bad as time passes.\nIf this all is true, what are the policy implications? First, a lockdown with no pending vaccine will only postpone problems, a\u2019 la the herd immunity theorists.\nSecond, we do have vaccines and so in any plausible model faster viral spread implies a faster timetable for vaccine approval and distribution. And it implies we should have been faster to begin with.\nIf you used to say \u201cwe were just slow enough,\u201d you now have to revise that opinion and believe that greater speed is called for, both prospectively and looking backwards.\nIn any plausible model.\nIf Godzilla is faster than you had thought, you need to start running away sooner. And you needed to have started running away sooner. In any plausible model.\nYet somehow I do not expect the rooftops to be so crowded over the next few days.\nThe post The new Covid strain and its policy implications appeared first onMarginal REVOLUTION.\n\u041f\u0440\u0435\u0434\u044b\u0434\u0443\u0449\u0430\u044f \u0441\u0442\u0430\u0442\u044c\u044fWhat should I ask Patricia Fara?\n",
+        "occurrences_drawn": 2
+      },
+      {
+        "doc_ix": 1408214591,
+        "tokens": 23,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0194.json.gz",
+        "url": "https://bijin-world.com/2020/10/13/the-public-is-fine-with-human-challenge-trials/",
+        "domain": "bijin-world.com",
+        "title": "The public is fine with Human Challenge Trials \u2013 BIJIN WORLD",
+        "snapshot": "CC-MAIN-2021-04",
+        "crawled": "2021-01-20T04:04:26Z",
+        "quality": 0.99513,
+        "lines_kept": 7,
+        "lines_original": 103,
+        "excerpt": "The post The public is fine with Human Challenge Trials appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 135443930,
+        "tokens": 899,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0212.json.gz",
+        "url": "https://bijin-world.com/2021/",
+        "domain": "bijin-world.com",
+        "title": "2021 \u2013 BIJIN WORLD",
+        "snapshot": "CC-MAIN-2021-10",
+        "crawled": "2021-03-07T01:55:21Z",
+        "quality": 0.03715,
+        "lines_kept": 23,
+        "lines_original": 146,
+        "excerpt": "The post The new phrenology? appeared first onMarginal REVOLUTION.\nIn two Defining Ideas articles in 2009, \u201cWho\u2019s Afraid of Budget Deficits? I Am\u201d and \u201cFurman, Summers, and Taxes,\u201d I criticized Lawrence Summers and Jason Furman, two prominent economists who worked in the Obama administration, for their dovish views on federal debt and deficits. They had argued that we shouldn\u2019t worry much about high federal budget deficits and growing federal debt. Of course, that was before the record budget deficit of 2020. Now even Summers is worried. In two February op-eds in the Washington Post, Summers argues against the size and composition of the Biden \u201cstimulus\u201d bill.\nSummers makes a solid argument, on Keynesian grounds alone, that the proposed $1.9 trillion spending bill is much too large. He also, to his credit, digs into some of the details of the bill, pointing out how absurd they are. Had Summers looked at more details, he could have made an even stronger case against the measure. For instance, one major provision of the bill, the added unemployment benefits through August, will actually slow the recovery. And other provisions of the bill, like the bailout of state and local governmen",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 564803678,
+        "tokens": 2229,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0234.json.gz",
+        "url": "https://sa-mebel-ekanom.ru/forum/?download=6573",
+        "domain": "sa-mebel-ekanom.ru",
+        "title": "Crack hacker s challenge ebook",
+        "snapshot": "CC-MAIN-2021-21",
+        "crawled": "2021-05-12T17:13:12Z",
+        "quality": 0.08737,
+        "lines_kept": 61,
+        "lines_original": 128,
+        "excerpt": ".  There is no element of luck in the game, you must concentrate and prepare well before the start of each round.\nThings start to unravel when there is news of a missing UAV drone over Germany. Join the 7-Day Green Smoothie Challenge for tasty + nourishing recipes, a shopping. Although the book says Lightroom 5, it is applicable to all versions of Lightroom from 4 through the latest version of Lightroom CC. Items not covered in this book are mostly limited to Lightroom.\nMinilyrics crack 7.0.676 skype https://sa-mebel-ekanom.ru/forum/?download=273. As the leading synthetic phonics publisher, and the most experienced, we offer a 7-year programme that teaches not only phonics, but spelling, punctuation and grammar too, enabling children to read and write from an early age. Do you have faith that can raise the dead?\nHacker s challenge ebook. Ondesoft audio book converter keygen. What you will learn: What is real biblical faith?\nThis eBook is no longer available for sale. Jitbit Macro Recorder 2020 Full Crack With Serial Code [Free Download] Jitbit Macro Recorder 2020 Full Crack is the best and the most light weight Keyboard and mouse recorder that is available for windows PC. It does n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 2333173968,
+        "tokens": 84,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0188.json.gz",
+        "url": "https://bishnupriyamanipuri.men/2020/09/22/tuesday-assorted-hyperlinks-6/",
+        "domain": "bishnupriyamanipuri.men",
+        "title": "Tuesday assorted hyperlinks | Bishnupriya Manipuri",
+        "snapshot": "CC-MAIN-2020-45",
+        "crawled": "2020-10-27T00:28:35Z",
+        "quality": 0.89265,
+        "lines_kept": 17,
+        "lines_original": 171,
+        "excerpt": "1. What\u2019s the marginal price curve like for gravediggers?\n2. 66% herd immunity within the Brazilian Amazon?\n5. MIE: discontinued photographic movie.\n6. Matt Y. on the Biden financial group.\nThe submit Tuesday assorted hyperlinks appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 543239435,
+        "tokens": 113,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0124.json.gz",
+        "url": "https://www.tefter.io/bookmarks/107372",
+        "domain": "tefter.io",
+        "title": "'Thursday assorted links' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-29",
+        "crawled": "2020-07-09T14:58:39Z",
+        "quality": 0.81344,
+        "lines_kept": 2,
+        "lines_original": 31,
+        "excerpt": "Umps are bad at calling strikes. 2. The Non-Non-libertarian FAQ. 3. Small towns are doing better out west. 4. \u201cThe Travis Corcoran novel (a sequel to last year\u2019s winner) the moon colonists consult a \u201cCowen wiki\u201d to figure out where to eat, and Corcoran says in the Afterword that this is a hat tip [\u2026] The post Thursday assorted links appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1883802711,
+        "tokens": 104,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0066.json.gz",
+        "url": "https://www.tefter.io/bookmarks/129172",
+        "domain": "tefter.io",
+        "title": "'Shipping the good economists out?' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-10",
+        "crawled": "2020-02-22T12:43:26Z",
+        "quality": 0.02582,
+        "lines_kept": 3,
+        "lines_original": 12,
+        "excerpt": "Shipping the good economists out?\nHow many of you even get that reference these days? Here is the latest from DOA, from Liz Crampton at Politico: The Agriculture Department is moving nearly all its researchers into the economic effects of climate change, trade policy and food stamps \u2013 subjects of controversial Trump administration initiatives \u2013 outside of Washington, part of [\u2026] The post Shipping the good economists out? appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 2737699160,
+        "tokens": 106,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0083.json.gz",
+        "url": "https://www.tefter.io/bookmarks/129173",
+        "domain": "tefter.io",
+        "title": "'*Range: Why Generalists Triumph in a Specialized World*' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-10",
+        "crawled": "2020-02-28T21:45:31Z",
+        "quality": 0.48193,
+        "lines_kept": 3,
+        "lines_original": 12,
+        "excerpt": "That is the new book by David Epstein, the author of the excellent The Sports Gene. I sometimes say that generalists are the most specialized people of them all, so specialized they can\u2019t in fact do anything. Except make observations of that nature. Excerpt: In an impressively insightful image, Tetlock described the very best forecasters [\u2026] The post Range: Why Generalists Triumph in a Specialized World appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 962713014,
+        "tokens": 111,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0095.json.gz",
+        "url": "https://www.tefter.io/bookmarks/323681",
+        "domain": "tefter.io",
+        "title": "'San Antonio Zoo Valentine's day markets in everything - Marginal REVOLUTION' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-24",
+        "crawled": "2020-05-26T13:09:44Z",
+        "quality": 0.11957,
+        "lines_kept": 2,
+        "lines_original": 31,
+        "excerpt": "For $25, you can name a rat after your dreaded ex. This rat, who now bears that terrible person\u2019s name, will then be fed to a snake on February 14. And yes there is price discrimination too: FYI, you can also pay $5 to the San Antonio Zoo to have a cockroach named after your ex if [\u2026] The post San Antonio Zoo Valentine\u2019s day markets in everything appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 2646804186,
+        "tokens": 478,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0016.json.gz",
+        "url": "https://leaders.economicblogs.org/tyler-cowen/2019/tabarrok-dont-subway-cost-disease/",
+        "domain": "leaders.economicblogs.org",
+        "title": "Why Don\u2019t We Know More About the Subway Cost Disease? \u2013 Leaders",
+        "snapshot": "CC-MAIN-2020-05",
+        "crawled": "2020-01-22T03:16:01Z",
+        "quality": 0.09778,
+        "lines_kept": 16,
+        "lines_original": 1157,
+        "excerpt": "Home / T. Cowen: Marginal Revolution / Why Don\u2019t We Know More About the Subway Cost Disease?\nWhy Don\u2019t We Know More About the Subway Cost Disease?\nAlon Levy has a good deck based on data he collected covering 205 projects in 40 countries on why subway costs are so expensive in the United States compared to much of the rest of the world.\nCosts are lower in poorer countries but Levy argues that GDP per capita is not a big factor once differences in type of subways are accounted for, I find that surprising and somewhat difficult to believe.\nLevy\u2019s major factor is simply that Americans and New Yorkers in particular don\u2019t know much about how things are done elsewhere. In Europe, when a city builds a subway it can look to ten or twelve examples in three to four nearby countries for best practices. New Yorker\u2019s don\u2019t look anywhere else and say things like \u201cNew York has a more built-out commuter rail network than London,\u201d as MTA chair Pat Foye recently claimed. In one way, this is good news because Levy argues that if Americans adopted European practices such as separating design from construction and simplifying station construction they could cut costs significantly.\nLevy is to be lauded",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 184741663,
+        "tokens": 82,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0081.json.gz",
+        "url": "https://www.tefter.io/bookmarks/96729",
+        "domain": "tefter.io",
+        "title": "'The real Horatio Alger story?' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-10",
+        "crawled": "2020-02-28T00:08:15Z",
+        "quality": 0.99288,
+        "lines_kept": 3,
+        "lines_original": 12,
+        "excerpt": "The real Horatio Alger story?\nHe was kicked out of his job as a minister at the First Unitarian Parish of Brewster, Mass., for sexual misconduct with boys. Here is further information. Here are further sources. For the pointer I thank RL. The post The real Horatio Alger story? appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1398841336,
+        "tokens": 531,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0149.json.gz",
+        "url": "https://leaders.economicblogs.org/tyler-cowen/2020/tabarrok-failing-challenge/",
+        "domain": "leaders.economicblogs.org",
+        "title": "Failing the Challenge \u2013 Leaders",
+        "snapshot": "CC-MAIN-2020-40",
+        "crawled": "2020-09-19T05:15:39Z",
+        "quality": 0.08662,
+        "lines_kept": 20,
+        "lines_original": 1063,
+        "excerpt": "Election Day: biology.\u201d Wrong. The one word is complacency. What CNN refers to as biology is the time it takes to run clinical trials.\nHere\u2019s how the trials work: You take 30,000 people, give half of them a vaccine and half of them a placebo, which is a shot of saline that does nothing. Then those 30,000 people go about their lives, and you wait to see how many in each group become infected and sick with Covid-19, the \u201cendpoint\u201d in medical parlance.\nThat waiting takes time, especially since the coronavirus vaccines currently being studied in the US are two-dose vaccines with each dose several weeks apart.\n\u201cWho\u2019s in the trials \u2013 the kind of people who tend to stay at home or the kind of people who attended the Sturgis rally?\u201d said John Moore, an immunologist at Weill Cornell Medicine, referring to a motorcycle rally in South Dakota that led to at least dozens of cases of Covid-19.\nHistorical precedent, as well as the demographics of the participants in the current coronavirus vaccine trials, suggest more the stay-at-home type.\nThat does not bode well for bringing the trials to a speedy conclusion.\nTypically, those who volunteer for clinical trials tend to be \u201cWhite, college-educated",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1808019882,
+        "tokens": 111,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0070.json.gz",
+        "url": "https://www.tefter.io/bookmarks/110998",
+        "domain": "tefter.io",
+        "title": "'Sunday assorted links' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-10",
+        "crawled": "2020-02-27T20:29:28Z",
+        "quality": 0.9851,
+        "lines_kept": 1,
+        "lines_original": 12,
+        "excerpt": "Analysis of candidate websites, fonts, typography, etc. 2. Roger Lowenstein reviews Big Business: A Love Letter to an American Anti-Hero. He also offers some criticisms. 3. Peter Thiel debates William Hurtbut on whether death is an enemy. 4. \u201cEskom is the greatest systemic risk to the South African economy.\u201d (The Economist) 5. The economics [\u2026] The post Sunday assorted links appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 577109222,
+        "tokens": 397,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0299.json.gz",
+        "url": "https://www.njeconomics.org/category/voluntary-exchange-sources/page/41/",
+        "domain": "njeconomics.org",
+        "title": "New Jersey Council for Economic Education |",
+        "snapshot": "CC-MAIN-2022-05",
+        "crawled": "2022-01-28T02:34:11Z",
+        "quality": 0.2043,
+        "lines_kept": 19,
+        "lines_original": 246,
+        "excerpt": "Here is the close of my latest Bloomberg column: On a related note: Have you noticed that private universities often have a stronger \u201cwoke\u201d culture, and less free speech, than public universities? This fact is also somewhat of an embarrassment for many libertarians. Though libertarian-leaning, I...\nFor a conference co-sponsored by Mercatus and Coin Center, here is Vitalik: Here is Balaji: Here are the other talks, by Nic Carter, Nevin Freeman, Erik Voorhees, and Peter van Valkenburgh. The post Crypto talks by Balaji and Vitalik appeared first onMarginal REVOLUTION. Read the Full Article here:...\n(Don Boudreaux) Tweet\u2026 is from pages 210-211 of the 1996 Foundation for Economic Education (FEE) edition of Henry Hazlitt\u2019s insightful 1973 book, The Conquest of Poverty (original emphasis): And unlike a government agency, the private owner is obliged by self-preservation to try to avoid losses, which...\nMillions of Americans, myself included, have come to rely on ride-sharing services like Uber and Lyft for convenient and affordable transportation. But in recent months, we\u2019ve seen skyrocketing prices and long wait times just to get a ride. As it turns out, the government is...\nIn 1970, Har",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 975478583,
+        "tokens": 36,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0158.json.gz",
+        "url": "https://leaders.economicblogs.org/tyler-cowen/2019/tabarrok-nobel-prize-economic-science-banerjee-duflo-kremer/",
+        "domain": "leaders.economicblogs.org",
+        "title": "The Nobel Prize in Economic Science Goes to Banerjee, Duflo, and Kremer \u2013 Leaders",
+        "snapshot": "CC-MAIN-2020-40",
+        "crawled": "2020-09-26T22:13:05Z",
+        "quality": 0.99512,
+        "lines_kept": 26,
+        "lines_original": 1056,
+        "excerpt": "The post The Nobel Prize in Economic Science Goes to Banerjee, Duflo, and Kremer appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 753212293,
+        "tokens": 758,
+        "subset": "falcon-refinedweb-filtered",
+        "shard": "falcon-refinedweb-filtered/falcon-0453.json.gz",
+        "url": "https://evantravers.com/articles/2020/12/23/books-and-links-december/",
+        "domain": "evantravers.com",
+        "title": null,
+        "snapshot": "CC-MAIN-2022-40",
+        "crawled": "2022-09-24T19:14:35.000Z",
+        "quality": null,
+        "lines_kept": null,
+        "lines_original": null,
+        "excerpt": "Books and Links: December\nThis year is almost done! I'm working on a year in review thingy... how many years have I done that now?\nBooks\nI haven't finished any books this month... I've been burning down the remaining 15+ hours of a podcast entitled Fear and Loathing in the New Jerusalem, a podcast series by Darryl Cooper. It examines the birth and growth of Zionism, starting in the late 19th century all the way up to the birth of the modern Israeli state.\nI went into this idly interested, but wound up being enthralled\u2026 and horrified. I appreciated how he confronts the listener with the experience of people in that time and context, honestly asking the hard question: \"what would you have done?\"\nOn deck: The 12 Week Year, House of Leaves.\nLinks\nWhat\u2019s a Linkable App and Why Does Linkability Matter? \u2013 Hook\nI'm obsessed with this weird app at the moment.\nPeople have become so accustomed to the weird fact that, without Hook, information resources are not easily addressable on the Mac that they tend not to realize that its just as important to be able to address local (or cloud synced) resources as it is to address remote resources.\nWhat\u2019s a Linkable App and Why Does Linkability Matter? ",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 643069136,
+        "tokens": 106,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0264.json.gz",
+        "url": "https://www.tefter.io/bookmarks/539556",
+        "domain": "tefter.io",
+        "title": "'Monday assorted links' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2021-17",
+        "crawled": "2021-04-22T20:34:57Z",
+        "quality": 0.69171,
+        "lines_kept": 2,
+        "lines_original": 33,
+        "excerpt": "State capacity: Italian Police Use Lamborghini To Transport Donor Kidney 300 Miles In Two Hours. 2. St. Helena golf club. 3. This source argues there was no real foreign election interference. 4. \u201cA fact that was never mentioned ahead of time. If we had reached complete suppression vaccine development would have been impossible. Depends, [\u2026] The post Monday assorted links appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 2373532429,
+        "tokens": 219,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0429.json.gz",
+        "url": "https://imtfair.com/2022/11/05/the-usg-program-with-the-highest-benefit-cost-ratio/",
+        "domain": "imtfair.com",
+        "title": "The USG program with the highest benefit-cost ratio? \u2013 IMT Fair",
+        "snapshot": "CC-MAIN-2023-06",
+        "crawled": "2023-01-27T07:14:10Z",
+        "quality": 0.92289,
+        "lines_kept": 36,
+        "lines_original": 76,
+        "excerpt": "The USG program with the highest benefit-cost ratio?\nOver 4 million premature deaths per year are attributed to air pollution, most of which are in low- and middle-income countries where residents do not have access to reliable information on air quality. We evaluate a large-scale program that provided real-time air-quality updates at over 40 US diplomatic sites around the world with poor preexisting monitoring. We find that the embassy monitoring program led to substantial reductions in fine particulate concentration levels, resulting in substantial decreases in the premature mortality risk faced by the over 300 million people living in cities home to a US embassy monitor. Our research indicates that monitoring and information interventions that draw attention to poor air quality in developing countries can generate substantial benefits.\nDid you take these benefits into account last time you were bitching about Twitter? Probably not.\nThe post The USG program with the highest benefit-cost ratio? appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1834479001,
+        "tokens": 108,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0198.json.gz",
+        "url": "https://www.tefter.io/bookmarks/250598",
+        "domain": "tefter.io",
+        "title": "'Friday assorted links - Marginal REVOLUTION' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2021-04",
+        "crawled": "2021-01-24T22:44:10Z",
+        "quality": 0.89457,
+        "lines_kept": 2,
+        "lines_original": 32,
+        "excerpt": "Sarah Skwire five favorite novels with economic themes. 2. The NBA seems to be opposing the Spencer Dinwiddie token contract. 3. Did Prohibition and the shutting down of bars temporarily stifle social networks and innovation? 4. \u201cStudies have found that Nobel Prize-winning scientists are about 25 times more likely to sing, dance or act [\u2026] The post Friday assorted links appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1295552141,
+        "tokens": 127,
+        "subset": "c4-filtered",
+        "shard": "c4-filtered/c4-0102.json.gz",
+        "url": "https://leaders.economicblogs.org/tyler-cowen/2019/cowen-assorted-links-927/",
+        "domain": "leaders.economicblogs.org",
+        "title": null,
+        "snapshot": null,
+        "crawled": "2019-04-19T17:15:54Z",
+        "quality": 0.99645,
+        "lines_kept": null,
+        "lines_original": null,
+        "excerpt": "1. At n = 2, it seems that going into outer space is bad for you. 2. David Brooks on immigration (NYT). 3. \u201cWhy is heightism barely a term in 2019?\u201d 4. \u201cRapidly declining remarkability of temperature anomalies may obscure public perception of climate change.\u201d 5. Quillette podcast with me. The post Saturday assorted links appeared first onMarginal REVOLUTION.\nThe post Saturday assorted links appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 3182237465,
+        "tokens": 108,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0180.json.gz",
+        "url": "https://bijin-world.com/2020/09/22/tuesday-assorted-links-15/",
+        "domain": "bijin-world.com",
+        "title": "Tuesday assorted links \u2013 BIJIN WORLD",
+        "snapshot": "CC-MAIN-2020-45",
+        "crawled": "2020-10-20T08:23:01Z",
+        "quality": 0.99892,
+        "lines_kept": 7,
+        "lines_original": 107,
+        "excerpt": "1. What is the marginal cost curve like for gravediggers?\n2. 66% herd immunity in the Brazilian Amazon?\n3. An Uber-like service for hiring an eviction crew.\n4. Jonathan Dancy on Parfit.\n5. MIE: discontinued photographic film.\n6. Matt Y. on the Biden economic team.\nThe post Tuesday assorted links appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 2734860467,
+        "tokens": 112,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0067.json.gz",
+        "url": "https://www.tefter.io/bookmarks/125764",
+        "domain": "tefter.io",
+        "title": "'It is the slacker writers who need agglomeration most of all' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-10",
+        "crawled": "2020-02-23T02:55:08Z",
+        "quality": 0.99447,
+        "lines_kept": 3,
+        "lines_original": 12,
+        "excerpt": "Do note the latter part of the last sentence, but the entire thesis is interesting: This paper utilises a unique, purpose-built panel dataset on prominent authors in the UK and Ireland born 1700\u20131925 to estimate the productivity gains associated with agglomeration of an industry with few capital requirements and no apparent need to cluster geographically. [\u2026] The post It is the slacker writers who need agglomeration most of all appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1841229371,
+        "tokens": 38,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0235.json.gz",
+        "url": "https://leaders.economicblogs.org/tyler-cowen/2021/tabarrok-central-planning-parking/",
+        "domain": "leaders.economicblogs.org",
+        "title": "End Central Planning for Parking \u2013 Leaders",
+        "snapshot": "CC-MAIN-2021-21",
+        "crawled": "2021-05-16T21:42:38Z",
+        "quality": 0.4341,
+        "lines_kept": 19,
+        "lines_original": 1097,
+        "excerpt": "The post End Central Planning for Parking appeared first onMarginal REVOLUTION.\nNext Mexican drug cartel now assassinates its enemies using drones?\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1006489827,
+        "tokens": 125,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0318.json.gz",
+        "url": "https://financetin.com/china-depredation-of-the-day/",
+        "domain": "financetin.com",
+        "title": "China depredation of the day",
+        "snapshot": "CC-MAIN-2022-27",
+        "crawled": "2022-06-26T05:11:16Z",
+        "quality": 0.18732,
+        "lines_kept": 8,
+        "lines_original": 67,
+        "excerpt": "People who have arrived in Zhengzhou to withdraw money from embattled regional banks said they have found their health codes turn red \u2014 a label mostly reserved for potential COVID-19 carriers or those infected with the virus \u2014 after arriving in Henan province\u2019s provincial capital, prohibiting them from accessing transportation networks, public services, and even going to the banks to lodge their grievances.\nWho needs deposit insurance? Here is the full story, via B.\nThe post China depredation of the day appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 2778876537,
+        "tokens": 524,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0317.json.gz",
+        "url": "https://moravia-europe.pl/cost_of_concrete_blocks_in_haiti/1583124299/",
+        "domain": "moravia-europe.pl",
+        "title": "cost of concrete blocks in haiti",
+        "snapshot": "CC-MAIN-2021-39",
+        "crawled": "2021-09-25T21:19:27Z",
+        "quality": 0.01131,
+        "lines_kept": 73,
+        "lines_original": 99,
+        "excerpt": "Cost can add up quickly, especially if you\u2019re a novice and have never attempted a Concrete Block Wall installation before I would strongly recommend you hire a .\nCement Haiti, Wholesale Various , QM4-45 Diesel Cement Brick Making Machine Haiti Cost Ad US $2800-4200 / Set 1 Set , Tags: Concrete Block Machine Haiti .\nNot only are Redi-Rock PC blocks backed by , of \"wet cast,\" air-entrained concrete and simplify the , back-to-back retaining walls, one of .\nRecipe for Disaster: Construction Methods, Materials, and Building Performance in the January 2010 Haiti Earthquake , Masonry blocks, concrete cylinders, .\nThe extent of the devastation following Tuesday's earthquake in Haiti sheds new , \"People are skimping on cement to try to cut costs, , \"Concrete blocks are .\nMost houses and other structures are built of poured concrete or block, there being [,]Marginal REVOLUTIONConstruction in Haiti by Tyler Cowen on January 14, .\nRebuilding Haiti: Houses for Haiti's , in cinder block or concrete reinforced , to build 6,000 houses annually and avoid shipping costs and delays at Haiti\u2019s .\n12 Responses to \u201cBuilding Inspections in Haiti , concrete versus wood construction in Haiti, , conditions b",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 645208703,
+        "tokens": 29,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0280.json.gz",
+        "url": "https://fxgen.info/what-to-do-with-your-spare-cash/",
+        "domain": "fxgen.info",
+        "title": "What to do with your spare cash - FxGen \u043e \u043d\u043e\u0432\u043e\u0441\u0442\u044f\u0445 \u0432 \u0420\u043e\u0441\u0441\u0438\u0438 \u0438 \u0432 \u043c\u0438\u0440\u0435. \u0427\u0438\u0442\u0430\u0439\u0442\u0435 \u043d\u043e\u0432\u043e\u0441\u0442\u0438 \u043d\u0430 fxgen.info",
+        "snapshot": "CC-MAIN-2021-21",
+        "crawled": "2021-05-12T02:26:15Z",
+        "quality": 0.99748,
+        "lines_kept": 8,
+        "lines_original": 88,
+        "excerpt": "Here is the longer story.\nThe post What to do with your spare cash appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 130099932,
+        "tokens": 33,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0184.json.gz",
+        "url": "https://bijin-world.com/2020/10/25/the-class-culture-that-is-britain/",
+        "domain": "bijin-world.com",
+        "title": "The class culture that is Britain \u2013 BIJIN WORLD",
+        "snapshot": "CC-MAIN-2020-50",
+        "crawled": "2020-11-30T11:30:10Z",
+        "quality": 0.99712,
+        "lines_kept": 4,
+        "lines_original": 106,
+        "excerpt": "Here is the full story, via a loyal MR reader.\nThe post The class culture that is Britain appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1523108079,
+        "tokens": 449,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0431.json.gz",
+        "url": "https://imtfair.com/2022/11/12/how-will-crypto-clearinghouses-evolve/",
+        "domain": "imtfair.com",
+        "title": "How will crypto clearinghouses evolve? \u2013 IMT Fair",
+        "snapshot": "CC-MAIN-2023-06",
+        "crawled": "2023-01-28T04:33:46Z",
+        "quality": 0.42351,
+        "lines_kept": 41,
+        "lines_original": 80,
+        "excerpt": "How will crypto clearinghouses evolve?\nThe upshot is that there is a tendency for members of a clearinghouse to either a) fail to meet standards and go bust, or b) join or least collude with a dominant coalition.\nYou could also argue that a dominant clearinghouse might be good for crypto. The history of banking includes dominant or semi-dominant clearinghouses stabilizing markets and helping to introduce innovations, for instance of timeliness and transparency. The collusive monopoly might take too big a share of the market surplus for itself, but it has an incentive to keep the market up and running and profitable. That is hardly the worst arrangement crypto might stumble upon.\nOne complication is that Binance is not a US firm; incorporated in China, it is now based in Dubai. Regulators might hope an American or at least Western version of Binance comes along, perhaps to create a new market duopoly. Arguably that is what regulators were hoping all along for FTX, so at least one version of the previous plan now has a huge hole in it. All the more pressure will be placed on Coinbase (a US firm), which may gain business but face a heavier regulatory burden and be expected to play a m",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 266540949,
+        "tokens": 4249,
+        "subset": "falcon-refinedweb-filtered",
+        "shard": "falcon-refinedweb-filtered/falcon-0084.json.gz",
+        "url": "https://proxygogo.info/?newsid=1593",
+        "domain": "proxygogo.info",
+        "title": null,
+        "snapshot": "CC-MAIN-2019-09",
+        "crawled": "2019-02-16T04:59:50.000Z",
+        "quality": null,
+        "lines_kept": null,
+        "lines_original": null,
+        "excerpt": "keptics: A Tribute to Bold Assertions. Slate bitcoin ponzi pyramid. Slate declaresBitcoin is a Ponzi scheme\" GTA Vice City Guides Strategies.\nPress Bitcoin Wiki Oct 24 one of a handful of key developers who helped build the underlying software for bitcoin that is known as blockchain, Jeff Garzik has seen its shortcomings firsthand. Tv In late August an operation titled Bitcoin Savings , Trust was shut down by the owner leaving around US 5.\nSlate declaresBitcoin is a Ponzi scheme\" General Chat GTAForums Bitconnect is a pyramid scheme that rewards early adopters and Deposit bitcoin. Bitcoin is Not a Ponzi Scheme, As Claimed By the Washington Post s Wonkblog.\nDon t Believe the Hype House Tyrell Is Richer Than House Lannister Slate MATTHEW YGLESIAS Apr 17,. Bitcoin miningis causing electricity blackouts.\nBitcoin Scams by Connor Treece on Prezi Oct 2, Ponzi Schemes, The RBI has cautioned the investors on the volatility risks associated with Bitcoins. Any investors who bought Bitcoins back in, when t. Slate bitcoin ponzi.\nSo he decided to create a better digital currency. CRYPTOCURRENCY Bitcoin is a nothing more than a fad pyramid scheme style scam according to billionaire investor Howar",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1883912923,
+        "tokens": 1353,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0066.json.gz",
+        "url": "http://int-art.eu/eu/healthcare/buying-liberty-haze-tucson.html",
+        "domain": "int-art.eu",
+        "title": "Buying liberty haze tucson int-art.eu",
+        "snapshot": "CC-MAIN-2020-10",
+        "crawled": "2020-02-22T18:55:23Z",
+        "quality": 0.03701,
+        "lines_kept": 52,
+        "lines_original": 211,
+        "excerpt": "Updated: 15:24 BST, published: 15:16 BST, hungry, an Inspector calls: Linden House is more than an airport hotel and deserves to fly. Rating: buying liberty haze tucson Four stars Both of us are in a bad mood. Too.\nWhen should we feel guilt and collective guilt? -Marginal REVOLUTIONby Tyler Cowen December 21, 2015 at 12:48 am in Education History Philosophy. Dustin P. writes to me: I would enjoy a blog post discussing under what circumstances you feel guilt, and how you.\nFebruary 14, 2019 Acheter clonazepam croatia Directory Order ak-b48 norway More helps make your expat journey.\nThe number of residents between the ages of 20 and zu kaufen eg-018 france 34the millennialshas increased by more than 10 percent in the past eight buying liberty haze tucson years, perhaps more important for the delivery pineapple express norway regions long-term prosperity, reversing a decades-long trend.like: how much is Stone Brewing or Mr Koch contributing? Though the goal is clear offering craft brewers an alternative to selling out to Big Beer - the details are still buying liberty haze tucson vague. Where will True Craft be headquartered? Who are their partners? Who will lead it?marketers are flock",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 592936291,
+        "tokens": 471,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0379.json.gz",
+        "url": "https://greatmoviescenes.org/2022/11/20/africas-megalopolis/",
+        "domain": "greatmoviescenes.org",
+        "title": "Africa\u2019s Megalopolis | news2know.org",
+        "snapshot": "CC-MAIN-2023-06",
+        "crawled": "2023-02-08T00:44:05Z",
+        "quality": 0.04352,
+        "lines_kept": 8,
+        "lines_original": 189,
+        "excerpt": "There\u2019s one place above all that ought to be seen because the centre of this city transformation. It\u2019s a stretch of coastal west Africa that begins within the west with Abidjan, the financial capital of Ivory Coast, and extends 600 miles east \u2013 passing by way of the international locations of Ghana, Togo and Benin \u2013 earlier than lastly arriving at Lagos. Just lately, this has come to be seen by many consultants because the world\u2019s most quickly urbanising area, a \u201cmegalopolis\u201d within the making \u2013 that\u2019s, a big and densely clustered group of metropolitan centres.\n\u2026In simply over a decade from now, its main cities will include 40 million folks. Abidjan, with 8.3 million folks, might be virtually as massive as New York Metropolis is right this moment. The story of the area\u2019s small cities is equally dramatic. They\u2019re both turning into main city centres in their very own proper, or \u2013 as with locations like Oyo in Nigeria, Takoradi in Ghana, and Bingerville in Ivory Coast \u2013 they\u2019re steadily being absorbed by greater cities. In the meantime, new child cities are popping into existence in settings that have been all however barren a technology in the past. When one contains these kinds of l",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1069872498,
+        "tokens": 236,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0274.json.gz",
+        "url": "https://leaders.economicblogs.org/tyler-cowen/2021/cowen-elements-monkey-pong/",
+        "domain": "leaders.economicblogs.org",
+        "title": "Which are the most striking elements of Monkey Pong? \u2013 Leaders",
+        "snapshot": "CC-MAIN-2021-21",
+        "crawled": "2021-05-16T21:41:58Z",
+        "quality": 0.91855,
+        "lines_kept": 24,
+        "lines_original": 1099,
+        "excerpt": "Home / T. Cowen: Marginal Revolution / Which are the most striking elements of Monkey Pong?\nTyler Cowen writes How are the major tech hubs evolving?\n1. Where did they get that background from?\n2. Can I have some of what that monkey is drinking?\n3. Wealth concentrations are going to make IRB regulations less relevant over time.\n4. How many people want to play Pong against a wired monkey? Will we employ or enslave monkeys to enable this? What is in fact the relevant difference?\n5. What else can that monkey (cognitively) do better than I can?\n6. Which regulatory agency will have jurisdiction over the (presumably disabled) humans who want this as a medical treatment? What about the non-disabled humans? The Navy pilots?\n7. Where does this all end?\n8. Will this raise or lower the price of monkeys?\nThe post Which are the most striking elements of Monkey Pong? appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 300647934,
+        "tokens": 77518,
+        "subset": "falcon-refinedweb-filtered",
+        "shard": "falcon-refinedweb-filtered/falcon-0288.json.gz",
+        "url": "http://www.asiaenews.com/ohio-state-attacker-abdul-razak-ali-artan-bought-knife-in-washington/emg4l4mx",
+        "domain": "asiaenews.com",
+        "title": null,
+        "snapshot": "CC-MAIN-2019-47",
+        "crawled": "2019-11-12T09:33:37.000Z",
+        "quality": null,
+        "lines_kept": null,
+        "lines_original": null,
+        "excerpt": "'s New World Disorder | The New Yorker\nLegoland California Passes - 1 Legoland Dr - craigslist/Ventura\nSupreme Court Lifts a Stay of Execution for a Serial Killer - The New\nProtect your enterprise data using Windows - Microsoft Docs\nRoger Clemens Found Not Guilty on All Counts - Barking Carnival\nWhen Did Laws Denying Same-Sex Couples Marriage Licenses\nSacha Baron Cohen screens 'Bruno' interview with Kansas killer | The\n'Third Rail' Is a Focus of Inquiry in Metro-North Crash - WSJ\n2012 RAW Empire State Building Shooting Phone & Security Cam ?\nEddie Redmayne flashes Oscar winning smile as he arrives at\nNato joins US in condemning Russia's response in South Ossetia\nRe-examining 9/11: CQR\nLittle League Baseball and Softball\nLive Blogging the Indiana-North Carolina Primaries - The New York\nIndyCar driver Dan Wheldon dies in 15-car crash - The Middletown\nDefense Base Closure and Realignment Commission (BRAC)\nThe 2010 Patient Protection and Affordable Care Act: States react\nSouthern Baptists Ask Obama to Help 10 Missionaries in Haiti | The\nGiants to retire Barry Bonds' No. 25 jersey in August - USA Today\nChristina Hendricks coat catches fire at Tony Awards party in New York\nGloom and Plum",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 485648255,
+        "tokens": 98,
+        "subset": "cc_en_head",
+        "shard": "cc_en_head/cc_en_head-0141.json.gz",
+        "url": "https://www.tefter.io/bookmarks/479500",
+        "domain": "tefter.io",
+        "title": "'The Black Lives Matter Plaza, WDC' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-45",
+        "crawled": "2020-10-27T12:16:31Z",
+        "quality": 0.1937,
+        "lines_kept": 3,
+        "lines_original": 32,
+        "excerpt": "Just north of the White House, I visited Sunday for the first time. I am very much a fan of the \u201cBlack Lives Matter\u201d block print letters as an artwork, and I wished to take in the broader social scene. On the plaza I saw fully boarded up buildings for the Ronald Reagan Presidential Foundation [\u2026] The post The Black Lives Matter Plaza, WDC appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 2238786738,
+        "tokens": 110,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0094.json.gz",
+        "url": "https://www.tefter.io/bookmarks/341508",
+        "domain": "tefter.io",
+        "title": "'Our new world of classical music concerts - Marginal REVOLUTION' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-24",
+        "crawled": "2020-05-26T01:06:03Z",
+        "quality": 0.91944,
+        "lines_kept": 3,
+        "lines_original": 31,
+        "excerpt": "The line in the men\u2019s room was to wash hands, not to use the other facilities. During the concert, there was remarkably little coughing compared to usual times. Is this because?: 1. The coughers were self-quarantining at home (there were more empty seats than usual). 2. Potential coughers didn\u2019t want their seat neighbors to think [\u2026] The post Our new world of classical music concerts appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 644473743,
+        "tokens": 158,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0274.json.gz",
+        "url": "https://fxgen.info/the-trouble-with-tribbles/",
+        "domain": "fxgen.info",
+        "title": "*The Trouble with Tribbles* - FxGen \u043e \u043d\u043e\u0432\u043e\u0441\u0442\u044f\u0445 \u0432 \u0420\u043e\u0441\u0441\u0438\u0438 \u0438 \u0432 \u043c\u0438\u0440\u0435. \u0427\u0438\u0442\u0430\u0439\u0442\u0435 \u043d\u043e\u0432\u043e\u0441\u0442\u0438 \u043d\u0430 fxgen.info",
+        "snapshot": "CC-MAIN-2021-21",
+        "crawled": "2021-05-13T13:37:19Z",
+        "quality": 0.6826,
+        "lines_kept": 6,
+        "lines_original": 87,
+        "excerpt": "Yes, another Star Trek episode. This one was striking for its explicit Malthusianism (!). The tribbles increase \u201carithmetically,\u201d to use Malthus\u2019s term \u2014 Spock notes that one tribble (bisexually) breeds on average ten tribbles a mere twelve hours later. And what is it that the tribbles end up doing? Trying to eat away a fixed supply of grain. Yes, grain. Might the tribbles exercise Malthusian moral restraint? No, they are born pregnant. Again, as Malthus suggests, a plague (poisoning) intervenes.\nThe post *The Trouble with Tribbles* appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1416990275,
+        "tokens": 10288,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0242.json.gz",
+        "url": "https://cyberthal-ghost.nfshost.com/2021-06-10-fierce-nerds-earplugs-replicability-crisis-covid19-masks-lab-leak-racist-desktop-wars-expat-singapore-icahns-crypto-birth-autism-flouride-good-ego-violence-ad-spies-ql-shy-uf/",
+        "domain": "cyberthal-ghost.nfshost.com",
+        "title": "2021-06-10 | Fierce Nerds | earplugs | replicability crisis | COVID19: masks; lab leak racist? | desktop wars | expat Singapore | Icahn's crypto | birth | autism | flouride good | ego ~ violence | ad spies | $QL | shy UFOs | Textmind | crime hosts //",
+        "snapshot": "CC-MAIN-2021-25",
+        "crawled": "2021-06-14T06:27:04Z",
+        "quality": 0.37885,
+        "lines_kept": 510,
+        "lines_original": 719,
+        "excerpt": "than complete sentences with punctuation. This shortens without sacrificing specificity. Imitate this style in your own notes. Learn more about Cyborganize here.\nA fascinating new study was published a few weeks ago showing how our brain interprets tools literally as an extension of our body.\n\"Instead, our results show that typicality representations for tool grasping are automatically evoked in visual regions specialised for representing the human hand, the brain\u2019s primary tool for interacting with the world\u2026 Finding a specificity for typical tool grasping in hand-, rather than tool-, selective regions challenges the long-standing assumption that activation for viewing tool images reflects sensorimotor processing linked to tool manipulation.\"\nChinese propaganda is just so\u2026 Tone deaf. Give me a couple million dollars and a couple interns and I'm pretty sure I could do better than any of its existing organs. This isn't a particularly high bar: you could probably do better just by doing nothing.\nRussian propagandists generally understood the West and how to undermine it. CCP propagandists do not. Jingoistic crimestop prevents them from reading or understanding the West's criticism of",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 3241334036,
+        "tokens": 46,
+        "subset": "falcon-refinedweb-filtered",
+        "shard": "falcon-refinedweb-filtered/falcon-0065.json.gz",
+        "url": "http://so-l.ru/tags/show/fraport",
+        "domain": "so-l.ru",
+        "title": null,
+        "snapshot": "CC-MAIN-2017-47",
+        "crawled": "2017-11-17T21:05:25.000Z",
+        "quality": null,
+        "lines_kept": null,
+        "lines_original": null,
+        "excerpt": "Fraport\n\u0412\u044b\u0431\u043e\u0440 \u0440\u0435\u0434\u0430\u043a\u0446\u0438\u0438\n10 \u044f\u043d\u0432\u0430\u0440\u044f, 22:00\nWill [\u2026] The post Will speech analysis determine your next promotion? appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 3090788804,
+        "tokens": 46,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0100.json.gz",
+        "url": "https://leaders.economicblogs.org/tyler-cowen/2020/cowen-infected/",
+        "domain": "leaders.economicblogs.org",
+        "title": "Are many more people infected than we think? \u2013 Leaders",
+        "snapshot": "CC-MAIN-2020-24",
+        "crawled": "2020-05-29T11:19:45Z",
+        "quality": 0.02148,
+        "lines_kept": 16,
+        "lines_original": 1160,
+        "excerpt": "Home / T. Cowen: Marginal Revolution / Are many more people infected than we think?\nThe post Are many more people infected than we think? appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1071182497,
+        "tokens": 55,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0284.json.gz",
+        "url": "https://leaders.economicblogs.org/tyler-cowen/2021/tabarrok-india-delays-delaying-improves-response-fractional-dosing/",
+        "domain": "leaders.economicblogs.org",
+        "title": "India Delays the 2nd Dose; Delaying 2nd Dose Improves Immune Response; Fractional Dosing \u2013 Leaders",
+        "snapshot": "CC-MAIN-2021-25",
+        "crawled": "2021-06-13T06:13:05Z",
+        "quality": 0.02087,
+        "lines_kept": 14,
+        "lines_original": 1143,
+        "excerpt": "The post India Delays the 2nd Dose; Delaying 2nd Dose Improves Immune Response; Fractional Dosing appeared first onMarginal REVOLUTION.\nNext What should I ask Alexander the Grate?",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 526976532,
+        "tokens": 111,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0049.json.gz",
+        "url": "https://www.tefter.io/bookmarks/111648",
+        "domain": "tefter.io",
+        "title": "'Peter Thiel on medicine and longevity' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-10",
+        "crawled": "2020-02-18T17:49:00Z",
+        "quality": 0.60587,
+        "lines_kept": 3,
+        "lines_original": 12,
+        "excerpt": "Or is it that there\u2019s something wrong with culture, with the funding? Almost no grants go to younger scientists. When it\u2019s scientists under age 40 that make [\u2026] of the most big discoveries, 2% of NIH grants go to scientists under age 40. That seems a little bit off. You have a peer-review process where [\u2026] The post Peter Thiel on medicine and longevity appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 963671369,
+        "tokens": 92,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0099.json.gz",
+        "url": "https://leaders.economicblogs.org/tyler-cowen/2020/cowen-economic-consequences-pandemics/",
+        "domain": "leaders.economicblogs.org",
+        "title": "Longer-run economic consequences of pandemics \u2013 Leaders",
+        "snapshot": "CC-MAIN-2020-24",
+        "crawled": "2020-05-29T09:21:59Z",
+        "quality": 0.77285,
+        "lines_kept": 14,
+        "lines_original": 1154,
+        "excerpt": "That is a new paper by \u00d2scar Jord\u00e0, Sanjay R. Singh, and Alan M. Taylor. And here is the tweet storm. It should be noted, of course, that the Spanish flu did not give rise to a comparable economic stagnation.\nVia Evan Soltas.\nThe post Longer-run economic consequences of pandemics appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 977721768,
+        "tokens": 101,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0169.json.gz",
+        "url": "https://www.tefter.io/bookmarks/405866",
+        "domain": "tefter.io",
+        "title": "'The economics of Covid-19 liability' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-45",
+        "crawled": "2020-10-24T05:46:05Z",
+        "quality": 0.53109,
+        "lines_kept": 2,
+        "lines_original": 32,
+        "excerpt": "The more you are interested in test, track, and trace, the more you should favor at least partial liability waivers for business, at least that is how I see it. Here is an excerpt from a new paper by Daniel Jacob Hemel and Daniel B. Rodriguez: Ex ante (before an exposure), the specter of liability [\u2026] The post The economics of Covid-19 liability appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1895014152,
+        "tokens": 115,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0126.json.gz",
+        "url": "https://www.tefter.io/bookmarks/319818",
+        "domain": "tefter.io",
+        "title": "'Sunday assorted links - Marginal REVOLUTION' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-24",
+        "crawled": "2020-06-06T08:36:34Z",
+        "quality": 0.49917,
+        "lines_kept": 2,
+        "lines_original": 31,
+        "excerpt": "Jordan Peterson update. Speculative? 2. Cancel culture comes to France (WSJ). 3. Are armed ecoguards beating up Pygmies? And critics of the proposed architectural mandate. 4. \u201cWhat is it like to speak a language that may not pretend to universality?\u201d 5. Origins of Amazon HQ2? 6. \u201cThe Duke and Duchess of Sussex have spoken [\u2026] The post Sunday assorted links appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 657568754,
+        "tokens": 849,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0347.json.gz",
+        "url": "http://td-fanera.ru/?id=1638482817",
+        "domain": "td-fanera.ru",
+        "title": "Incorrect email |",
+        "snapshot": "CC-MAIN-2022-05",
+        "crawled": "2022-01-29T13:21:20Z",
+        "quality": 0.26295,
+        "lines_kept": 72,
+        "lines_original": 89,
+        "excerpt": "I hope somebody can help. I accidentally put in an incorrect email address that I have no access to and that is not mine. I tried to change it to something else but because the incorrect email address is the official one I can\u2019t change anything. I\u2019ve sent multiple requests to Swagbucks over the last month and have heard nothing. So now I can\u2019t do anything with my account. What do I do?\nIf this does happen, it would be awesome to have musical acts. What\u2019s your top 3 wish list?!. I think everyone will say Oliver, post, Mac demarco, logic, marc rebillet\u2026.\n2022.01.29 10:21 Caninus-Surdis What is the oddest profession you have come across?\n\u2026The government will pay 40,000 million rupees ($200m) to farmers whose harvests were affected by the chemical fertiliser ban, agriculture minister Mahindananda Aluthgamage said on Tuesday.\nA good example of central planning in action.\nThe post Update on the Sri Lanka Organic Farming Disaster appeared first onMarginal REVOLUTION.\n2022.01.29 10:21 Squeezy_Lemon_ People who have broken up a relationship to go back to your one true love, what happened?\n2022.01.29 10:21 Ok_Butterscotch_1494 More accurate time frame.\nI think Starlink is starting to get mor",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1727139907,
+        "tokens": 77,
+        "subset": "c4-filtered",
+        "shard": "c4-filtered/c4-0137.json.gz",
+        "url": "https://leaders.economicblogs.org/tyler-cowen/2019/cowen-triumph-ethiopian-yimby/",
+        "domain": "leaders.economicblogs.org",
+        "title": null,
+        "snapshot": null,
+        "crawled": "2019-04-26T16:02:11Z",
+        "quality": 0.9987,
+        "lines_kept": null,
+        "lines_original": null,
+        "excerpt": "Yonas receives permission from the county seat to build a new house: The post The triumph of Ethiopian YIMBY appeared first onMarginal REVOLUTION.\nTyler Cowen writes Who should Trump pick for the Fed Board of Governors?\nThe post The triumph of Ethiopian YIMBY appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 552718599,
+        "tokens": 24,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0171.json.gz",
+        "url": "https://bijin-world.com/2020/09/14/how-to-make-yourself-happier-during-the-pandemic/",
+        "domain": "bijin-world.com",
+        "title": "How to make yourself happier during the pandemic \u2013 BIJIN WORLD",
+        "snapshot": "CC-MAIN-2020-45",
+        "crawled": "2020-10-25T22:47:44Z",
+        "quality": 0.99999,
+        "lines_kept": 10,
+        "lines_original": 108,
+        "excerpt": "The post How to make yourself happier during the pandemic appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1608186362,
+        "tokens": 1660,
+        "subset": "falcon-refinedweb-filtered",
+        "shard": "falcon-refinedweb-filtered/falcon-0479.json.gz",
+        "url": "http://hotels-dominican-republic.net/examples-of-monopoly-products.html",
+        "domain": "hotels-dominican-republic.net",
+        "title": null,
+        "snapshot": "CC-MAIN-2018-51",
+        "crawled": "2018-12-09T23:35:37.000Z",
+        "quality": null,
+        "lines_kept": null,
+        "lines_original": null,
+        "excerpt": "examples of monopoly products\nMonopoly prices \u2013 to regulate or not to regulate, that is the ...\nWhy do governments regulate the prices in industries such as natural gas and electricity? Because companies tend to abuse from the consumers. Electricity and natural gas is primordial for most people, so people are ready to pay a lot to have those products.Get A Touch\nHow Does a Monopoly Affect Business and Consumers? | Chron.com\nPrice, Supply and Demand. A monopoly's potential to raise prices indefinitely is its most critical detriment to consumers. Because it has no industry competition, a monopoly's price is the market price and demand is market demand.Get A Touch\nGive real life examples of a monopoly, perfect competition ...\nGet an answer for 'Give real life examples of a monopoly, perfect competition, oligopoly, monopolistic competition and duopoly in India.' and find homework help for other Business questions at eNotesGet A Touch\nIntangible investment and monopoly profits -Marginal REVOLUTION\n'monopoly has not risen in the traditional sense' Ever looked at how many companies can make the tangible smartphone screen? Whether one wants to call it a monopoly or not, it is most distinct",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 2318412060,
+        "tokens": 125,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0114.json.gz",
+        "url": "https://www.tefter.io/bookmarks/327103",
+        "domain": "tefter.io",
+        "title": "'Monday assorted links - Marginal REVOLUTION' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-24",
+        "crawled": "2020-05-31T09:50:23Z",
+        "quality": 0.71382,
+        "lines_kept": 2,
+        "lines_original": 31,
+        "excerpt": "Update on New Zealand lottery method of funding scientists (NYT). 2. Did you know that the Canadians pursue tow truck wars? 3. Zambia had a space program in the 1960s (New Yorker). 4. Davos markets in everything in Trump\u2019s DNA (speculative). 5. 52 more things Devin Faddoul learned in 2019. 6. The Economist lead [\u2026] The post Monday assorted links appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 41214310,
+        "tokens": 97,
+        "subset": "cc_en_head",
+        "shard": "cc_en_head/cc_en_head-0047.json.gz",
+        "url": "https://www.tefter.io/bookmarks/110818",
+        "domain": "tefter.io",
+        "title": "'Families and social networks don\u2019t always help stroke victims' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-10",
+        "crawled": "2020-02-29T13:09:05Z",
+        "quality": 0.78584,
+        "lines_kept": 3,
+        "lines_original": 12,
+        "excerpt": "A recent study in Nature Communications shows that when stroke patients are surrounded by close connections like their immediate family, they are less likely to get to the hospital in time for treatment, compared to patients with looser social connections. Amar Dhand is a neurologist at Harvard Medical School with a PhD in sociology from [\u2026] The post Families and social networks don\u2019t always help stroke victims appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 640060442,
+        "tokens": 19,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0239.json.gz",
+        "url": "https://leaders.economicblogs.org/tyler-cowen/2021/cowen-demand-crypto/",
+        "domain": "leaders.economicblogs.org",
+        "title": "The demand for crypto \u2013 Leaders",
+        "snapshot": "CC-MAIN-2021-10",
+        "crawled": "2021-03-06T05:09:50Z",
+        "quality": 0.99999,
+        "lines_kept": 16,
+        "lines_original": 1171,
+        "excerpt": "The post The demand for crypto appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 3090757264,
+        "tokens": 24,
+        "subset": "cc_en_middle",
+        "shard": "cc_en_middle/cc_en_middle-0099.json.gz",
+        "url": "https://leaders.economicblogs.org/tyler-cowen/2020/cowen-psychometric/",
+        "domain": "leaders.economicblogs.org",
+        "title": "The world is running a disturbing psychometric test \u2013 Leaders",
+        "snapshot": "CC-MAIN-2020-24",
+        "crawled": "2020-05-29T11:18:58Z",
+        "quality": 0.99148,
+        "lines_kept": 17,
+        "lines_original": 1157,
+        "excerpt": "The post The world is running a disturbing psychometric test appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1027426603,
+        "tokens": 111,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0038.json.gz",
+        "url": "https://www.tefter.io/bookmarks/296738",
+        "domain": "tefter.io",
+        "title": "'The United States is Starved for Talent - Marginal REVOLUTION' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-05",
+        "crawled": "2020-01-27T01:22:59Z",
+        "quality": 0.77152,
+        "lines_kept": 6,
+        "lines_original": 28,
+        "excerpt": "The US offers a limited number of H1-B visas annually, these are temporary 3-6 year visas that allow firms to hire high-skill workers. In many years, the demand exceeds the supply which is capped at 85,000 and in these years USCIS randomly selects which visas to approve. The random selection is key to a new [\u2026] The post The United States is Starved for Talent appeared first onMarginal REVOLUTION.\n",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1336872892,
+        "tokens": 115,
+        "subset": "cc_en_head",
+        "shard": "cc_en_head/cc_en_head-0143.json.gz",
+        "url": "https://www.tefter.io/bookmarks/509512",
+        "domain": "tefter.io",
+        "title": "'Sunday assorted links' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-45",
+        "crawled": "2020-10-29T14:50:56Z",
+        "quality": 0.98013,
+        "lines_kept": 2,
+        "lines_original": 32,
+        "excerpt": "My May predictions about the NBA bubble. 2. On acceptance parenting. 3. A second wave of Covid infections for London health care workers. 4. Floodgates work in Venice in first major test (NYT). 5. Borgen it ain\u2019t: \u201cThe 15-year-old he slept with was member of the junior wing of the Social Democrats.\u201d 6. Resource [\u2026] The post Sunday assorted links appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 743455675,
+        "tokens": 27,
+        "subset": "falcon-refinedweb-filtered",
+        "shard": "falcon-refinedweb-filtered/falcon-0394.json.gz",
+        "url": "https://bijin-world.com/2020/10/19/what-our-new-chinese-overlords-desire-for-us/",
+        "domain": "bijin-world.com",
+        "title": null,
+        "snapshot": "CC-MAIN-2020-50",
+        "crawled": "2020-11-24T00:16:26.000Z",
+        "quality": null,
+        "lines_kept": null,
+        "lines_original": null,
+        "excerpt": "Fleet.\nThe post What our new Chinese overlords desire for us appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 1489427886,
+        "tokens": 891,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0227.json.gz",
+        "url": "https://bijin-world.com/2020/12/12/",
+        "domain": "bijin-world.com",
+        "title": "December 12, 2020 \u2013 BIJIN WORLD",
+        "snapshot": "CC-MAIN-2021-10",
+        "crawled": "2021-02-27T07:08:06Z",
+        "quality": 0.34557,
+        "lines_kept": 37,
+        "lines_original": 154,
+        "excerpt": "The post That was then, this is now; science and chaos edition appeared first onMarginal REVOLUTION.\nWhat is the great the illusion of education? How do both the Left and the Right perpetuate myths that harm the most vulnerable participants in the system- the students? In this episode, EconTalk host Russ Roberts welcomes author Fredrik de Boer to discuss his book, The Cult of Smart.\nA terrific conversation ensues, featuring areas of both agreement and disagreement between Roberts and de Boer. Now we\u2019d like to know what you think. Use the prompts below and share your answer in the comments, or use them to start your own conversation offline.\n1- What are the different myths that the Left and the Right lean on with regard to education, according to de Boer? What do they have in common, and how do they diverge?\n2- Roberts pushes de Boer, suggesting he gets close to saying schools achieve nothing. How does he respond? What does de Boer mean when he says that different schools make no difference?\n3- De Boer asks a trenchant question: To what extent is educational mobility even desirable? How would you answer this question?\n4- In discussing the \u201cmonolith\u201d of American K12 education, Robert",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 669269940,
+        "tokens": 330,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0412.json.gz",
+        "url": "https://financetin.com/dan-klein-responds-to-bryan-caplan-on-immigration/",
+        "domain": "financetin.com",
+        "title": "Dan Klein responds to Bryan Caplan on immigration",
+        "snapshot": "CC-MAIN-2022-49",
+        "crawled": "2022-11-27T14:48:24Z",
+        "quality": 0.38228,
+        "lines_kept": 14,
+        "lines_original": 87,
+        "excerpt": "Big changes have large and unknowable consequences, including critical consequences about basic political stability, functionality, and integrity. Liberal civilization is not entirely natural to man. Alexis de Tocqueville worried that despotism is.\nWould he call for New Zealand to do so?\nIf the ranking shown above would not go for Sweden or New Zealand but would go for the United States, why the difference? What is there in the Swedish case that changes the ranking?\nOn the same premise: You\u2019d think that open border advocates would confront that matter directly, telling us which countries should have open borders and which shouldn\u2019t. Maybe they do this. A discussion of where open borders is/is not recommended would, I should think, also elaborate the basis for the separating nations into those two bins.\nI would stress that I favor a 3x increase in immigrant flow for the United States, but not Sweden. I do not favor Open Borders for any country that large numbers of people might want to move to. I also observe that the nations that have done the most to take in more immigrants \u2014 Canada and Australia \u2014 maintain a pretty \u201chard ass\u201d control over their borders. There is a lesson here. Wh",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 465854851,
+        "tokens": 113,
+        "subset": "cc_en_head",
+        "shard": "cc_en_head/cc_en_head-0043.json.gz",
+        "url": "https://www.tefter.io/bookmarks/133974",
+        "domain": "tefter.io",
+        "title": "'*Godzilla: King of the Monsters* (spoilers in this post)' bookmarked by ~marginalrevolution | Tefter",
+        "snapshot": "CC-MAIN-2020-10",
+        "crawled": "2020-02-26T19:37:55Z",
+        "quality": 0.28163,
+        "lines_kept": 2,
+        "lines_original": 12,
+        "excerpt": "Carp all you want, I thought it was pretty damn good. The innovations: monsters have economic value, there are property rights in monsters (for a while), communication really matters, the environmentalists are the bad guys, and nuclear power saves the world. The stagnation: Asian people, and only Asian people, have TFP about monsters. You can\u2019t [\u2026] The post Godzilla: King of the Monsters (spoilers in this post) appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      },
+      {
+        "doc_ix": 2761393288,
+        "tokens": 36,
+        "subset": "cc_en_tail",
+        "shard": "cc_en_tail/cc_en_tail-0204.json.gz",
+        "url": "https://bijin-world.com/2020/11/06/",
+        "domain": "bijin-world.com",
+        "title": "November 6, 2020 \u2013 BIJIN WORLD",
+        "snapshot": "CC-MAIN-2020-50",
+        "crawled": "2020-11-30T13:15:45Z",
+        "quality": 0.79336,
+        "lines_kept": 33,
+        "lines_original": 150,
+        "excerpt": "Is research productivity declining in China and Germany?\nThe post Is research productivity declining in China and Germany? appeared first onMarginal REVOLUTION.",
+        "occurrences_drawn": 1
+      }
+    ],
+    "domains": [
+      {
+        "domain": "tefter.io",
+        "occurrences": 19,
+        "share": 0.31666666666666665
+      },
+      {
+        "domain": "leaders.economicblogs.org",
+        "occurrences": 12,
+        "share": 0.2
+      },
+      {
+        "domain": "bijin-world.com",
+        "occurrences": 8,
+        "share": 0.13333333333333333
+      },
+      {
+        "domain": "fxgen.info",
+        "occurrences": 4,
+        "share": 0.06666666666666667
+      },
+      {
+        "domain": "imtfair.com",
+        "occurrences": 2,
+        "share": 0.03333333333333333
+      },
+      {
+        "domain": "financetin.com",
+        "occurrences": 2,
+        "share": 0.03333333333333333
+      },
+      {
+        "domain": "sa-mebel-ekanom.ru",
+        "occurrences": 1,
+        "share": 0.016666666666666666
+      },
+      {
+        "domain": "bishnupriyamanipuri.men",
+        "occurrences": 1,
+        "share": 0.016666666666666666
+      },
+      {
+        "domain": "njeconomics.org",
+        "occurrences": 1,
+        "share": 0.016666666666666666
+      },
+      {
+        "domain": "evantravers.com",
+        "occurrences": 1,
+        "share": 0.016666666666666666
+      },
+      {
+        "domain": "moravia-europe.pl",
+        "occurrences": 1,
+        "share": 0.016666666666666666
+      },
+      {
+        "domain": "proxygogo.info",
+        "occurrences": 1,
+        "share": 0.016666666666666666
+      },
+      {
+        "domain": "int-art.eu",
+        "occurrences": 1,
+        "share": 0.016666666666666666
+      },
+      {
+        "domain": "greatmoviescenes.org",
+        "occurrences": 1,
+        "share": 0.016666666666666666
+      },
+      {
+        "domain": "asiaenews.com",
+        "occurrences": 1,
+        "share": 0.016666666666666666
+      },
+      {
+        "domain": "cyberthal-ghost.nfshost.com",
+        "occurrences": 1,
+        "share": 0.016666666666666666
+      },
+      {
+        "domain": "so-l.ru",
+        "occurrences": 1,
+        "share": 0.016666666666666666
+      },
+      {
+        "domain": "td-fanera.ru",
+        "occurrences": 1,
+        "share": 0.016666666666666666
+      },
+      {
+        "domain": "hotels-dominican-republic.net",
+        "occurrences": 1,
+        "share": 0.016666666666666666
+      }
+    ],
+    "on_subject_site": 0
+  }
+}

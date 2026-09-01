@@ -10,12 +10,14 @@ from pathlib import Path
 from . import (
     behavior,
     budget,
+    casestudy,
     classify,
     context,
     extract,
     hf,
     infinigram,
     languages,
+    lookup,
     pretrain,
     registry,
     search,
@@ -29,6 +31,17 @@ from .stats import cluster_wilson as _cluster_wilson, wilson as _wilson
 # is a single samplable dataset with no pipeline around it, and the layers that
 # read rows cannot tell the difference (see registry.resolve).
 TARGET_HELP = "model or dataset: " + ", ".join(registry.targets())
+
+
+def _count_int(value: str) -> int:
+    """argparse type for a count where zero is a real choice — `lookup --docs 0`
+    asks for counts without documents. A negative one is not: it reaches the
+    sampler as a negative budget, skips retrieval, and reports "0 documents from
+    0 draws" for a phrase with thousands of occurrences."""
+    n = int(value)
+    if n < 0:
+        raise argparse.ArgumentTypeError(f"must be zero or a positive integer, got {n}")
+    return n
 
 
 def _positive_int(value: str) -> int:
@@ -1893,6 +1906,91 @@ def _report_questions(target_name: str, target: dict) -> None:
         print()
 
 
+def cmd_lookup(args):
+    """Count an exact string across the public corpora that have an index.
+
+    The complement to every sampling command here: those ask what a corpus
+    contains, this asks whether it contains one specific thing. No model is
+    called and nothing is downloaded.
+    """
+    ids = args.index or [i["id"] for i in lookup.INDEXES]
+    unknown = [i for i in ids if i not in lookup.INDEX_BY_ID]
+    if unknown:
+        sys.exit(
+            f"unknown index {', '.join(unknown)}; known: "
+            + ", ".join(i["id"] for i in lookup.INDEXES)
+        )
+    print(f"\n{args.query!r}\n")
+    width = max(len(lookup.INDEX_BY_ID[i]["label"]) for i in ids)
+    # The index counts token-boundary matches, not character substrings, so a
+    # surprising count is sometimes a surprising tokenisation — `find` prints
+    # the sequence for exactly this reason. Collected per index because each
+    # index tokenises for itself, and printed once when they all agree.
+    tokenised: dict[str, list[str]] = {}
+    for idx in ids:
+        info = lookup.INDEX_BY_ID[idx]
+        try:
+            r = lookup.probe(idx, args.query, args.docs)
+        except lookup.LookupError_ as e:
+            print(f"  {info['label']:<{width}}  — {e}")
+            continue
+        n = r["occurrences"]
+        tokenised.setdefault(" | ".join(r.get("tokens") or []), []).append(info["label"])
+        # Occurrences and documents are different numbers and the gap is the
+        # whole point, so print both whenever documents were pulled rather than
+        # letting one stand in for the other.
+        detail = ""
+        if args.docs and n:
+            docs = r["documents"]
+            detail = (
+                f"  in {len(docs)} document{'s' if len(docs) != 1 else ''}"
+                + ("" if r["exhaustive"] else f" (sampled from {r['drawn']} draws)")
+            )
+        print(f"  {info['label']:<{width}}  {n:>9,} occurrence{'s' if n != 1 else ' '}{'~' if r['approx'] else ''}{detail}")
+        for d in r.get("documents", []):
+            bits = [b for b in [d["subset"], d["snapshot"], f"{d['tokens']:,} tok" if d["tokens"] else None] if b]
+            print(f"      {d['url'] or d['shard'] or '?'}")
+            print(f"        {' · '.join(bits)}")
+    for seq, labels in tokenised.items():
+        if not seq:
+            continue
+        where = "" if len(tokenised) == 1 else f"  ({', '.join(labels)})"
+        print(f"\n  matched as tokens: {seq}{where}")
+    print()
+
+
+def cmd_case_study(args):
+    """Run a committed lookup study and write its result file for the site."""
+    if args.slug not in casestudy.CASE_STUDIES:
+        sys.exit(f"unknown case study {args.slug!r}; known: {', '.join(casestudy.CASE_STUDIES)}")
+    RESULTS.mkdir(exist_ok=True)
+
+    def progress(query, index):
+        line = f"  {lookup.INDEX_BY_ID[index]['label']} · {query}"
+        print(f"\r{line[:78]:<78}", end="", file=sys.stderr, flush=True)
+
+    out = casestudy.run(args.slug, progress=progress)
+    print(file=sys.stderr)
+    path = RESULTS / f"case-study.{args.slug}.json"
+    path.write_text(json.dumps(out, indent=2))
+
+    probe, spread = out["probe"], out["spread"]
+    print(
+        f"{probe['query']!r}: {probe['occurrences']} occurrence(s) in "
+        f"{len(probe['documents'])} document(s)"
+        + ("" if probe["exhaustive"] else " (sampled)"),
+        file=sys.stderr,
+    )
+    top = spread["domains"][:3]
+    print(
+        f"{spread['query']!r}: {spread['occurrences']:,} occurrences; of "
+        f"{spread['drawn']} drawn, "
+        + ", ".join(f"{d['domain']} {d['share'] * 100:.0f}%" for d in top),
+        file=sys.stderr,
+    )
+    print(f"-> {path}", file=sys.stderr)
+
+
 def main():
     ap = argparse.ArgumentParser(prog="trainspotting")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -2033,6 +2131,27 @@ def main():
                    help="read prompts from the committed classify run instead of re-sampling HuggingFace")
     p.set_defaults(fn=cmd_languages)
 
+    p = sub.add_parser("lookup", help="count an exact string in the public corpora that have an index")
+    p.add_argument("query", help="the exact string to look for")
+    p.add_argument(
+        "--index",
+        action="append",
+        help=f"restrict to one index (repeatable); default all of: {', '.join(i['id'] for i in lookup.INDEXES)}",
+    )
+    p.add_argument(
+        "--docs",
+        type=_count_int,
+        default=0,
+        metavar="N",
+        help="also pull up to N documents behind each count (the index caps a single call at 10)",
+    )
+    p.set_defaults(fn=cmd_lookup)
+
+    p = sub.add_parser("case-study", help="run a committed lookup study and write its result file")
+    p.add_argument("slug", nargs="?", default="marginal-revolution",
+                   help=f"one of: {', '.join(casestudy.CASE_STUDIES)}")
+    p.set_defaults(fn=cmd_case_study)
+
     p = sub.add_parser("classify")
     p.add_argument("target", help=TARGET_HELP)
     p.add_argument("--stage", help="only this stage (sft/dpo/rlvr for a model; a dataset has one)")
@@ -2047,10 +2166,15 @@ def main():
     # filename meant `classify WildChat-1M` produced a file the site — which
     # indexes the registry key — never asks for, and the run silently didn't
     # exist.
-    try:
-        args.target = registry.resolve(args.target)["target"]
-    except KeyError as e:
-        sys.exit(e.args[0])
+    # Only the commands that take one: `find`, `lookup` and `case-study` are
+    # about corpora rather than a registered target, and canonicalizing an
+    # argument they never parsed raised AttributeError before their handler ever
+    # ran. `find` has been unusable on main since this canonicalization landed.
+    if getattr(args, "target", None) is not None:
+        try:
+            args.target = registry.resolve(args.target)["target"]
+        except KeyError as e:
+            sys.exit(e.args[0])
     args.fn(args)
 
 
