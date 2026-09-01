@@ -2,10 +2,13 @@
 
 Users usually start from a transcript ("the model claims its knowledge cutoff
 is September 2021"), not from a search string. This module extracts the phrases
-in that text worth searching for: long enough to be selective, and anchored on
-at least one token unlikely to appear by chance — a name, a number, a word in
-the long tail. Extraction is local and deterministic; no model is called, so
-the queries are inspectable before anything is spent searching with them.
+in that text worth searching for: anchored on at least one token unlikely to
+appear by chance — a name, a number, a word in the long tail — and as much of
+the surrounding phrase as the sentence holding it allows. The anchor is what
+makes a query selective, not its length, so `Assistant: ChatGPT` yields
+`ChatGPT` rather than nothing. Extraction is local and deterministic; no model
+is called, so the queries are inspectable before anything is spent searching
+with them.
 
 The fan-out over stages lives in the CLI. Ranking what comes back is the
 reader's job: a query that hits everywhere may mean the behavior is trained
@@ -20,7 +23,6 @@ import re
 # September 2021"); shorter windows lose the selectivity, longer ones dilute
 # the anchor density that ranks them.
 WINDOW = 8
-MIN_WORDS = 3
 
 # Small on purpose: this list only has to stop function words from counting as
 # signal, not model English. "i" covers the pronoun, which capitalization would
@@ -74,15 +76,21 @@ def _weight(token: str, sentence_initial: bool) -> int:
     language model trained to assist people", which is the behavior `trace`
     exists to find — yielded no query at all and sent the user to `ask`.
     """
-    m = _WORD.search(token)
-    if not m:
+    segments = _WORD.findall(token)
+    if not segments:
         return 0
-    core = m.group(0)
+    core = segments[0]
     if core.lower() in STOPWORDS:
         return 0
-    if any(ch.isdigit() for ch in core):
+    # Every word segment of the token, not just the first: punctuation inside a
+    # whitespace-delimited token hides the rest of it, and `version-4217` or
+    # `iso-9001` read as the ordinary word "version" when only the segment
+    # before the hyphen was inspected. The title-case test below stays on the
+    # first segment, because that is the letter the sentence rule capitalized.
+    word = "".join(segments)
+    if any(ch.isdigit() for ch in word):
         return 2
-    if any(ch.isupper() for ch in core[1:]):
+    if any(ch.isupper() for ch in word[1:]):
         return 2
     if core[0].isupper() and not sentence_initial:
         return 2
@@ -103,9 +111,13 @@ def distinctive_ngrams(text: str, max_queries: int = 6) -> list[str]:
     """
     candidates = []  # (score, order, anchors, query)
     for s_idx, seg in enumerate(_sentences(text)):
+        # No minimum segment length. The anchor requirement below is the real
+        # floor on how generic a query may be, and a word count on top of it
+        # threw away the shortest segments that are nothing but anchor:
+        # `Knowledge cutoff: September 2021` splits at the colon into two
+        # two-word segments, `Assistant: ChatGPT` into two one-word ones, and a
+        # three-word minimum answered all of them with "no distinctive phrase".
         tokens = seg.split()
-        if len(tokens) < MIN_WORDS:
-            continue
         weights = [_weight(t, i == 0) for i, t in enumerate(tokens)]
         size = min(WINDOW, len(tokens))
         for start in range(len(tokens) - size + 1):

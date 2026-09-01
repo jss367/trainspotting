@@ -1438,20 +1438,20 @@ def cmd_trace(args):
             }
         )
 
-    results.sort(key=lambda r: -r["density"])
-    print(f"\n# Behavior trace: {args.target}\n")
-    print("Stages ranked by matches per million rows.\n")
-    for r in results:
+    # A partially indexed stage's density is a lower bound over a denominator
+    # that counts rows nobody searched, so it does not belong in the same order
+    # as an exact one: a 36 GB mix with the behavior all through it can print a
+    # smaller number than a small mix with none of it, and `results[0]` would
+    # then name the wrong stage as the place to look. The two groups are
+    # reported separately, ranked within themselves.
+    ranked = sorted((r for r in results if not r["partial"]), key=lambda r: -r["density"])
+    bounded = sorted((r for r in results if r["partial"]), key=lambda r: -r["density"])
+
+    def show(r):
         print(
             f"## {r['stage']} — {'≥' if r['partial'] else ''}{r['density']:.1f}/M"
             f"  ({r['hits']} matches in {r['total']:,} rows, {r['dataset']})"
         )
-        if r["partial"]:
-            print(
-                "  note: the index covers only the first 5 GB of this split, so"
-                " the matches are over a prefix of the rows they are divided by"
-                " — a lower bound, not comparable with a fully indexed stage."
-            )
         for q, c in sorted(r["per_query"].items(), key=lambda kv: -kv[1]):
             # `!r`, like the stderr echo above: a query is a slice of text the
             # user pasted, and an escape sequence survives tokenization (`\x1b`
@@ -1460,21 +1460,59 @@ def cmd_trace(args):
             # report that is quoting it back.
             print(f"  {c:>7,}  {q!r}")
         print()
-    if not any(r["hits"] for r in results):
+
+    print(f"\n# Behavior trace: {args.target}\n")
+    if ranked:
+        print("Stages ranked by matches per million rows.\n")
+        for r in ranked:
+            show(r)
+    if bounded:
+        print("## Not ranked: only part of these splits is indexed\n")
+        print(
+            "The server's full-text index stops at the first 5 GB of a split, so"
+            " the matches below are from a prefix of the rows they are divided"
+            " by. Each figure is a lower bound, and cannot be compared with the"
+            " ranking above or placed within it.\n"
+        )
+        for r in bounded:
+            show(r)
+
+    found = [r for r in ranked + bounded if r["hits"]]
+    if not found:
         print(
             "No stage contained these phrases. The behavior may be a disposition"
             " with no signature string, or the phrases may be paraphrased in"
             " training.\nTry `trainspotting ask` to judge what sampled examples"
             " teach — it reads meaning, not verbatim text."
+            # A zero over an indexed prefix is not a zero over the split, so it
+            # cannot join the others in a flat "nothing here".
+            + (
+                "\nNote that "
+                + ", ".join(r["stage"] for r in bounded)
+                + " was only partly indexed, so the phrases could be in the part"
+                " that was never searched."
+                if bounded
+                else ""
+            )
         )
     else:
-        top = results[0]
+        top = max(found, key=lambda r: r["density"])
         print(
-            "The index counts rows, not sides. Read the examples behind the top"
-            f" stage with `trainspotting search {args.target} --stage"
+            "The index counts rows, not sides. Read the examples behind"
+            f" {top['stage']} with `trainspotting search {args.target} --stage"
             f" {top['stage']} <phrase>`, which says whether the string is in the"
             " prompt, the response, or the rejected half of a pair."
         )
+        # `top` is the largest number, which is only the largest density when
+        # every stage was fully indexed. Say so rather than letting a bound that
+        # happens to sort lower read as a stage with less of the behavior.
+        others = [r["stage"] for r in bounded if r["hits"] and r is not top]
+        if others:
+            print(
+                "Worth reading either way: " + ", ".join(others) + " reported a"
+                " lower bound, so the true density there may be higher than"
+                " anything above."
+            )
 
 
 def cmd_report(args):

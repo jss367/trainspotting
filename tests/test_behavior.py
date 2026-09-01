@@ -44,6 +44,26 @@ def test_a_digit_anchors_a_query():
     assert behavior.distinctive_ngrams("the answer is exactly 4217 units")
 
 
+def test_a_digit_behind_punctuation_in_a_token_still_anchors():
+    # `_WORD.search` read only the first word segment of a whitespace-delimited
+    # token, so `version-4217` scored as the ordinary word "version" and a
+    # lowercase sentence around it produced nothing at all.
+    assert behavior.distinctive_ngrams("the build is version-4217 in the log")
+    assert behavior.distinctive_ngrams("iso-9001 compliance was claimed")
+
+
+def test_a_segment_too_short_for_a_window_is_still_a_query():
+    """The anchor is what makes a query selective, not its length. A three-word
+    minimum threw away exactly the segments that are nothing but anchor: the
+    sentence splitter breaks at a colon, so a pasted header line reduced to two
+    short segments and `trace` answered "no distinctive phrase" to a name."""
+    assert behavior.distinctive_ngrams("Knowledge cutoff: September 2021") == ["September 2021"]
+    assert behavior.distinctive_ngrams("Assistant: ChatGPT") == ["ChatGPT"]
+    assert behavior.distinctive_ngrams("Model: GPT-4") == ["GPT-4"]
+    # Still nothing without an anchor, however short the segment.
+    assert behavior.distinctive_ngrams("Reply: yes") == []
+
+
 def test_capitalized_word_anchors_but_sentence_start_does_not():
     # "Weather" opens its sentence, so its capital proves nothing; "Reykjavik"
     # is capitalized mid-sentence, which does.
@@ -181,6 +201,47 @@ def test_trace_escapes_the_queries_it_echoes(monkeypatch, capsys):
     )
     assert "\x1b" not in out
     assert "x1b" in out
+
+
+def test_a_partially_indexed_stage_is_left_out_of_the_ranking(monkeypatch, capsys):
+    """A lower bound over a denominator counting unsearched rows cannot be
+    ordered against an exact density: here SFT's bound is below DPO's real
+    figure while its true density may be well above it. Ranking them together
+    named the wrong stage as the place to look."""
+    out = _run_trace(
+        monkeypatch,
+        capsys,
+        ["trainspotting", "trace", "olmo-3-7b-think", "I am ChatGPT, by OpenAI"],
+        {
+            "allenai/Dolci-Think-SFT-7B": (10, True),
+            "allenai/Dolci-Think-DPO-7B": (99, False),
+            "allenai/Dolci-Think-RL-7B": (0, False),
+        },
+    )
+    heading = out.index("## Not ranked")
+    assert out.index("## dpo") < heading < out.index("## sft")
+    # The pointer names a stage whose density means what it says, and the bound
+    # is called out rather than read as a stage with less of the behavior.
+    assert "--stage dpo" in out
+    assert "--stage sft" not in out
+    assert "sft reported a lower bound" in out
+
+
+def test_nothing_found_does_not_speak_for_the_unindexed_rows(monkeypatch, capsys):
+    """Zero over an indexed prefix is not zero over the split, so it cannot join
+    the fully searched stages in a flat "nothing here"."""
+    out = _run_trace(
+        monkeypatch,
+        capsys,
+        ["trainspotting", "trace", "olmo-3-7b-think", "I am ChatGPT, by OpenAI"],
+        {
+            "allenai/Dolci-Think-SFT-7B": (0, True),
+            "allenai/Dolci-Think-DPO-7B": (0, False),
+            "allenai/Dolci-Think-RL-7B": (0, False),
+        },
+    )
+    assert "No stage contained these phrases" in out
+    assert "sft was only partly indexed" in out
 
 
 def _live_search_count(dataset, phrase, split="train"):

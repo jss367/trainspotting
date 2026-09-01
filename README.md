@@ -566,17 +566,22 @@ assistant turns, not just the metadata beside them: it covers string values
 nested inside a struct or a list of structs, which is what an SFT `messages`
 column and a DPO `chosen`/`rejected` column are.
 
-A phrase is kept only if it is anchored: on a number, on a capital past a
+A window is kept only if it is anchored: on a number, on a capital past a
 token's first letter (`ChatGPT`, `OpenAI` — English does not shape words that
-way, so they are names wherever they sit, including the opening word of a
-transcript), or on a capital anywhere but the start of its sentence. A window of
-pure function words matches rows by coincidence, so those are dropped, and
-boundary function words are trimmed off the ones kept because search ANDs a
-query's tokens together. Two anchors in one sentence get two queries — a
-candidate window is dropped only when every anchor in it is already covered,
-not merely because it overlaps, or `"...developed by OpenAI, my knowledge
-cutoff is September 2021."` would spend its whole budget on the lab and never
-reach the date.
+way, so those are names wherever they sit, including the opening word of a
+transcript), or on a capital anywhere but the start of its sentence. The anchor
+is what makes a query selective, not the length, so a window of pure function
+words is dropped however long it is — it would match training rows by
+coincidence — while `"Assistant: ChatGPT"` yields `ChatGPT`. Boundary function
+words are trimmed off the windows that are kept, because search ANDs a query's
+tokens together and a trailing "so I" only excludes the row that phrased the
+same span without it.
+
+Two anchors in one sentence get two queries: a candidate window is dropped only
+when every anchor in it is already covered, not merely because it overlaps one
+already chosen. Otherwise `"...developed by OpenAI, my knowledge cutoff is
+September 2021."` — fourteen words, so every eight-word window touches every
+other — would spend its whole budget on the lab and never reach the date.
 
 Two things a `trace` number is not, both printed next to it:
 
@@ -585,8 +590,10 @@ Two things a `trace` number is not, both printed next to it:
   on verbatim occurrences. A high-ranking stage is where to point `search`,
   which reads the rows and says which *side* of the example the string is on.
 - **Not always the whole split.** The full-text index stops at the first 5 GB,
-  which the two 36 GB Think SFT mixes are well past. Those stages print `≥` and
-  a note rather than being ranked last for being large.
+  which the two 36 GB Think SFT mixes are well past. Their matches come from a
+  prefix of the rows they are divided by, so they are reported separately as
+  lower bounds rather than ranked — a bound below an exact density says nothing,
+  and ranking the two together put the biggest mixes last for being big.
 
 The first search against a cold split can take minutes while the server builds
 the index. When the behavior has no signature string — it is a disposition, or
