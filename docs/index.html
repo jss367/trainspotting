@@ -85,13 +85,21 @@
   .ghlink:hover { color: var(--text-primary); border-color: var(--baseline); }
   @media (max-width: 640px) { .ghlink { display: none; } }
 
-  /* ---- model tabs ---- */
+  /* ---- target tabs: trained models on the left, standalone datasets after a
+     rule, because the two answer different questions and a dataset was never
+     trained on ---- */
   .tabs {
     position: sticky; top: 0; z-index: 5;
-    display: flex; gap: 8px; flex-wrap: wrap;
+    display: flex; gap: 8px 16px; flex-wrap: wrap; align-items: center;
     padding: 10px 0 12px; margin: 0 0 14px;
     background: color-mix(in srgb, var(--page) 86%, transparent);
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .tabgroup { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tabgroup + .tabgroup { border-left: 1px solid var(--grid); padding-left: 16px; }
+  .tabgroup > .glabel {
+    font-size: 11px; font-weight: 650; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--muted); cursor: help;
   }
   .tabs button {
     font: inherit; font-size: 13px; font-weight: 550; padding: 7px 15px;
@@ -102,6 +110,20 @@
   .tabs button:hover { color: var(--text-primary); border-color: var(--baseline); }
   .tabs button[aria-pressed="true"] {
     background: var(--text-primary); border-color: var(--text-primary); color: var(--page);
+  }
+  /* a dataset tab is not a model tab: dashed edge, square-ish corners */
+  .tabs button.ds { border: 1px dashed var(--baseline); border-radius: 8px; }
+  .tabs button.ds[aria-pressed="true"] { border-style: solid; }
+  @media (max-width: 640px) {
+    .tabgroup + .tabgroup { border-left: 0; padding-left: 0; width: 100%; }
+  }
+
+  /* ---- badge: what kind of thing the open tab is ---- */
+  .kind {
+    display: inline-block; vertical-align: 3px; margin-left: 9px;
+    font-size: 11px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--muted); border: 1px dashed var(--baseline); border-radius: 6px;
+    padding: 2px 7px;
   }
 
   /* ---- part dividers: the two halves of the pipeline ---- */
@@ -139,6 +161,7 @@
   }
   .ptile .v { font-size: 21px; font-weight: 650; margin: 3px 0 1px; white-space: nowrap; }
   .ptile .d { font-size: 12px; color: var(--text-secondary); }
+  .pipe.one .ptile { flex: 0 1 auto; min-width: 200px; }
   .parrow { align-self: center; flex: none; color: var(--baseline); font-size: 16px; user-select: none; }
   .ptile.link { cursor: pointer; transition: border-color .15s, background .15s; }
   .ptile.link:hover { border-color: var(--baseline); background: var(--track); }
@@ -449,12 +472,13 @@
         <h1>trainspotting</h1>
         <p class="tagline">Spot what's in a model's training data — stage sizes, exact mix
            composition, and how much of post-training is about being helpful, honest, and harmless.
-           The last tabs are datasets on their own, with no model around them.</p>
+           The <em>datasets</em> tabs run the same layers over a dataset on its own: it arrives as a
+           single stage, with no training pipeline around it and no response anything was fit to.</p>
       </div>
       <a class="ghlink" href="https://github.com/jss367/trainspotting">GitHub&nbsp;↗</a>
     </div>
   </header>
-  <nav class="tabs" id="tabs" aria-label="model"></nav>
+  <nav class="tabs" id="tabs" aria-label="models and datasets"></nav>
   <main id="main"></main>
   <footer>
     Mix composition is exact (from each dataset's own label columns via the
@@ -1885,13 +1909,19 @@ async function renderModel(model, gen){
   const facts = document.createElement("section");
   facts.className = "card";
   facts.innerHTML = m.is_model === false
-    ? `<h2>${esc(m.name)}</h2>
+    ? `<h2>${esc(m.name)}<span class="kind" data-tip="A dataset, not a model: one stage, no training pipeline
+         around it. The layers below read the data itself, which nothing was fit to.">dataset</span></h2>
        <p class="sub">${esc(m.note || "A dataset on its own — no model trained on it here.")}</p>
        <div class="pipe"></div>`
-    : `<h2>Training pipeline</h2>
+    : `<h2>Training pipeline<span class="kind" data-tip="A model, and every stage of data it was
+         fit to.">model</span></h2>
        <p class="sub">${m.hf_model} — token counts from the OLMo 3 paper; example counts from the datasets themselves.</p>
        <div class="pipe"></div>`;
+  wireTips(facts);
   const pipe = facts.querySelector(".pipe");
+  // A dataset has one stage and no arrows: a lone tile stretched across the card
+  // would still read as a pipeline with the rest cropped off.
+  if (m.stages.length === 1) pipe.classList.add("one");
   m.stages.forEach((s, i) => {
     if (i){
       const a = document.createElement("div");
@@ -2812,17 +2842,37 @@ async function applyHashState(nav){
     fetchJSON("registry.json"), fetchJSON("manifest.json"), fetchJSON("language-names.json"),
     fetchJSON("reward-kinds.json")]);
   const tabs = document.getElementById("tabs");
-  // Models first, then standalone datasets, then the cross-model view — the
-  // registry's own order, which puts the pipelines before the raw corpora.
-  const order = [...Object.keys(REG).filter(k => REG[k].is_model !== false),
-                 ...Object.keys(REG).filter(k => REG[k].is_model === false), "compare"];
-  for (const name of order){
-    const b = document.createElement("button");
-    b.textContent = name === "compare" ? "compare models" : name;
-    b.dataset.m = name;
-    b.onclick = () => { if (name !== VIEW) location.hash = "#" + name; };
-    tabs.appendChild(b);
-  }
+  // Two groups, not one row of look-alike pills: a model tab is a training
+  // pipeline someone was fit to, a dataset tab is a corpus nothing was trained
+  // on, and the answers they give mean different things. `compare` belongs to
+  // the models group — it lines models up against each other.
+  const group = (label, tip, names, cls) => {
+    if (!names.length) return;
+    const g = document.createElement("div");
+    g.className = "tabgroup";
+    g.setAttribute("role", "group");
+    g.setAttribute("aria-label", label);
+    const l = document.createElement("span");
+    l.className = "glabel";
+    l.textContent = label;
+    l.setAttribute("aria-hidden", "true");
+    hover(l, tip);
+    g.appendChild(l);
+    for (const name of names){
+      const b = document.createElement("button");
+      b.textContent = name === "compare" ? "compare models" : name;
+      b.dataset.m = name;
+      if (cls) b.className = cls;
+      b.onclick = () => { if (name !== VIEW) location.hash = "#" + name; };
+      g.appendChild(b);
+    }
+    tabs.appendChild(g);
+  };
+  group("models", "A model and everything it was trained on, stage by stage: pretraining through RL.",
+        [...Object.keys(REG).filter(k => REG[k].is_model !== false), "compare"]);
+  group("datasets", "A dataset on its own, with no model around it: one stage, no pretraining " +
+        "behind it, and no response any model was fit to.",
+        Object.keys(REG).filter(k => REG[k].is_model === false), "ds");
   syncStickyHeight();
   if (window.ResizeObserver) new ResizeObserver(syncStickyHeight).observe(tabs);
   window.addEventListener("resize", syncStickyHeight);
