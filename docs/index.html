@@ -1535,8 +1535,10 @@ function budgetCard(m, rows){
     p.className = "note";
     p.style.margin = "0 0 14px";
     p.textContent = `${mixed.map(r => r.stage).join(", ")} ${mixed.length === 1 ? "is" : "are"} missing above: `
-      + `the sampled examples and the exact row count were read from different revisions of the dataset, `
-      + `so multiplying one by the other would report a mixed-tree number as one measurement. `
+      + (mixed.some(r => r.revisions.moved && r.revisions.moved.length)
+        ? `the dataset was republished while a run was in flight, so its rows may come from either tree. `
+        : `the sampled examples and the exact row count were read from different revisions of the dataset, `
+          + `so multiplying one by the other would report a mixed-tree number as one measurement. `)
       + `Re-run trainspotting context or trainspotting sources for ${mixed.length === 1 ? "it" : "them"}.`;
     card.appendChild(p);
   }
@@ -1884,6 +1886,31 @@ function crossRows(records, keyToValue, labelOf, limit = 12, dropped = new Set()
   return {rows, undecidable, unmatched, groups: sorted.length};
 }
 
+// Whether two committed runs describe the same draw, and if not, what differs.
+//
+// The crosstab crosses a profile against a labels or languages run as though
+// they sampled the same rows. They usually did — sampling is deterministic in
+// --sample and --seed — but the CLI lets each command run with its own, and a
+// classify at --sample 500 crossed against a context at 300 produces a grid of
+// whatever the two draws happen to share. That is a biased intersection wearing
+// the same clothes as a real one, and the note under it would blame the gap on
+// key collisions.
+function sameDraw(profile, run){
+  if (profile.dataset !== run.dataset)
+    return `they were run against different datasets (${profile.dataset} and ${run.dataset})`;
+  if (profile.sample !== run.sample || profile.seed !== run.seed)
+    return `they were drawn with different sampling — the examples at --sample ${profile.sample} --seed ${profile.seed}, `
+      + `the labels at --sample ${run.sample} --seed ${run.seed}`;
+  // A revision on both sides that disagrees is two trees; a revision on one
+  // side proves nothing either way, which is the pre-stamp case.
+  if (profile.revisions && profile.revisions.context && run.revision
+      && profile.revisions.context !== run.revision)
+    return `they read different revisions of the dataset (${profile.revisions.context.slice(0,7)} and ${run.revision.slice(0,7)})`;
+  if (run.revision_moved_to)
+    return `the dataset was republished while that run was in flight, so its rows may come from either tree`;
+  return null;
+}
+
 async function crosstabCard(model, m, post, profiles, ctxFor, gen){
   const card = document.createElement("section");
   card.className = "card";
@@ -1941,7 +1968,13 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
       return note;
     };
 
-    if (labeled.length){
+    const mismatch = labeled.length ? sameDraw(p, labels) : null;
+    let drewLabels = false;
+    if (mismatch){
+      noLabels(card, `the sampled examples and the classification run cannot be crossed: ${mismatch}. `
+        + `Re-run one of them so both describe the same draw.`);
+    } else if (labeled.length){
+      drewLabels = true;
       const cross = crossRows(labeled, keyToValue, r => r.label, 12, dropped);
       heatTable(card, cross.rows, LABELS.map(l => ({key: l, short: SHORT_LABEL[l], label: NICE[l]})), ctx);
       card.appendChild(explain("prompts", cross));
@@ -1951,7 +1984,10 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
     // question with the same join: whether the non-English prompts come from
     // one corner of the mix or from all of it. Secondary where a taxonomy grid
     // is already drawn, primary where none is.
-    if (langs && langs.records.length){
+    const langMismatch = langs && langs.records.length ? sameDraw(p, langs) : null;
+    if (langMismatch){
+      noLabels(card, `the language run cannot be crossed against these examples: ${langMismatch}.`);
+    } else if (langs && langs.records.length){
       const counts = {};
       for (const r of langs.records) counts[r.label] = (counts[r.label]||0) + 1;
       const top = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 7);
@@ -1963,10 +1999,12 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
         parent.appendChild(explain("prompts", cross,
           `, the top ${top.length} detected languages drawn and everything else in the last column`));
       };
-      if (!labeled.length){
+      if (!drewLabels){
         const sub = document.createElement("p");
         sub.className = "stage-sub";
-        sub.textContent = "by detected language — no classification run is committed for this stage, so there is no taxonomy grid to draw";
+        sub.textContent = mismatch
+          ? "by detected language — the classification run for this stage could not be crossed, so there is no taxonomy grid above"
+          : "by detected language — no classification run is committed for this stage, so there is no taxonomy grid to draw";
         card.appendChild(sub);
         build(card);
       } else {
