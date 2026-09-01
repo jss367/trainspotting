@@ -994,7 +994,13 @@ function demotionReason(rec, reason, shared = 0){
     left behind — so the two cannot be compared byte for byte.`;
 }
 
-function sharedNote(ops, rec, dead, demoted){
+// `ops` covers the answers alone; a thinking span is diffed separately, so
+// nothing here may speak for the response as a whole. Every count and every
+// claim is about the answers, and where there is reasoning as well, says so.
+function sharedNote(ops, rec, dead, demoted, hasThink){
+  const alsoThinking = hasThink
+    ? " Both also carry a thinking span, diffed on its own below; none of these counts include it."
+    : "";
   const pre = opChars(ops, "prefix", "a"), ovl = opChars(ops, "same", "a");
   const chosenTotal = pre + ovl + opChars(ops, "chosen", "a");
   const why = (rec.meta && rec.meta.preference_type) === "delta_learning"
@@ -1012,14 +1018,15 @@ function sharedNote(ops, rec, dead, demoted){
     tokens inside it read the same context and their two terms cancel`);
   if (ovl) parts.push(`${num(ovl)} characters of wording that reappears after they diverge, which the
     loss does not see as the same tokens at all — each copy follows a different prefix`);
-  if (!parts.length) return `The two responses have no wording in common beyond incidental short matches.
-    The update pushes up nearly every token of the chosen response and pushes down nearly every token of
-    the rejected one, so this pair teaches a preference over whole responses rather than a local fix.${why}`;
+  if (!parts.length) return `The two answers have no wording in common beyond incidental short matches.
+    The update pushes up nearly every token of the chosen answer and pushes down nearly every token of the
+    rejected one, so this pair teaches a preference over whole answers rather than a local
+    fix.${why}${alsoThinking}`;
   const lex = (pre + ovl) / (chosenTotal || 1);
-  return `Of the chosen response's ${num(chosenTotal)} characters: ${parts.join("; and ")}.
+  return `Of the chosen answer's ${num(chosenTotal)} characters: ${parts.join("; and ")}.
     ${lex > 0.5
-      ? "Lexically the two are close to an edit of one into the other, so the highlighted spans are where the pair differs at all."
-      : `The rest is unique to one side.${why}`}`;
+      ? "Lexically the two answers are close to an edit of one into the other, so the highlighted spans are where they differ at all."
+      : `The rest is unique to one side.${why}`}${alsoThinking}`;
 }
 
 // Exactness is claimable only where the stored record is the raw response. A
@@ -1111,7 +1118,7 @@ update ∝ σ(−margin) · [ ∇ log π(chosen) − ∇ log π(rejected) ]</div
       DPO needs no separately trained reward model: β · log(π/π_ref) is the reward, and the reference is the
       baseline it is scored against. β also sets how far π may drift from π_ref; it is a setting of the
       training run, not part of this dataset.</p>
-    <h4>how much of this pair the update acts on</h4>
+    <h4>how much of ${hasThink ? "these answers" : "this pair"} the update acts on</h4>
     <p class="kv">Add a constant to both log-probabilities and the margin does not move: the loss sees only
       the gap between the two responses. Where the pair shares an opening, both sides are conditioned on
       identical text, so the tokens inside it cancel one for one and that span carries no signal. Once the responses
@@ -1121,7 +1128,7 @@ update ∝ σ(−margin) · [ ∇ log π(chosen) − ∇ log π(rejected) ]</div
       and then the answer, so "opening" means the opening of that whole sequence: two answers that start
       alike after two different thinking spans share no opening at all.</p>
     ${diffPanel(answers)}
-    <p class="kv">${sharedNote(answers, rec, deadPair, demoted)}</p>
+    <p class="kv">${sharedNote(answers, rec, deadPair, demoted, !!thinking)}</p>
     ${thinking ? `<h4>the thinking span${reason.a && reason.b ? "s" : ""}</h4>
       <p class="kv">${thinkingNote(rec, reason, shared)}</p>
       <details><summary>diff the thinking span${reason.a && reason.b ? "s" : ""}</summary>

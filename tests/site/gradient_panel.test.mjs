@@ -316,6 +316,20 @@ ok(/matched later <em>\d+ \/ \d+ ch<\/em>/.test(wsLegend),
 ok(!/matched later <em>\d+ ch<\/em>/.test(wsLegend),
   "and does not report one as though it covered both");
 
+// The summary sits under the answers diff and must not speak for the response as
+// a whole: a think row's reasoning is diffed separately and counted nowhere here.
+const thinkSummary = {prompt_full: {text: "q", chars: 1}, row: 14, meta: {},
+  chosen: {model: "big", turns: [convo[0], turn("A " + LONG, {reasoning: "a long trace of reasoning here", raw: false})]},
+  rejected: {model: "small", turns: [convo[0], turn("B " + LONG, {reasoning: "a different trace entirely", raw: false})]}};
+const thinkOut = P.gradientSection(thinkSummary, 1).replace(/\s+/g, " ");
+ok(thinkOut.includes("none of these counts include it") ||
+   thinkOut.includes("none of this counts"),
+  "a summary over the answers says the thinking span is not in it");
+ok(!/the two responses have no wording in common/i.test(thinkOut),
+  "and does not claim the responses share nothing when only the answers were compared");
+ok(!/chosen response's \d/.test(thinkOut),
+  "nor reports an answer-only total as the response's length");
+
 // --------------------------------------------------- against the real rows ---
 const dataDir = path.join(ROOT, "docs", "data");
 const files = fs.readdirSync(dataDir).filter(f => f.includes(".dpo.context."));
