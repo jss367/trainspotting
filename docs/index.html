@@ -1721,6 +1721,12 @@ function caseStudyCards(main, d){
   // moves the headline with the table under it.
   const ceiling = (d.groups.find(g => g.selection === "independent") || {rows: []}).rows[0];
 
+  // A draw whose document had unreadable metadata has no domain — `normalize`
+  // leaves it unset and `domain_shares` groups it as "(no url recorded)". It is
+  // excluded from `on_subject_site`, which does not make it somebody else's page.
+  const unknownDomain = (d.spread.domains.find(x => !x.domain || x.domain === "(no url recorded)") || {}).occurrences || 0;
+  const anyApprox = d.groups.some(g => g.rows.some(r => Object.values(r.by_index).some(v => v.approx)))
+    || d.probe.approx || d.spread.approx;
   const head = document.createElement("section");
   head.className = "card lookup";
   head.innerHTML = `<h2>${esc(d.title)}</h2>
@@ -1740,7 +1746,11 @@ function caseStudyCards(main, d){
       </div>
       <div class="finding">
         <div class="n">${num(d.spread.on_subject_site)} of ${num(d.spread.drawn)}</div>
-        <div class="t">randomly drawn copies of the blog's own name sit on the blog. The rest are other people's pages.</div>
+        <div class="t">randomly drawn copies of the blog's own name sit on the blog.
+          ${unknownDomain
+            ? `${num(d.spread.drawn - d.spread.on_subject_site - unknownDomain)} are on other people's pages,
+               and ${num(unknownDomain)} came back with no readable URL, so where they sit is unknown.`
+            : "The rest are other people's pages."}</div>
       </div>
       ${ceiling ? `<div class="finding">
         <div class="n">${num(ceiling.by_index[d.probe.index].occurrences)}</div>
@@ -1751,11 +1761,17 @@ function caseStudyCards(main, d){
   main.appendChild(head);
 
   // ---- counts ----
+  // Two things the prose above and below must not assume: that every drawn
+  // occurrence has a readable domain, and that every count is exact. Both are
+  // recorded per result, so read them rather than writing around them.
   const counts = document.createElement("section");
   counts.className = "card lookup";
   counts.innerHTML = `<h2>The counts</h2>
     <p class="sub">Occurrences of each exact string, per corpus. Nothing is sampled here — a
-      suffix array counts every occurrence it holds.</p>`;
+      suffix array counts every occurrence it holds.${anyApprox
+        ? ` A count marked <code>~</code> is the index's own estimate: it stops counting a string this
+            common and reports an approximation, which it flags and this passes through.`
+        : ""}</p>`;
   for (const g of d.groups){
     const h = document.createElement("p");
     h.className = "lutgrp";
