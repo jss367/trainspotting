@@ -257,7 +257,12 @@ def test_a_narrowed_field_reads_differently_from_a_missing_column():
     line = influence._group_line(influence.stage_trace(narrowed))
     assert "response not searched" in line and "reference not searched" in line
     line = influence._group_line(influence.stage_trace(absent))
-    assert "response no such column" in line and "reference no such column" in line
+    # Columns the mix does not have are gathered into one clause rather than
+    # named one by one — six groups means a DPO mix would otherwise spend four
+    # of them saying "no such column" and bury the numbers. The distinction
+    # from "not searched" is what has to survive, and it does.
+    assert "no response/chosen/rejected/reference/rollout column" in line
+    assert "not searched" not in line
 
 
 def test_a_run_predating_available_fields_says_the_weaker_thing():

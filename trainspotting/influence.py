@@ -506,15 +506,24 @@ def _group_line(r: dict) -> str:
     mix has no reference column to read. Runs recorded before `available_fields`
     existed cannot tell those two apart, so they say the weaker thing.
     """
-    parts = []
+    parts, absent = [], []
     for g in GROUPS:
         if g in r["fields"]:
             parts.append(f"{g} {r['by_group'].get(g, 0):,}")
-        elif r["available_fields"]:
-            parts.append(f"{g} {'not searched' if g in r['available_fields'] else 'no such column'}")
-        else:
+        elif not r["available_fields"]:
             parts.append(f"{g} not counted")
-    return " · ".join(parts)
+        elif g in r["available_fields"]:
+            parts.append(f"{g} not searched")
+        else:
+            # Gathered rather than listed one by one. Six groups means a DPO mix
+            # names four columns it does not have, which buries the three
+            # numbers that are the point. The distinction between a zero and a
+            # blank is what matters and it survives the shortening.
+            absent.append(g)
+    line = " · ".join(parts)
+    if absent:
+        line += f" — no {'/'.join(absent)} column"
+    return line
 
 
 def _largest(sources: list[dict], side: str) -> tuple[dict, bool]:
