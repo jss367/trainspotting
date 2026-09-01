@@ -39,9 +39,14 @@ COMMITTED = BULK + DERIVED
 
 # Result files with no reader on the page. The site draws a card per labels/ask/
 # languages run and ignores anything it does not recognise, so exporting these
-# would only add unread weight to what the page ships. Drop the prefix here when
-# the page learns to render an exact string count.
-UNRENDERED = (".grep-",)
+# would only add unread weight to what the page ships. Drop a prefix from here
+# when the page learns to render that kind of run.
+#
+# `.search-` is here for the same reason as `.grep-` and is easy to miss: the
+# page has a search box, but it searches the committed samples directly and
+# never reads a `.search-` result file. Exporting one ships bytes nobody
+# fetches.
+UNRENDERED = (".grep-", ".search-")
 
 out = ROOT / "docs" / "data"
 out.mkdir(parents=True, exist_ok=True)

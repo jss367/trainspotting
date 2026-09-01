@@ -2114,10 +2114,25 @@ async function renderSearch(query, gen){
   summary.style.margin = "0";
   // Said in both branches. It qualifies a zero more than it qualifies a count,
   // and a zero is exactly where the page most needs to not overclaim.
+  //
+  // Two separate gaps, and the second is the one that cannot be counted. Records
+  // read here whose fields were cut are countable, and counted. Files the index
+  // ruled out are not: the index is built from these same shortened files, so a
+  // string living only past a cut has no trigrams in it and its file is dropped
+  // before anything looks. Every committed sample contains at least one cut
+  // field, so keeping such files as candidates would keep all of them and the
+  // index would stop being an index. The honest move is to say the bound rather
+  // than pretend to a floor the page cannot reach.
   const cutNote = censored
     ? ` ${censored} record${censored > 1 ? "s were" : " was"} shortened to 4,000 characters
         per field before export, so a match past that could not be seen here;
         the linked row on HuggingFace is untruncated.`
+    : "";
+  const indexNote = prefiltered && candidates.length < files.length
+    ? ` The index is built from those same shortened fields, so a string that appears
+        only past a cut can have its file ruled out before it is read — a limit of
+        searching the export rather than the mix, which
+        <code>trainspotting grep</code> does not have.`
     : "";
   summary.innerHTML = matched
     ? `<b>${matched}</b> matching example${matched > 1 ? "s" : ""} in ${filesWithHits} of
@@ -2125,10 +2140,10 @@ async function renderSearch(query, gen){
          ? ` — ${candidates.length} read, the rest ruled out by the index` : ""}.
        These are the 300-row-per-stage samples, so this finds instances to read, not a rate:
        for an exact count over every row of a mix, run
-       <code>trainspotting grep &lt;model&gt; "${esc(query)}"</code>.${cutNote}`
+       <code>trainspotting grep &lt;model&gt; "${esc(query)}"</code>.${cutNote}${indexNote}`
     : `No match in any of the ${files.length} committed samples${prefiltered ? "" : " read"}.
        A string this rare in a 300-row sample can still be common in the mix —
-       <code>trainspotting grep &lt;model&gt; "${esc(query)}"</code> counts every row.${cutNote}`;
+       <code>trainspotting grep &lt;model&gt; "${esc(query)}"</code> counts every row.${cutNote}${indexNote}`;
   card.insertBefore(summary, card.querySelector("h3.stage"));
 }
 
