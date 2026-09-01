@@ -80,12 +80,20 @@ def _reward(row: dict) -> dict:
     }
 
 
-def build(row: dict, kind: str, prompt: str, row_index: int) -> dict:
+def build(row: dict, kind: str, prompt: str, row_index: int, source_columns=()) -> dict:
     """One kind-appropriate context record for an already-sampled row.
 
     `kind` is `registry.stage_kind` of the stage the row came from — the shape
     of the training example, which for a model stage is its pipeline position
     and for a standalone dataset is what the registry declares it to be.
+
+    `source_columns` is the stage's own provenance columns from the registry.
+    The per-kind lists below are the columns these mixes happen to use, and a
+    mix that names its provenance something else — Dolci Think 32B calls it
+    `source` where the 7B mixes call it `source_dataset` — dropped out of the
+    record entirely, which the site reads as a stage that records nothing about
+    where its examples came from. The registry already knows the answer, so ask
+    it rather than growing the list every time a mix is added.
 
     `row` is the join: a result record stores the same index, and the site looks
     the context up by it. `key` is the older prompt-prefix join, kept for runs
@@ -102,7 +110,7 @@ def build(row: dict, kind: str, prompt: str, row_index: int) -> dict:
     if kind == "sft":
         rec["kind"] = "sft"
         rec["turns"] = _turns(row.get("messages"))
-        rec["meta"] = _meta(row, ["source_dataset", "domain", "dataset_source"])
+        rec["meta"] = _meta(row, [*source_columns, "source_dataset", "domain", "dataset_source"])
     elif kind == "chat":
         # A log, not a training example: no turn here is a target, so the record
         # is the exchange and the metadata the collector recorded around it.
@@ -115,7 +123,7 @@ def build(row: dict, kind: str, prompt: str, row_index: int) -> dict:
         rec["kind"] = "dpo"
         rec["chosen"] = {"model": row.get("chosen_model"), "turns": _turns(row.get("chosen"))}
         rec["rejected"] = {"model": row.get("rejected_model"), "turns": _turns(row.get("rejected"))}
-        rec["meta"] = _meta(row, ["preference_type", "dataset_source"])
+        rec["meta"] = _meta(row, [*source_columns, "preference_type", "dataset_source"])
     else:
         rec["kind"] = "rlvr"
         rec["reward"] = _reward(row)
@@ -127,6 +135,7 @@ def build(row: dict, kind: str, prompt: str, row_index: int) -> dict:
             "sample": _text(outputs[0]) if outputs else None,
         }
         rec["meta"] = _meta(
-            row, ["dataset_source", "data_source", "ability", "difficulty", "setting_name"]
+            row,
+            [*source_columns, "dataset_source", "data_source", "ability", "difficulty", "setting_name"],
         )
     return rec

@@ -780,7 +780,9 @@ def cmd_context(args):
             prompt = extract.extract_prompt(row, s["prompt_path"])
             if prompt:
                 records.append(
-                    context.build(row, registry.stage_kind(s), prompt, row_index)
+                    context.build(
+                        row, registry.stage_kind(s), prompt, row_index, s.get("source_columns") or ()
+                    )
                 )
         path = _write_json(
             RESULTS / f"{args.target}.{s['stage']}.context.json",

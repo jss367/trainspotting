@@ -83,9 +83,25 @@ def _shared_turns(chosen: list[dict], rejected: list[dict]) -> int:
     backwards — the shared part is context, and only what comes after the branch
     carries the preference signal.
     """
+    # Every part of a turn a reader can see, because every part of it is text
+    # the pair either shares or branches on. A turn's reasoning span is stored
+    # beside its answer rather than inside it, so comparing the answer and the
+    # combined length alone calls two turns identical when they reason
+    # differently at the same length toward the same answer — and then counts
+    # one copy of a turn that is really two, with neither reasoning span as a
+    # target.
+    def same(a: dict, b: dict) -> bool:
+        return (
+            a.get("role") == b.get("role")
+            and a.get("chars") == b.get("chars")
+            and a.get("text") == b.get("text")
+            and (a.get("reasoning") or {}).get("chars") == (b.get("reasoning") or {}).get("chars")
+            and (a.get("reasoning") or {}).get("text") == (b.get("reasoning") or {}).get("text")
+        )
+
     n = 0
     for a, b in zip(chosen, rejected):
-        if a.get("role") != b.get("role") or _turn_chars(a) != _turn_chars(b) or a.get("text") != b.get("text"):
+        if not same(a, b):
             break
         n += 1
     # A side swallowed whole by the shared prefix is not a side with no

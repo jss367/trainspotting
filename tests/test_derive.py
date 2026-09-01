@@ -83,6 +83,31 @@ def test_dpo_leaves_a_completion_on_a_side_the_prefix_would_swallow():
     assert total == 10 + target
 
 
+def test_dpo_branches_where_the_reasoning_diverges_even_if_the_answer_matches():
+    """A turn is its answer and the reasoning span stored beside it. Two turns
+    that reach the same answer at the same length by different reasoning are a
+    branch, not shared history — counting them as shared would keep one copy of
+    a turn that is really two and score neither reasoning span."""
+    opening = turn("user", 50, "ask")
+    rec = {
+        "kind": "dpo",
+        "chosen": {"turns": [opening, turn("assistant", 30, "same answer", reasoning=70),
+                             turn("assistant", 10, "tail")]},
+        "rejected": {"turns": [opening, turn("assistant", 30, "same answer", reasoning=70),
+                               turn("assistant", 10, "tail")]},
+    }
+    # Identical on both sides: shared up to the clamp, as before.
+    assert derive._shared_turns(rec["chosen"]["turns"], rec["rejected"]["turns"]) == 2
+
+    rec["rejected"]["turns"][1] = turn("assistant", 30, "same answer", reasoning=70)
+    rec["rejected"]["turns"][1]["reasoning"]["text"] = "a different route to it"
+    total, target = derive.example_chars(rec)
+    assert derive._shared_turns(rec["chosen"]["turns"], rec["rejected"]["turns"]) == 1
+    # Both divergent turns and both reasoning spans are targets now.
+    assert target == (30 + 70) * 2 + 10 * 2
+    assert total == 50 + target
+
+
 def test_rl_stores_no_target_and_chat_is_not_a_training_example():
     rl = {"kind": "rlvr", "prompt_full": {"chars": 500}, "reward": {}}
     assert derive.example_chars(rl) == (500, 0)
