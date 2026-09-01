@@ -583,25 +583,33 @@ already chosen. Otherwise `"...developed by OpenAI, my knowledge cutoff is
 September 2021."` — fourteen words, so every eight-word window touches every
 other — would spend its whole budget on the lab and never reach the date.
 
-Two things a `trace` number is not, both printed next to it:
+Three things a `trace` number is not, all printed next to it:
 
 - **Not the phrase.** The server stems each token and ANDs them, so a hit is a
   row holding all of the query's words, not the literal string — an upper bound
-  on verbatim occurrences. A high-ranking stage is where to point `search`,
-  which reads the rows and says which *side* of the example the string is on.
+  on verbatim occurrences.
+- **Not a side.** It counts rows, not which half of the example the string is
+  in. A run ends with a link into the dataset viewer, whose `?q=` runs the same
+  index, so the rows behind the count are one click away. Deliberately not a
+  `trainspotting search` command: `search` is the layer that attributes a hit to
+  a side, but it does it over a 300-row random draw, and at the densities a
+  signature string produces (100/M is a 3% chance of one hit in that draw) it
+  would answer with a confident zero.
 - **Not always the whole split.** The full-text index stops at the first 5 GB,
   which the two 36 GB Think SFT mixes are well past. Their matches come from a
   prefix of the rows they are divided by, so they are reported separately as
-  lower bounds rather than ranked — a bound below an exact density says nothing,
-  and ranking the two together put the biggest mixes last for being big.
+  lower bounds rather than ranked. A bound settles one comparison — it is
+  conclusively above a ranked stage whose exact density is smaller — and nothing
+  else, and ranking the two together put the biggest mixes last for being big.
 
 The first search against a cold split can take minutes while the server builds
 the index. When the behavior has no signature string — it is a disposition, or
 the training paraphrases it — `trace` finds nothing and says to reach for `ask`,
 which judges what sampled examples *teach* instead of matching their text
 (`"does this example teach the model to identify as ChatGPT?"`). All three
-compose: `trace` narrows to a stage, `search` says which side of the example the
-string landed on, and `ask` characterizes the fuzzy cases neither can see.
+compose, on different scales: `trace` narrows to a stage over the whole split,
+`search` says which side of the example a string lands on over a sample of it,
+and `ask` characterizes the fuzzy cases neither can match.
 
 ## Pretraining data
 

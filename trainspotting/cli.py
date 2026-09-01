@@ -3,6 +3,7 @@ import hashlib
 import json
 import re
 import sys
+import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -787,6 +788,21 @@ def _filename_part(part: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", part).strip("._-") or "x"
 
 
+def _viewer_search_url(dataset: str, query: str, split: str = "train") -> str:
+    """The Hub viewer showing the rows a full-text query matched.
+
+    The viewer's `?q=` runs the same datasets-server index `hf.search_count`
+    counts with, so this lands on the rows behind a count rather than on a
+    sample that might contain one. That distinction is why `trace` links here
+    instead of at `trainspotting search`, which draws 300 random rows and so
+    finds none of the matches for the rare strings a trace is made of.
+    """
+    return (
+        f"{hf.HUB}/datasets/{dataset}/viewer/default/{split}"
+        f"?q={urllib.parse.quote(query)}"
+    )
+
+
 def cmd_find(args):
     """Exact-string search over an open training corpus, via infini-gram.
 
@@ -1389,13 +1405,15 @@ def cmd_trace(args):
     `trainspotting ask`, which judges the meaning of sampled examples instead of
     matching their text. The closing line says so.
 
-    Two things a count here is not. The server's index stops at the first 5 GB
-    of a split, which the two 36 GB Think SFT mixes are well past, so those
-    stages report a lower bound and say so rather than being ranked last for
-    being large. And the match is a stemmed AND over the query's tokens, not the
-    literal phrase, so a stage that ranks high is where to point `search` —
-    which reads the rows and says which side of the example the string is on —
-    rather than an answer on its own.
+    Three things a count here is not. The server's index stops at the first
+    5 GB of a split, which the two 36 GB Think SFT mixes are well past, so those
+    stages are reported beside the ranking as lower bounds rather than placed in
+    it. The match is a stemmed AND over the query's tokens, not the literal
+    phrase, so the count is an upper bound on verbatim occurrences. And it
+    counts rows, not sides — so a run ends by linking the matched rows in the
+    dataset viewer, which runs the same index, rather than at `trainspotting
+    search`, whose 300-row draw finds none of the matches for a string this
+    rare.
     """
     text = sys.stdin.read() if args.text == "-" else args.text
     queries = behavior.distinctive_ngrams(text, max_queries=args.max_queries)
@@ -1471,8 +1489,11 @@ def cmd_trace(args):
         print(
             "The server's full-text index stops at the first 5 GB of a split, so"
             " the matches below are from a prefix of the rows they are divided"
-            " by. Each figure is a lower bound, and cannot be compared with the"
-            " ranking above or placed within it.\n"
+            " by. Each figure is a lower bound: the true density is at least"
+            " this, which settles the comparison against a ranked stage whose"
+            " exact density is smaller and settles nothing against a larger one,"
+            " because the rows nobody searched could hold any number of"
+            " matches.\n"
         )
         for r in bounded:
             show(r)
@@ -1496,14 +1517,29 @@ def cmd_trace(args):
             )
         )
     else:
+        # The largest number, bounds included. A bound *above* every exact
+        # density is the one comparison a bound settles — the true density is at
+        # least that, so the stage really is the densest — and dropping it here
+        # would point at a stage this run has evidence is not the leader. It is
+        # a bound *below* an exact figure that says nothing, and that one loses
+        # the max anyway.
         top = max(found, key=lambda r: r["density"])
         print(
-            "The index counts rows, not sides. Read the examples behind"
-            f" {top['stage']} with `trainspotting search {args.target} --stage"
-            f" {top['stage']} <phrase>`, which says whether the string is in the"
-            " prompt, the response, or the rejected half of a pair."
+            f"Read the rows behind {top['stage']} in the dataset viewer, which"
+            " searches the same index:\n"
+            f"  {_viewer_search_url(top['dataset'], max(top['per_query'], key=top['per_query'].get))}"
         )
-        # `top` is the largest number, which is only the largest density when
+        # Not `trainspotting search`: it draws 300 random rows, so at the
+        # densities a signature string produces — 100/M is a 3% chance of one
+        # hit in that draw — it answers "how common is this" and almost never
+        # "here is one". Pointing at it for a rare phrase would send the reader
+        # to a confident zero.
+        print(
+            "`trainspotting search` reports which side of an example a hit lands"
+            " on, but over a 300-row random draw rather than the matched rows, so"
+            " for a phrase this rare it will usually find none of them."
+        )
+        # `top` is the largest number, which is only the largest *density* when
         # every stage was fully indexed. Say so rather than letting a bound that
         # happens to sort lower read as a stage with less of the behavior.
         others = [r["stage"] for r in bounded if r["hits"] and r is not top]
@@ -1511,7 +1547,7 @@ def cmd_trace(args):
             print(
                 "Worth reading either way: " + ", ".join(others) + " reported a"
                 " lower bound, so the true density there may be higher than"
-                " anything above."
+                " anything ranked above it."
             )
 
 

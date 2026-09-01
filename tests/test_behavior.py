@@ -220,11 +220,52 @@ def test_a_partially_indexed_stage_is_left_out_of_the_ranking(monkeypatch, capsy
     )
     heading = out.index("## Not ranked")
     assert out.index("## dpo") < heading < out.index("## sft")
-    # The pointer names a stage whose density means what it says, and the bound
-    # is called out rather than read as a stage with less of the behavior.
-    assert "--stage dpo" in out
-    assert "--stage sft" not in out
+    # The reader is pointed at the stage whose density means what it says, and
+    # the bound is called out rather than read as a stage with less of the
+    # behavior.
+    assert "Dolci-Think-DPO-7B/viewer" in out
+    assert "Dolci-Think-SFT-7B/viewer" not in out
     assert "sft reported a lower bound" in out
+
+
+def test_a_bound_above_every_exact_density_is_the_stage_to_read(monkeypatch, capsys):
+    """The one comparison a lower bound does settle. A bound of 200/M against an
+    exact 2/M means the partial stage really is the densest — its true figure is
+    at least the bound — so refusing to name it would point the reader at a
+    stage this run has evidence is not the leader."""
+    out = _run_trace(
+        monkeypatch,
+        capsys,
+        ["trainspotting", "trace", "olmo-3-7b-think", "I am ChatGPT, by OpenAI"],
+        {
+            "allenai/Dolci-Think-SFT-7B": (100, True),
+            "allenai/Dolci-Think-DPO-7B": (1, False),
+            "allenai/Dolci-Think-RL-7B": (0, False),
+        },
+    )
+    assert "Dolci-Think-SFT-7B/viewer" in out
+
+
+def test_the_handoff_goes_to_the_matched_rows_not_a_random_draw(monkeypatch, capsys):
+    """`trainspotting search` attributes a hit to a side, but over 300 random
+    rows: at the densities a signature string produces it finds none of the
+    matches, so a trace that recommended it was sending the reader to a
+    confident zero. The viewer's `?q=` runs the same index the count came
+    from."""
+    out = _run_trace(
+        monkeypatch,
+        capsys,
+        ["trainspotting", "trace", "olmo-3-7b-instruct", "I am ChatGPT, by OpenAI"],
+        {
+            "allenai/Dolci-Instruct-SFT": (3, False),
+            "allenai/Dolci-Instruct-DPO": (1, False),
+            "allenai/Dolci-Instruct-RL": (0, False),
+        },
+    )
+    assert "?q=" in out
+    assert "300-row random draw" in out
+    # Not presented as the way to see these rows.
+    assert "trainspotting search olmo-3-7b-instruct" not in out
 
 
 def test_nothing_found_does_not_speak_for_the_unindexed_rows(monkeypatch, capsys):
