@@ -71,7 +71,18 @@ def prompt_key(prompt: str) -> str:
 
 
 def _turn_chars(turn: dict) -> int:
-    """A turn is its text plus the reasoning span split off in front of it."""
+    """How many characters the turn actually was.
+
+    The two stored halves are an answer and the reasoning span split off in
+    front of it, and the split drops what sat between them — the `<think>`
+    tags and the whitespace around them, which the model read. `chars_raw` is
+    the length before that split, so it is the honest measure where a record
+    carries one; records written before it fall back to the sum, which
+    understates a reasoning turn by the markup (0.04% to 0.16% of the Think
+    stages' totals, measured).
+    """
+    if turn.get("chars_raw") is not None:
+        return turn["chars_raw"]
     return turn.get("chars", 0) + (turn.get("reasoning", {}) or {}).get("chars", 0)
 
 

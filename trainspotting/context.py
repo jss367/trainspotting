@@ -61,10 +61,18 @@ def _turns(messages) -> list[dict]:
     for m in messages or []:
         if not (isinstance(m, dict) and m.get("content")):
             continue
-        reasoning, answer = _split_think(str(m["content"]))
+        content = str(m["content"])
+        reasoning, answer = _split_think(content)
         turn = {"role": m.get("role", "?"), **_text(answer)}
         if reasoning:
             turn["reasoning"] = _text(reasoning)
+            # The split is for display: it drops the `<think>` tags and the
+            # whitespace around them, which the model read. Those characters
+            # are nobody's answer and nobody's reasoning, so they survive
+            # nowhere else — and `derive` measures a turn by summing the two
+            # halves, which then understates every reasoning turn. Keep the
+            # length of what was actually there.
+            turn["chars_raw"] = len(content)
         out.append(turn)
     return out
 
