@@ -418,10 +418,18 @@ from, so it stays a caveat rather than a correction made badly.
 
 The interval is the count-based one — cluster-corrected for corpora, where the
 `ask` run already stored it — rescaled by the weighed rate over the count rate,
-which is exactly 1 for a corpus stage. For post-training it carries the sampling
-uncertainty in the rate and not the extra uncertainty in the length ratio, so it
-is narrower than the truth by that much, and the output says so whenever the
-reweighting rests on fewer than ten matching examples.
+which is exactly 1 for a corpus stage. It is computed over the rows the point
+estimate was actually built from, which for an RL stage is much smaller than the
+sample: Dolci-Instruct-RL stores a reference generation for 60 of 300 judged
+rows, and taking the interval over all 300 claimed five times the evidence there
+is — a 5.6% upper bound where the honest one is 13.7%. What it still does not
+carry is the extra uncertainty in the length ratio, so it is narrower than the
+truth by that much, and the output says so whenever the reweighting rests on
+fewer than ten matching examples.
+
+A stage whose ask run labeled nothing, or whose rows join to no stored example,
+reports no rate rather than a rate of zero. Absent evidence with a zero-width
+interval on it is the one reading of that case that is worse than a gap.
 
 ### What it does not do
 

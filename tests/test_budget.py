@@ -269,3 +269,51 @@ def test_a_partial_total_names_what_was_actually_measured():
     assert t["measured"] == 1 and t["stages"] == 2
     # Divided by the whole pipeline — a lower bound, not 1% of what was read.
     assert t["share"] == pytest.approx(10_000 / 5_930_001_000_000)
+
+
+def test_the_interval_comes_from_the_rows_the_estimate_used():
+    """A rate built on 60 rows does not get the interval for 300.
+
+    Dolci-Instruct-RL stores a reference generation for only 60 of 300 sampled
+    rows, so the length-weighted rate is built from those 60 — but the count
+    interval was being taken over all 300, claiming five times the evidence and
+    letting matches that never entered the estimate narrow it. The honest upper
+    bound there is 13.7%, not 5.6%.
+    """
+    from trainspotting.stats import wilson
+
+    out = {
+        "measured": True,
+        "matched": 9, "n": 300, "count_rate": 0.03,
+        "weighed": 60, "weighed_matched": 3, "weighed_count_rate": 0.05,
+        "count_ci": list(wilson(3, 60)),
+        "rate": 0.05,
+        "size_tokens": 1_000_000,
+        "notes": [],
+    }
+    budget._apply_rate(out)
+    lo, hi = out["matching_tokens_ci"]
+    # Rate equals the weighed count rate here, so the interval passes through
+    # unscaled — and it is the 60-row interval, not the 300-row one.
+    assert (lo / 1e6, hi / 1e6) == pytest.approx(wilson(3, 60))
+    assert hi / 1e6 > wilson(9, 300)[1]
+
+
+def test_an_ask_run_nothing_can_be_weighed_from_is_not_a_zero():
+    """Absent evidence must not become a negative result.
+
+    A run that labeled nothing, or whose rows do not join to any stored example,
+    used to produce rate 0 with a zero-width interval and still count as a
+    measured stage contributing zero matching tokens.
+    """
+    out = {"measured": True, "matched": 0, "n": 0, "count_rate": 0.0,
+           "weighed_count_rate": 0.0, "rate": 0.0, "notes": []}
+    # No size was ever set, so nothing is priced.
+    budget._apply_rate(out)
+    assert "matching_tokens" not in out
+
+    stages = [{"stage": "rlvr", "family": "post-training", "measured": False,
+               "unusable": "the ask run labeled nothing", "size_tokens": 100}]
+    t = budget.totals(stages)["post-training"]
+    assert t["measured"] == 0
+    assert t["matching_tokens"] == 0 and t["share"] == 0.0

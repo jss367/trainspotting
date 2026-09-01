@@ -1086,8 +1086,10 @@ async function budgetCard(main, model, slug){
     if (!st.measured) tr.className = "unmeasured";
     const size = tokens(st.size_tokens) + (st.size_is_floor ? "*" : "");
     if (!st.measured){
+      // "never asked" and "asked, but nothing came back that could be weighed"
+      // are different facts about the stage.
       tr.innerHTML = `<td>${esc(st.stage)}</td><td>${size}</td>`
-        + `<td colspan="3">never asked this question</td>`;
+        + `<td colspan="3">${esc(st.unusable || "never asked this question")}</td>`;
     } else {
       const ci = st.matching_tokens_ci
         ? `<span class="est">${tokens(st.matching_tokens_ci[0])}–${tokens(st.matching_tokens_ci[1])}</span>` : "";
@@ -1787,6 +1789,7 @@ async function renderModel(model, gen){
   }
 
   let askDivider = false;   // only if a card actually renders — the files may all fail to load
+  const askSlugsSeen = new Set();
   for (const [slug, files] of Object.entries(bySlug)){
     // Pipeline order, not just post-training order — a question asked with
     // --pretrain puts corpus stages in the same card, and they come first.
@@ -1865,6 +1868,7 @@ async function renderModel(model, gen){
     // After the bars, not instead of them: the bars are what was measured and
     // the budget is what it adds up to. One per slug, however many wordings the
     // slug turned out to cover.
+    askSlugsSeen.add(slug);
     if (askDivider){
       // Direction first, then the budget: which way it pushes, then how much of
       // it there is. A total is only worth reading once the sign is settled.
@@ -1876,6 +1880,24 @@ async function renderModel(model, gen){
       if (gen !== GEN) return;
       await budgetCard(main, model, slug);
     }
+    if (gen !== GEN) return;
+  }
+
+  // A stance run does not require an ask run — `stance` reads the committed
+  // context records, not an ask file, and the CLI report shows stance-only
+  // slugs. Iterating `bySlug` alone indexes those files and then never draws
+  // them, so anything asked only of whole examples would silently not exist on
+  // this page. They have no ask bucket to compare against, so every one states
+  // its own wording.
+  for (const slug of Object.keys(stanceStages)){
+    if (askSlugsSeen.has(slug)) continue;
+    if (!askDivider){
+      main.appendChild(part("Custom questions", "asked of whichever stages you ran them against"));
+      askDivider = true;
+    }
+    await stanceCard(main, model, slug, stanceStages[slug], ctxFor, post, new Set());
+    if (gen !== GEN) return;
+    await budgetCard(main, model, slug);
     if (gen !== GEN) return;
   }
 

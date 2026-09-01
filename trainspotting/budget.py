@@ -240,11 +240,19 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
     weighable = [(r, f) for r, f in fit if f is not None]
 
     k, n = sum(bool(r["match"]) for r in records), len(records)
-    lo, hi = wilson(k, n)
     total_chars = sum(f for _, f in weighable)
     matched_chars = sum(f for r, f in weighable if r["match"])
     char_rate = _rate(matched_chars, total_chars)
     count_rate = k / n if n else 0.0
+    # The interval belongs to the rows the point estimate was actually built
+    # from, which is the weighable subset — an example with no stored target
+    # text contributes to neither. Taking it over all 300 judged rows when 60
+    # carried a weight claims five times the evidence there is: for
+    # Dolci-Instruct-RL that is a 5.6% upper bound where the honest one is
+    # 13.7%. It also lets a match that never entered the estimate widen it.
+    k_w = sum(bool(r["match"]) for r, _ in weighable)
+    n_w = len(weighable)
+    lo, hi = wilson(k_w, n_w)
 
     out.update(
         {
@@ -259,7 +267,13 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
             "matched": k,
             "count_rate": count_rate,
             "count_ci": [lo, hi],
-            "weighed": len(weighable),
+            "weighed": n_w,
+            "weighed_matched": k_w,
+            # The rate the interval is anchored on: matches among the rows that
+            # carried a weight, over those rows. Distinct from `count_rate`,
+            # which is the share of everything judged and is what the table
+            # shows as "sampled".
+            "weighed_count_rate": k_w / n_w if n_w else 0.0,
             "fit_chars_total": total_chars,
             "fit_chars_matched": matched_chars,
             "char_rate": char_rate,
@@ -274,19 +288,36 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
             f"{unjoined} of {n} judged records have no stored training example, so the"
             " rate below is weighed over the rest"
         )
-    if all_examples and len(weighable) < len(all_examples):
-        out["notes"].append(
-            f"the rate is over {len(weighable)} judged example(s); the stage size uses"
-            f" all {len(all_examples)} stored, because how long an example is does not"
-            " depend on whether the classifier answered about it"
-        )
     if len(weighable) < len(fit):
         # RL is where this bites: a row with no stored reference generation has
         # no length to weigh by, and for Dolci-Instruct-RL that is most of them.
+        # The rate and its interval both come from the rows that do, so say how
+        # many that is — a 3.0% headline resting on 60 observations rather than
+        # 300 is a very different claim.
         out["notes"].append(
-            f"{len(fit) - len(weighable)} of {len(fit)} examples store no text the model"
-            " was fit to, so they carry no weight in the rate"
+            f"{len(fit) - len(weighable)} of {len(fit)} judged examples store no text the"
+            f" model was fit to; the rate and its interval come from the remaining"
+            f" {len(weighable)}, while the stage size uses all {len(all_examples)} stored"
+            " examples, whose length does not depend on the classifier"
         )
+
+    if not n_w:
+        # No judged example carried a usable weight — an empty ask run, or one
+        # whose rows do not join to any stored example (a `context` run at a
+        # different --seed will do that). A rate of 0 here is absent evidence
+        # dressed as a negative result, with a zero-width interval on top of
+        # it. The ask card already renders an empty run as having no rate.
+        out["unusable"] = (
+            "no judged example has a stored target to weigh by"
+            if n
+            else "the ask run labeled nothing"
+        )
+        out["measured"] = False
+        out["notes"].append(
+            f"an ask run exists but produced no usable rate — {out['unusable']};"
+            " the stage is left unmeasured rather than counted as zero"
+        )
+        return out
 
     rows = stage_rows(target_name, name)
     # Size is a property of the stage, so it is estimated over the whole stored
@@ -420,12 +451,18 @@ def _apply_rate(out: dict) -> None:
     size = out.get("size_tokens")
     if not out.get("measured") or size is None:
         return
-    if 0 < out["matched"] < FEW_MATCHES and out["rate"] != out["count_rate"]:
+    # Over the rows the estimate was built from, and against the rate on the
+    # same rows — comparing a length-weighted rate over 60 examples with a
+    # count rate over 300 would attribute the difference to length when most of
+    # it is the change of denominator.
+    base = out.get("weighed_count_rate", out["count_rate"])
+    matched = out.get("weighed_matched", out["matched"])
+    if 0 < matched < FEW_MATCHES and out["rate"] != base:
         out["notes"].append(
-            f"weighing by length rests on {out['matched']} matching example(s), so the"
-            f" gap between the row rate ({out['count_rate'] * 100:.1f}%) and the weighed"
-            f" rate ({out['rate'] * 100:.1f}%) is those examples' lengths, not a"
-            " measured property of matching content"
+            f"weighing by length rests on {matched} matching example(s), so the gap"
+            f" between their share of the weighed rows ({base * 100:.1f}%) and the"
+            f" weighed rate ({out['rate'] * 100:.1f}%) is those examples' lengths,"
+            " not a measured property of matching content"
         )
     out["matching_tokens"] = out["rate"] * size
     # The interval is over the count rate; rescale it by however much the
@@ -433,8 +470,10 @@ def _apply_rate(out: dict) -> None:
     # known. It is not — matching examples being longer is itself measured on
     # 300 draws — so this is narrower than the truth. For a corpus stage the
     # rate *is* the count rate and the factor is exactly 1.
-    count_rate = out["count_rate"]
-    ratio = out["rate"] / count_rate if count_rate else 1.0
+    # Rescale from whatever rate the interval was computed on: the weighable
+    # subset for a post-training stage, the document count for a corpus.
+    base = out.get("weighed_count_rate", out["count_rate"])
+    ratio = out["rate"] / base if base else 1.0
     lo, hi = out["count_ci"]
     out["matching_tokens_ci"] = [lo * ratio * size, hi * ratio * size]
 

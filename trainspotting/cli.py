@@ -1205,7 +1205,11 @@ BUDGET_COLS = f"{'stage':<14}{'fit tokens':>11}  {'sampled':>13}  {'rate':>9}  {
 def _budget_row(s: dict) -> str:
     size = _fmt_est(s.get("size_tokens")) + ("*" if s.get("size_is_floor") else " ")
     if not s.get("measured"):
-        return f"{s['stage']:<14}{size:>12}  not measured"
+        # "never asked" and "asked, but nothing came back that could be weighed"
+        # are different facts about the stage, and collapsing them would read as
+        # a gap in the run rather than a gap in the data.
+        why = s.get("unusable") or "not measured"
+        return f"{s['stage']:<14}{size:>12}  {why}"
     sampled = f"{s['matched']}/{s['n']}  {s['count_rate'] * 100:4.1f}%"
     matching = _fmt_est(s.get("matching_tokens"))
     ci = s.get("matching_tokens_ci")
