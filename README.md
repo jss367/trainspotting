@@ -774,11 +774,18 @@ sampling run that quietly labels nothing.
   `short_draws` bias documented above pushes the same way.
 - A `budget` total is withheld, in the CLI and on the site, when the stages
   under one slug were not scored by the same instrument — different wordings of
-  the question, different classifiers, or different rubrics for the same words
-  (compared by the `system_sha` every result file already carries). A slug is
-  not a question: `--slug` takes any string and a generated one is cut to 60
-  characters, so a collision is possible, and a sum across one is a number no
-  single measurement produced.
+  the question, different classifiers, or a rubric that moved between stages of
+  the same family (compared by the `system_sha` every result file carries). A
+  slug is not a question: `--slug` takes any string and a generated one is cut
+  to 60 characters, so a collision is possible, and a sum across one is a number
+  no single measurement produced. The rubric is compared within a family and
+  never across one: a corpus document is judged under a different rubric than a
+  post-training prompt on purpose, so that pair is expected rather than a
+  conflict.
+- A stage's matching-token interval is clamped to the stage. A few matching
+  examples much longer than the rest can rescale a Wilson endpoint past the
+  stage's whole fit-token count, which is an impossible bound rather than a
+  wide one.
 - Stage sizes are estimated over the whole stored context sample, not over the
   prompts the classifier answered about. Refusals land on jailbreak-style
   prompts, so letting classifier success pick which examples set the mean length

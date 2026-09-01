@@ -475,7 +475,43 @@ def _apply_rate(out: dict) -> None:
     base = out.get("weighed_count_rate", out["count_rate"])
     ratio = out["rate"] / base if base else 1.0
     lo, hi = out["count_ci"]
-    out["matching_tokens_ci"] = [lo * ratio * size, hi * ratio * size]
+    # Clamped to the stage. A handful of matching examples much longer than the
+    # rest makes `ratio` large, and a rescaled Wilson endpoint can then run past
+    # the stage's whole fit-token count — a bound saying more than 100% of the
+    # stage matches, which is not a wide interval but an impossible one.
+    out["matching_tokens_ci"] = [
+        min(max(x * ratio * size, 0.0), float(size)) for x in (lo, hi)
+    ]
+
+
+def mixing(measured: list[dict]) -> dict:
+    """Whether these stages were produced by one instrument, and how they differ.
+
+    What made a number, not just what it was asked. A question reworded between
+    runs is two measurements summed into one total, and so is the same question
+    put to two different judges.
+
+    The rubric is compared *within* a family, never across one. A corpus
+    document is not a request to a model, so `ask --pretrain` scores it under
+    `classify.ASK_DOC_SYSTEM` while the post-training stages use `ASK_SYSTEM` —
+    two different hashes, by design, on every run of the thing this command
+    exists to compute. Treating that expected pair as a conflict would withhold
+    the pipeline total from exactly the runs that have one. What is still worth
+    catching is a rubric that moved between stages judged the same way.
+    """
+    variants = sorted({s["question"] for s in measured})
+    judges = sorted({s.get("classifier") for s in measured if s.get("classifier")})
+    rubrics: dict[str, set] = {}
+    for s in measured:
+        rubrics.setdefault(s.get("family"), set()).add(s.get("system_sha"))
+    conflict = sorted(fam for fam, shas in rubrics.items() if len(shas) > 1)
+    mixed = len(variants) > 1 or len(judges) > 1 or bool(conflict)
+    return {
+        "question_variants": variants if mixed else [],
+        "classifiers": judges if mixed else [],
+        "rubric_conflict": conflict,
+        "mixed": mixed,
+    }
 
 
 def estimate(target_name: str, slug: str) -> dict:
@@ -493,27 +529,21 @@ def estimate(target_name: str, slug: str) -> dict:
 
     measured = [s for s in stages if s.get("question")]
     question = measured[0]["question"] if measured else None
-    # What produced a number, not just what it was asked. A question reworded
-    # between runs is two measurements summed into one total — and so is the
-    # same question put to two different judges, or the same judge under a
-    # reworded rubric, neither of which the question text shows. The system
-    # hash is already stamped into every result file for exactly this reason.
-    instruments = {
-        (s["question"], s.get("classifier"), s.get("system_sha")) for s in measured
-    }
-    variants = sorted({s["question"] for s in measured})
-    judges = sorted({s.get("classifier") for s in measured if s.get("classifier")})
+    mix = mixing(measured)
+    variants, judges = mix["question_variants"], mix["classifiers"]
+    rubric_conflict, mixed = mix["rubric_conflict"], mix["mixed"]
     return {
         "target": target_name,
         "is_model": target["is_model"],
         "slug": slug,
         "question": question,
-        "question_variants": variants if len(instruments) > 1 else [],
-        # Named separately, because "two wordings" and "one wording, two
-        # judges" read very differently to someone deciding whether to trust a
-        # withheld total.
-        "classifiers": judges if len(instruments) > 1 else [],
-        "instruments": len(instruments),
+        "question_variants": variants if mixed else [],
+        # Named separately, because "two wordings", "one wording two judges" and
+        # "the rubric moved inside one family" read very differently to someone
+        # deciding whether a withheld total was worth withholding.
+        "classifiers": judges if mixed else [],
+        "rubric_conflict": rubric_conflict,
+        "mixed": mixed,
         "chars_per_token": CHARS_PER_TOKEN,
         "stages": stages,
         "totals": totals(stages),

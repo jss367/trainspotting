@@ -1053,12 +1053,11 @@ const shareText = f => (f * 100 >= 0.01 || f === 0) ? (f*100).toFixed(2)+"%" : (
 // wording, two judges" read very differently to someone deciding whether the
 // withheld total was worth withholding.
 function mixedWhat(est){
-  const words = (est.question_variants || []).length > 1;
-  const judges = (est.classifiers || []).length > 1;
-  if (words && judges) return "wordings and classifiers";
-  if (words) return "wordings of the question";
-  if (judges) return "classifiers";
-  return "judging rubrics for the same words";
+  const parts = [];
+  if ((est.question_variants || []).length > 1) parts.push("wordings of the question");
+  if ((est.classifiers || []).length > 1) parts.push("classifiers");
+  if ((est.rubric_conflict || []).length) parts.push(`rubrics within the ${est.rubric_conflict.join(", ")} stages`);
+  return parts.length ? parts.join(" and ") : "judging instruments";
 }
 
 // One card per question, rolling every stage onto the scale the question is
@@ -1106,7 +1105,7 @@ async function budgetCard(main, model, slug){
   // against different wordings — which the ask card above already splits into
   // separate cards. Summing them here would put a number under a total that no
   // single question produced, so the total is withheld rather than qualified.
-  const mixed = (est.instruments || 1) > 1;
+  const mixed = !!est.mixed;
   const total = document.createElement("tr");
   total.className = "total";
   // The denominator is every sized stage, asked or not, so with one still

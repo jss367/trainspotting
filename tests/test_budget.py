@@ -188,7 +188,7 @@ def test_one_slug_over_two_wordings_gets_no_total(capsys):
     """
     from trainspotting.cli import _warn_mixed_questions
 
-    est = {"slug": "s", "instruments": 2,
+    est = {"slug": "s", "mixed": True,
            "question_variants": ["wording one?", "wording two?"], "classifiers": []}
     assert _warn_mixed_questions(est) is True
     out = capsys.readouterr().out
@@ -197,7 +197,7 @@ def test_one_slug_over_two_wordings_gets_no_total(capsys):
     assert "no total is shown" in out.lower()
     assert "wording one?" in out and "wording two?" in out
 
-    assert _warn_mixed_questions({"slug": "s", "instruments": 1}) is False
+    assert _warn_mixed_questions({"slug": "s", "mixed": False}) is False
     assert capsys.readouterr().out == ""
 
 
@@ -210,7 +210,7 @@ def test_one_wording_judged_by_two_classifiers_also_gets_no_total(capsys):
     """
     from trainspotting.cli import _warn_mixed_questions
 
-    est = {"slug": "s", "instruments": 2, "question_variants": ["one wording?"],
+    est = {"slug": "s", "mixed": True, "question_variants": ["one wording?"],
            "classifiers": ["claude-opus-5", "claude-sonnet-5"]}
     assert _warn_mixed_questions(est) is True
     out = capsys.readouterr().out
@@ -317,3 +317,61 @@ def test_an_ask_run_nothing_can_be_weighed_from_is_not_a_zero():
     t = budget.totals(stages)["post-training"]
     assert t["measured"] == 0
     assert t["matching_tokens"] == 0 and t["share"] == 0.0
+
+
+def stage(family, question="Q?", classifier="claude-opus-5", sha="aaa"):
+    return {"family": family, "question": question, "classifier": classifier, "system_sha": sha}
+
+
+def test_the_corpus_rubric_is_not_a_conflict_with_the_post_training_one():
+    """`ask --pretrain` always uses two rubrics, and that is the design.
+
+    A corpus document is not a request to a model, so it is judged under
+    ASK_DOC_SYSTEM while post-training stages use ASK_SYSTEM. Comparing the
+    stamped hashes across families would mark every `--pretrain` run as mixed
+    and withhold the pipeline total from exactly the runs that have one.
+    """
+    mix = budget.mixing([
+        stage("pretrain", sha="corpus-rubric"),
+        stage("pretrain", sha="corpus-rubric"),
+        stage("post-training", sha="prompt-rubric"),
+        stage("post-training", sha="prompt-rubric"),
+    ])
+    assert mix["mixed"] is False
+    assert mix["rubric_conflict"] == []
+
+
+def test_a_rubric_that_moved_inside_one_family_is_still_a_conflict():
+    mix = budget.mixing([
+        stage("post-training", sha="prompt-rubric"),
+        stage("post-training", sha="prompt-rubric-reworded"),
+    ])
+    assert mix["mixed"] is True
+    assert mix["rubric_conflict"] == ["post-training"]
+
+
+def test_wording_and_judge_still_mix_across_families():
+    assert budget.mixing([stage("pretrain"), stage("post-training", question="other?")])["mixed"]
+    assert budget.mixing([stage("pretrain"), stage("post-training", classifier="other")])["mixed"]
+
+
+def test_a_rescaled_bound_cannot_exceed_the_stage():
+    """A few matching examples much longer than the rest make `ratio` large.
+
+    Multiplying the Wilson upper endpoint by it can put the bound past the
+    stage's whole fit-token count — not a wide interval but an impossible one,
+    claiming more than 100% of the stage matches.
+    """
+    out = {
+        "measured": True,
+        "matched": 1, "n": 60, "count_rate": 1 / 60,
+        "weighed": 60, "weighed_matched": 1, "weighed_count_rate": 1 / 60,
+        "count_ci": [0.003, 0.089],
+        "rate": 0.60,          # the one match is enormous
+        "size_tokens": 1_000,
+        "notes": [],
+    }
+    budget._apply_rate(out)
+    lo, hi = out["matching_tokens_ci"]
+    assert 0 <= lo <= hi <= 1_000
+    assert hi == 1_000  # clamped, not 3,204

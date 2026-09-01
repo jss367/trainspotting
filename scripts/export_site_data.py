@@ -100,9 +100,37 @@ for f in sorted((ROOT / "results").glob("*.json")):
         total += (out / name).stat().st_size
         copied.append(name)
 
+# Ordinary result files that results/ no longer has. The copy loop only ever
+# writes, so deleting a run — or moving it to another slug — used to leave its
+# old copy sitting here: dropped from the manifest, so the site stopped drawing
+# its card, but still the first thing `paths.find` returns to anything reading a
+# run back. The budgets derived below would then be rolled up over a
+# measurement whose card is no longer on the page.
+#
+# Bulk and derived files are exempt: those are gitignored under results/, so a
+# fresh clone has none of them there and this is their only copy.
+stale = [
+    f
+    for f in sorted(out.glob("*.json"))
+    if not f.name.endswith(COMMITTED)
+    and f.name not in set(copied)
+    and f.name not in {"registry.json", "language-names.json", "reward-kinds.json", "manifest.json"}
+    and not f.name.startswith(tuple(f"{n}.budget-" for n in registry.targets()))
+]
+for f in stale:
+    f.unlink()
+if stale:
+    print(f"removed {len(stale)} stale site file(s) results/ no longer has: "
+          + ", ".join(f.name for f in stale))
+
 # Every question asked of a target gets its budget rolled up here, from whatever
 # stages were committed. A question asked of only the post-training half still
 # gets a card — with the corpora shown as unmeasured, which is the finding.
+# Budgets are rebuilt from scratch every run, so drop the previous set first:
+# a slug that no longer has any ask run should lose its budget file too, and the
+# loop below only writes the ones it can still build.
+for f in out.glob("*.budget-*.json"):
+    f.unlink()
 for name in registry.targets():
     for slug in paths.runs(name, "ask"):
         est = budget.estimate(name, slug)
