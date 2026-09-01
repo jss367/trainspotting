@@ -557,7 +557,7 @@ history.
 assumes you already know what to look for; `trace` starts from what the model
 did. Paste the text — a transcript, a description, the sentence that surprised
 you — and it pulls the distinctive phrases out of it and counts how many rows of
-each post-training stage contain each one, over the whole split (the
+each post-training stage contain each one across the split (the
 datasets-server full-text index, nothing sampled and nothing downloaded). It
 ranks the stages by matches per million rows, so `"As an AI language model
 developed by OpenAI"` lands you on whichever mix carries the most of that
