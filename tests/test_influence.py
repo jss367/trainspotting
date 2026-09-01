@@ -1335,3 +1335,61 @@ def test_no_rename_instructions_without_a_collision():
     text = " ".join(influence.render(influence.compare(runs, THINK), "olmo-3-7b-think"))
     assert "Move this trace under" not in text
     assert "--slug identity --stage sft" in text
+
+
+# --- rejected-only and rollout-only matches are evidence against ------------
+
+
+def _bare(stage, hits, rows, groups):
+    return run(stage, hits=hits, rows=rows, groups=groups,
+               fields=list(groups), available_fields=list(groups))
+
+
+def test_a_rejected_only_stage_does_not_win_on_its_hit_count():
+    """500 rows of rejected completions is 100× the other stage's hits and is
+    evidence the objective pushed the model *off* the phrase. Splitting
+    `rejected` out of PRODUCE stopped it counting toward a produce rate, but the
+    row-rate fallback ranked it on total hits anyway."""
+    t = influence.compare([
+        _bare("dpo", 500, 100_000, {"prompt": 0, "chosen": 0, "rejected": 500}),
+        _bare("rlvr", 5, 100_000, {"prompt": 0, "reference": 5, "rollout": 0}),
+    ], THINK)
+    assert t["best"]["stage"] == "rlvr"
+    text = " ".join(influence.render(t, "olmo-3-7b-think"))
+    assert "Most plausibly dpo" not in text
+    assert "evidence against this stage" in text
+
+
+def test_a_rollout_only_stage_is_blocked_too():
+    t = influence.compare([
+        _bare("rlvr", 300, 100_000, {"prompt": 0, "reference": 0, "rollout": 300}),
+        _bare("dpo", 4, 100_000, {"prompt": 0, "chosen": 4, "rejected": 0}),
+    ], THINK)
+    assert t["best"]["stage"] == "dpo"
+
+
+def test_a_stage_with_any_produce_or_prompt_hit_still_ranks():
+    """The block is for stages whose matches are *only* against them. One chosen
+    row alongside the rejected ones is still evidence."""
+    t = influence.compare([
+        _bare("dpo", 500, 100_000, {"prompt": 0, "chosen": 1, "rejected": 499}),
+    ], THINK)
+    assert t["best"] is not None and t["best"]["stage"] == "dpo"
+
+
+def test_a_rejected_only_stage_does_not_drag_others_onto_the_row_basis():
+    """It has no produce rate, so letting it decide the basis would rank every
+    other stage on total hits instead of produce-side ones."""
+    t = influence.compare([
+        _bare("dpo", 500, 100_000, {"prompt": 0, "chosen": 0, "rejected": 500}),
+        _bare("rlvr", 50, 100_000, {"prompt": 40, "reference": 10, "rollout": 0}),
+    ], THINK)
+    assert t["basis"] == "produced"
+
+
+def test_the_produce_union_excludes_rejected_and_rollout_rows():
+    """60 overlapping response/reference rows plus 40 rollout-only rows read as
+    100 produce-side out of a true 60."""
+    assert influence._union(100, 40, [60, 60]) == (60, 100)
+    # and with nothing off the produce side the interval still settles outright
+    assert influence._union(180, 0, [100, 80]) == (180, 180)

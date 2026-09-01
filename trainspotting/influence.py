@@ -80,25 +80,52 @@ def produced(result) -> tuple[int, int] | None:
     counts = [by_group.get(g, 0) for g in PRODUCE if g in fields]
     if not counts:
         return None
-    return _union(result.get("matched", 0), by_group.get("prompt", 0), counts)
+    # Every group that is not produce-side, not only the prompt. A row can match
+    # in `rejected` or `rollout` alone, so those have to be subtracted from
+    # `matched` too before what is left is guaranteed produce-side.
+    elsewhere = [by_group.get(g, 0) for g in GROUPS if g not in PRODUCE and g in fields]
+    return _union(result.get("matched", 0), sum(elsewhere), counts)
 
 
-def _union(matched: int, prompt: int, counts: list[int]) -> tuple[int, int]:
+def _only_against(r) -> bool:
+    """Every match this stage found is evidence against it, or of nothing.
+
+    True when the produce side and the prompt are both empty and something
+    matched: whatever it was, it was a rejected completion the objective trains
+    away from, or a reference generation the objective never reads. Ranking a
+    stage on that says the model most plausibly learned a phrase from text it
+    was pushed off, which is not a weaker claim than the truth but the reverse
+    of it.
+    """
+    fields = set(r.get("fields") or [])
+    if not r.get("hits"):
+        return False
+    live = {"prompt", *PRODUCE} & fields
+    return not any(r["by_group"].get(g, 0) for g in live)
+
+
+def _union(matched: int, elsewhere: int, counts: list[int]) -> tuple[int, int]:
     """Bounds on the rows matching in at least one of `counts`.
 
     Two lower bounds. The largest single group is one. The other is the rows
-    that did not match the prompt, because every matched row matched somewhere
-    and a row not in the prompt group has nowhere else to be — which settles
-    the interval outright whenever nothing matched a prompt: 100 response and
-    80 reference rows out of 180 with no prompt match are 180 produce-side
-    rows, and reporting 100–180 there would call an ordering unsettled that the
-    counts settle. It reads the same way when the prompt was never searched:
-    `matched` then only counts produce-side rows, and `prompt` is zero.
+    that cannot have matched anywhere but the produce side, because every
+    matched row matched somewhere — which settles the interval outright when
+    nothing matched off it: 100 response and 80 reference rows out of 180 with
+    no prompt match are 180 produce-side rows, and reporting 100–180 there would
+    call an ordering unsettled that the counts settle.
+
+    `elsewhere` sums the non-produce groups rather than counting rows, so it
+    over-subtracts when a row matches two of them, which keeps the bound safe in
+    the only direction that matters. It used to be the prompt count alone, which
+    was right while prompt was the only non-produce group: after `rejected` and
+    `rollout` were split out, 60 overlapping response and reference rows plus 40
+    rollout-only rows read as 100 produce-side out of a true 60, overstating the
+    rate the ranking runs on.
     """
     hi = min(matched, sum(counts))
     # Clamped, because the two lower bounds only agree on self-consistent
     # counts and a result file is input rather than an invariant.
-    return min(max(max(counts), matched - prompt), hi), hi
+    return min(max(max(counts), matched - elsewhere), hi), hi
 
 
 def _sources(result) -> list[dict]:
@@ -314,6 +341,14 @@ def _rank_block(r: dict, basis: str, key: str) -> str | None:
         # exists to avoid.
         return (f"this run read only {', '.join(r['fields']) or 'nothing'}, so there is no "
                 "produce-side rate to compare")
+    if r.get("only_against"):
+        # Not a third way of being incomparable but the opposite of evidence.
+        # Everything this stage matched is text the objective pushes the model
+        # off — a rejected completion — or text it never reads at all — a
+        # reference generation. Ranking it would say the model most plausibly
+        # learned the phrase where it was actually trained not to.
+        return ("every match here is in a rejected completion or a reference rollout, "
+                "which is evidence against this stage rather than for it")
     return None
 
 
@@ -364,7 +399,28 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
     # Rank on the produce side where any stage measured it, because that is the
     # text the model is trained to emit; fall back to the overall rate when no
     # run searched a produce-side column, so a prompt-only sweep still ranks.
-    basis = "produced" if any(r["produced_rate"] for r in hitting) else "rows"
+    # A stage whose only matches are in `rejected` or `rollout` has no evidence
+    # for being the origin and some against it: DPO trains away from a rejected
+    # completion, and a reference generation is not a training input at all.
+    # Splitting those out of PRODUCE stopped them counting toward a produce
+    # rate, but the row-rate fallback reached around it — every produced_rate
+    # falsy selects "rows", and the stage ranked on its total hits while the
+    # verdict called them text the model was trained to read. Both wrong, and
+    # the second is the reverse of the truth rather than a weaker version of it.
+    #
+    # Marked rather than dropped: the hits are real and worth printing, so the
+    # stage still renders with its counts. It just cannot be ranked on them, and
+    # cannot decide the basis the other stages are ranked on.
+    for r in hitting:
+        r["only_against"] = _only_against(r)
+    # Rank on the produce side where any stage measured it, because that is the
+    # text the model is trained to emit; fall back to the overall rate when no
+    # run searched a produce-side column, so a prompt-only sweep still ranks.
+    # Stages that only matched against themselves do not get a say in that
+    # choice either — otherwise a rejected-only stage with no produce rate drags
+    # every other stage onto the row basis.
+    basis = ("produced" if any(r["produced_rate"] for r in hitting if not r["only_against"])
+             else "rows")
     # Falling back to the overall rate has two causes worth telling apart: no
     # run read a produce-side column, or every run did and found nothing there.
     produce_searched = any(r["produced"] is not None for r in searched + inconclusive)
