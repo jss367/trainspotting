@@ -1447,6 +1447,11 @@ function budgetRows(m, sources, profiles, corpusSummaries){
       lengths: base ? (corpus && corpus.lengths ? corpus.lengths.chars : null) : (p ? p.chars : null),
       targetLengths: base ? null : (p ? p.target_chars : null),
       perExample: est ? est.per_example : null,
+      // Why the whisker is as wide as it is: the sampler's draws, and how much
+      // correlation inside them cost. A wide interval with no explanation reads
+      // as a small sample.
+      deff: p && p.chars ? p.chars.deff : null,
+      clusters: p && p.chars ? p.chars.clusters : null,
     };
   });
 }
@@ -1532,6 +1537,9 @@ function budgetCard(m, rows){
       + (r.estimated
         ? `<br>estimated: ${num(Math.round(r.perExample))} tokens/example × ${num(r.examples)} examples`
           + `<br>95% CI ${fmtTok(r.lo)}–${fmtTok(r.hi)} on the sampled mean length`
+          + (r.deff > 1.05
+            ? `<br>widened ${r.deff.toFixed(1)}× for clustering — ${r.clusters} draws of ten consecutive rows, not ${r.lengths.n} independent ones`
+            : "")
         : `<br>published in the OLMo 3 paper`),
   })));
   const note = document.createElement("p");
@@ -1546,6 +1554,10 @@ function budgetCard(m, rows){
     // *processed* would count a DPO prompt twice (it is read once with each
     // completion) and would have to include RL's generated rollouts, which are
     // not in the dataset at any length and cannot be recovered from it.
+    + " The interval is over the sampler's draws rather than its rows: rows arrive in"
+    + " chunks of ten consecutive positions and neighbours on disk are correlated, so 300 rows"
+    + " are about thirty independent draws and treating them as 300 would make every whisker"
+    + " here about twice too narrow."
     + " These are tokens of text in each stage's data, not tokens processed during training."
     + " A DPO example's shared prompt is read once with each completion at training time and is"
     + " counted once here; an RL stage is only its prompts, because the completions RL actually"
@@ -1793,13 +1805,20 @@ function pickGroupColumn(columns){
 // keys instead and let the count of them travel with the grid: a prompt missing
 // from the table is recoverable, a prompt in the wrong row is not.
 function valueByKey(records, col){
-  const map = new Map(), dropped = new Set();
+  const map = new Map(), dropped = new Set(), missing = new Set();
   for (const r of records){
     const v = r.m[col];
-    if (v == null) continue;
+    // A row with no value for this column is not a row to skip past: if
+    // another row shares its key, a prompt on that key might belong to either,
+    // and leaving the other row's value in the map files it under a source it
+    // may not have. Missing-against-present is the same ambiguity as two
+    // different values, so it drops the key too. Nullable source columns are a
+    // supported case — tests/test_context.py allows a row to leave one null.
+    if (v == null){ missing.add(r.k); continue; }
     if (map.has(r.k) && map.get(r.k) !== v) dropped.add(r.k);
     else if (!map.has(r.k)) map.set(r.k, v);
   }
+  for (const k of missing) if (map.has(k)) dropped.add(k);
   for (const k of dropped) map.delete(k);
   return {map, dropped};
 }

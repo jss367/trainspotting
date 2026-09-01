@@ -61,17 +61,22 @@ def test_dpo_counts_the_shared_history_once_and_only_the_branch_as_target():
     assert total == 200 + 390                # the shared conversation, counted once
 
 
-def test_dpo_with_identical_sides_still_has_a_target():
+def test_dpo_with_identical_sides_has_no_target_because_it_has_no_signal():
+    """DPO reads the difference between the two sequences' log probabilities, so
+    a pair whose sides are identical cancels exactly and carries no gradient.
+    Manufacturing a final-turn branch would report two copies of one answer as
+    gradient-bearing. Four sampled Instruct DPO pairs are identical in full."""
     same = [turn("user", 10, "q"), turn("assistant", 20, "a")]
     rec = {"kind": "dpo", "chosen": {"turns": list(same)}, "rejected": {"turns": list(same)}}
     total, target = derive.example_chars(rec)
-    assert target == 40 and total == 50
+    assert target == 0
+    assert total == 30      # the conversation is there; none of it is a target
 
 
-def test_dpo_leaves_a_completion_on_a_side_the_prefix_would_swallow():
-    """One side being a prefix of the other is not one side with nothing to
-    compare. Without the clamp the shorter side contributes no target at all
-    and the pair reads as one-sided."""
+def test_dpo_with_one_side_a_prefix_of_the_other_scores_only_the_extra_turns():
+    """Everything up to where the shorter side ends is conditioned identically
+    on both sequences and cancels, so the difference between them is exactly
+    what only the longer side has."""
     shared = [turn("user", 10, "q"), turn("assistant", 20, "a")]
     rec = {
         "kind": "dpo",
@@ -79,8 +84,8 @@ def test_dpo_leaves_a_completion_on_a_side_the_prefix_would_swallow():
         "rejected": {"turns": list(shared)},
     }
     total, target = derive.example_chars(rec)
-    assert target == 20 + 30 + 20     # both sides keep their last turn
-    assert total == 10 + target
+    assert target == 30
+    assert total == 30 + 30
 
 
 def test_dpo_branches_where_the_reasoning_diverges_even_if_the_answer_matches():
@@ -96,8 +101,8 @@ def test_dpo_branches_where_the_reasoning_diverges_even_if_the_answer_matches():
         "rejected": {"turns": [opening, turn("assistant", 30, "same answer", reasoning=70),
                                turn("assistant", 10, "tail")]},
     }
-    # Identical on both sides: shared up to the clamp, as before.
-    assert derive._shared_turns(rec["chosen"]["turns"], rec["rejected"]["turns"]) == 2
+    # Identical on both sides: shared all the way down, so nothing is a target.
+    assert derive._shared_turns(rec["chosen"]["turns"], rec["rejected"]["turns"]) == 3
 
     rec["rejected"]["turns"][1] = turn("assistant", 30, "same answer", reasoning=70)
     rec["rejected"]["turns"][1]["reasoning"]["text"] = "a different route to it"
@@ -133,6 +138,55 @@ def test_estimate_scales_the_sampled_mean_and_carries_its_interval():
     assert est["lo"] < est["tokens"] < est["hi"]
     # The interval is the sample's own standard error, not a fixed fraction.
     assert est["hi"] - est["tokens"] == pytest.approx(1.96 * stats["se"] / 4 * 1_000_000)
+
+
+def test_clusters_are_the_samplers_draws_not_its_rows():
+    """`hf.sample_rows_with_truncation` takes ten consecutive rows per random
+    offset, so maximal runs of consecutive indices are the draws."""
+    assert derive.clusters_of([10, 11, 12, 40, 41]) == [[0, 1, 2], [3, 4]]
+    # Order of arrival doesn't matter; the row index does.
+    assert derive.clusters_of([41, 11, 40, 10, 12]) == [[3, 1, 4], [2, 0]]
+    # Two offsets landing next to each other merge, which claims nothing false.
+    assert derive.clusters_of([1, 2, 3]) == [[0, 1, 2]]
+    # Records committed before the sampler recorded a row index.
+    assert derive.clusters_of([1, None, 3]) is None
+
+
+def test_the_interval_widens_when_the_draws_are_correlated():
+    """Neighbouring rows share a source dataset and a length profile. Scoring
+    300 correlated rows as 300 independent ones makes every whisker on the page
+    too narrow — about 2x on the committed samples."""
+    # Ten draws of ten, alike inside a draw and far apart between them.
+    values, rows = [], []
+    for draw in range(10):
+        for i in range(10):
+            values.append(100 if draw % 2 else 900)
+            rows.append(draw * 1000 + i)
+
+    clustered = derive.summarize(values, rows)
+    independent = derive.summarize(values)
+
+    assert clustered["clusters"] == 10
+    assert clustered["deff"] > 5
+    assert clustered["se"] > independent["se"] * 2
+    # The point estimate is untouched; only the claim about its precision moves.
+    assert clustered["mean"] == independent["mean"]
+
+
+def test_an_uncorrelated_sample_is_not_widened_for_nothing():
+    """The design effect has a floor of 1: clustering can only cost precision,
+    and a draw whose neighbours are unalike has not cost any."""
+    values = [(i * 37) % 100 for i in range(100)]
+    rows = list(range(100))
+
+    stats = derive.summarize(values, rows)
+
+    assert stats["deff"] == pytest.approx(1.0, abs=0.5)
+
+
+def test_a_sample_with_no_row_indices_falls_back_to_the_independent_error():
+    stats = derive.summarize([1, 2, 3, 4], [None, None, None, None])
+    assert stats["clusters"] is None and stats["deff"] == 1.0
 
 
 def test_a_stage_with_no_row_count_measures_shape_but_claims_no_budget():

@@ -104,11 +104,19 @@ def _shared_turns(chosen: list[dict], rejected: list[dict]) -> int:
         if not same(a, b):
             break
         n += 1
-    # A side swallowed whole by the shared prefix is not a side with no
-    # completion — a pair whose completions happen to be identical, or whose
-    # shorter side is a prefix of the longer, would otherwise come back with no
-    # target at all. Leave each side its last turn.
-    return min(n, len(chosen) - 1, len(rejected) - 1) if n else 0
+    # No clamp. A side swallowed whole by the shared prefix really does have no
+    # completion, and that is the answer rather than a degenerate case to work
+    # around: DPO's loss reads the difference between the two sequences' log
+    # probabilities, so a pair whose sides are identical cancels exactly and
+    # carries no gradient at all. Backing the prefix up a turn to manufacture a
+    # branch would report two copies of the same answer as gradient-bearing.
+    # Four sampled Instruct DPO pairs are identical in full.
+    #
+    # The same holds one step weaker for a side that is a strict prefix of the
+    # other: everything up to where the shorter side ends is conditioned
+    # identically and cancels, and the difference is exactly the turns only the
+    # longer side has.
+    return n
 
 
 def example_chars(rec: dict) -> tuple[int, int]:
@@ -169,18 +177,78 @@ def _quantile(sorted_values: list[float], q: float) -> float:
     return sorted_values[lo] + (sorted_values[hi] - sorted_values[lo]) * (i - lo)
 
 
-def summarize(values: list[int]) -> dict:
-    """Mean with its standard error, the quantiles, and the shared-bin histogram."""
+def clusters_of(rows: list[int | None]) -> list[list[int]] | None:
+    """The sampler's fetches, recovered from the row indices it kept.
+
+    `hf.sample_rows_with_truncation` draws random offsets and takes ten
+    consecutive rows from each, because rows adjacent on disk are correlated —
+    the same source dataset, often the same generation run. So a 300-row sample
+    is about thirty draws, not three hundred, and the maximal runs of
+    consecutive indices are those draws. Two offsets landing next to each other
+    merge into one longer run, which costs a little precision and claims
+    nothing false.
+
+    Returns positions grouped by run, or None when the records carry no row
+    index (runs committed before the sampler recorded one).
+    """
+    if any(r is None for r in rows):
+        return None
+    order = sorted(range(len(rows)), key=lambda i: rows[i])
+    groups: list[list[int]] = []
+    for i in order:
+        if groups and rows[i] == rows[groups[-1][-1]] + 1:
+            groups[-1].append(i)
+        else:
+            groups.append([i])
+    return groups
+
+
+def _cluster_se(values: list[float], mean: float, groups: list[list[int]]) -> tuple[float, float]:
+    """(standard error, design effect) for a mean over clustered draws.
+
+    The same Taylor-linearised ratio variance `cli._cluster_wilson` uses for a
+    rate, with a cluster's sum of values where that one has its match count:
+
+        Var(mean) = C / ((C - 1) · M²) · Σ (S_c - mean · m_c)²
+
+    Dividing by the independent variance gives the design effect, which is what
+    makes the widening legible — an interval that is simply wider looks like a
+    smaller sample rather than a correlated one.
+    """
+    n = len(values)
+    C = len(groups)
+    if C < 2:
+        return 0.0, 1.0
+    ss = sum((sum(values[i] for i in g) - mean * len(g)) ** 2 for g in groups)
+    var_cluster = C / ((C - 1) * n**2) * ss
+    var_ind = sum((v - mean) ** 2 for v in values) / (n - 1) / n if n > 1 else 0.0
+    deff = max(1.0, var_cluster / var_ind) if var_ind else 1.0
+    return math.sqrt(var_cluster), deff
+
+
+def summarize(values: list[int], rows: list[int | None] | None = None) -> dict:
+    """Mean with its standard error, the quantiles, and the shared-bin histogram.
+
+    The error is the clustered one wherever the row indices allow it, because
+    the sample is not 300 independent draws — see `clusters_of`. Treating it as
+    independent makes every interval on the page too narrow, by about 2x on
+    these samples.
+    """
     n = len(values)
     if not n:
         return {"n": 0}
     ordered = sorted(values)
     mean = sum(values) / n
     var = sum((v - mean) ** 2 for v in values) / (n - 1) if n > 1 else 0.0
+    se, deff, groups = math.sqrt(var / n), 1.0, clusters_of(rows) if rows is not None else None
+    if groups:
+        se, deff = _cluster_se(values, mean, groups)
     return {
         "n": n,
         "mean": mean,
-        "se": math.sqrt(var / n),
+        "se": se,
+        "deff": deff,
+        "clusters": len(groups) if groups else None,
         "p10": _quantile(ordered, 0.10),
         "median": _quantile(ordered, 0.50),
         "p90": _quantile(ordered, 0.90),
@@ -232,8 +300,9 @@ def stage_profile(ctx: dict, examples: int | None = None) -> dict:
             columns.setdefault(k, set()).add(str(v))
         out.append({"k": key, "m": {k: str(v) for k, v in meta.items()}})
 
-    stats = summarize(totals)
-    target_stats = summarize(targets)
+    rows = [rec.get("row") for rec in records]
+    stats = summarize(totals, rows)
+    target_stats = summarize(targets, rows)
     return {
         "dataset": ctx.get("dataset"),
         "stage": ctx.get("stage"),
