@@ -14,8 +14,8 @@
   },
   "groups": {
     "prompt": 3,
-    "chosen": 1,
-    "rejected": 1
+    "chosen": 4,
+    "rejected": 4
   },
   "leaves": [
     [
@@ -25,6 +25,30 @@
     [
       "chosen",
       "role"
+    ],
+    [
+      "chosen",
+      "tool_calls"
+    ],
+    [
+      "rejected",
+      "tool_calls"
+    ],
+    [
+      "chosen",
+      "function_call"
+    ],
+    [
+      "rejected",
+      "function_call"
+    ],
+    [
+      "chosen",
+      "refusal"
+    ],
+    [
+      "rejected",
+      "refusal"
     ],
     [
       "rejected",

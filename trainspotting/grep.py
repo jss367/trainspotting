@@ -33,6 +33,8 @@ import urllib.parse
 
 import requests
 
+from . import search
+
 BASE = "https://datasets-server.huggingface.co"
 HUB = "https://huggingface.co"
 PARQUET_BRANCH = "refs/convert/parquet"
@@ -85,7 +87,18 @@ STRUCT_TEXT = {
 MESSAGE_LISTS = ("messages", "chosen", "rejected", "source_prompt", "conversation")
 # Extra subfields some message lists carry, and which side of the turn they are
 # on: a tool schema is given to the model, a call is emitted by it.
-MESSAGE_EXTRAS = {"functions": "prompt", "function_calls": "response"}
+#
+# Taken from `search`, which already enumerates them, rather than listed again
+# here. Listing them again is how this pair diverged in the first place: `grep`
+# knew about `functions` and `function_calls` while `search` also knew about
+# `tool_calls`, `function_call` and `refusal` — the three the Instruct DPO turn
+# struct actually carries — so `grep` was silently not searching them. One list,
+# imported, cannot drift; the side each field is on is still stated here,
+# because that is a claim about training rather than about the schema.
+MESSAGE_EXTRAS = {
+    **{f: "prompt" for f in search.INPUT_TURN_FIELDS},
+    **{f: "response" for f in search.STRUCTURED_TURN_FIELDS},
+}
 
 # Text columns that are provenance, labels, or identifiers rather than training
 # text. Named so that a column in neither table gets reported as unsearched
@@ -254,10 +267,17 @@ def _pair_exprs(typ: str) -> list[tuple[str, str, tuple[str, ...]]]:
     # something either completion claims.
     for col in (c, r):
         out.append(("prompt", content(tail(col), f"NOT ({emitted})"), both))
+    # A tool call is produced text, so in a pair it belongs to the completion
+    # that made it — `response` would put a rejected call back on the side the
+    # objective trains toward, undoing the split for exactly the fields that
+    # carry a model's tool use. The tool *menu* is input and shared, so it stays
+    # prompt from both.
     for sub, group in MESSAGE_EXTRAS.items():
-        if f'"{sub}"' in typ or f" {sub} " in typ:
-            for col in (c, r):
-                out.append((group, f"list_transform({col}, m -> m.{_ident(sub)})", (sub,)))
+        if not (f'"{sub}"' in typ or f" {sub} " in typ):
+            continue
+        for col, name in ((c, "chosen"), (r, "rejected")):
+            side = name if group == "response" else group
+            out.append((side, f"list_transform({col}, m -> m.{_ident(sub)})", (name, sub)))
     return out
 
 
@@ -328,7 +348,12 @@ def text_fields(
             # Both columns are read by it, so both contribute leaves.
             if col == "chosen":
                 for group, expr, subs in _pair_exprs(typ):
-                    add(group, expr, "chosen", subs)
+                    # A pair expression names one column or both. `(col, sub)`
+                    # says which; a bare tuple of subfields is read from both.
+                    if len(subs) == 2 and subs[0] in PAIR:
+                        add(group, expr, subs[0], (subs[1],))
+                    else:
+                        add(group, expr, "chosen", subs)
             if any(g in want for g in ("prompt", *PAIR)):
                 for sub in ("content", "role"):
                     if (col, sub) not in leaves:

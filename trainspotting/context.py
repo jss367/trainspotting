@@ -16,7 +16,7 @@ join them onto committed label and ask results without re-running any model.
 
 import json
 
-from trainspotting import rewards
+from trainspotting import rewards, search
 
 MAX_TEXT = 4000  # per field; the full row stays one click away on HuggingFace
 KEY_CHARS = 400  # prompt prefix that joins a context record to a labeled prompt
@@ -48,7 +48,10 @@ def _split_think(text: str) -> tuple[str | None, str]:
 # and dropping them here made them invisible to anything reading the export,
 # so a tool name occurring only in a function definition came back as a clean
 # "no match" from the site rather than as "not exported".
-TURN_FIELDS = ("functions", "function_calls")
+# The same list `search` searches, imported rather than repeated — `grep` and
+# this module each had their own shorter copy, so a `tool_calls` or a `refusal`
+# was searchable from the CLI and absent from the export the page reads.
+TURN_FIELDS = search.STRUCTURED_TURN_FIELDS + search.INPUT_TURN_FIELDS
 
 
 def _turns(messages) -> list[dict]:

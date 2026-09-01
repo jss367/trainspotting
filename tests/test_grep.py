@@ -1082,3 +1082,35 @@ def test_a_single_turn_pair_still_splits_at_the_first_turn(con, tmp_path):
     exprs, _, _ = grep.text_fields(schema)
     r = grep.scan(con, grep.read_parquet_sql([str(path)]), exprs, None, "ChatGPT")
     assert r["by_group"] == {"prompt": 0, "chosen": 1, "rejected": 0}
+
+
+def test_the_searchable_turn_fields_come_from_one_list():
+    """`grep`, `context` and `search` each knew a different subset. `grep` had
+    `functions` and `function_calls`; `search` also had `tool_calls`,
+    `function_call` and `refusal` — the three an Instruct DPO turn actually
+    carries — so `grep` was silently not searching them. Importing the list is
+    the one axis of that duplication removable without touching `search`."""
+    from trainspotting import context, search
+    canonical = set(search.STRUCTURED_TURN_FIELDS) | set(search.INPUT_TURN_FIELDS)
+    assert set(grep.MESSAGE_EXTRAS) == canonical
+    assert set(context.TURN_FIELDS) == canonical
+
+
+def test_a_rejected_tool_call_is_not_produce_side():
+    """Widening the field set re-exposed the conflation the pair split fixed: a
+    tool call is produced text, so in a pair it belongs to the completion that
+    made it. Routing both to `response` would put a rejected call back on the
+    side the objective trains toward."""
+    typ = ('STRUCT("content" VARCHAR, "role" VARCHAR, "tool_calls" VARCHAR, '
+           '"functions" VARCHAR)[]')
+    exprs, leaves, _ = grep.text_fields({"chosen": typ, "rejected": typ})
+    assert "response" not in exprs
+    assert any('"rejected"' in e and "tool_calls" in e for e in exprs["rejected"])
+    assert any('"chosen"' in e and "tool_calls" in e for e in exprs["chosen"])
+    # the tool menu is input and shared, so it is prompt from both sides.
+    # Matched on the projection rather than the substring: the branch
+    # comparison also names these fields, correctly, since it compares exactly
+    # what a search can read.
+    assert sum(1 for e in exprs["prompt"] if 'm."functions"' in e) == 2
+    # and each column's extra subfields are priced against that column
+    assert ("rejected", "tool_calls") in leaves
