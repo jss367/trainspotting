@@ -42,6 +42,14 @@ scale the stages share:
    share of Dolma 3 documents are different denominators; this is where they
    become one number. See [How much training is that?](#how-much-training-is-that).
 
+Every one of those starts from something you can already name — a string to
+search for, or a question you can already phrase. When you start from an
+observed behavior instead — a transcript where the model claimed the wrong
+knowledge cutoff or identified as another lab's assistant — `trainspotting
+trace` extracts the distinctive phrases from that text and ranks the
+post-training stages by how densely each contains them, so you find the stage
+without guessing a search string. See [Tracing a behavior](#tracing-a-behavior).
+
 The pretraining corpora get their own path, because the datasets-server cannot
 sample them: exact composition from the shard listing, readable random documents,
 and the same free-form questions. There is no context layer there — a corpus
@@ -93,6 +101,11 @@ trainspotting facts olmo-3-7b-instruct
 
 # Exact source/domain/reward-type composition of each post-training stage
 trainspotting sources olmo-3-7b-instruct --json
+
+# Start from a behavior, not a search string: extract the distinctive phrases
+# from a transcript and rank stages by how densely they contain them
+trainspotting trace olmo-3-7b-instruct \
+  "As an AI language model developed by OpenAI, my knowledge cutoff is September 2021."
 
 # Sample 300 prompts per stage and label each one with Claude
 trainspotting classify olmo-3-7b-instruct --sample 300
@@ -537,6 +550,72 @@ to disregard human welfare* — runs `stance` over the post-training examples, a
 rolls every question up with `budget`. The question wordings live in that script,
 which makes them one editable instrument rather than nine copies in a shell
 history.
+
+## Tracing a behavior
+
+`trace` is the way in when you have a behavior, not a query. Most of the tool
+assumes you already know what to look for; `trace` starts from what the model
+did. Paste the text — a transcript, a description, the sentence that surprised
+you — and it pulls the distinctive phrases out of it and counts how many rows of
+each post-training stage contain each one across the split (the
+datasets-server full-text index, nothing sampled and nothing downloaded). It
+ranks the stages by matches per million rows, so `"As an AI language model
+developed by OpenAI"` lands you on whichever mix carries the most of that
+provenance rather than leaving you to guess a `grep`. The index reaches the
+assistant turns, not just the metadata beside them: it covers string values
+nested inside a struct or a list of structs, which is what an SFT `messages`
+column and a DPO `chosen`/`rejected` column are.
+
+A window is kept only if it is anchored: on a number, on a capital past a
+token's first letter (`ChatGPT`, `OpenAI` — English does not shape words that
+way, so those are names wherever they sit, including the opening word of a
+transcript), or on a capital anywhere but the start of its sentence. The anchor
+is what makes a query selective, not the length, so a window of pure function
+words is dropped however long it is — it would match training rows by
+coincidence — while `"Assistant: ChatGPT"` yields `ChatGPT`. Boundary function
+words are trimmed off the windows that are kept, because search ANDs a query's
+tokens together and a trailing "so I" only excludes the row that phrased the
+same span without it.
+
+Two anchors in one sentence get two queries: a candidate window is dropped only
+when every anchor in it is already covered, not merely because it overlaps one
+already chosen. Otherwise `"...developed by OpenAI, my knowledge cutoff is
+September 2021."` — fourteen words, so every eight-word window touches every
+other — would spend its whole budget on the lab and never reach the date.
+
+Three things a `trace` number is not, all printed next to it:
+
+- **Not the phrase.** The server stems each token and ANDs them, so a hit is a
+  row holding all of the query's words, not the literal string — an upper bound
+  on verbatim occurrences.
+- **Not a side.** It counts rows, not which half of the example the string is
+  in. A run ends with a link into the dataset viewer, whose `?q=` runs the same
+  index, so the rows behind the count are one click away. Deliberately not a
+  `trainspotting search` command: `search` is the layer that attributes a hit to
+  a side, but it does it over a 300-row random draw, and at the densities a
+  signature string produces (100/M is a 3% chance of one hit in that draw) it
+  would answer with a confident zero.
+- **Not always the whole split.** The full-text index stops at the first 5 GB,
+  which the two 36 GB Think SFT mixes are well past. Their matches come from a
+  prefix of the rows they are divided by, so they are reported separately as
+  lower bounds rather than ranked. A bound settles one comparison — it is
+  conclusively above a ranked stage whose exact density is smaller — and nothing
+  else, and ranking the two together put the biggest mixes last for being big.
+
+The first search against a cold split can take minutes while the server builds
+the index — the widest window in the tool for `main` to move under a run. Each
+stage's revision is read before its row count and again after its searches, and
+a stage that moved in between is reported outside the ranking, like a partly
+indexed one but for a stronger reason: the two halves of its ratio describe
+different trees, so unlike a lower bound it is not a loose estimate of the
+density but not an estimate of it at all. Its counts are printed, its density is
+not ranked, and it cannot take the viewer link. When the behavior has no signature string — it is a disposition, or
+the training paraphrases it — `trace` finds nothing and says to reach for `ask`,
+which judges what sampled examples *teach* instead of matching their text
+(`"does this example teach the model to identify as ChatGPT?"`). All three
+compose, on different scales: `trace` narrows to a stage over the whole split,
+`search` says which side of the example a string lands on over a sample of it,
+and `ask` characterizes the fuzzy cases neither can match.
 
 ## Pretraining data
 
