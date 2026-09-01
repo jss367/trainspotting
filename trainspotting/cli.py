@@ -1485,17 +1485,25 @@ def cmd_trace(args):
     bounded = sorted((r for r in rest if r["partial"]), key=by_rank)
 
     def show(r):
-        print(
-            f"## {r['stage']} — {'≥' if r['partial'] else ''}{r['density']:.1f}/M"
-            f"  ({r['hits']} matches in {r['total']:,} rows, {r['dataset']})"
-        )
         if r["revision_moved_to"]:
+            # No density, and no "in N rows" either: that row count is not this
+            # figure's denominator, it was read off a different tree. Printing
+            # the ratio anyway had the section text contradicting its own
+            # stages one line further down.
+            print(
+                f"## {r['stage']} — no density"
+                f"  ({r['hits']} matches, split moved mid-search, {r['dataset']})"
+            )
             print(
                 f"  republished mid-search: {r['revision'][:7]} ->"
                 f" {r['revision_moved_to'][:7]}"
+                + ("; only the first 5 GB is indexed" if r["partial"] else "")
             )
-        if r["partial"] and r["revision_moved_to"]:
-            print("  and only the first 5 GB of the split is indexed")
+        else:
+            print(
+                f"## {r['stage']} — {'≥' if r['partial'] else ''}{r['density']:.1f}/M"
+                f"  ({r['hits']} matches in {r['total']:,} rows, {r['dataset']})"
+            )
         for q, c in sorted(r["per_query"].items(), key=lambda kv: -kv[1]):
             # `!r`, like the stderr echo above: a query is a slice of text the
             # user pasted, and an escape sequence survives tokenization (`\x1b`
@@ -1526,12 +1534,13 @@ def cmd_trace(args):
     if crossed:
         print("## Not ranked: these splits were republished mid-search\n")
         print(
-            "The row count below was read before the searches and the dataset"
-            " moved before they finished, so the two halves of the ratio"
-            " describe different trees and it is not an estimate of anything."
-            " The counts are printed because they are what the run saw; the"
-            " density is not, and neither is a place in the ranking. Re-run"
-            " these stages.\n"
+            "Each stage's row count was read before its searches and the"
+            " dataset moved before they finished, so the two halves of the"
+            " ratio describe different trees and it is not an estimate of"
+            " anything. The match counts below are what the run saw, so they"
+            " are printed; the density they would have been divided into is"
+            " not, and neither is a place in the ranking. Re-run these"
+            " stages.\n"
         )
         for r in crossed:
             show(r)
@@ -1542,7 +1551,15 @@ def cmd_trace(args):
     found = [r for r in ranked + bounded if r["hits"]]
     if not found:
         print(
-            "No stage contained these phrases. The behavior may be a disposition"
+            # Only stages searched end to end can support the flat claim. With a
+            # bound or a crossed stage in the run the headline has to be the
+            # weaker one, or it contradicts the caveats printed under it.
+            (
+                "No stage that was searched in full contained these phrases."
+                if bounded or crossed
+                else "No stage contained these phrases."
+            )
+            + " The behavior may be a disposition"
             " with no signature string, or the phrases may be paraphrased in"
             " training.\nTry `trainspotting ask` to judge what sampled examples"
             " teach — it reads meaning, not verbatim text."

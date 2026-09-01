@@ -52,7 +52,7 @@ def _sentences(text: str):
         # space when the sentence being ended is a quoted one, and a boundary
         # missed there is a query stitched across it: `OpenAI." Then it` is not
         # a phrase any training row contains.
-        for seg in re.split(r"(?<=[.!?;:])[\"'\u201d\u2019)\]]*\s+", line):
+        for seg in re.split(r"(?<=[.!?;:])[\"'\u201d\u2019)\]}]*\s+", line):
             seg = seg.strip()
             if seg:
                 yield seg

@@ -152,6 +152,18 @@ def test_a_window_bringing_no_new_anchor_is_still_dropped():
     assert len(queries) == 1, queries
 
 
+def test_a_closing_brace_ends_a_sentence_too():
+    """Same boundary as a closing quote, and the second-order effect is the
+    worse half: glued together, the next sentence's opening capital sits
+    mid-segment and `_weight` scores it as an anchor."""
+    assert list(behavior._sentences("I was made by OpenAI.} Then September 2021.")) == [
+        "I was made by OpenAI.",
+        "Then September 2021.",
+    ]
+    for q in behavior.distinctive_ngrams("I was made by OpenAI.} Then September 2021."):
+        assert not ("OpenAI" in q and "September" in q), q
+
+
 def test_a_quoted_sentence_ends_where_the_quote_closes():
     """`OpenAI." Then it` is not a phrase any training row contains, so a query
     must not be stitched across that boundary."""
@@ -298,8 +310,31 @@ def test_nothing_found_does_not_speak_for_the_unindexed_rows(monkeypatch, capsys
             "allenai/Dolci-Think-RL-7B": (0, False),
         },
     )
-    assert "No stage contained these phrases" in out
+    # Not the flat claim: a bound of zero has not searched the rows it is
+    # divided by, so it cannot join the others in asserting absence.
+    assert "No stage that was searched in full contained these phrases" in out
+    assert "No stage contained these phrases" not in out
     assert "sft was only partly indexed" in out
+
+
+def test_absence_is_stated_flatly_when_every_stage_was_searched_in_full(
+    monkeypatch, capsys
+):
+    """The weaker headline is only for runs that had something inconclusive in
+    them. With all three stages fully indexed and stable, zero really does mean
+    the phrases are not there, and hedging it would be its own inaccuracy."""
+    out = _run_trace(
+        monkeypatch,
+        capsys,
+        ["trainspotting", "trace", "olmo-3-7b-instruct", "I am ChatGPT, by OpenAI"],
+        {
+            "allenai/Dolci-Instruct-SFT": (0, False),
+            "allenai/Dolci-Instruct-DPO": (0, False),
+            "allenai/Dolci-Instruct-RL": (0, False),
+        },
+    )
+    assert "No stage contained these phrases." in out
+    assert "searched in full" not in out
 
 
 def test_a_republish_mid_trace_takes_the_stage_out_of_the_ranking(monkeypatch, capsys):
@@ -326,6 +361,26 @@ def test_a_republish_mid_trace_takes_the_stage_out_of_the_ranking(monkeypatch, c
     assert "says nothing about those stages either way" in out
     # And nothing is recommended off one of those figures.
     assert "?q=" not in out
+
+
+def test_a_crossed_stage_prints_no_density_at_all(monkeypatch, capsys):
+    """The row count was read off a different tree, so it is not the
+    denominator of anything. Printing the ratio anyway had the section text
+    contradicting its own stages one line down."""
+    out = _run_trace(
+        monkeypatch,
+        capsys,
+        ["trainspotting", "trace", "olmo-3-7b-instruct", "I am ChatGPT, by OpenAI"],
+        {
+            "allenai/Dolci-Instruct-SFT": (3, False),
+            "allenai/Dolci-Instruct-DPO": (1, False),
+            "allenai/Dolci-Instruct-RL": (0, False),
+        },
+        revisions=("aaaaaaa", "bbbbbbb"),
+    )
+    assert "no density" in out
+    assert "/M" not in out
+    assert "matches in" not in out
 
 
 def test_a_crossed_stage_cannot_win_the_recommendation(monkeypatch, capsys):
