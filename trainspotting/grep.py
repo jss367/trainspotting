@@ -267,7 +267,15 @@ def _pair_exprs(typ: str) -> list[tuple[str, str, tuple[str, ...]]]:
         for f in fields
     )
     same = f"list_transform(list_zip({c}, {r}), z -> ({same_turn}))"
-    b = f"coalesce(list_position({same}, false), least(len({c}), len({r})) + 1)"
+    # Capped so the last turn of each list is never swallowed by the prefix. With
+    # two identical completions `list_position` finds no disagreement, the
+    # coalesce lands one past the end, both tails come back empty and the answer
+    # is filed as prompt history — so a pair reports `chosen 0, rejected 0` for a
+    # pattern that is in both candidates. `search` caps at `len - 1` per side for
+    # this reason: a pair's last turn is its candidate answer by definition,
+    # however far the two lists agree.
+    b = (f"least(coalesce(list_position({same}, false), least(len({c}), len({r})) + 1), "
+         f"len({c}), len({r}))")
 
     def tail(col):
         return f"list_slice({col}, {b}, len({col}))"
@@ -325,6 +333,14 @@ def _message_exprs(col: str, typ: str) -> list[tuple[str, str, tuple[str, ...]]]
     q = _ident(col)
     roles = ", ".join(_lit(r) for r in RESPONSE_ROLES)
     out = []
+    # An RL row's `source_prompt` is the conversation the policy is given, whole.
+    # An assistant turn inside it is history the model reads, not anything it was
+    # scored for emitting, so the role split does not apply here: splitting it
+    # made a phrase in that history produce-side evidence and could rank RLVR as
+    # where the model learned to say it. `search` puts those turns on the prompt
+    # side for the same reason.
+    if col == "source_prompt" and "content" in typ:
+        return [("prompt", f"list_transform({q}, m -> m.content)", ("content",))]
     if "content" in typ:
         emitted = f"lower(coalesce(m.role, '')) IN ({roles})"
         both = ("content", "role")

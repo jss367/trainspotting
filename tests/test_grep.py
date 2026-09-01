@@ -1155,3 +1155,45 @@ def test_a_tool_call_in_shared_history_is_not_either_completion(con, tmp_path):
     exprs, _, _ = grep.text_fields(schema)
     r = grep.scan(con, grep.read_parquet_sql([str(path)]), exprs, None, "ChatGPT")
     assert r["by_group"]["chosen"] == 0 and r["by_group"]["rejected"] == 0
+
+
+# --- resumed after the cap --------------------------------------------------
+
+
+def test_identical_completions_still_have_a_candidate_answer(con, tmp_path):
+    """Two identical completions agree on every turn, so `list_position` finds no
+    disagreement and the branch lands past the end — both tails empty, the answer
+    filed as prompt history, and the pair reporting `chosen 0, rejected 0` for a
+    pattern that is in both candidates. A pair's last turn is its candidate
+    answer however far the lists agree, which is where `search` caps too."""
+    path = tmp_path / "identical.parquet"
+    turns = ("{'role': 'user', 'content': 'q'},"
+             "{'role': 'assistant', 'content': 'I am ChatGPT'}")
+    con.execute(
+        f"COPY (SELECT [{turns}] AS chosen, [{turns}] AS rejected)"
+        f" TO '{path}' (FORMAT parquet)"
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    r = grep.scan(con, grep.read_parquet_sql([str(path)]), exprs, None, "ChatGPT")
+    assert r["matched"] == 1
+    assert r["by_group"]["chosen"] == 1 and r["by_group"]["rejected"] == 1
+
+
+def test_a_branching_pair_is_unaffected_by_the_cap(con, multiturn_pair):
+    """The cap must not move a branch that the texts already settled."""
+    schema = grep.schema(con, str(multiturn_pair))
+    exprs, _, _ = grep.text_fields(schema)
+    r = grep.scan(con, grep.read_parquet_sql([str(multiturn_pair)]), exprs, None, "ChatGPT")
+    assert r["by_group"] == {"prompt": 1, "chosen": 0, "rejected": 0}
+
+
+def test_an_rl_source_prompt_is_prompt_throughout():
+    """The whole `source_prompt` conversation is what the policy is given. An
+    assistant turn inside it is history the model reads, not text it was scored
+    for emitting, so splitting it by role made that history produce-side evidence
+    and could rank RLVR as where the model learned to say something."""
+    typ = 'STRUCT("content" VARCHAR, "role" VARCHAR)[]'
+    exprs, _, _ = grep.text_fields({"source_prompt": typ})
+    assert list(exprs) == ["prompt"]
+    assert "response" not in exprs

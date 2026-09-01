@@ -1412,3 +1412,53 @@ def test_the_read_rate_excludes_rejected_and_rollout():
     trace = influence.stage_trace(r)
     assert trace["rate"] == 0.1              # every matched row
     assert trace["read_rate"] == 0.001       # the one the model reads
+
+
+# --- the row basis names sources on the rows it ranked ----------------------
+
+
+def _srcrun(stage, hits, rows, groups, by_source, rows_by_source, by_source_group):
+    return {"stage": stage, "matched": hits, "total_rows": rows, "by_group": groups,
+            "fields": list(groups), "available_fields": list(groups),
+            "by_source": by_source, "rows_by_source": rows_by_source,
+            "by_source_group": by_source_group, "partial": False,
+            "unsearched_columns": [], "pattern": "x", "regex": False,
+            "case_sensitive": False, "dataset": "d", "examples": []}
+
+
+SPREAD_READ_BUNCHED_REJECTED = _srcrun(
+    "dpo", 100, 100_000, {"prompt": 10, "chosen": 0, "rejected": 90},
+    {"bunched": 90, "spread_a": 5, "spread_b": 5},
+    {"bunched": 1_000, "spread_a": 49_500, "spread_b": 49_500},
+    {"bunched": {"prompt": 0, "chosen": 0, "rejected": 90},
+     "spread_a": {"prompt": 5, "chosen": 0, "rejected": 0},
+     "spread_b": {"prompt": 5, "chosen": 0, "rejected": 0}},
+)
+
+
+def test_a_rejected_only_source_is_not_named_as_the_concentration():
+    """Readable hits spread, 90 rejected-only hits bunched in one small source.
+    The stage ranks on readable rows, so the concentration has to be selected on
+    them too — on total hits, `bunched` clears the share test and is reported as
+    where the string concentrates, having supplied none of the rows ranked."""
+    t = influence.compare([SPREAD_READ_BUNCHED_REJECTED], THINK)
+    assert t["basis"] == "rows"
+    assert t["best"]["conc_side"] == "read"
+    assert t["best"]["concentration"] is None
+    assert t["best"]["concentration_all"]["name"] == "bunched"
+
+
+def test_the_largest_contributor_is_named_per_side_too():
+    """The fallback line calls a source "the largest contributor". Picked by
+    total hits it named `bunched` and then printed its readable numbers, which
+    are zero."""
+    t = influence.compare([SPREAD_READ_BUNCHED_REJECTED], THINK)
+    line = next(l for l in influence.render(t, "olmo-3-7b-think") if "contributor" in l)
+    assert "spread_a" in line and "bunched" not in line
+
+
+def test_every_side_has_a_full_key_triple():
+    """`SIDE_KEYS` is what stops a side reading another side's numbers."""
+    for side, (hk, rk, lk) in influence.SIDE_KEYS.items():
+        assert hk and rk and lk, side
+    assert set(influence.SIDE_KEYS) == {"all", "read", "produced"}

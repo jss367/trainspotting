@@ -166,6 +166,14 @@ def _sources(result) -> list[dict]:
     stage_rate = (result.get("matched", 0) / rows) if rows else 0
     bounds = produced(result)
     stage_produced_rate_hi = (bounds[1] / rows) if (bounds and rows) else 0
+    # The stage's own readable rate, so a source's `read_lift` compares against
+    # the measurement the row basis ranks by. Against the top of the interval,
+    # like the produce-side lift, so a lift is never inflated by a floor.
+    read_stage = _readable_bounds(
+        dict(result.get("by_group") or {}), set(result.get("fields") or []),
+        result.get("matched", 0),
+    )
+    stage_read = (read_stage[1] / rows) if (read_stage and rows) else 0
     fields = set(result.get("fields") or [])
     out = []
     for name, hits in (result.get("by_source") or {}).items():
@@ -203,6 +211,10 @@ def _sources(result) -> list[dict]:
             "read_hits_hi": r_bounds[1] if r_bounds else None,
             "read_rate": (r_bounds[0] / n) if (r_bounds and n) else None,
             "read_rate_hi": (r_bounds[1] / n) if (r_bounds and n) else None,
+            # Against the stage's own readable rate, so a source is compared on
+            # the measurement the row basis ranks by rather than on total hits.
+            "read_lift": ((r_bounds[0] / n) / stage_read
+                          if (r_bounds and n and stage_read) else None),
             "produced_rate_hi": (p_hi / n) if (p_hi is not None and n) else None,
             # The source's floor over the stage's ceiling, which is the lift the
             # counts guarantee. Dividing two floors proves nothing: a source
@@ -223,6 +235,19 @@ MIN_SHARE = 0.1
 MIN_LIFT = 2.0
 
 
+# The per-source fields each basis reads. Three sides rather than "produced and
+# everything else": the row basis ranks on `read_rate`, so a concentration
+# selected on `hits` names a source on a different measurement from the one the
+# ranking used — a source whose rows are nearly all rejected or rollout cleared
+# the share test and was reported as where the string concentrates, having
+# supplied none of the rows that decided the order.
+SIDE_KEYS = {
+    "all": ("hits", "rate", "lift"),
+    "read": ("read_hits", "read_rate", "read_lift"),
+    "produced": ("produced_hits", "produced_rate", "produced_lift"),
+}
+
+
 def concentration(sources: list[dict], total: int, side: str = "all") -> dict | None:
     """The source the matches actually bunch in, or None if they are spread.
 
@@ -241,8 +266,7 @@ def concentration(sources: list[dict], total: int, side: str = "all") -> dict | 
     name the ten-row source, while the other source may hold 180 distinct rows
     and leave its real share at 10/190.
     """
-    hk, rk, lk = ("hits", "rate", "lift") if side == "all" else (
-        "produced_hits", "produced_rate", "produced_lift")
+    hk, rk, lk = SIDE_KEYS[side]
     floor = max(2, MIN_SHARE * total)
     worth = [s for s in sources if (s[hk] or 0) >= floor and s[lk]]
     if not worth:
@@ -333,6 +357,11 @@ def stage_trace(result) -> dict:
         # only guaranteed against the top of it.
         "concentration_produced": concentration(
             sources, bounds[1] if bounds else 0, side="produced"),
+        # The row basis reads this one. Its total is the top of the readable
+        # interval for the same reason the produce side uses the top of its own:
+        # a share is only guaranteed against the larger denominator.
+        "concentration_read": concentration(
+            sources, read_bounds[1] if read_bounds else 0, side="read"),
         "concentration": concentration(sources, hits),
         "conc_side": "all",
         "revision": result.get("revision"),
@@ -445,7 +474,8 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
             "produced": None, "produced_rate": None,
             "produced_rate_hi": None,
             "sources": [], "concentration": None, "concentration_all": None,
-            "concentration_produced": None, "conc_side": "all",
+            "concentration_produced": None, "concentration_read": None,
+            "conc_side": "all",
             "revision": None, "partial": False,
             "unsearched_columns": [], "rank_block": None,
         })
@@ -494,9 +524,17 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
         # dropping the concentration line entirely would be worse than the
         # weaker all-matches reading.
         by_side = any(s["produced_hits"] is not None for s in r["sources"])
-        r["conc_side"] = "produced" if (basis == "produced" and r["produced"] and by_side) else "all"
-        r["concentration"] = (r["concentration_produced"] if r["conc_side"] == "produced"
-                              else r["concentration_all"])
+        read_side = any(s.get("read_hits") is not None for s in r["sources"])
+        if basis == "produced" and r["produced"] and by_side:
+            r["conc_side"] = "produced"
+        elif basis == "rows" and r.get("read") and read_side:
+            # The row basis ranks on `read_rate`, so the source it names has to
+            # be selected and quoted on the readable rows too. Falling through to
+            # `all` here let a rejected-only source be reported as the origin.
+            r["conc_side"] = "read"
+        else:
+            r["conc_side"] = "all"
+        r["concentration"] = r[f"concentration_{r['conc_side']}"]
     rankable = [r for r in hitting if not r["rank_block"]]
     ranked = sorted(rankable, key=lambda r: r[key] or 0, reverse=True)
     # The basis is chosen over every stage that matched, so a stage excluded
@@ -648,8 +686,12 @@ def _largest(sources: list[dict], side: str) -> tuple[dict, bool]:
     it is the best available — but it is only called the largest when its floor
     clears every other source's ceiling.
     """
-    lo = "hits" if side != "produced" else "produced_hits"
-    hi = "hits" if side != "produced" else "produced_hits_hi"
+    # Per side, like everything else that reports on one. Picking by total hits
+    # under the row basis named a source holding 90 rejected rows and no readable
+    # ones as "the largest contributor", on a line whose own numbers then read 0.
+    lo, _, _ = SIDE_KEYS[side]
+    hi = {"all": "hits", "read": "read_hits_hi",
+          "produced": "produced_hits_hi"}[side]
     top = max(sources, key=lambda s: s[lo] or 0)
     beaten = all((s[hi] or 0) <= (top[lo] or 0) for s in sources if s is not top)
     return top, beaten
@@ -658,6 +700,8 @@ def _largest(sources: list[dict], side: str) -> tuple[dict, bool]:
 def _source_count(src: dict, side: str) -> str:
     """A source's matching rows, on whichever basis is being reported. Both are
     unions of overlapping groups, so both can be an interval."""
+    if side == "all":
+        return f"{src['hits']:,}"
     lo, hi = ((src["produced_hits"], src["produced_hits_hi"]) if side == "produced"
               else (src.get("read_hits"), src.get("read_hits_hi")))
     if lo is None:
@@ -668,7 +712,7 @@ def _source_count(src: dict, side: str) -> str:
 def _source_rate(src: dict, side: str) -> str:
     if side == "produced":
         return _span(src["produced_rate"], src["produced_rate_hi"])
-    if src.get("read_rate") is None:
+    if side == "all" or src.get("read_rate") is None:
         return _pct(src["rate"])
     return _span(src["read_rate"], src["read_rate_hi"])
 
@@ -697,7 +741,8 @@ def _stage_lines(r: dict, hoisted: bool = False) -> list[str]:
         side = r["conc_side"]
         hk, rk, lk = (("hits", "rate", "lift") if side == "all"
                       else ("produced_hits", "produced_rate", "produced_lift"))
-        what = "produce side" if side == "produced" else "source"
+        what = ("produce side" if side == "produced"
+                else "readable" if side == "read" else "source")
         # The produce-side lift divides a floor by a ceiling, so it is the lift
         # the counts guarantee rather than the lift itself, except where the
         # interval closed.
