@@ -144,7 +144,14 @@ for docs in out.glob("*.docs.json"):
 # any of them moving fails this until someone re-reads the paragraph and pastes
 # in the new one. That is the whole point of it: the fingerprint records that a
 # person checked the prose against this data, not that a file was regenerated.
-for study in out.glob("case-study.*.json"):
+#
+# Only the studies this run copied. A study is retired by deleting its results
+# file and its README section, and the export does not delete what it no longer
+# writes — so globbing docs/data/ would hold the retired copy's figures against
+# a README that correctly no longer mentions them, and fail every export until
+# someone thought to delete a file the manifest already ignores.
+for name in sorted(n for n in copied if n.startswith("case-study.")):
+    study = out / name
     d = json.loads(study.read_text())
     fp = casestudy.fingerprint(d)
     marker = f"<!-- figures: {study.stem} {fp} -->"
