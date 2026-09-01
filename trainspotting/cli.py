@@ -1349,10 +1349,15 @@ def main():
     # filename meant `classify WildChat-1M` produced a file the site — which
     # indexes the registry key — never asks for, and the run silently didn't
     # exist.
-    try:
-        args.target = registry.resolve(args.target)["target"]
-    except KeyError as e:
-        sys.exit(e.args[0])
+    # Only the commands that take one: `find`, `lookup` and `case-study` are
+    # about corpora rather than a registered target, and canonicalizing an
+    # argument they never parsed raised AttributeError before their handler ever
+    # ran. `find` has been unusable on main since this canonicalization landed.
+    if getattr(args, "target", None) is not None:
+        try:
+            args.target = registry.resolve(args.target)["target"]
+        except KeyError as e:
+            sys.exit(e.args[0])
     args.fn(args)
 
 
