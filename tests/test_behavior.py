@@ -183,22 +183,39 @@ def test_trace_escapes_the_queries_it_echoes(monkeypatch, capsys):
     assert "x1b" in out
 
 
-def _live_search_count(dataset, phrase, **kw):
+def _live_search_count(dataset, phrase, split="train"):
     """`hf.search_count`, skipping while the server is still building the index.
 
-    `search_count` already waits that 500 out for several minutes, which covers
-    a warm-ish split and not a cold multi-gigabyte one. A run that hits the cold
-    case has learned nothing about the contract under test, so it skips rather
-    than fails — the alternative is a canary that reports upstream breakage
-    every time the index has been evicted.
+    A cold split answers 500 "the dataset index is loading" until the server has
+    built a full-text index over it, which on a multi-gigabyte mix outlasts the
+    several minutes `search_count` will properly spend waiting. A run that hits
+    that has learned nothing about the contract under test, so it skips: the
+    alternative is a canary reporting upstream breakage every time the index has
+    been evicted.
+
+    The private `_get` is deliberate, for its retry budget: two attempts, so a
+    cold split costs seconds instead of `search_count`'s full patience being
+    spent discovering the same thing. A real run wants that patience; a canary
+    does not. Once the pre-flight answers, the index is warm and the
+    `search_count` call below is what is actually under test.
     """
     try:
-        return hf.search_count(dataset, phrase, **kw)
+        hf._get(
+            "search",
+            server_error_retries=2,
+            dataset=dataset,
+            config="default",
+            split=split,
+            query=phrase,
+            offset=0,
+            length=1,
+        )
     except requests.HTTPError as e:
         body = e.response.text if e.response is not None else ""
         if "index is loading" in body:
             pytest.skip(f"{dataset}: the split's full-text index is still building")
         raise
+    return hf.search_count(dataset, phrase, split=split)
 
 
 @pytest.mark.live
