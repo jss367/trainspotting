@@ -56,6 +56,14 @@ eq(C.langCode("  russian "), "ru", "the join ignores case and surrounding space"
 // unmapped it would land in the non-English pile and inflate that share.
 eq(C.langCode("Nolang"), "undetermined", "Nolang is the column's undetermined");
 eq(C.langCode("undetermined"), "undetermined", "our own label round-trips");
+// A column spells a language however it likes. Where that is a variant of a
+// name the code table already has, it must join — unaliased, WildChat's 943
+// Bokmal/Nynorsk/Slovene rows are reported as beyond the detector's reach when
+// the detector has a code for every one of them.
+eq(C.langCode("Bokmal"), "nb", "Bokmal is Norwegian Bokmal");
+eq(C.langCode("Nynorsk"), "nn", "Nynorsk is Norwegian Nynorsk");
+eq(C.langCode("Slovene"), "sl", "Slovene is Slovenian");
+eq(C.langCode("Norwegian"), "no", "the plain name still wins over the variant");
 // py3langid emits 97 codes; WildChat's column has values outside them. These
 // must not silently become some other language.
 eq(C.langCode("Maori"), null, "a label with no ISO code in the table does not join");
@@ -112,6 +120,17 @@ eq(C.columnLangShares(null, 100).english, 0, "a stage with no column reports no 
 
   ok(col.english > 0, "WildChat's own column still has an English share to compare against");
   near(col.covered, 1.0, 1e-6, "the column's values cover every row the stats API counted");
+  // Anything left unjoined is claimed on the page as a label py3langid cannot
+  // emit. That has to be true of every one of them, or the note is wrong and a
+  // real share is being hidden behind it — so the list is enumerated, and a new
+  // column value has to be classified deliberately rather than land here by
+  // default. py3langid has no code for any of these.
+  const CODELESS = new Set(["Maori", "Sotho", "Yoruba", "Tswana", "Somali",
+                            "Tsonga", "Shona", "Ganda"]);
+  for (const [value] of col.unmatched)
+    ok(CODELESS.has(value), `unjoined column value "${value}" is genuinely outside py3langid`);
+  for (const v of ["Bokmal", "Nynorsk", "Slovene"])
+    ok(!col.unmatched.some(([u]) => u === v), `${v} joined rather than being written off`);
   // Not a test that the two agree — they measure different text over different
   // rows, and the card says so. A test that the sampled reading is precise
   // enough for the comparison to mean anything: if the interval ever grew wide

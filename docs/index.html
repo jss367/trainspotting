@@ -1544,13 +1544,30 @@ const UNDET = "undetermined";
 // A dataset that ships its own `language` column spells the languages out in
 // English; the detector emits ISO codes. Invert the shared name table so a
 // language gets one row carrying both readings instead of two rows in two
-// cards. `Nolang` is WildChat's own marker for a conversation its detector
-// would not call, which is what `undetermined` means here.
+// cards.
+//
+// A column names a language whatever it likes, and an exact-name inversion
+// misses the same language under another spelling — WildChat writes Bokmal,
+// Nynorsk and Slovene where the code table says Norwegian Bokmal, Norwegian
+// Nynorsk and Slovenian. Unaliased, those 943 rows get reported as labels the
+// detector cannot emit, and a sample that did draw one would show a zero tick
+// next to a share the dataset actually recorded. `Nolang` is WildChat's own
+// marker for a conversation its detector would not call, which is what
+// `undetermined` means here.
+const LANG_ALIASES = {
+  nolang: UNDET,
+  bokmal: "nb",
+  nynorsk: "nn",
+  slovene: "sl",
+};
 let LANG_CODES = null;
 function langCode(value){
   if (!LANG_CODES){
     LANG_CODES = new Map(Object.entries(LANG_NAMES).map(([c, n]) => [n.toLowerCase(), c]));
-    LANG_CODES.set("nolang", UNDET);
+    // Aliases lose to a real name: a column value that already matches the code
+    // table is not a variant spelling of something else.
+    for (const [alias, code] of Object.entries(LANG_ALIASES))
+      if (!LANG_CODES.has(alias)) LANG_CODES.set(alias, code);
   }
   return LANG_CODES.get(String(value).trim().toLowerCase()) || null;
 }
