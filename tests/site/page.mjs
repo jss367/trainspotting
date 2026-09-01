@@ -63,7 +63,18 @@ export function loadPage(){
                           createElement: el, body: el() };
   globalThis.location = { hash: "" };
   globalThis.fetch = async () => ({ ok: false });
-  process.on("unhandledRejection", () => {});
+  // Swallow the boot's own fetch failures and nothing else.
+  //
+  // The page boots by fetching its data files; nothing serves them here, so
+  // `fetchJSON` throws `new Error(<filename>)` and that rejection is expected.
+  // A blanket no-op listener also swallows every *other* unhandled rejection
+  // for the rest of the process, though — which under Node's default
+  // `--unhandled-rejections=throw` is the one thing that would have failed a
+  // suite that broke asynchronously. A suite going quietly green is worse than
+  // one that crashes, so anything that is not a data filename is rethrown and
+  // takes the process down as it would have anyway.
+  const bootFailure = e => e instanceof Error && /^[\w.-]+\.json$/.test(e.message);
+  process.on("unhandledRejection", e => { if (!bootFailure(e)) throw e; });
   const missing = [];
   eval(js + `
 ;globalThis.__PAGE = {

@@ -13,11 +13,23 @@ on:
     branches: [main]
   pull_request:
 
+# This job reads the tree, runs tests, and reports. It writes nothing back, so
+# the token it is handed should not be able to. The default is write access to
+# most scopes, and `pip install -e .` runs setup code from the tree — on a fork's
+# pull request that is somebody else's tree, next to a credential the checkout
+# leaves in `.git/config` by default.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Nothing here pushes, so the token does not need to outlive the
+          # checkout step or sit in the local git config while installs run.
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:

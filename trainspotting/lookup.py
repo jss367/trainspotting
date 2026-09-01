@@ -284,7 +284,15 @@ def normalize(doc: dict) -> dict:
     # subject's site and be tallied as somebody else's — which is the study's
     # headline number. `hostname` also lowercases, which the fold below then
     # only has to strip `www.` from.
-    domain = deep.get("source_domain") or _hostname(url)
+    # The recorded domain first, the URL's host as the fallback — but only if the
+    # recorded one is usable. A plain `or` picked a truthy non-string
+    # `source_domain` (an id, a nested object) and the type check below then
+    # turned it into None, throwing away a hostname the URL could still have
+    # supplied. That is a document dropped from `domain_shares`, which is what
+    # the study's headline share is computed over, for a field that was never
+    # the better answer anyway.
+    recorded = deep.get("source_domain")
+    domain = recorded if isinstance(recorded, str) and recorded else _hostname(url)
     domain = domain.lower().removeprefix("www.") if isinstance(domain, str) else None
 
     # How much of the page survived line-level filtering. This is the number
