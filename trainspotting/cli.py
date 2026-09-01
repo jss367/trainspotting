@@ -1383,9 +1383,9 @@ def cmd_trace(args):
     (full-text search over the whole split, nothing sampled and nothing
     downloaded), and ranks the stages by how densely the behavior appears.
 
-    This is provenance by near-verbatim match, so it only answers when the behavior
-    left a distinctive string. When it finds nothing — the phrases are generic,
-    or the behavior is a disposition with no signature words — the fix is
+    This is provenance by near-verbatim match, so it only answers when the
+    behavior left a distinctive string. When it finds nothing — the phrases are
+    generic, or the behavior is a disposition with no signature words — the fix is
     `trainspotting ask`, which judges the meaning of sampled examples instead of
     matching their text. The closing line says so.
 
@@ -1401,9 +1401,10 @@ def cmd_trace(args):
     queries = behavior.distinctive_ngrams(text, max_queries=args.max_queries)
     if not queries:
         sys.exit(
-            "no distinctive phrase to search on — the text has no window anchored"
-            " on a name, number, or rare word.\nTry `trainspotting ask` to judge"
-            " what sampled examples teach instead of matching their text."
+            "no distinctive phrase to search on — no window of this text is"
+            " anchored on a number, a name-shaped token, or a mid-sentence"
+            " capital.\nTry `trainspotting ask` to judge what sampled examples"
+            " teach instead of matching their text."
         )
     print("searching for:", file=sys.stderr)
     for q in queries:
