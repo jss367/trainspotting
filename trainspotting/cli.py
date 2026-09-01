@@ -1272,6 +1272,13 @@ def _budget_row(s: dict) -> str:
     )
 
 
+# Exit code for "there is nothing here to add up yet" — no ask run, or only
+# unusable ones. Distinct from 1 because an uncaught exception also exits 1, and
+# a caller that tolerates a missing measurement must not thereby tolerate a
+# traceback. `scripts/human_life_value.sh` is that caller.
+NO_MEASUREMENT = 3
+
+
 def cmd_budget(args):
     """Roll an `ask` question up into a share of the training budget.
 
@@ -1297,11 +1304,13 @@ def cmd_budget(args):
             for s in unusable:
                 for note in s.get("notes", []):
                     print(f"  {s['stage']}: {note}", file=sys.stderr)
-            sys.exit(1)
-        sys.exit(
+            sys.exit(NO_MEASUREMENT)
+        print(
             f"no ask run for {args.target} with slug {args.slug!r}"
-            f" — run `trainspotting ask {args.target} \"...\" --slug {args.slug}`"
+            f" — run `trainspotting ask {args.target} \"...\" --slug {args.slug}`",
+            file=sys.stderr,
         )
+        sys.exit(NO_MEASUREMENT)
     print(f"# Training budget — {args.target}\n")
     mixed = _warn_mixed_questions(est)
     if not mixed:
@@ -1607,7 +1616,7 @@ def _report_questions(target_name: str, target: dict) -> None:
         if unasked:
             corpora = [x["stage"] for x in unasked if x["family"] == "pretrain"]
             how = (
-                f" --pretrain-only` to close the gap" if corpora and len(corpora) == len(unasked)
+                " --pretrain-only` to close the gap" if corpora and len(corpora) == len(unasked)
                 else "` for the stages below"
             )
             print(

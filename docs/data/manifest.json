@@ -28,6 +28,7 @@
   "olmo-3-7b-instruct.sft.languages.json",
   "olmo-3-7b-instruct.sources.json",
   "olmo-3-7b-think.budget-caring-about-human-lives.json",
+  "olmo-3-7b-think.budget-caring-about-human-lives.json",
   "olmo-3-7b-think.dpo.ask-caring-about-human-lives.json",
   "olmo-3-7b-think.dpo.context.json",
   "olmo-3-7b-think.dpo.labels.json",

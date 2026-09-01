@@ -31,6 +31,15 @@ set -euo pipefail
 
 MODEL="${1:-olmo-3-7b-think}"
 PHASE="${2:-all}"
+# Validated, because every phase below is guarded by a string comparison: a typo
+# matches none of them, the script runs nothing, and the closing "done" reports
+# success. A battery that silently did nothing looks exactly like one that had
+# nothing to do.
+case "$PHASE" in
+  all|pretrain|subquestions|stance|budget) ;;
+  *) printf 'unknown phase: %s (want: all, pretrain, subquestions, stance, budget)\n' "$PHASE" >&2
+     exit 2 ;;
+esac
 TS=(python3 -m trainspotting.cli)
 
 # The umbrella question, worded exactly as the committed post-training runs
@@ -90,8 +99,19 @@ fi
 if [[ "$PHASE" == all || "$PHASE" == budget ]]; then
   step "rolling every stage up into one token budget"
   "${TS[@]}" budget "$MODEL" "$UMBRELLA_SLUG" --json
+  # A sub-question with no ask run yet is expected — the battery is meant to be
+  # runnable phase by phase — and `budget` exits 3 for exactly that. Anything
+  # else is a real failure and has to stop the run. The dedicated code matters:
+  # an uncaught Python exception exits 1, so tolerating 1 would have swallowed a
+  # traceback and still printed "done".
+  NO_MEASUREMENT=3
   for entry in "${SUBQUESTIONS[@]}"; do
-    "${TS[@]}" budget "$MODEL" "${entry%%|*}" --json || true
+    status=0
+    "${TS[@]}" budget "$MODEL" "${entry%%|*}" --json || status=$?
+    if [[ $status -ne 0 && $status -ne $NO_MEASUREMENT ]]; then
+      printf 'budget failed for %s (exit %d)\n' "${entry%%|*}" "$status" >&2
+      exit "$status"
+    fi
   done
 fi
 

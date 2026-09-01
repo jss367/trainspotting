@@ -1140,7 +1140,16 @@ async function budgetCard(main, model, slug){
     notes.push(`Stages under this slug were scored with different ${mixedWhat(est)}, `
       + `so they do not add up to one measurement${detail}.`);
   }
-  if (partial){
+  // Declared out here because the unsized-only note below reads it too. Left
+  // inside the `if` it was block-scoped, and `unsized && !missing.length` threw
+  // a ReferenceError the moment any stage was unsized — taking the whole card
+  // down with it, since budgetCard throws before it appends anything.
+  const missing = est.stages.filter(st => !st.measured);
+  // Keyed on `missing`, not on `partial`. `partial` is also true when every
+  // stage was measured and one could not be sized, and this note would then
+  // announce that nothing at all was unmeasured: ", so 0 of 6.1T fit tokens
+  // above — 0.00% of the pipeline — are unmeasured".
+  if (missing.length){
     // The single most misleading thing this page could do is show a pipeline
     // total that quietly leaves out 5.93T tokens of pretraining.
     //
@@ -1148,7 +1157,6 @@ async function budgetCard(main, model, slug){
     // facts, and the row above already prints `unusable` for the second. Saying
     // "never asked" about those too contradicts the same card two lines up, and
     // tells someone to run a question they have already run.
-    const missing = est.stages.filter(st => !st.measured);
     const unasked = missing.filter(st => !st.unusable);
     const unusable = missing.filter(st => st.unusable);
     const missingTokens = missing.reduce((a, st) => a + (st.size_tokens || 0), 0);

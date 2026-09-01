@@ -426,6 +426,11 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
     # 13.7%. It also lets a match that never entered the estimate widen it.
     k_w = sum(bool(r["match"]) for r, _ in weighable)
     n_w = len(weighable)
+    # Named `rate_ci` and not `count_ci`: it is the interval on the rate this
+    # stage reports, over the rows that produced it. `count_rate` beside it is
+    # the share of *everything* judged, which is a different denominator — and
+    # calling this one "count" while `_apply_rate` pairs it with
+    # `weighed_count_rate` invited exactly that confusion.
     lo, hi = wilson(k_w, n_w)
 
     out.update(
@@ -440,7 +445,7 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
             "n": n,
             "matched": k,
             "count_rate": count_rate,
-            "count_ci": [lo, hi],
+            "rate_ci": [lo, hi],
             "weighed": n_w,
             "weighed_matched": k_w,
             # The rate the interval is anchored on: matches among the rows that
@@ -566,7 +571,7 @@ def _pretrain_stage(target_name: str, stage: dict, slug: str) -> dict:
             "n": n,
             "matched": k,
             "count_rate": count_rate,
-            "count_ci": [lo, hi],
+            "rate_ci": [lo, hi],
             "weighed": n,
             # Shards are drawn with probability proportional to size and one
             # document is taken from each, so every sampled document already
@@ -652,7 +657,7 @@ def _apply_rate(out: dict) -> None:
     # subset for a post-training stage, the document count for a corpus.
     base = out.get("weighed_count_rate", out["count_rate"])
     ratio = out["rate"] / base if base else 1.0
-    lo, hi = out["count_ci"]
+    lo, hi = out["rate_ci"]
     # Clamped to the stage. A handful of matching examples much longer than the
     # rest makes `ratio` large, and a rescaled Wilson endpoint can then run past
     # the stage's whole fit-token count — a bound saying more than 100% of the

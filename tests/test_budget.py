@@ -66,7 +66,7 @@ def test_the_token_interval_is_the_count_interval_rescaled_by_the_length_ratio()
         "matched": 50,
         "n": 100,
         "count_rate": 0.5,
-        "count_ci": [0.4, 0.6],
+        "rate_ci": [0.4, 0.6],
         "rate": 0.25,  # matching examples are half the average length
         "size_tokens": 1_000,
         "notes": [],
@@ -86,7 +86,7 @@ def test_a_zero_rate_keeps_the_upper_end_of_its_interval():
         "matched": 0,
         "n": 300,
         "count_rate": 0.0,
-        "count_ci": [0.0, 0.0126],
+        "rate_ci": [0.0, 0.0126],
         "rate": 0.0,
         "size_tokens": 1_000_000,
         "notes": [],
@@ -102,7 +102,7 @@ def test_weighing_by_length_on_a_handful_of_matches_says_so():
         "matched": 3,
         "n": 300,
         "count_rate": 0.01,
-        "count_ci": [0.003, 0.029],
+        "rate_ci": [0.003, 0.029],
         "rate": 0.001,
         "size_tokens": 1_000,
         "notes": [],
@@ -235,7 +235,7 @@ def test_a_corpus_rate_is_not_weighed_by_length_a_second_time():
         "matched": 10,
         "n": 100,
         "count_rate": 0.10,
-        "count_ci": [0.055, 0.175],
+        "rate_ci": [0.055, 0.175],
         # The matching documents happen to be ten times the average length.
         "rate": 0.10,
         "char_rate": 0.53,
@@ -286,7 +286,7 @@ def test_the_interval_comes_from_the_rows_the_estimate_used():
         "measured": True,
         "matched": 9, "n": 300, "count_rate": 0.03,
         "weighed": 60, "weighed_matched": 3, "weighed_count_rate": 0.05,
-        "count_ci": list(wilson(3, 60)),
+        "rate_ci": list(wilson(3, 60)),
         "rate": 0.05,
         "size_tokens": 1_000_000,
         "notes": [],
@@ -366,7 +366,7 @@ def test_a_rescaled_bound_cannot_exceed_the_stage():
         "measured": True,
         "matched": 1, "n": 60, "count_rate": 1 / 60,
         "weighed": 60, "weighed_matched": 1, "weighed_count_rate": 1 / 60,
-        "count_ci": [0.003, 0.089],
+        "rate_ci": [0.003, 0.089],
         "rate": 0.60,          # the one match is enormous
         "size_tokens": 1_000,
         "notes": [],
@@ -713,7 +713,9 @@ def test_budget_tells_an_unusable_run_apart_from_a_missing_one(capsys, monkeypat
         ], "totals": {}})
     with pytest.raises(SystemExit) as exc:
         cli.cmd_budget(type("A", (), {"target": "m", "slug": "q", "json": False})())
-    assert exc.value.code == 1
+    # A dedicated code, not 1: an uncaught exception also exits 1, and the
+    # battery script tolerates "nothing to add up" without tolerating a crash.
+    assert exc.value.code == cli.NO_MEASUREMENT
     err = capsys.readouterr().err
     assert "is unusable" in err
     assert "the ask run labeled nothing" in err
