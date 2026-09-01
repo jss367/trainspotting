@@ -52,6 +52,20 @@ def test_a_digit_behind_punctuation_in_a_token_still_anchors():
     assert behavior.distinctive_ngrams("iso-9001 compliance was claimed")
 
 
+def test_an_identifier_opening_on_a_stopword_letter_still_anchors():
+    """`t`, `s` and `i` are on the stopword list for the contractions they end,
+    so an identifier whose first segment is one of them was rejected before its
+    digits were ever looked at. A digit is a claim about the whole token, so it
+    is read first."""
+    assert behavior.distinctive_ngrams("the robot is T-800 and protects people")
+    assert behavior.distinctive_ngrams("the index tracks S&P500 closely")
+    assert behavior.distinctive_ngrams("the report cites I/O-2024 standards")
+    # The contractions the list exists for carry neither signal, so they still
+    # reach it and still weigh nothing.
+    assert behavior.distinctive_ngrams("don't do that thing please") == []
+    assert behavior.distinctive_ngrams("it is what it is") == []
+
+
 def test_a_segment_too_short_for_a_window_is_still_a_query():
     """The anchor is what makes a query selective, not its length. A three-word
     minimum threw away exactly the segments that are nothing but anchor: the

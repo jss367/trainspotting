@@ -62,11 +62,11 @@ def _weight(token: str, sentence_initial: bool) -> int:
     """0 for function words, 1 for ordinary content, 2 for an anchor.
 
     An anchor is a token unlikely to appear by chance: it carries a digit
-    ("2021"), carries a capital past its first letter ("ChatGPT", "OpenAI",
-    "AI"), or is capitalized somewhere other than the start of its sentence
-    ("September"). Only the last of those depends on position, and it has to:
-    every sentence capitalizes its opening word, so a leading "Weather" is
-    evidence of nothing.
+    ("2021", "T-800"), carries a capital past its first letter ("ChatGPT",
+    "OpenAI", "AI"), or is capitalized somewhere other than the start of its
+    sentence ("September"). Only the last of those depends on position, and it
+    has to: every sentence capitalizes its opening word, so a leading "Weather"
+    is evidence of nothing.
 
     An interior capital is different, and it is worth its own case rather than
     falling in with the ordinary title-cased opening word. English capitalizes
@@ -79,19 +79,25 @@ def _weight(token: str, sentence_initial: bool) -> int:
     segments = _WORD.findall(token)
     if not segments:
         return 0
-    core = segments[0]
-    if core.lower() in STOPWORDS:
-        return 0
-    # Every word segment of the token, not just the first: punctuation inside a
-    # whitespace-delimited token hides the rest of it, and `version-4217` or
-    # `iso-9001` read as the ordinary word "version" when only the segment
-    # before the hyphen was inspected. The title-case test below stays on the
-    # first segment, because that is the letter the sentence rule capitalized.
+    # Every word segment of the token, and read before the stopword list rather
+    # than after it. Punctuation inside a whitespace-delimited token hides the
+    # rest of it two different ways: `version-4217` and `iso-9001` read as the
+    # ordinary words before their hyphens, and `T-800`, `S&P500` and `I/O-2024`
+    # read as nothing at all, because `t`, `s` and `i` are on the list for the
+    # contractions they end. A digit or an interior capital is a claim about
+    # the whole token, so it settles the weight before a rule about one segment
+    # of it gets a say — and `don't`, `it's` and `I'd` still reach the list,
+    # since none of them carries either signal.
     word = "".join(segments)
     if any(ch.isdigit() for ch in word):
         return 2
     if any(ch.isupper() for ch in word[1:]):
         return 2
+    core = segments[0]
+    if core.lower() in STOPWORDS:
+        return 0
+    # The title-case test stays on the first segment: that is the letter the
+    # sentence-capitalization rule acts on.
     if core[0].isupper() and not sentence_initial:
         return 2
     return 1
