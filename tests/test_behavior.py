@@ -302,13 +302,13 @@ def test_nothing_found_does_not_speak_for_the_unindexed_rows(monkeypatch, capsys
     assert "sft was only partly indexed" in out
 
 
-def test_a_republish_mid_trace_is_reported_rather_than_divided_through(
-    monkeypatch, capsys
-):
+def test_a_republish_mid_trace_takes_the_stage_out_of_the_ranking(monkeypatch, capsys):
     """A trace holds a stage open longer than any sampling path — a cold split
     spends minutes building its index — so the window for `main` to move under
     it is the widest in the tool. The row count is read before the searches, so
-    a republish makes the density a ratio between two datasets."""
+    a republish leaves the two halves of the ratio describing different trees:
+    not a loose estimate but an estimate of nothing, which is why it is reported
+    outside the ranking rather than noted inside it."""
     out = _run_trace(
         monkeypatch,
         capsys,
@@ -320,8 +320,43 @@ def test_a_republish_mid_trace_is_reported_rather_than_divided_through(
         },
         revisions=("aaaaaaa", "bbbbbbb"),
     )
-    assert out.count("was republished while this stage was being searched") == 3
-    assert "aaaaaaa -> bbbbbbb" in out
+    assert out.count("republished mid-search: aaaaaaa -> bbbbbbb") == 3
+    assert "Stages ranked by matches per million rows" not in out
+    # A zero from a crossed stage cannot say the phrases are absent either.
+    assert "says nothing about those stages either way" in out
+    # And nothing is recommended off one of those figures.
+    assert "?q=" not in out
+
+
+def test_a_crossed_stage_cannot_win_the_recommendation(monkeypatch, capsys):
+    """The stage with the largest number is republished, so its density is a
+    ratio between two datasets. Leaving it in the ranking would let it take the
+    headline and the viewer link on the strength of a figure that estimates
+    nothing."""
+    # SFT moves; the other two are stable, so only SFT is crossed.
+    revisions = iter(["aaaaaaa", "bbbbbbb", "ccccccc", "ccccccc", "ccccccc", "ccccccc"])
+    monkeypatch.setattr(hf, "dataset_revision", lambda dataset, *a, **k: next(revisions))
+    monkeypatch.setattr(hf, "num_rows", lambda dataset, *a, **k: 1_000_000)
+    counts = {
+        "allenai/Dolci-Instruct-SFT": (9999, False),
+        "allenai/Dolci-Instruct-DPO": (5, False),
+        "allenai/Dolci-Instruct-RL": (0, False),
+    }
+    monkeypatch.setattr(hf, "search_count", lambda dataset, query, *a, **k: counts[dataset])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["trainspotting", "trace", "olmo-3-7b-instruct", "I am ChatGPT, by OpenAI"],
+    )
+    cli.main()
+    out = capsys.readouterr().out
+
+    heading = out.index("## Not ranked: these splits were republished")
+    assert out.index("## dpo") < heading < out.index("## sft")
+    # DPO's 5 real matches beat SFT's 9999 crossed ones for the recommendation.
+    assert "Dolci-Instruct-DPO/viewer" in out
+    assert "Dolci-Instruct-SFT/viewer" not in out
+    assert "Not compared at all: sft" in out
 
 
 def _live_search_count(dataset, phrase, split="train"):

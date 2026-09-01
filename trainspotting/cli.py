@@ -1466,14 +1466,23 @@ def cmd_trace(args):
             }
         )
 
-    # A partially indexed stage's density is a lower bound over a denominator
-    # that counts rows nobody searched, so it does not belong in the same order
-    # as an exact one: a 36 GB mix with the behavior all through it can print a
-    # smaller number than a small mix with none of it, and `results[0]` would
-    # then name the wrong stage as the place to look. The two groups are
-    # reported separately, ranked within themselves.
-    ranked = sorted((r for r in results if not r["partial"]), key=lambda r: -r["density"])
-    bounded = sorted((r for r in results if r["partial"]), key=lambda r: -r["density"])
+    # Three groups, by what each stage's number is worth rather than by size.
+    #
+    # `ranked` is an exact density over the whole split. `bounded` is a lower
+    # bound: the index stopped at 5 GB, so a 36 GB mix with the behavior all
+    # through it can print a smaller figure than a small mix with none of it,
+    # and ordering the two together would name the wrong stage as the place to
+    # look. `crossed` is worse than either — the dataset was republished
+    # between the row count and the searches, so the ratio's halves describe
+    # different trees and it estimates nothing at all. A bound is at least
+    # directionally true; a crossed figure has no known relation to any real
+    # quantity, so it is reported for what it is and kept out of the ranking
+    # and the recommendation both.
+    by_rank = lambda r: -r["density"]  # noqa: E731
+    crossed = sorted((r for r in results if r["revision_moved_to"]), key=by_rank)
+    rest = [r for r in results if not r["revision_moved_to"]]
+    ranked = sorted((r for r in rest if not r["partial"]), key=by_rank)
+    bounded = sorted((r for r in rest if r["partial"]), key=by_rank)
 
     def show(r):
         print(
@@ -1482,11 +1491,11 @@ def cmd_trace(args):
         )
         if r["revision_moved_to"]:
             print(
-                "  note: the dataset was republished while this stage was being"
-                f" searched ({r['revision'][:7]} -> {r['revision_moved_to'][:7]}),"
-                " so the matches and the row count they are divided by are not"
-                " certainly from the same tree. Re-run it."
+                f"  republished mid-search: {r['revision'][:7]} ->"
+                f" {r['revision_moved_to'][:7]}"
             )
+        if r["partial"] and r["revision_moved_to"]:
+            print("  and only the first 5 GB of the split is indexed")
         for q, c in sorted(r["per_query"].items(), key=lambda kv: -kv[1]):
             # `!r`, like the stderr echo above: a query is a slice of text the
             # user pasted, and an escape sequence survives tokenization (`\x1b`
@@ -1514,7 +1523,22 @@ def cmd_trace(args):
         )
         for r in bounded:
             show(r)
+    if crossed:
+        print("## Not ranked: these splits were republished mid-search\n")
+        print(
+            "The row count below was read before the searches and the dataset"
+            " moved before they finished, so the two halves of the ratio"
+            " describe different trees and it is not an estimate of anything."
+            " The counts are printed because they are what the run saw; the"
+            " density is not, and neither is a place in the ranking. Re-run"
+            " these stages.\n"
+        )
+        for r in crossed:
+            show(r)
 
+    # Only stages whose figure means something. `crossed` is excluded outright:
+    # a number with no known relation to the split cannot recommend where to
+    # read, and a zero from one cannot say the phrases are absent either.
     found = [r for r in ranked + bounded if r["hits"]]
     if not found:
         print(
@@ -1530,6 +1554,14 @@ def cmd_trace(args):
                 + " was only partly indexed, so the phrases could be in the part"
                 " that was never searched."
                 if bounded
+                else ""
+            )
+            + (
+                "\nAnd "
+                + ", ".join(r["stage"] for r in crossed)
+                + " went unmeasured, having been republished mid-search — this"
+                " says nothing about those stages either way."
+                if crossed
                 else ""
             )
         )
@@ -1565,6 +1597,15 @@ def cmd_trace(args):
                 "Worth reading either way: " + ", ".join(others) + " reported a"
                 " lower bound, so the true density there may be higher than"
                 " anything ranked above it."
+            )
+        # A stage left out of the comparison entirely is not a stage with less
+        # of the behavior, and the recommendation would read as if it were.
+        if crossed:
+            print(
+                "Not compared at all: "
+                + ", ".join(r["stage"] for r in crossed)
+                + " was republished mid-search, so it could hold more of this"
+                " than anything above. Re-run those stages before concluding."
             )
 
 

@@ -603,9 +603,13 @@ Three things a `trace` number is not, all printed next to it:
   else, and ranking the two together put the biggest mixes last for being big.
 
 The first search against a cold split can take minutes while the server builds
-the index — the widest window in the tool for `main` to move under a run, so
-each stage's revision is read before and after its searches and a republish is
-reported next to the density it would otherwise have quietly corrupted. When the behavior has no signature string — it is a disposition, or
+the index — the widest window in the tool for `main` to move under a run. Each
+stage's revision is read before its row count and again after its searches, and
+a stage that moved in between is reported outside the ranking, like a partly
+indexed one but for a stronger reason: the two halves of its ratio describe
+different trees, so unlike a lower bound it is not a loose estimate of the
+density but not an estimate of it at all. Its counts are printed, its density is
+not ranked, and it cannot take the viewer link. When the behavior has no signature string — it is a disposition, or
 the training paraphrases it — `trace` finds nothing and says to reach for `ask`,
 which judges what sampled examples *teach* instead of matching their text
 (`"does this example teach the model to identify as ChatGPT?"`). All three
