@@ -1801,7 +1801,10 @@ function caseStudyCards(main, d){
     <p class="sub"><code>${esc(d.probe.query)}</code> in ${esc(probeIndex.label)}:
       ${num(d.probe.occurrences)} occurrence${d.probe.occurrences === 1 ? "" : "s"}
       across ${num(d.probe.documents.length)} document${d.probe.documents.length === 1 ? "" : "s"}.
-      ${esc(d.probe.explain)}</p>`;
+      ${d.probe.exhaustive
+        ? esc(d.probe.explain)
+        : `The index answered with fewer than the whole occurrence list, so these documents are a
+           sample of ${num(d.probe.drawn)} draws rather than every copy the corpus holds.`}</p>`;
   for (const rec of d.probe.documents)
     probe.insertAdjacentHTML("beforeend", lookupDocBlock(rec, d.site, d.probe.exhaustive));
   main.appendChild(probe);

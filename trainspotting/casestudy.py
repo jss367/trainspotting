@@ -224,6 +224,15 @@ def quoted_figures(study: dict) -> dict:
             "occurrences": study["probe"]["occurrences"],
             "documents": len(study["probe"]["documents"]),
             "exhaustive": study["probe"]["exhaustive"],
+            # The prose reads these documents, not just counts them — "cut to
+            # 105 tokens with 7 of its 76 lines surviving the line filter" is a
+            # claim about one document's metadata. A re-run against a live index
+            # can return different documents while the counts above hold still,
+            # so the figures that describe them belong in the fingerprint too.
+            "each": [
+                {k: doc.get(k) for k in ("tokens", "lines_kept", "lines_original")}
+                for doc in study["probe"]["documents"]
+            ],
         },
         "spread": {
             "occurrences": study["spread"]["occurrences"],
