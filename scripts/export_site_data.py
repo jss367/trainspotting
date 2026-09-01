@@ -80,6 +80,13 @@ if missing:
 
 copied, total = [], 0
 for f in sorted((ROOT / "results").glob("*.json")):
+    # A budget is derived below from the committed ask runs, never copied. A
+    # local `budget --json` leaves one in results/ — gitignored, so it is not
+    # part of what this repo publishes — and copying it here put its name in
+    # `copied` a second time when the derive loop wrote the real one, so the
+    # manifest listed it twice.
+    if ".budget-" in f.name:
+        continue
     if f.name.endswith(BULK):
         (out / f.name).write_text(json.dumps(json.loads(f.read_text()), separators=(",", ":")))
     else:
@@ -127,7 +134,8 @@ if stale:
 # stages were committed. A question asked of only the post-training half still
 # gets a card — with the corpora shown as unmeasured, which is the finding.
 # Budgets are rebuilt from scratch every run, so drop the previous set first:
-# a slug that no longer has any ask run should lose its budget file too, and the
+# they are derived, not copied (the loop above skips them), so nothing here is
+# lost. A slug that no longer has any ask run loses its budget file too, and the
 # loop below only writes the ones it can still build.
 for f in out.glob("*.budget-*.json"):
     f.unlink()
