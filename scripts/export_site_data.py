@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trainspotting import languages, registry  # noqa: E402
+from trainspotting import languages, registry, rewards  # noqa: E402
 
 # Bulk text the site fetches on demand: full training examples behind a prompt,
 # and sampled pretraining documents. Both are regenerable caches of upstream
@@ -59,10 +59,20 @@ if missing:
     )
 
 
-(out / "registry.json").write_text(json.dumps(registry.MODELS, indent=2))
+# Models and standalone datasets in one map, each already resolved to the
+# {is_model, hf_model, stages} shape the page reads — so a dataset renders
+# through the same code as a model, and the cross-model compare has the flag it
+# needs to leave datasets out of an axis they don't belong on.
+(out / "registry.json").write_text(
+    json.dumps({name: registry.resolve(name) for name in registry.targets()}, indent=2)
+)
 # The site labels language bars with these; keeping the map here means the CLI
 # and the page can never disagree about what "gu" is called.
 (out / "language-names.json").write_text(json.dumps(languages.NAMES, indent=2))
+# The mix→verifier table, so the site can explain each RL row's reward from its
+# kind (instead of trusting text baked into old context exports) and roll a
+# stage's dataset_source counts up into exact reward-type shares.
+(out / "reward-kinds.json").write_text(json.dumps(rewards.site_export(), indent=2))
 
 copied, total = [], 0
 for f in sorted((ROOT / "results").glob("*.json")):

@@ -1,0 +1,29 @@
+{
+  "target": "olmo-3-7b-think",
+  "stage": "sft",
+  "dataset": "allenai/Dolci-Think-SFT-7B",
+  "prompt_path": "messages",
+  "row_offset": 0,
+  "columns": [
+    "dataset_source",
+    "id",
+    "messages"
+  ],
+  "prompt_chars": 379,
+  "prompt_head": "Please translate the following paragraph into Chinese:\"In light of high risks of China’s economic outlook, rising geopol",
+  "prompt_tail": "nd its key trading partners could also derail the recovery.\"",
+  "row": {
+    "messages": [
+      {
+        "content": "Please translate the following paragraph into Chinese:\"In light of high risks of China’s economic outlook, rising geopolitical tensions could disrupt economic activity and dampen business and consumer sentiment. Externally, a deeper and more protracted global recession and escalating bilateral tensions between China and its key trading partners could also derail the recovery.\"",
+        "role": "user"
+      },
+      {
+        "content": "<think>\n\n</think>\n\n鉴于中国经济前景面临的高风险，地缘政治紧张局势的加剧可能扰乱经济活动，抑制企业和消费者信心。从外部环境来看，全球衰退程度加深且持续时间延长，以及中国与其主要贸易伙伴之间的双边紧张关系升级，也可能阻碍经济复苏进程。",
+        "role": "assistant"
+      }
+    ],
+    "dataset_source": "allenai/tulu_v3.9_wildchat_100k_english-r1-final-content-filtered",
+    "id": "tulu_v3.9_wildchat_100k_english-r1-final-content-filtered_0"
+  }
+}

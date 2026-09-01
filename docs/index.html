@@ -104,6 +104,18 @@
     background: var(--text-primary); border-color: var(--text-primary); color: var(--page);
   }
 
+  /* ---- part dividers: the two halves of the pipeline ---- */
+  .part {
+    display: flex; align-items: baseline; gap: 10px;
+    margin: 30px 2px 12px; font-size: 12px; font-weight: 650;
+    letter-spacing: .09em; text-transform: uppercase; color: var(--text-secondary);
+  }
+  .part span {
+    font-size: 12px; font-weight: 400; letter-spacing: 0;
+    text-transform: none; color: var(--muted);
+  }
+  .part::after { content: ""; flex: 1; height: 1px; background: var(--grid); }
+
   /* ---- cards ---- */
   .card {
     background: var(--surface-1); border: 1px solid var(--border);
@@ -435,7 +447,8 @@
       <div>
         <h1>trainspotting</h1>
         <p class="tagline">Spot what's in a model's training data — stage sizes, exact mix
-           composition, and how much of post-training is about being helpful, honest, and harmless.</p>
+           composition, and how much of post-training is about being helpful, honest, and harmless.
+           The last tabs are datasets on their own, with no model around them.</p>
       </div>
       <a class="ghlink" href="https://github.com/jss367/trainspotting">GitHub&nbsp;↗</a>
     </div>
@@ -448,7 +461,9 @@
     per stage and labeled with Claude; whiskers are Wilson 95% intervals. Click any
     bar for the prompts behind it, then <em>see it in training context</em> for the
     rest of the training example — the response the model is fit to, the pair it is
-    pushed between, or the verifier that scores it.
+    pushed between, or the verifier that scores it. On a dataset tab those same
+    labels describe what the person asked for: nothing was trained on a chat log,
+    so there is no training signal there to read.
     Language is detected locally per prompt, line by line and weighted by length,
     so a template that wraps a foreign-language question in English instructions
     counts as English; a prompt split evenly between two languages is left
@@ -521,6 +536,41 @@ function wireTips(root){
 
 const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;");
 const escAttr = s => esc(s).replace(/"/g,"&quot;");
+// A dataset id does not say which version was counted: `main` moves. Result
+// files written since the sampler was fixed carry the commit they read, so link
+// it where the count is shown; older files simply have nothing to link.
+const treeLink = (dataset, sha) =>
+  `<a href="https://huggingface.co/datasets/${escAttr(dataset)}/tree/${escAttr(sha)}" target="_blank" rel="noopener"><code>${esc(String(sha).slice(0,7))}</code></a>`;
+// A run long enough to outlast a republish records where the dataset went. The
+// rows may then come from either tree, and showing only the first SHA would
+// present exactly the ambiguity the field exists to record as a settled fact —
+// so show both, in the order they happened.
+const revLink = d => d.revision
+  ? ` ${treeLink(d.dataset, d.revision)}` + (d.revision_moved_to
+      ? ` <span title="the dataset moved while this run was in flight; its rows may come from either tree">→ ${treeLink(d.dataset, d.revision_moved_to)}</span>`
+      : "")
+  : "";
+
+// What a run's classifier never labeled, phrased once. Both views need it: a
+// comparison that shows one model's 280 beside another's 300 without saying why
+// invites reading the gap as a difference in the data rather than in coverage.
+// Older files carry no count, so fall back to the null records they still hold.
+const unlabeledOf = (d, labeled) => {
+  const n = d.unlabeled ?? (d.records.length - labeled);
+  const why = Object.entries(d.unlabeled_reasons || {}).map(([k, v]) => `${v} ${k}`).join(", ");
+  return n ? {n, why, text: `${n} of ${n + labeled} sampled prompts unlabeled${why ? ` (${why})` : ""} and excluded`} : null;
+};
+
+// A run whose every request failed writes a real file: an unlabeled count and
+// no records. There is no share to draw from zero labels — 0/0 is NaN, which
+// renders as "NaN%" behind a bar of undefined width — so each chart says what
+// happened instead of drawing it.
+const noLabels = (parent, text) => {
+  const p = document.createElement("p");
+  p.className = "note";
+  p.textContent = text;
+  parent.appendChild(p);
+};
 
 // Mix labels are a mix of real HuggingFace dataset ids and bare internal names.
 // Only the ones checked as publicly reachable when the data was built get a link.
@@ -621,6 +671,26 @@ function renderSFT(rec, dataset){
     </section>`;
 }
 
+// Chat log: nobody was trained on this. Show the exchange and the metadata the
+// collector kept, and say plainly that no turn here is a target — the SFT view
+// above would otherwise mark the assistant turns "trained to produce this",
+// which is exactly the claim a raw conversation corpus does not support.
+function renderChat(rec, dataset){
+  const nturns = rec.turns.length;
+  return `${chips(rec, dataset)}
+    <section class="ctxsec">
+      <h3>what this example is</h3>
+      <p class="kv">A logged conversation, ${nturns} turn${nturns > 1 ? "s" : ""} long. No model
+        was fit to any of it: the replies are what the other side said, not a training target.
+        What it shows is what people actually sent — which is what a mix built from this
+        inherits.</p>
+    </section>
+    <section class="ctxsec">
+      <h3>the conversation</h3>
+      ${rec.turns.map(t => turnBlock(t, "")).join("")}
+    </section>`;
+}
+
 // DPO: the pair, side by side, plus the length gap between the two responses.
 function renderDPO(rec, dataset){
   const sides = [
@@ -679,12 +749,9 @@ function renderRLVR(rec, dataset){
     <div class="step"><div class="t">4 · reward</div><div class="v">score on that answer</div></div>
   </div>`;
 
-  const GT_LABEL = {
-    "constraint checker": "checker configuration",
-    "unit tests": "test cases the answer is run against",
-  };
+  const kindInfo = REWARDS.kinds[r.kind] || {};
   const checks = [];
-  if (r.ground_truth) checks.push([GT_LABEL[r.kind] || "ground truth the answer is matched against", r.ground_truth]);
+  if (r.ground_truth) checks.push([kindInfo.gt_label || "ground truth the answer is matched against", r.ground_truth]);
   if (r.constraint) checks.push([`constraint checked${r.constraint_type ? " (" + r.constraint_type + ")" : ""}`, r.constraint]);
   if (r.solution) checks.push(["reference solution", r.solution]);
   // Code mixes store their tests as one base64 blob; dumping it reads as noise.
@@ -705,20 +772,26 @@ function renderRLVR(rec, dataset){
           rate to filter the mix — prompts that always pass or never pass carry no gradient.</p>
       </div>
     </section>`;
+  } else {
+    meter = `<section class="ctxsec">
+      <h3>how hard this prompt was for the reference model</h3>
+      <p class="kv">This row stores no reference-model rollout statistics, so there is no
+        measured pass rate to show.</p>
+    </section>`;
   }
 
   return `${chips(rec, dataset)}
     <section class="ctxsec">
       <h3>how this prompt trains the model</h3>
       ${flow}
-      <p class="kv">${esc(r.explain || "")}</p>
+      <p class="kv">${esc(kindInfo.explain || r.explain || "")}</p>
     </section>
     ${promptSection(rec)}
     ${checks.length ? `<section class="ctxsec"><h3>what the verifier checks</h3>
       ${checks.map(check).join("")}
     </section>` : `<section class="ctxsec"><h3>what the verifier checks</h3>
-      <p class="kv">This row stores no ground truth or constraint — the reward comes from a judge model
-        whose rubric is not published with the dataset.</p></section>`}
+      <p class="kv">This row stores no ground truth, constraint, or reference answer for the
+        verifier to read.</p></section>`}
     ${meter}
     ${roll.sample ? `<section class="ctxsec"><h3>one sampled rollout</h3>
       <details><summary>show the answer the reference model produced</summary>${textBlock(roll.sample.text, roll.sample.chars)}</details>
@@ -726,7 +799,7 @@ function renderRLVR(rec, dataset){
         policy's own answers, not on this one.</p></section>` : ""}`;
 }
 
-const RENDER = {sft: renderSFT, dpo: renderDPO, rlvr: renderRLVR};
+const RENDER = {sft: renderSFT, dpo: renderDPO, rlvr: renderRLVR, chat: renderChat};
 
 const dlg = document.getElementById("ctx");
 // Closing the modal drops the row-… segment from the hash it wrote on open.
@@ -811,13 +884,23 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
       const dpoNote = ctx.stage === "dpo"
         ? " These prompts are often deliberately harmful: the training signal is the preference between the two responses, not the prompt."
         : "";
+      // What sits behind a prompt differs by kind, and a chat log has no
+      // training half at all — promising "the response the model is fit to"
+      // there would describe a target that does not exist.
+      const behind = ctx.kind === "chat"
+        ? "open it to read the rest of the exchange."
+        : "open the training context for the response the model is fit to, the pair it is pushed between, or the verifier that scores it.";
+      const half = ctx.kind === "chat"
+        ? `the ${records.length} sampled prompt${records.length>1?"s":""} behind this bar. Each opened a
+           real conversation —`
+        : `the ${records.length} sampled prompt${records.length>1?"s":""} behind
+        this bar. A prompt is half of a training example —`;
       panel.innerHTML = ctx.isCorpus
         ? `<p class="dnote">the ${records.length} sampled document${records.length>1?"s":""} behind this bar.
             These are raw corpus documents, not requests to a model — nothing here was written to teach
             anything, so what the model takes from them is whatever fitting the text implies.</p>`
-        : `<p class="dnote">the ${records.length} sampled prompt${records.length>1?"s":""} behind
-        this bar. A prompt is half of a training example — ${ctx.hasContext
-          ? "open the training context for the response the model is fit to, the pair it is pushed between, or the verifier that scores it."
+        : `<p class="dnote">${half} ${ctx.hasContext
+          ? behind
           : `no context run is committed for this stage, so only the prompts are here (run <code>trainspotting context ${ctx.model}</code>).`}${dpoNote}</p>`;
       for (const r of records){
         const item = document.createElement("div");
@@ -831,7 +914,7 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
             const nav = NAV;
             b.disabled = true;
             b.textContent = "loading…";
-            let rec = await contextFor(ctx.model, ctx.stage, r.prompt);
+            let rec = await contextFor(ctx.model, ctx.stage, r);
             // Any hash move (nav moved on) or a closed drill-down (button
             // detached) mid-download makes this modal stale — drop it.
             if (nav !== NAV || !b.isConnected) return;
@@ -910,7 +993,7 @@ function corpusComposition(parent, groups, totalBytes, limit = 14){
   }
 }
 
-let REG, MANIFEST, LANG_NAMES = {}, DATA = {}, CTXMAPS = {};
+let REG, MANIFEST, LANG_NAMES = {}, REWARDS = {kinds:{}, mixes:{}}, DATA = {}, CTXMAPS = {};
 const langName = c => LANG_NAMES[c] || c;
 async function fetchJSON(p){ const r = await fetch("data/"+p); if(!r.ok) throw new Error(p); return r.json(); }
 async function getData(name){
@@ -920,15 +1003,30 @@ async function getData(name){
 const KEY_CHARS = 400;  // must match trainspotting/context.py
 const ctxFile = (model, stage) => `${model}.${stage}.context.json`;
 
-async function contextFor(model, stage, prompt){
+// Two joins, and the row is the real one. The prompt-prefix map cannot tell
+// apart two rows that open with the same 400 characters, and it keeps the first
+// — rare in a curated mix, routine in a chat log, where 64 of WildChat's 299
+// sampled prompts share an opening and 39 of them are the same Midjourney
+// preamble in front of 39 different conversations. Result records now carry the
+// sampled row index; the prefix map stays for runs committed before they did.
+async function ctxMaps(model, stage){
   const f = ctxFile(model, stage);
   if (!CTXMAPS[f]){
     const d = await getData(f);
-    const m = new Map();
-    for (const r of (d ? d.records : [])) if (!m.has(r.key)) m.set(r.key, r);
-    CTXMAPS[f] = m;
+    const byKey = new Map(), byRow = new Map();
+    for (const r of (d ? d.records : [])){
+      if (!byKey.has(r.key)) byKey.set(r.key, r);
+      if (r.row != null) byRow.set(r.row, r);
+    }
+    CTXMAPS[f] = {byKey, byRow};
   }
-  return CTXMAPS[f].get(prompt.slice(0, KEY_CHARS));
+  return CTXMAPS[f];
+}
+
+async function contextFor(model, stage, rec){
+  const {byKey, byRow} = await ctxMaps(model, stage);
+  if (rec.row != null && byRow.has(rec.row)) return byRow.get(rec.row);
+  return byKey.get(rec.prompt.slice(0, KEY_CHARS));
 }
 // Deep links address a training example by its HuggingFace row number.
 async function contextRowFor(model, stage, row){
@@ -947,13 +1045,27 @@ function syncStickyHeight(){
   if (tabs) document.documentElement.style.setProperty("--stickyh", tabs.offsetHeight + "px");
 }
 
+// Each stage's first card owns "sec-": the published mix for a base stage, the
+// exact composition for a post-training one. The fallbacks cover a stage whose
+// first card didn't render because its data file isn't committed.
 function jumpToStage(stage){
-  const el = document.getElementById("sec-" + stage) || document.getElementById("mix-" + stage);
+  const el = document.getElementById("sec-" + stage)
+    || document.getElementById("hhh-" + stage)
+    || document.getElementById("docs-" + stage);
   if (!el) return false;
   syncStickyHeight();
   el.scrollIntoView({behavior: "smooth", block: "start"});
   el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
   return true;
+}
+
+// A divider between the two halves of the pipeline, so the page reads top to
+// bottom in the same order as the tiles at the top of it.
+function part(title, note){
+  const h = document.createElement("h2");
+  h.className = "part";
+  h.innerHTML = `${esc(title)}<span>${esc(note)}</span>`;
+  return h;
 }
 
 async function renderModel(model, gen){
@@ -967,16 +1079,20 @@ async function renderModel(model, gen){
   if (gen !== GEN) return;
   const post = m.stages.filter(s => s.hf_dataset);
   const ctxFor = s => ({
-    model, stage: s.stage, dataset: s.hf_dataset, stageName: s.name,
+    model, stage: s.stage, kind: s.kind || s.stage, dataset: s.hf_dataset, stageName: s.name,
     hasContext: MANIFEST.includes(ctxFile(model, s.stage)),
   });
 
   // ---- pipeline tiles ----
   const facts = document.createElement("section");
   facts.className = "card";
-  facts.innerHTML = `<h2>Training pipeline</h2>
-    <p class="sub">${m.hf_model} — token counts from the OLMo 3 paper; example counts from the datasets themselves.</p>
-    <div class="pipe"></div>`;
+  facts.innerHTML = m.is_model === false
+    ? `<h2>${esc(m.name)}</h2>
+       <p class="sub">${esc(m.note || "A dataset on its own — no model trained on it here.")}</p>
+       <div class="pipe"></div>`
+    : `<h2>Training pipeline</h2>
+       <p class="sub">${m.hf_model} — token counts from the OLMo 3 paper; example counts from the datasets themselves.</p>
+       <div class="pipe"></div>`;
   const pipe = facts.querySelector(".pipe");
   m.stages.forEach((s, i) => {
     if (i){
@@ -1009,140 +1125,6 @@ async function renderModel(model, gen){
   });
   main.appendChild(facts);
 
-  // ---- HHH classification ----
-  const hhh = document.createElement("section");
-  hhh.className = "card";
-  hhh.innerHTML = `<h2>How much of post-training is about being helpful, honest, harmless?</h2>
-    <p class="sub">Share of sampled prompts per stage whose primary training signal is each label. Whiskers: Wilson 95% CI.</p>`;
-  let any = false;
-  for (const s of post){
-    const d = await getData(`${model}.${s.stage}.labels.json`);
-    if (gen !== GEN) return;
-    if (!d) continue;
-    any = true;
-    const recs = d.records.filter(r => r.label);
-    const n = recs.length;
-    const counts = {};
-    for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
-    const h = document.createElement("h3");
-    h.className = "stage";
-    h.id = "sec-" + s.stage;
-    h.style.setProperty("--bar", hueFor(s.stage));
-    h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())} <span class="ds">— ${esc(s.name)}</span>`;
-    const sub = document.createElement("p");
-    sub.className = "stage-sub";
-    sub.textContent = `${d.dataset} · n=${n} sampled prompts labeled by ${d.classifier}`;
-    hhh.append(h, sub);
-    const max = Math.max(...LABELS.map(l => wilson(counts[l]||0, n)[1]), 0.01);
-    let lastGrp = null;
-    for (const l of LABELS){
-      const grp = VALUE_LABELS.has(l) ? "values" : "skills";
-      if (grp !== lastGrp){
-        const g = document.createElement("div"); g.className = "grp"; g.textContent = grp;
-        hhh.appendChild(g); lastGrp = grp;
-      }
-      const k = counts[l] || 0;
-      const [lo, hi] = wilson(k, n);
-      barRow(hhh, NICE[l], k/n, lo, hi, max,
-        `<b>${NICE[l]}</b><br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
-        VALUE_LABELS.has(l),
-        recs.filter(r => r.label === l), {...ctxFor(s), linkKey: l});
-    }
-  }
-  if (!any) hhh.innerHTML += `<p class="note">No classification runs committed for this model yet — run <code>trainspotting classify ${model}</code>.</p>`;
-  main.appendChild(hhh);
-
-  // ---- language breakdown ----
-  // A stage detects a dozen-odd languages and all but English are slivers, so
-  // the full breakdown is three screens of bars answering a question most
-  // visitors answer with one number. Each stage collapses to that number and
-  // draws its bars when someone opens it.
-  const langCard = document.createElement("section");
-  langCard.className = "card";
-  langCard.innerHTML = `<h2>What language is post-training written in?</h2>
-    <p class="sub">Detected locally with py3langid over the same sampled prompts — no model is called.
-       The Dolci datasets carry no language column, so this is the only way to get the breakdown.
-       Open a stage for every language it found, and click any language to read its prompts.</p>`;
-  let anyLang = false;
-  for (const s of post){
-    const d = await getData(`${model}.${s.stage}.languages.json`);
-    if (gen !== GEN) return;
-    if (!d) continue;
-    anyLang = true;
-    const recs = d.records;
-    const n = recs.length;
-    const counts = {};
-    for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
-    const rest = Object.keys(counts).filter(c => c !== "en" && c !== "undetermined")
-      .sort((a,b) => counts[b] - counts[a]);
-    const nonEn = rest.reduce((a,c) => a + counts[c], 0);
-    const undet = counts.undetermined || 0;
-
-    const det = document.createElement("details");
-    det.className = "langstage";
-    det.style.setProperty("--bar", hueFor(s.stage));
-    // "detected", and the undetermined share beside it: the headline counts only
-    // prompts the detector called, and every sample has some it would not.
-    det.innerHTML = `<summary>
-      <i class="sw"></i><b>${esc(s.stage.toUpperCase())}</b>
-      <span class="ds">— ${esc(s.name)}</span>
-      <span class="lsum"><em>${pct(nonEn/n)}</em> detected non-English ·
-        ${undet ? `${pct(undet/n)} undetermined · ` : ""}
-        ${rest.length} other language${rest.length === 1 ? "" : "s"} · n=${n}</span>
-      <span class="caret">›</span></summary>`;
-    const body = document.createElement("div");
-    body.className = "langbody";
-    det.appendChild(body);
-    langCard.appendChild(det);
-
-    // Bars are built on first open, not up front: three stages of them is a few
-    // hundred elements nobody has asked to see yet.
-    let built = false;
-    det.addEventListener("toggle", () => {
-      if (!det.open || built) return;
-      built = true;
-
-      const sub = document.createElement("p");
-      sub.className = "stage-sub";
-      sub.textContent = `${d.dataset} · n=${n} sampled prompts · detector ${d.detector}`;
-      body.appendChild(sub);
-
-      // English swamps everything, so the two groups get separate scales: one bar
-      // at full width for English, then the rest against the largest non-English
-      // share. A shared scale would render every other language as an invisible
-      // sliver.
-      const g1 = document.createElement("div"); g1.className = "grp"; g1.textContent = "english";
-      body.appendChild(g1);
-      const enK = counts.en || 0, enCI = wilson(enK, n);
-      barRow(body, "English", enK/n, enCI[0], enCI[1], Math.max(enCI[1], 0.01),
-        `<b>English</b><br>${enK} of ${n} sampled prompts (${pct(enK/n)})<br>95% CI ${pct(enCI[0])}–${pct(enCI[1])}<br>click to see the prompts`,
-        true, recs.filter(r => r.label === "en"), ctxFor(s));
-
-      const g2 = document.createElement("div"); g2.className = "grp";
-      g2.textContent = "every other language — own scale";
-      body.appendChild(g2);
-      if (!rest.length){
-        const p = document.createElement("p"); p.className = "note";
-        p.textContent = "no non-English prompts in this sample";
-        body.appendChild(p);
-      }
-      const restMax = Math.max(...rest.map(c => wilson(counts[c], n)[1]), 0.005);
-      for (const c of rest){
-        const k = counts[c], [lo, hi] = wilson(k, n);
-        barRow(body, esc(langName(c)), k/n, lo, hi, restMax,
-          `<b>${esc(langName(c))}</b> (${esc(c)})<br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
-          false, recs.filter(r => r.label === c), ctxFor(s));
-      }
-      const note = document.createElement("p");
-      note.className = "note";
-      note.textContent = `${pct(nonEn/n)} of this sample was detected as not English.`
-        + (undet ? ` ${undet} prompt${undet>1?"s":""} (${pct(undet/n)}) ${undet>1?"were":"was"} too short, too much code, or too evenly mixed to call, and ${undet>1?"are":"is"} counted in neither group.` : "");
-      body.appendChild(note);
-    });
-  }
-  if (!anyLang) langCard.innerHTML += `<p class="note">No language run committed for this model yet — run <code>trainspotting languages ${model}</code>.</p>`;
-  main.appendChild(langCard);
-
   // ---- pretraining documents ----
   const corpusStages = m.stages.filter(s => s.sample_dataset);
   const corpusData = [];
@@ -1155,6 +1137,63 @@ async function renderModel(model, gen){
     if (gen !== GEN) return;
     if (d) corpusData.push([s, d]);
   }
+
+  const base = m.stages.filter(s => !s.hf_dataset);
+  if (base.length || corpusData.length)
+    main.appendChild(part("Pretraining", "what the base model read, before any instruction tuning"));
+
+  // ---- base training stages (facts from the paper and each mix's own dataset
+  // card; the corpus card below measures the same stages by sampling them) ----
+  if (base.length){
+    const card = document.createElement("section");
+    card.className = "card";
+    card.innerHTML = `<h2>What the base model was trained on</h2>
+      <p class="sub">Token counts and mix composition from the OLMo 3 paper (Table 4) and each mix's
+        dataset card — the release's own numbers, not measured here. The card below measures the
+        same mixes independently by sampling their shards, so the two are worth comparing.</p>`;
+    // shares under 0.1% would round to a flat 0.0%
+    const pctc = f => f < 0.001 ? (f*100).toFixed(2)+"%" : pct(f);
+    for (const s of base){
+      const div = document.createElement("div");
+      div.className = "basestage";
+      // One anchor per stage, and this card owns it: a tile click lands on the
+      // stage's published facts, with the sampled documents for the same stage
+      // in the next card down.
+      div.id = "sec-" + s.stage;
+      const link = s.hf
+        ? `<span class="chip link"><a href="https://huggingface.co/datasets/${escAttr(s.hf)}"
+             target="_blank" rel="noopener">${esc(s.hf)} ↗</a></span>` : "";
+      div.innerHTML = `<h3 class="stage"><i class="sw" style="background:var(--baseline)"></i>${esc(s.stage.toUpperCase())}
+          <span class="ds">— ${esc(s.name)}${s.tokens ? " · " + fmtTok(s.tokens) + " tokens" : ""}</span>${link}</h3>
+        <p class="kv" style="margin:2px 0 8px">${esc(s.note || "No further details recorded in the registry.")}</p>`;
+      if (s.composition && s.composition.length){
+        const total = s.composition.reduce((a,c) => a + c.tokens, 0);
+        const maxf = Math.max(...s.composition.map(c => c.tokens/total));
+        // Some stages train on less than the full published mix (the 32B runs
+        // 5.50T of a recipe whose card counts 5.93T). When the stage's declared
+        // tokens don't match the composition total, the absolute per-source
+        // counts describe the mix, not this run — show only the mix's own
+        // shares, and put a clearly-approximate scaled count in the tooltip.
+        const exact = !s.tokens || Math.abs(total - s.tokens) <= 0.005 * s.tokens;
+        for (const c of s.composition){
+          const f = c.tokens/total;
+          const row = document.createElement("div");
+          row.className = "row";
+          row.innerHTML = `
+            <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</div>
+            <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
+            <div class="val">${pctc(f)}${exact ? ` <small>${fmtTok(c.tokens)}</small>` : ""}</div>`;
+          hover(row.querySelector(".trackbar"), exact
+            ? `<b>${escAttr(c.name)}</b><br>${fmtTok(c.tokens)} of ${fmtTok(total)} tokens (${pctc(f)})`
+            : `<b>${escAttr(c.name)}</b><br>${pctc(f)} of the mix recipe — ≈${fmtTok(f*s.tokens)} of this ${fmtTok(s.tokens)}-token run`);
+          div.appendChild(row);
+        }
+      }
+      card.appendChild(div);
+    }
+    main.appendChild(card);
+  }
+
   if (corpusData.length){
     const card = document.createElement("section");
     card.className = "card corpus";
@@ -1167,7 +1206,7 @@ async function renderModel(model, gen){
     for (const [s, d] of corpusData){
       const h = document.createElement("h3");
       h.className = "stage";
-      h.id = "sec-" + s.stage;
+      h.id = "docs-" + s.stage;
       h.innerHTML = `<i class="sw" style="background:var(--baseline)"></i>${esc(s.stage.toUpperCase())}
         <span class="ds">— ${esc(d.dataset)} · ${fmtTok(s.tokens)} tokens</span>`;
       card.appendChild(h);
@@ -1243,6 +1282,289 @@ async function renderModel(model, gen){
     main.appendChild(card);
   }
 
+  if (post.length)
+    main.appendChild(m.is_model === false
+      ? part("The data", "what is in it, and what the prompts in it are about")
+      : part("Post-training", "the examples that turned the base model into an assistant"));
+
+  // ---- exact mix composition ----
+  if (sources){
+    const mix = document.createElement("section");
+    mix.className = "card";
+    // "Mix" is a model's word for it. A standalone dataset has a composition
+    // too, but it was not mixed toward anything.
+    mix.innerHTML = m.is_model === false
+      ? `<h2>Composition</h2>
+         <p class="sub">From the dataset's own label columns — counted, not sampled.</p>`
+      : `<h2>Exact mix composition</h2>
+         <p class="sub">From each dataset's own label columns — exact counts, not samples.</p>`;
+    for (const s of post){
+      const st = sources[s.stage];
+      if (!st) continue;
+      const h = document.createElement("h3");
+      h.className = "stage";
+      h.id = "sec-" + s.stage;
+      h.style.setProperty("--bar", hueFor(s.stage));
+      // Link the tree these counts were taken from, not just the dataset root:
+      // "exact composition" is a claim about one revision, and `main` moves.
+      h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())}
+        <span class="ds">— <a href="https://huggingface.co/datasets/${escAttr(st.dataset)}"
+          target="_blank" rel="noopener">${esc(st.dataset)} ↗</a>${revLink(st)} (${st.total.toLocaleString()} examples)</span>`;
+      mix.appendChild(h);
+      // On a big dataset HuggingFace's stats API stops after a first slice, so
+      // the counts below are over the rows it reached, not the whole split.
+      // Divide by the scanned count or every share reads low under a heading
+      // that promises exact numbers.
+      const denom = st.counted || st.total;
+      if (st.partial){
+        const note = document.createElement("p");
+        note.className = "stage-sub";
+        note.textContent = `shares are over the ${denom.toLocaleString()} rows `
+          + `(${pct(denom/st.total)}) HuggingFace's stats API scanned, not all ${st.total.toLocaleString()}`;
+        mix.appendChild(note);
+      }
+      // RL mixes don't label their reward functions, but each mix has exactly
+      // one verifier, so when every value in a mix-name column is in the
+      // mix→verifier table the reward-type shares are exact — the same counts,
+      // grouped by what scores the response instead of where the prompt came from.
+      // Column stats can be sparse (nulls / long tails), so also require the
+      // counts to cover every row — otherwise "exact" would be a lie.
+      if (s.stage === "rlvr"){
+        const mapped = st.partial ? null : Object.values(st.columns).find(freq => {
+          const vals = Object.keys(freq);
+          return vals.length && vals.every(v => REWARDS.mixes[v]) &&
+            vals.reduce((sum, v) => sum + freq[v], 0) === st.total;
+        });
+        if (mapped){
+          const agg = {};
+          for (const [v, c] of Object.entries(mapped)){
+            const mx = REWARDS.mixes[v];
+            if (!agg[mx.kind]) agg[mx.kind] = {count: 0, subjects: new Set()};
+            agg[mx.kind].count += c;
+            agg[mx.kind].subjects.add(mx.subject);
+          }
+          const sub = document.createElement("p");
+          sub.className = "stage-sub";
+          sub.textContent = "what scores the response — each mix below uses exactly one verifier, so these counts are exact";
+          mix.appendChild(sub);
+          const kinds = Object.entries(agg).sort((a, b) => b[1].count - a[1].count);
+          const maxk = Math.max(...kinds.map(([, g]) => g.count/denom));
+          for (const [kind, g] of kinds){
+            const f = g.count/denom;
+            const info = REWARDS.kinds[kind] || {};
+            const row = document.createElement("div");
+            row.className = "row";
+            row.style.setProperty("--bar", hueFor(s.stage));
+            row.innerHTML = `
+              <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(kind)}</div>
+              <div class="trackbar"><div class="fill" style="width:${f/maxk*100}%"></div></div>
+              <div class="val">${pct(f)} <small>${g.count.toLocaleString()}</small></div>`;
+            hover(row.querySelector(".trackbar"),
+              `<b>${esc(kind)}</b> — ${esc([...g.subjects].join(", "))}<br>${esc(info.explain || "")}<br>${g.count.toLocaleString()} of ${denom.toLocaleString()} (${pct(f)})`);
+            mix.appendChild(row);
+          }
+        }
+      }
+      for (const [col, freq] of Object.entries(st.columns)){
+        const sub = document.createElement("p");
+        sub.className = "stage-sub"; sub.textContent = col;
+        mix.appendChild(sub);
+        const entries = Object.entries(freq);
+        const shown = entries.slice(0, 12);
+        const maxf = Math.max(...entries.map(([,c]) => c/denom));
+        for (const [v, c] of shown){
+          const f = c/denom;
+          const row = document.createElement("div");
+          row.className = "row";
+          row.style.setProperty("--bar", hueFor(s.stage));
+          row.innerHTML = `
+            <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${srcLabel(v, st.links)}</div>
+            <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
+            <div class="val">${pct(f)} <small>${c.toLocaleString()}</small></div>`;
+          const mx = REWARDS.mixes[v];
+          hover(row.querySelector(".trackbar"), `<b>${v}</b><br>${c.toLocaleString()} of ${denom.toLocaleString()} (${pct(f)})`
+            + (mx ? `<br>${esc(mx.subject)}, scored by ${esc(mx.kind)}` : ""));
+          mix.appendChild(row);
+        }
+        const restN = entries.length - shown.length;
+        const sum = entries.reduce((a,[,c]) => a+c, 0);
+        const notes = [];
+        if (restN > 0) notes.push(`+${restN} more values (${pct((sum - shown.reduce((a,[,c])=>a+c,0))/denom)})`);
+        if (sum < denom * 0.95) notes.push(`values shown cover ${pct(sum/denom)} of rows — the rest are null or not enumerated by the stats API`);
+        if (notes.length){
+          const p = document.createElement("p"); p.className = "note"; p.textContent = notes.join(" · ");
+          mix.appendChild(p);
+        }
+      }
+    }
+    main.appendChild(mix);
+  }
+
+  // ---- HHH classification ----
+  const hhh = document.createElement("section");
+  hhh.className = "card";
+  hhh.innerHTML = m.is_model === false
+    ? `<h2>What are people in this dataset asking for?</h2>
+       <p class="sub">Share of sampled prompts in each request category. The same seven labels a model
+          stage gets, but read differently: nothing was trained on these, so a bar is what was asked,
+          not a training signal — <code>harmlessness</code> here means the request was safety-relevant,
+          and says nothing about what came back. Whiskers: Wilson 95% CI.</p>`
+    : `<h2>How much of post-training is about being helpful, honest, harmless?</h2>
+       <p class="sub">Share of sampled prompts per stage whose primary training signal is each label. Whiskers: Wilson 95% CI.</p>`;
+  let any = false;
+  for (const s of post){
+    const d = await getData(`${model}.${s.stage}.labels.json`);
+    if (gen !== GEN) return;
+    if (!d) continue;
+    any = true;
+    const recs = d.records.filter(r => r.label);
+    const n = recs.length;
+    const counts = {};
+    for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
+    const h = document.createElement("h3");
+    h.className = "stage";
+    h.id = "hhh-" + s.stage;
+    h.style.setProperty("--bar", hueFor(s.stage));
+    h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())} <span class="ds">— ${esc(s.name)}</span>`;
+    const sub = document.createElement("p");
+    sub.className = "stage-sub";
+    // Two things the count alone would hide. Some RLVR rows are labeled by
+    // their own verifier and never reached the classifier, so name both counts
+    // instead of crediting the model for labels it was never asked about. And
+    // prompts the classifier never labeled are excluded from every bar below —
+    // refusals land on jailbreak-style prompts, the content the harmlessness
+    // bar is about, so an unreported gap reads as a smaller share rather than
+    // as missing data. Older files carry no unlabeled count; for those the
+    // unlabeled records are still in `records`, so count them.
+    const byVerifier = recs.filter(r => r.by === "verifier").length;
+    const who = byVerifier
+      ? `n=${n} sampled prompts — ${n - byVerifier} labeled by ${esc(d.classifier)}, ${byVerifier} by their verifier`
+      : `n=${n} sampled prompts labeled by ${esc(d.classifier)}`;
+    const skipped = d.unlabeled ?? (d.records.length - n);
+    const why = Object.entries(d.unlabeled_reasons || {}).map(([k, v]) => `${v} ${k}`).join(", ");
+    sub.innerHTML = `${esc(d.dataset)}${revLink(d)} · ${who}`
+      + (skipped ? ` · <b>${skipped}</b> unlabeled${why ? ` (${esc(why)})` : ""} and excluded` : "");
+    hhh.append(h, sub);
+    if (!n){
+      noLabels(hhh, `every sampled prompt went unlabeled — no shares to show for this stage`);
+      continue;
+    }
+    const max = Math.max(...LABELS.map(l => wilson(counts[l]||0, n)[1]), 0.01);
+    let lastGrp = null;
+    for (const l of LABELS){
+      const grp = VALUE_LABELS.has(l) ? "values" : "skills";
+      if (grp !== lastGrp){
+        const g = document.createElement("div"); g.className = "grp"; g.textContent = grp;
+        hhh.appendChild(g); lastGrp = grp;
+      }
+      const k = counts[l] || 0;
+      const [lo, hi] = wilson(k, n);
+      barRow(hhh, NICE[l], k/n, lo, hi, max,
+        `<b>${NICE[l]}</b><br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
+        VALUE_LABELS.has(l),
+        recs.filter(r => r.label === l), {...ctxFor(s), linkKey: l});
+    }
+  }
+  if (!any) hhh.innerHTML += `<p class="note">No classification runs committed for ${esc(model)} yet — run <code>trainspotting classify ${model}</code>.</p>`;
+  main.appendChild(hhh);
+
+  // ---- language breakdown ----
+  // A stage detects a dozen-odd languages and all but English are slivers, so
+  // the full breakdown is three screens of bars answering a question most
+  // visitors answer with one number. Each stage collapses to that number and
+  // draws its bars when someone opens it.
+  const langCard = document.createElement("section");
+  langCard.className = "card";
+  // The Dolci mixes have no language column, which is why this layer exists at
+  // all. A dataset that does have one (WildChat) makes this a check on the
+  // detector rather than the only number available, so don't claim otherwise.
+  langCard.innerHTML = `<h2>What language ${m.is_model === false ? "is this dataset" : "is post-training"} written in?</h2>
+    <p class="sub">Detected locally with py3langid over the same sampled prompts — no model is called.
+       ${m.is_model === false
+         ? "Compare it against the dataset's own language column above."
+         : "The Dolci datasets carry no language column, so this is the only way to get the breakdown."}
+       Open a stage for every language it found, and click any language to read its prompts.</p>`;
+  let anyLang = false;
+  for (const s of post){
+    const d = await getData(`${model}.${s.stage}.languages.json`);
+    if (gen !== GEN) return;
+    if (!d) continue;
+    anyLang = true;
+    const recs = d.records;
+    const n = recs.length;
+    const counts = {};
+    for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
+    const rest = Object.keys(counts).filter(c => c !== "en" && c !== "undetermined")
+      .sort((a,b) => counts[b] - counts[a]);
+    const nonEn = rest.reduce((a,c) => a + counts[c], 0);
+    const undet = counts.undetermined || 0;
+
+    const det = document.createElement("details");
+    det.className = "langstage";
+    det.style.setProperty("--bar", hueFor(s.stage));
+    // "detected", and the undetermined share beside it: the headline counts only
+    // prompts the detector called, and every sample has some it would not.
+    det.innerHTML = `<summary>
+      <i class="sw"></i><b>${esc(s.stage.toUpperCase())}</b>
+      <span class="ds">— ${esc(s.name)}</span>
+      <span class="ds">${esc(d.dataset)}${revLink(d)}</span>
+      <span class="lsum"><em>${pct(nonEn/n)}</em> detected non-English ·
+        ${undet ? `${pct(undet/n)} undetermined · ` : ""}
+        ${rest.length} other language${rest.length === 1 ? "" : "s"} · n=${n}</span>
+      <span class="caret">›</span></summary>`;
+    const body = document.createElement("div");
+    body.className = "langbody";
+    det.appendChild(body);
+    langCard.appendChild(det);
+
+    // Bars are built on first open, not up front: three stages of them is a few
+    // hundred elements nobody has asked to see yet.
+    let built = false;
+    det.addEventListener("toggle", () => {
+      if (!det.open || built) return;
+      built = true;
+
+      const sub = document.createElement("p");
+      sub.className = "stage-sub";
+      sub.textContent = `${d.dataset} · n=${n} sampled prompts · detector ${d.detector}`;
+      body.appendChild(sub);
+
+      // English swamps everything, so the two groups get separate scales: one bar
+      // at full width for English, then the rest against the largest non-English
+      // share. A shared scale would render every other language as an invisible
+      // sliver.
+      const g1 = document.createElement("div"); g1.className = "grp"; g1.textContent = "english";
+      body.appendChild(g1);
+      const enK = counts.en || 0, enCI = wilson(enK, n);
+      barRow(body, "English", enK/n, enCI[0], enCI[1], Math.max(enCI[1], 0.01),
+        `<b>English</b><br>${enK} of ${n} sampled prompts (${pct(enK/n)})<br>95% CI ${pct(enCI[0])}–${pct(enCI[1])}<br>click to see the prompts`,
+        true, recs.filter(r => r.label === "en"), ctxFor(s));
+
+      const g2 = document.createElement("div"); g2.className = "grp";
+      g2.textContent = "every other language — own scale";
+      body.appendChild(g2);
+      if (!rest.length){
+        const p = document.createElement("p"); p.className = "note";
+        p.textContent = "no non-English prompts in this sample";
+        body.appendChild(p);
+      }
+      const restMax = Math.max(...rest.map(c => wilson(counts[c], n)[1]), 0.005);
+      for (const c of rest){
+        const k = counts[c], [lo, hi] = wilson(k, n);
+        barRow(body, esc(langName(c)), k/n, lo, hi, restMax,
+          `<b>${esc(langName(c))}</b> (${esc(c)})<br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
+          false, recs.filter(r => r.label === c), ctxFor(s));
+      }
+      const note = document.createElement("p");
+      note.className = "note";
+      note.textContent = `${pct(nonEn/n)} of this sample was detected as not English.`
+        + (undet ? ` ${undet} prompt${undet>1?"s":""} (${pct(undet/n)}) ${undet>1?"were":"was"} too short, too much code, or too evenly mixed to call, and ${undet>1?"are":"is"} counted in neither group.` : "");
+      body.appendChild(note);
+    });
+  }
+  if (!anyLang) langCard.innerHTML += `<p class="note">No language run committed for ${esc(model)} yet — run <code>trainspotting languages ${model}</code>.</p>`;
+  main.appendChild(langCard);
+
   // ---- custom questions (trainspotting ask) ----
   const askFiles = MANIFEST.filter(f => f.startsWith(model + ".") && f.includes(".ask-"));
   const bySlug = {};
@@ -1250,6 +1572,7 @@ async function renderModel(model, gen){
     const [, stage, rest] = f.match(/^[^.]+\.([^.]+)\.ask-(.+)\.json$/) || [];
     if (stage) (bySlug[rest] ||= []).push([stage, f]);
   }
+  let askDivider = false;   // only if a card actually renders — the files may all fail to load
   for (const [slug, files] of Object.entries(bySlug)){
     // Pipeline order, not just post-training order — a question asked with
     // --pretrain puts corpus stages in the same card, and they come first.
@@ -1283,21 +1606,31 @@ async function renderModel(model, gen){
       card.className = "card";
       const kinds = rows.map(r => corpusStages.some(c => c.stage === r.stage) ? "documents" : "prompts");
       const unitLabel = [...new Set(kinds)].join(" and ");
-      card.innerHTML = `<h2>Custom question</h2>
-        <p class="sub">“${esc(question)}” — share of sampled ${unitLabel} judged a match by ${classifier}. Click a bar to read the matches verbatim.</p>`;
+      card.innerHTML = `<h2>“${esc(question)}”</h2>
+        <p class="sub">Share of sampled ${unitLabel} judged a match by ${classifier}. Click a bar to read the matches verbatim.</p>`;
       const max = Math.max(...rows.map(r => r.ci[1]), 0.01);
       for (const r of rows){
+        if (!r.n){
+          noLabels(card, `${r.stage.toUpperCase()} — every sampled item went unjudged, so there is no rate to show`);
+          continue;
+        }
         const s = post.find(p => p.stage === r.stage) || {stage: r.stage, hf_dataset: r.d.dataset, name: r.d.dataset};
         const isCorpus = corpusStages.some(c => c.stage === r.stage);
         const unit = isCorpus ? "documents" : "prompts";
         // Only call out the correction when it actually bit; at one document per
         // shard the design effect is ~1 and n_eff lands within a hair of n.
         const clustered = r.nEff < r.n * 0.98;
+        // Same accounting as the HHH card: whatever the classifier never
+        // judged is missing from n, not counted as a non-match.
+        const skipped = r.d.unlabeled || 0;
+        const skipNote = skipped
+          ? `<br>${skipped} sampled ${unit} went unjudged (${esc(Object.entries(r.d.unlabeled_reasons || {}).map(([k, v]) => `${v} ${k}`).join(", ") || "no reason recorded")}) and are excluded from n`
+          : "";
         const ciNote = clustered
           ? `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])} — widened for clustering, effective n ${r.nEff.toFixed(0)} of ${r.n} (documents sharing a shard are correlated)`
           : `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`;
         barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
-          `<b>${r.stage}</b><br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})${ciNote}<br>click to read them`,
+          `<b>${r.stage}</b> · ${esc(r.d.dataset)}${revLink(r.d)}<br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})${ciNote}${skipNote}<br>click to read them`,
           false,
           r.d.records.filter(x => x.match), {...ctxFor(s), isCorpus, linkKey: "ask-" + slug});
       }
@@ -1309,112 +1642,12 @@ async function renderModel(model, gen){
           + "A given rate means something different in each.";
         card.appendChild(p);
       }
+      if (!askDivider){
+        main.appendChild(part("Custom questions", "asked of whichever stages you ran them against"));
+        askDivider = true;
+      }
       main.appendChild(card);
     }
-  }
-
-  // ---- exact mix composition ----
-  if (sources){
-    const mix = document.createElement("section");
-    mix.className = "card";
-    mix.innerHTML = `<h2>Exact mix composition</h2>
-      <p class="sub">From each dataset's own label columns — exact counts, not samples.</p>`;
-    for (const s of post){
-      const st = sources[s.stage];
-      if (!st) continue;
-      const h = document.createElement("h3");
-      h.className = "stage";
-      h.id = "mix-" + s.stage;
-      h.style.setProperty("--bar", hueFor(s.stage));
-      h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())}
-        <span class="ds">— <a href="https://huggingface.co/datasets/${escAttr(st.dataset)}"
-          target="_blank" rel="noopener">${esc(st.dataset)} ↗</a> (${st.total.toLocaleString()} examples)</span>`;
-      mix.appendChild(h);
-      for (const [col, freq] of Object.entries(st.columns)){
-        const sub = document.createElement("p");
-        sub.className = "stage-sub"; sub.textContent = col;
-        mix.appendChild(sub);
-        const entries = Object.entries(freq);
-        const shown = entries.slice(0, 12);
-        const maxf = Math.max(...entries.map(([,c]) => c/st.total));
-        for (const [v, c] of shown){
-          const f = c/st.total;
-          const row = document.createElement("div");
-          row.className = "row";
-          row.style.setProperty("--bar", hueFor(s.stage));
-          row.innerHTML = `
-            <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${srcLabel(v, st.links)}</div>
-            <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
-            <div class="val">${pct(f)} <small>${c.toLocaleString()}</small></div>`;
-          hover(row.querySelector(".trackbar"), `<b>${v}</b><br>${c.toLocaleString()} of ${st.total.toLocaleString()} (${pct(f)})`);
-          mix.appendChild(row);
-        }
-        const restN = entries.length - shown.length;
-        const sum = entries.reduce((a,[,c]) => a+c, 0);
-        const notes = [];
-        if (restN > 0) notes.push(`+${restN} more values (${pct((sum - shown.reduce((a,[,c])=>a+c,0))/st.total)})`);
-        if (sum < st.total * 0.95) notes.push(`values shown cover ${pct(sum/st.total)} of rows — the rest are null or not enumerated by the stats API`);
-        if (notes.length){
-          const p = document.createElement("p"); p.className = "note"; p.textContent = notes.join(" · ");
-          mix.appendChild(p);
-        }
-      }
-    }
-    main.appendChild(mix);
-  }
-
-  // ---- base training stages (facts from the paper and each mix's own dataset
-  // card; the corpus card above measures the same stages by sampling them) ----
-  const sampled = new Set(corpusData.map(([s]) => s.stage));
-  const base = m.stages.filter(s => !s.hf_dataset);
-  if (base.length){
-    const card = document.createElement("section");
-    card.className = "card";
-    card.innerHTML = `<h2>Base training stages</h2>
-      <p class="sub">Token counts and mix composition from the OLMo 3 paper (Table 4) and each mix's
-        dataset card — the release's own numbers, not measured here. The corpus card above measures
-        the same mixes independently by sampling their shards, so the two are worth comparing.</p>`;
-    // shares under 0.1% would round to a flat 0.0%
-    const pctc = f => f < 0.001 ? (f*100).toFixed(2)+"%" : pct(f);
-    for (const s of base){
-      const div = document.createElement("div");
-      div.className = "basestage";
-      // One anchor per stage. Where a document sample exists the corpus card
-      // above owns it — it is the richer destination and comes first — so this
-      // section takes a secondary id rather than competing for the jump.
-      div.id = (sampled.has(s.stage) ? "base-" : "sec-") + s.stage;
-      const link = s.hf
-        ? `<span class="chip link"><a href="https://huggingface.co/datasets/${escAttr(s.hf)}"
-             target="_blank" rel="noopener">${esc(s.hf)} ↗</a></span>` : "";
-      div.innerHTML = `<h3 class="stage"><i class="sw" style="background:var(--baseline)"></i>${esc(s.stage.toUpperCase())}
-          <span class="ds">— ${esc(s.name)}${s.tokens ? " · " + fmtTok(s.tokens) + " tokens" : ""}</span>${link}</h3>
-        <p class="kv" style="margin:2px 0 8px">${esc(s.note || "No further details recorded in the registry.")}</p>`;
-      if (s.composition && s.composition.length){
-        const total = s.composition.reduce((a,c) => a + c.tokens, 0);
-        const maxf = Math.max(...s.composition.map(c => c.tokens/total));
-        // Some stages train on less than the full published mix (the 32B runs
-        // 5.50T of a recipe whose card counts 5.93T). When the stage's declared
-        // tokens don't match the composition total, the absolute per-source
-        // counts describe the mix, not this run — show only the mix's own
-        // shares, and put a clearly-approximate scaled count in the tooltip.
-        const exact = !s.tokens || Math.abs(total - s.tokens) <= 0.005 * s.tokens;
-        for (const c of s.composition){
-          const f = c.tokens/total;
-          const row = document.createElement("div");
-          row.className = "row";
-          row.innerHTML = `
-            <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</div>
-            <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
-            <div class="val">${pctc(f)}${exact ? ` <small>${fmtTok(c.tokens)}</small>` : ""}</div>`;
-          hover(row.querySelector(".trackbar"), exact
-            ? `<b>${escAttr(c.name)}</b><br>${fmtTok(c.tokens)} of ${fmtTok(total)} tokens (${pctc(f)})`
-            : `<b>${escAttr(c.name)}</b><br>${pctc(f)} of the mix recipe — ≈${fmtTok(f*s.tokens)} of this ${fmtTok(s.tokens)}-token run`);
-          div.appendChild(row);
-        }
-      }
-      card.appendChild(div);
-    }
-    main.appendChild(card);
   }
 
   // Every destination is mounted now, so honor a tile clicked while data was loading.
@@ -1657,7 +1890,9 @@ async function renderLookup(gen){
 }
 
 async function renderCompare(gen){
-  const models = Object.keys(REG);
+  // Models only. A dataset has no pipeline to line up stage-by-stage against
+  // one, and putting it on this axis would read as a fourth model.
+  const models = Object.keys(REG).filter(k => REG[k].is_model !== false);
   const main = document.getElementById("main");
   main.innerHTML = "";
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === "compare"));
@@ -1676,7 +1911,8 @@ async function renderCompare(gen){
       if (s.hf_dataset && !stages.includes(s.stage)) stages.push(s.stage);
   const ctxOf = (m, stage, ds) => {
     const s = REG[m].stages.find(x => x.stage === stage) || {stage, hf_dataset: ds, name: ds};
-    return {model: m, view: "compare", stage: s.stage, dataset: s.hf_dataset, stageName: s.name,
+    return {model: m, view: "compare", stage: s.stage, kind: s.kind || s.stage,
+      dataset: s.hf_dataset, stageName: s.name,
       hasContext: MANIFEST.includes(ctxFile(m, s.stage))};
   };
 
@@ -1700,7 +1936,7 @@ async function renderCompare(gen){
       const recs = d.records.filter(r => r.label);
       const counts = {};
       for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
-      per.push({m, recs, counts, n: recs.length, dataset: d.dataset});
+      per.push({m, recs, counts, n: recs.length, dataset: d.dataset, rev: d, skipped: unlabeledOf(d, recs.length)});
     }
     // A stage no registered model has at all contributes neither data nor
     // missing-run notices — skip it. But a stage where every registered model
@@ -1721,7 +1957,17 @@ async function renderCompare(gen){
       hhh.appendChild(p);
     }
     if (!per.length) continue;
-    const max = Math.max(...per.flatMap(p => LABELS.map(l => wilson(p.counts[l]||0, p.n)[1])), 0.01);
+    for (const p of per.filter(x => !x.n)){
+      noLabels(hhh, `${p.m} — every sampled prompt went unlabeled, so this model has no bars here`);
+    }
+    // Same accounting as the per-model page, per model rather than per stage.
+    for (const p of per.filter(x => x.skipped)){
+      const note = document.createElement("p");
+      note.className = "note";
+      note.textContent = `${p.m} — ${p.skipped.text} from the bars below`;
+      hhh.appendChild(note);
+    }
+    const max = Math.max(...per.filter(p => p.n).flatMap(p => LABELS.map(l => wilson(p.counts[l]||0, p.n)[1])), 0.01);
     let lastGrp = null;
     for (const l of LABELS){
       const grp = VALUE_LABELS.has(l) ? "values" : "skills";
@@ -1733,11 +1979,12 @@ async function renderCompare(gen){
       lbl.className = "cmp-lbl" + (VALUE_LABELS.has(l) ? " value" : "");
       lbl.textContent = NICE[l];
       hhh.appendChild(lbl);
-      for (const p of per){
+      for (const p of per.filter(x => x.n)){
         const k = p.counts[l] || 0;
         const [lo, hi] = wilson(k, p.n);
         barRow(hhh, shortName(p.m), k/p.n, lo, hi, max,
-          `<b>${p.m}</b> · ${NICE[l]}<br>${k} of ${p.n} sampled prompts (${pct(k/p.n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
+          `<b>${p.m}</b> · ${NICE[l]}${revLink(p.rev)}<br>${k} of ${p.n} sampled prompts (${pct(k/p.n)})<br>95% CI ${pct(lo)}–${pct(hi)}`
+          + (p.skipped ? `<br>${esc(p.skipped.text)}` : "") + `<br>click to see the prompts`,
           false,
           p.recs.filter(r => r.label === l), {...ctxOf(p.m, stage, p.dataset), linkKey: `${p.m}.${l}`}, color(p.m));
       }
@@ -1775,7 +2022,7 @@ async function renderCompare(gen){
         const b = buckets.get(key);
         if (!b.rowsByStage.has(stage)) b.rowsByStage.set(stage, []);
         const n = d.records.length, k = d.records.filter(r => r.match).length;
-        b.rowsByStage.get(stage).push({m, d, n, k, ci: wilson(k, n)});
+        b.rowsByStage.get(stage).push({m, d, n, k, ci: wilson(k, n), skipped: unlabeledOf(d, n)});
       }
     }
     for (const {question, classifier, rowsByStage} of buckets.values()){
@@ -1807,9 +2054,20 @@ async function renderCompare(gen){
           p.textContent = `${m} — no ask run committed for this stage`;
           card.appendChild(p);
         }
+        for (const r of rows.filter(x => x.skipped)){
+          const note = document.createElement("p");
+          note.className = "note";
+          note.textContent = `${r.m} — ${r.skipped.text} from the bar below`;
+          card.appendChild(note);
+        }
         for (const r of rows){
+          if (!r.n){
+            noLabels(card, `${r.m} — every sampled item went unjudged, so there is no rate to show`);
+            continue;
+          }
           barRow(card, shortName(r.m), r.k/r.n, r.ci[0], r.ci[1], max,
-            `<b>${r.m}</b> · ${stage}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}<br>click to read them`,
+            `<b>${r.m}</b> · ${stage}${revLink(r.d)}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`
+            + (r.skipped ? `<br>${esc(r.skipped.text)}` : "") + `<br>click to read them`,
             false,
             r.d.records.filter(x => x.match), {...ctxOf(r.m, stage, r.d.dataset), linkKey: `${r.m}.ask-${slug}`}, color(r.m));
         }
@@ -1914,9 +2172,13 @@ async function applyHashState(nav){
     // A context file covers the whole stage, so a stale/edited row number can
     // resolve to a record behind a DIFFERENT bar (e.g. a capability record
     // under a helpfulness link). Only honor rows that belong to the bar this
-    // hash names: its records carry the prompts, and context records are
-    // keyed by the same KEY_CHARS prompt prefix (see contextFor).
-    if (rec && !el._records.some(r => r.prompt.slice(0, KEY_CHARS) === rec.key)) rec = null;
+    // hash names. Match on the row when the bar's records carry one, and fall
+    // back to the prompt prefix for runs committed before they did — the prefix
+    // is ambiguous across duplicate openings, which is exactly why it is the
+    // fallback and not the test.
+    if (rec && !el._records.some(r => r.row != null
+          ? r.row === rec.row
+          : r.prompt.slice(0, KEY_CHARS) === rec.key)) rec = null;
     const s = REG[model] && REG[model].stages.find(x => x.stage === st.stage);
     if (rec && s) openContext(rec, st.stage, s.hf_dataset, s.name, [VIEW, st.stage, st.key, "row-" + st.row]);
     // Lookup failed (stale/edited hash naming a row that no longer exists):
@@ -1927,13 +2189,18 @@ async function applyHashState(nav){
 }
 
 (async () => {
-  [REG, MANIFEST, LANG_NAMES] = await Promise.all([
-    fetchJSON("registry.json"), fetchJSON("manifest.json"), fetchJSON("language-names.json")]);
+  [REG, MANIFEST, LANG_NAMES, REWARDS] = await Promise.all([
+    fetchJSON("registry.json"), fetchJSON("manifest.json"), fetchJSON("language-names.json"),
+    fetchJSON("reward-kinds.json")]);
   const tabs = document.getElementById("tabs");
-  // The lookup study is about corpora rather than any one model, so it sits at
-  // the end of the bar rather than among the model tabs.
+  // Models first, then standalone datasets, then the cross-model view — the
+  // registry's own order, which puts the pipelines before the raw corpora. The
+  // lookup study is about corpora rather than any one model, so it sits after
+  // all of them.
   const TAB_LABEL = {compare: "compare models", lookup: "is my writing in here?"};
-  for (const name of [...Object.keys(REG), "compare", "lookup"]){
+  const order = [...Object.keys(REG).filter(k => REG[k].is_model !== false),
+                 ...Object.keys(REG).filter(k => REG[k].is_model === false), "compare", "lookup"];
+  for (const name of order){
     const b = document.createElement("button");
     b.textContent = TAB_LABEL[name] || name;
     b.dataset.m = name;
