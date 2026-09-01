@@ -1,0 +1,1199 @@
+"""Exact string search over a whole mix: the schema mapping, and the SQL it builds.
+
+Two halves. The saved Parquet schemas under fixtures/schemas/ pin the mapping
+from column names to the part of the example they hold, so an upstream rename
+fails here instead of quietly shrinking a count. The rest builds a small Parquet
+file locally and runs the real query against it, which needs duckdb but no
+network — the failure mode being guarded against is SQL that parses and returns
+a plausible wrong number.
+"""
+
+import json
+import pathlib
+import re
+from pathlib import Path
+
+import pytest
+
+from trainspotting import grep, registry
+
+SCHEMAS = Path(__file__).resolve().parent / "fixtures" / "schemas"
+
+# Every target, not only the models: WildChat-1M is a standalone dataset whose
+# turns live in a `conversation` list, and the layer silently had no expressions
+# for it until that column was mapped.
+STAGES = [
+    (name, stage)
+    for name in registry.targets()
+    for stage in registry.post_training_stages(registry.resolve(name))
+]
+STAGE_IDS = [f"{m}.{s['stage']}" for m, s in STAGES]
+
+
+def schema_fixture(model: str, stage: str) -> dict:
+    path = SCHEMAS / f"{model}.{stage}.json"
+    assert path.exists(), (
+        f"no saved schema for {model}/{stage} — run scripts/capture_parquet_schemas.py"
+    )
+    return json.loads(path.read_text())
+
+
+# --- the schema mapping, offline -------------------------------------------
+
+
+@pytest.mark.parametrize(("model_name", "stage"), STAGES, ids=STAGE_IDS)
+def test_saved_schema_maps_to_the_same_fields(model_name, stage):
+    saved = schema_fixture(model_name, stage["stage"])
+    assert saved["dataset"] == stage["hf_dataset"]
+    exprs, leaves, unsearched = grep.text_fields(saved["schema"])
+    assert {g: len(e) for g, e in exprs.items()} == saved["groups"]
+    assert [list(x) for x in leaves] == saved["leaves"]
+    assert unsearched == saved["unsearched"]
+
+
+@pytest.mark.parametrize(("model_name", "stage"), STAGES, ids=STAGE_IDS)
+def test_every_text_column_is_classified(model_name, stage):
+    """A text column in neither table is the finding: it would be searched by
+    nobody and reported to nobody until someone reads the warning."""
+    saved = schema_fixture(model_name, stage["stage"])
+    _, _, unsearched = grep.text_fields(saved["schema"])
+    assert unsearched == [], (
+        f"{stage['hf_dataset']} has text columns this layer does not place: "
+        f"{unsearched} — add them to PLAIN_TEXT/LIST_TEXT or METADATA"
+    )
+
+
+@pytest.mark.parametrize(("model_name", "stage"), STAGES, ids=STAGE_IDS)
+def test_every_stage_has_a_prompt_to_search(model_name, stage):
+    saved = schema_fixture(model_name, stage["stage"])
+    exprs, _, _ = grep.text_fields(saved["schema"])
+    assert exprs.get("prompt"), f"{stage['hf_dataset']}: nothing maps to the prompt"
+
+
+@pytest.mark.parametrize(("model_name", "stage"), STAGES, ids=STAGE_IDS)
+def test_source_column_resolves(model_name, stage):
+    saved = schema_fixture(model_name, stage["stage"])
+    _, name = grep.source_expr(saved["schema"], stage["source_columns"])
+    assert name == saved["source_column"]
+
+
+def test_narrowing_fields_narrows_what_is_paid_for():
+    """`--field prompt` should not pull the response columns; the leaves are what
+    the byte cost is computed over, so this is the difference between 1 GB and 36."""
+    schema = schema_fixture("olmo-3-7b-think", "rlvr")["schema"]
+    all_exprs, all_leaves, _ = grep.text_fields(schema)
+    exprs, leaves, _ = grep.text_fields(schema, ["prompt"])
+    assert list(exprs) == ["prompt"]
+    assert set(leaves) < set(all_leaves)
+    assert ("outputs", None) in all_leaves and ("outputs", None) not in leaves
+
+
+@pytest.mark.parametrize(("model_name", "stage"), STAGES, ids=STAGE_IDS)
+def test_the_groups_a_mix_has_are_a_superset_of_the_ones_a_run_reads(model_name, stage):
+    """What a result file records as `available_fields`, against what it searched.
+
+    The report reads the gap between the two: a blank response count means
+    `--field` narrowed the search where the mix has the column, and means the
+    mix has no such column where it does not. That only holds if the unnarrowed
+    call is a superset, so an empty `--field prompt` is never mistaken for a
+    schema that lacks a response side.
+    """
+    schema = schema_fixture(model_name, stage["stage"])["schema"]
+    available, _, _ = grep.text_fields(schema)
+    for narrow in (["prompt"], ["response"], ["reference"], None):
+        exprs, _, _ = grep.text_fields(schema, narrow)
+        assert set(exprs) <= set(available)
+    assert "prompt" in available
+
+
+def test_reserved_word_columns_are_quoted():
+    """Dolci RL mixes have a column called `constraint`, which DuckDB reserves."""
+    exprs, _, _ = grep.text_fields({"constraint": "VARCHAR"})
+    assert exprs["reference"] == ['list_value("constraint")']
+
+
+def test_literal_pattern_escapes_like_wildcards():
+    test = grep._element_test("100%_done", regex=False, case_sensitive=False)
+    assert "ILIKE" in test
+    assert "100\\%\\_done" in test
+
+
+def test_case_sensitive_and_regex_pick_different_operators():
+    assert "LIKE" in grep._element_test("x", regex=False, case_sensitive=True)
+    assert "ILIKE" in grep._element_test("x", regex=False, case_sensitive=False)
+    assert grep._element_test("x+", regex=True, case_sensitive=True) == (
+        "regexp_matches(t, 'x+')"
+    )
+    assert ", 'i'" in grep._element_test("x+", regex=True, case_sensitive=False)
+
+
+def test_quoting_survives_a_pattern_with_a_quote():
+    assert "''" in grep._element_test("it's", regex=False, case_sensitive=False)
+
+
+# --- snippets ---------------------------------------------------------------
+
+
+def test_snippet_centres_on_the_match():
+    text = "a" * 5000 + "ChatGPT" + "b" * 5000
+    out = grep.snippet(text, "ChatGPT", regex=False, case_sensitive=False)
+    assert "ChatGPT" in out
+    assert out.startswith("…") and out.endswith("…")
+    assert len(out) <= grep.SNIPPET_CHARS + 2
+
+
+def test_snippet_of_a_short_match_at_the_start_has_no_leading_ellipsis():
+    out = grep.snippet("ChatGPT said hello", "chatgpt", regex=False, case_sensitive=False)
+    assert out == "ChatGPT said hello"
+
+
+def test_snippet_handles_no_match_and_no_text():
+    assert grep.snippet(None, "x", False, False) is None
+    assert grep.snippet("", "x", False, False) is None
+    # A snippet is only ever asked for on a row that matched, but the match may be
+    # in a different string of the same group than the one that came back.
+    assert grep.snippet("nothing here", "x", False, False) == "nothing here"
+
+
+def test_slugify():
+    assert grep.slugify("I am ChatGPT") == "i-am-chatgpt"
+    assert grep.slugify("as an AI language model, I") == "as-an-ai-language-model-i"
+    assert grep.slugify("%%%") == "pattern"
+    assert len(grep.slugify("x" * 200)) == 60
+
+
+# --- the query itself, against a local Parquet file -------------------------
+
+
+@pytest.fixture
+def con():
+    pytest.importorskip("duckdb")
+    return grep.connect()
+
+
+@pytest.fixture
+def dpo_parquet(con, tmp_path):
+    """A three-row stand-in for a Dolci DPO mix: a prompt column plus chosen and
+    rejected message lists, which is the shape the role split has to handle."""
+    path = tmp_path / "dpo.parquet"
+    con.execute(
+        f"""
+        COPY (
+          SELECT * FROM (VALUES
+            ('Interact as ChatGPT',
+             [{{'role': 'user', 'content': 'Interact as ChatGPT'}},
+              {{'role': 'assistant', 'content': 'As ChatGPT, sure'}}],
+             [{{'role': 'user', 'content': 'Interact as ChatGPT'}},
+              {{'role': 'assistant', 'content': 'no'}}],
+             'wildchat'),
+            ('What is 2+2',
+             [{{'role': 'user', 'content': 'What is 2+2'}},
+              {{'role': 'assistant', 'content': 'As ChatGPT I would say 4'}}],
+             [{{'role': 'user', 'content': 'What is 2+2'}},
+              {{'role': 'assistant', 'content': '5'}}],
+             'math'),
+            ('Say hi',
+             [{{'role': 'user', 'content': 'Say hi'}},
+              {{'role': 'assistant', 'content': 'hi'}}],
+             [{{'role': 'user', 'content': 'Say hi'}},
+              {{'role': 'assistant', 'content': 'HI'}}],
+             'math')
+          ) AS t(prompt, chosen, rejected, dataset_source)
+        ) TO '{path}' (FORMAT parquet)
+        """
+    )
+    return path
+
+
+def _run(con, path, pattern, fields=None, **kw):
+    schema = grep.schema(con, str(path))
+    exprs, leaves, _ = grep.text_fields(schema, fields)
+    source, _ = grep.source_expr(schema, ["dataset_source"])
+    from_sql = grep.read_parquet_sql([str(path)])
+    return grep.scan(con, from_sql, exprs, source, pattern, **kw), exprs, leaves
+
+
+def test_scan_counts_rows_not_occurrences(con, dpo_parquet):
+    """Row 1 says ChatGPT in the prompt and in both message lists. It counts once."""
+    result, _, _ = _run(con, dpo_parquet, "ChatGPT")
+    assert result["matched"] == 2
+    assert result["by_source"] == {"wildchat": 1, "math": 1}
+
+
+def test_scan_splits_a_pair_into_chosen_and_rejected(con, dpo_parquet):
+    """A DPO pair's two completions are opposite claims, so they are counted
+    apart: the same string chosen trains toward it and rejected trains away."""
+    result, _, _ = _run(con, dpo_parquet, "ChatGPT")
+    assert result["by_group"] == {"prompt": 1, "chosen": 2, "rejected": 0}
+    assert result["by_source_group"]["math"] == {"prompt": 0, "chosen": 1, "rejected": 0}
+
+
+def test_scan_narrowed_to_prompts_misses_the_response_only_row(con, dpo_parquet):
+    result, exprs, _ = _run(con, dpo_parquet, "ChatGPT", fields=["prompt"])
+    assert list(exprs) == ["prompt"]
+    assert result["matched"] == 1
+    assert result["by_source"] == {"wildchat": 1}
+
+
+def test_scan_is_case_insensitive_by_default(con, dpo_parquet):
+    assert _run(con, dpo_parquet, "chatgpt")[0]["matched"] == 2
+    assert _run(con, dpo_parquet, "chatgpt", case_sensitive=True)[0]["matched"] == 0
+
+
+def test_scan_regex(con, dpo_parquet):
+    result, _, _ = _run(con, dpo_parquet, r"(As|Interact as) ChatGPT", regex=True)
+    assert result["matched"] == 2
+    assert _run(con, dpo_parquet, r"^hi$", regex=True)[0]["matched"] == 1
+
+
+def test_scan_examples_carry_a_readable_snippet(con, dpo_parquet):
+    result, _, _ = _run(con, dpo_parquet, "ChatGPT", examples=1)
+    assert len(result["examples"]) == 1
+    example = result["examples"][0]
+    assert "ChatGPT" in example["snippet"]
+    assert example["groups"] and example["source"] in ("wildchat", "math")
+
+
+def test_examples_cap_does_not_change_the_count(con, dpo_parquet):
+    assert _run(con, dpo_parquet, "ChatGPT", examples=0)[0]["matched"] == 2
+
+
+def test_no_match_is_an_empty_result_not_an_error(con, dpo_parquet):
+    result, _, _ = _run(con, dpo_parquet, "Gemini")
+    assert result["matched"] == 0
+    assert result["by_source"] == {} and result["examples"] == []
+    assert result["by_group"] == {"prompt": 0, "chosen": 0, "rejected": 0}
+
+
+def test_row_count_and_byte_cost_come_from_the_footers(con, dpo_parquet):
+    _, _, leaves = _run(con, dpo_parquet, "ChatGPT")
+    urls = [str(dpo_parquet)]
+    assert grep.total_rows(con, urls) == 3
+    projected = grep.byte_cost(con, urls, leaves)
+    everything = grep.byte_cost(con, urls, [(c, None) for c in grep.schema(con, str(dpo_parquet))])
+    assert 0 < projected <= everything
+
+
+def test_byte_cost_of_a_narrowed_scan_is_smaller(con, tmp_path):
+    """Only where a column belongs to one group. A message list holds both sides
+    of the conversation in one column chunk, so `--field prompt` on an SFT or DPO
+    mix costs exactly what searching all of it costs; an RL mix, where `outputs`
+    is response-only, is where narrowing actually saves the bytes."""
+    path = tmp_path / "rl.parquet"
+    con.execute(
+        f"""COPY (SELECT 'p' AS prompt, ['{'x' * 20000}'] AS outputs)
+            TO '{path}' (FORMAT parquet)"""
+    )
+    urls = [str(path)]
+    schema = grep.schema(con, str(path))
+    _, all_leaves, _ = grep.text_fields(schema)
+    _, prompt_leaves, _ = grep.text_fields(schema, ["prompt"])
+    assert ("outputs", None) in all_leaves and ("outputs", None) not in prompt_leaves
+    assert grep.byte_cost(con, urls, prompt_leaves) < grep.byte_cost(con, urls, all_leaves)
+
+
+def test_source_totals_gives_the_denominator(con, dpo_parquet):
+    totals = grep.source_totals(
+        con, grep.read_parquet_sql([str(dpo_parquet)]), '"dataset_source"'
+    )
+    assert totals == {"wildchat": 1, "math": 2}
+
+
+def test_a_mix_with_no_source_column_still_scans(con, tmp_path):
+    """Dolci-Instruct-DPO carries no source column; the scan groups everything."""
+    path = tmp_path / "nosource.parquet"
+    con.execute(
+        f"COPY (SELECT 'I am ChatGPT' AS prompt) TO '{path}' (FORMAT parquet)"
+    )
+    schema = grep.schema(con, str(path))
+    source, name = grep.source_expr(schema, ["dataset_source"])
+    assert (source, name) == (None, None)
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(path)]), exprs, source, "ChatGPT"
+    )
+    assert result["matched"] == 1
+    assert result["by_source"] == {"(no source column)": 1}
+
+
+def test_null_text_does_not_match(con, tmp_path):
+    """Most RL columns are null for most mixes — `constraint` is set only for the
+    instruction-following rows — and a null must not count as a match or crash."""
+    path = tmp_path / "nulls.parquet"
+    con.execute(
+        f"""COPY (SELECT * FROM (VALUES
+              ('has ChatGPT', NULL), (NULL, 'ChatGPT here'), (NULL, NULL)
+            ) AS t(prompt, "constraint")) TO '{path}' (FORMAT parquet)"""
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(con, grep.read_parquet_sql([str(path)]), exprs, None, "ChatGPT")
+    assert result["matched"] == 2
+    assert result["by_group"] == {"prompt": 1, "reference": 1}
+
+
+# --- live ------------------------------------------------------------------
+
+
+@pytest.mark.live
+@pytest.mark.parametrize(("model_name", "stage"), STAGES, ids=STAGE_IDS)
+def test_live_schema_still_matches_the_saved_one(model_name, stage):
+    """The check that catches an upstream re-release: footers only, no rows."""
+    pytest.importorskip("duckdb")
+    saved = schema_fixture(model_name, stage["stage"])
+    con = grep.connect()
+    listing = grep.parquet_listing(stage["hf_dataset"])
+    live = grep.schema(con, listing["urls"][0])
+    assert live == saved["schema"], (
+        f"{stage['hf_dataset']} schema moved — re-run "
+        "scripts/capture_parquet_schemas.py and read the diff"
+    )
+    assert listing["partial"] == saved["partial"]
+
+
+def test_snippet_survives_a_regex_re_cannot_compile():
+    """The count comes from DuckDB's RE2, which accepts syntax `re` rejects. The
+    snippet loses its centring rather than taking the scan down with it."""
+    out = grep.snippet("a ChatGPT b", r"(?P<x>a)(?P<x>b)", regex=True, case_sensitive=False)
+    assert out == "a ChatGPT b"
+
+
+# --- review round 1: role chunks, tool turns, matches past the SQL window ----
+
+
+def test_role_chunks_are_part_of_the_cost():
+    """A role-filtered expression reads `role` as well as `content`. Leaving the
+    role leaf out understated `bytes_read` and the --max-gb guard."""
+    schema = schema_fixture("olmo-3-7b-think", "dpo")["schema"]
+    _, leaves, _ = grep.text_fields(schema)
+    assert ("chosen", "role") in leaves
+    assert ("rejected", "role") in leaves
+
+
+def test_tool_turns_count_as_model_input():
+    """A tool result is handed back to the model, not emitted by it, so it belongs
+    on the prompt side. Only assistant output is a response."""
+    typ = 'STRUCT("content" VARCHAR, "role" VARCHAR)[]'
+    exprs, _, _ = grep.text_fields({"messages": typ})
+    assert "'assistant', 'model'" in exprs["response"][0]
+    assert exprs["prompt"][0].startswith("list_transform(list_filter(\"messages\", m -> NOT (")
+
+
+@pytest.fixture
+def tool_parquet(con, tmp_path):
+    path = tmp_path / "tool.parquet"
+    con.execute(
+        f"""COPY (SELECT [
+              {{'role': 'user', 'content': 'look it up'}},
+              {{'role': 'assistant', 'content': 'calling the tool'}},
+              {{'role': 'tool', 'content': 'the tool said ChatGPT'}}
+            ] AS messages) TO '{path}' (FORMAT parquet)"""
+    )
+    return path
+
+
+def test_tool_result_lands_in_prompt_not_response(con, tool_parquet):
+    schema = grep.schema(con, str(tool_parquet))
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(tool_parquet)]), exprs, None, "ChatGPT"
+    )
+    assert result["by_group"] == {"prompt": 1, "response": 0}
+
+
+def test_only_prompt_field_still_finds_the_tool_result(con, tool_parquet):
+    schema = grep.schema(con, str(tool_parquet))
+    exprs, _, _ = grep.text_fields(schema, ["prompt"])
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(tool_parquet)]), exprs, None, "ChatGPT"
+    )
+    assert result["matched"] == 1
+
+
+def test_snippet_finds_a_match_past_the_sql_window(con, tmp_path):
+    """A Dolci response can run past 100k characters. Cutting the first N before
+    searching would show the opening of a response instead of the match."""
+    path = tmp_path / "long.parquet"
+    filler = "a" * (grep.SNIPPET_SOURCE_CHARS * 3)
+    con.execute(
+        f"COPY (SELECT '{filler} ChatGPT appears late {filler}' AS prompt)"
+        f" TO '{path}' (FORMAT parquet)"
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(path)]), exprs, None, "ChatGPT", examples=1
+    )
+    assert result["matched"] == 1
+    snip = result["examples"][0]["snippet"]
+    assert "ChatGPT appears late" in snip
+    assert snip.startswith("…")
+
+
+def test_snippet_finds_a_late_regex_match_too(con, tmp_path):
+    path = tmp_path / "longre.parquet"
+    filler = "b" * (grep.SNIPPET_SOURCE_CHARS * 2)
+    con.execute(
+        f"COPY (SELECT '{filler} I am ChatGPT {filler}' AS prompt)"
+        f" TO '{path}' (FORMAT parquet)"
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(path)]), exprs, None,
+        r"(I am|I'm) ChatGPT", regex=True, examples=1,
+    )
+    assert "I am ChatGPT" in result["examples"][0]["snippet"]
+
+
+def test_window_start_drives_the_leading_ellipsis():
+    """Text the SQL window elided is as elided as text this function drops."""
+    assert grep.snippet("ChatGPT here", "ChatGPT", False, False, 1) == "ChatGPT here"
+    assert grep.snippet("ChatGPT here", "ChatGPT", False, False, 4001).startswith("…")
+
+
+# --- review round 2: null and empty source values ---------------------------
+
+
+def test_null_and_empty_source_values_share_one_denominator(con, tmp_path):
+    """A column holding both NULL and '' used to produce two SQL groups whose
+    labels collided, so one denominator overwrote the other while the matches
+    summed under the shared key."""
+    path = tmp_path / "mixedsrc.parquet"
+    con.execute(
+        f"""COPY (SELECT * FROM (VALUES
+              ('ChatGPT a', 'wildchat'),
+              ('ChatGPT b', NULL),
+              ('ChatGPT c', ''),
+              ('nothing',   NULL),
+              ('nothing',   '')
+            ) AS t(prompt, dataset_source)) TO '{path}' (FORMAT parquet)"""
+    )
+    urls = [str(path)]
+    schema = grep.schema(con, str(path))
+    source, _ = grep.source_expr(schema, ["dataset_source"])
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(con, grep.read_parquet_sql(urls), exprs, source, "ChatGPT")
+    totals = grep.source_totals(con, grep.read_parquet_sql(urls), source)
+
+    assert result["by_source"] == {grep.NO_SOURCE_VALUE: 2, "wildchat": 1}
+    # Four rows carry a null-or-empty source, not the two of whichever group
+    # happened to come back last.
+    assert totals == {grep.NO_SOURCE_VALUE: 4, "wildchat": 1}
+    # Which is what makes the printed rate meaningful: 2 of 4, not 2 of 2.
+    assert result["by_source"][grep.NO_SOURCE_VALUE] < totals[grep.NO_SOURCE_VALUE]
+
+
+def test_every_matched_label_has_a_denominator(con, tmp_path):
+    """The invariant behind the percentages: scan and source_totals label cells
+    the same way, so no key in one is missing from the other."""
+    path = tmp_path / "labels.parquet"
+    con.execute(
+        f"""COPY (SELECT * FROM (VALUES
+              ('ChatGPT', 'a'), ('ChatGPT', NULL), ('ChatGPT', '')
+            ) AS t(prompt, dataset_source)) TO '{path}' (FORMAT parquet)"""
+    )
+    urls = [str(path)]
+    schema = grep.schema(con, str(path))
+    source, _ = grep.source_expr(schema, ["dataset_source"])
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(con, grep.read_parquet_sql(urls), exprs, source, "ChatGPT")
+    totals = grep.source_totals(con, grep.read_parquet_sql(urls), source)
+    assert set(result["by_source"]) <= set(totals)
+    assert all(result["by_source"][k] <= totals[k] for k in result["by_source"])
+
+
+def test_an_empty_source_value_is_not_a_missing_source_column():
+    """Two different facts about a mix, so two different labels."""
+    assert grep.source_label(None, has_column=False) == grep.NO_SOURCE_COLUMN
+    assert grep.source_label(None, has_column=True) == grep.NO_SOURCE_VALUE
+    assert grep.source_label("", has_column=True) == grep.NO_SOURCE_VALUE
+    assert grep.source_label("wildchat", has_column=True) == "wildchat"
+
+
+def test_regex_window_locates_the_match_not_an_earlier_lookalike(con, tmp_path):
+    """`\\bChatGPT` against a string holding `xChatGPT` at the front and a real
+    match past the window: searching for the extracted text finds the copy inside
+    `xChatGPT` and cuts the window around a non-match."""
+    path = tmp_path / "lookalike.parquet"
+    filler = "a" * (grep.SNIPPET_SOURCE_CHARS * 3)
+    con.execute(
+        f"COPY (SELECT 'xChatGPT {filler} the real ChatGPT match {filler}' AS prompt)"
+        f" TO '{path}' (FORMAT parquet)"
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(path)]), exprs, None,
+        r"\bChatGPT", regex=True, examples=1,
+    )
+    assert result["matched"] == 1
+    assert "the real ChatGPT match" in result["examples"][0]["snippet"]
+
+
+@pytest.mark.parametrize(
+    ("pattern", "text", "expected"),
+    [
+        (r"(As|Interact as) ChatGPT", "zzz Interact as ChatGPT", 5),
+        (r"^hi", "hi there", 1),
+        (r"^hi", "x hi", 0),          # anchored and unmatched, not "position 1"
+        (r"a+b", "zzz aaab", 5),
+        (r"\bChatGPT", "xChatGPTonly", 0),
+        ("ChatGPT", "line1\nline2 ChatGPT", 13),   # the prefix has to cross newlines
+    ],
+)
+def test_regex_offset_sql(con, pattern, text, expected):
+    """The offset expression itself, over the cases that broke the old one:
+    alternation, the user's own groups, anchors, and a no-match that must not
+    read as a match at the start of the string."""
+    sql = grep._offset_sql("s", pattern, regex=True, case_sensitive=False)
+    got = con.execute(f"SELECT {sql} FROM (SELECT ? AS s)", [text]).fetchone()[0]
+    assert got == expected
+
+
+# --- the committed artifacts have to substantiate their own counts -----------
+
+RESULTS = Path(__file__).resolve().parent.parent / "results"
+COMMITTED_RUNS = sorted(RESULTS.glob("*.grep-*.json"))
+
+
+@pytest.mark.parametrize("path", COMMITTED_RUNS, ids=[p.name for p in COMMITTED_RUNS])
+def test_committed_snippets_contain_their_pattern(path):
+    """Every saved snippet has to contain the pattern the run counted.
+
+    `scan` takes each snippet from the first *matching* string in a group, so the
+    match is in there by construction — which makes this an invariant rather than
+    a style preference, and the one that says the artifact is evidence. A result
+    file whose examples do not show the pattern cannot substantiate its own
+    number, and that is exactly what a run committed before the late-match window
+    fix looked like: the snippet was the head of a long response with nothing to
+    do with the query.
+
+    Re-run the scan rather than editing a result file by hand — the point is that
+    the artifact came out of the code.
+    """
+    run = json.loads(path.read_text())
+    flags = 0 if run["case_sensitive"] else re.IGNORECASE
+    expr = run["pattern"] if run["regex"] else re.escape(run["pattern"])
+    missing = [
+        i for i, e in enumerate(run["examples"])
+        if not (e.get("snippet") and re.search(expr, e["snippet"], flags))
+    ]
+    assert not missing, (
+        f"{path.name}: examples {missing} show no {run['pattern']!r} match — "
+        f"re-run `trainspotting grep` for this stage and pattern"
+    )
+
+
+# --- examples have to depend on the match set, not on arrival order ----------
+
+
+def test_example_selection_is_independent_of_arrival_order():
+    """DuckDB reads shards in parallel, so the same match set arrives in a
+    different order each run. Keeping the first N rewrote every example on a
+    re-run; hashing keeps the choice a function of the matches alone."""
+    records = [{"source": "s", "groups": ["prompt"], "snippet": f"match {i}"} for i in range(50)]
+
+    def pick(order):
+        kept, by_snippet = [], {}
+        for i in order:
+            grep._pick(kept, by_snippet, 5, records[i]["snippet"], records[i])
+        return [by_snippet[t]["snippet"] for _, t in sorted(kept, key=lambda kv: -kv[0])]
+
+    forward = pick(range(50))
+    assert len(forward) == 5
+    assert pick(reversed(range(50))) == forward
+    assert pick([*range(25, 50), *range(25)]) == forward
+
+
+def test_example_selection_spreads_rather_than_taking_a_prefix():
+    """The old rule took whatever the first-read shard held — 12 consecutive
+    unit-test assertions out of 134 matches. A digest-ordered sample does not
+    collapse onto one run of neighbours."""
+    kept, by_snippet = [], {}
+    for i in range(200):
+        rec = {"source": "s", "groups": ["prompt"], "snippet": f"match {i}"}
+        grep._pick(kept, by_snippet, 10, rec["snippet"], rec)
+    chosen = sorted(int(by_snippet[t]["snippet"].split()[1]) for _, t in kept)
+    assert chosen != list(range(10))
+    assert max(chosen) - min(chosen) > 20
+
+
+def test_duplicate_snippets_are_kept_once():
+    kept, by_snippet = [], {}
+    for _ in range(10):
+        grep._pick(kept, by_snippet, 5, "same text", {"source": "s", "groups": [], "snippet": "same text"})
+    assert len(kept) == 1
+
+
+def test_zero_examples_keeps_none(con, dpo_parquet):
+    result, _, _ = _run(con, dpo_parquet, "ChatGPT", examples=0)
+    assert result["matched"] == 2 and result["examples"] == []
+
+
+@pytest.mark.parametrize("path", COMMITTED_RUNS, ids=[p.name for p in COMMITTED_RUNS])
+def test_committed_runs_record_a_usable_pattern(path):
+    """A run file has to say what was actually searched, in a form that can be
+    re-run. This exists because a shell-quoting slip in a regeneration script
+    turned `I'm` into `I.m` across three files: same counts, so nothing else
+    noticed, but the artifact then documented a pattern nobody had chosen.
+    """
+    run = json.loads(path.read_text())
+    assert run["pattern"] and run["pattern"].strip() == run["pattern"]
+    assert run["fields"] and set(run["fields"]) <= set(grep.GROUPS)
+    if run["regex"]:
+        re.compile(run["pattern"])
+        # `.` where a literal was meant is the shape of that slip: an unescaped
+        # dot inside a word, next to characters, matching more than intended.
+        assert not re.search(r"[A-Za-z]\.[A-Za-z]", run["pattern"]), (
+            f"{path.name}: {run['pattern']!r} has an unescaped dot between letters"
+            " — likely a quoting slip; write \\. or a character class if meant"
+        )
+
+
+# --- review round 4 ---------------------------------------------------------
+
+
+def test_snippet_uses_the_sql_offset_when_re_cannot_compile():
+    """RE2 accepts patterns `re` rejects. The old fallback searched in Python,
+    failed, and cropped from offset zero — 4,000 characters short of the match
+    the SQL window had been built around."""
+    text = "a" * 4000 + "ChatGPT" + "b" * 4000
+    bad_for_python = r"(?P<x>Chat)(?P<x>GPT)"
+    blind = grep.snippet(text, bad_for_python, regex=True, case_sensitive=False)
+    assert "ChatGPT" not in blind          # what the fallback can do on its own
+    told = grep.snippet(
+        text, bad_for_python, regex=True, case_sensitive=False,
+        window_start=1, match_at=4001, match_len=7,
+    )
+    assert "ChatGPT" in told
+
+
+def test_sql_offset_and_python_search_agree_on_ordinary_patterns():
+    """Which is why switching the scan to the SQL offset moves no committed
+    snippet: for a pattern both engines understand they find the same match."""
+    text = "x" * 100 + "ChatGPT" + "y" * 100
+    assert grep.snippet(text, "ChatGPT", False, False) == grep.snippet(
+        text, "ChatGPT", False, False, 1, 101, 7
+    )
+
+
+def test_window_sql_reports_where_the_match_sits(con, tmp_path):
+    """End to end: a match past the window cut still lands inside the snippet,
+    with a pattern Python's `re` refuses to compile."""
+    path = tmp_path / "re2only.parquet"
+    filler = "z" * (grep.SNIPPET_SOURCE_CHARS * 2)
+    con.execute(
+        f"COPY (SELECT '{filler} ChatGPT late {filler}' AS prompt) TO '{path}' (FORMAT parquet)"
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(path)]), exprs, None,
+        r"(?P<a>Chat)(?P<a>GPT)", regex=True, examples=1,
+    )
+    assert result["matched"] == 1
+    assert "ChatGPT late" in result["examples"][0]["snippet"]
+
+
+def test_negative_example_limit_is_a_usage_error_not_an_indexerror():
+    """`--examples -1` used to be accepted, run the whole scan, then die on the
+    first matching row with an empty heap and no result written."""
+    from trainspotting import cli
+    with pytest.raises(Exception):
+        cli._nonnegative_int("-1")
+    assert cli._nonnegative_int("0") == 0
+    assert cli._nonnegative_int("20") == 20
+
+
+def test_pick_refuses_a_nonpositive_limit():
+    kept, by_snippet = [], {}
+    grep._pick(kept, by_snippet, -1, "text", {"snippet": "text"})
+    grep._pick(kept, by_snippet, 0, "text", {"snippet": "text"})
+    assert kept == [] and by_snippet == {}
+
+
+def test_source_orderings_are_total_not_arrival_ordered():
+    """Same names and numbers in a different order is still a diff. DuckDB
+    aggregates in parallel, so nothing about arrival order is stable — ties break
+    on the name to make the sort total rather than merely mostly-defined."""
+    assert list(grep._by_count({"b": 1, "a": 3, "c": 1})) == ["a", "b", "c"]
+    assert list(grep._by_count({"c": 1, "a": 3, "b": 1})) == ["a", "b", "c"]
+
+
+@pytest.mark.parametrize("path", COMMITTED_RUNS, ids=[p.name for p in COMMITTED_RUNS])
+def test_committed_runs_are_in_canonical_order(path):
+    """The whole file has to be a function of the scan, not of which thread
+    finished first — otherwise `git diff` after a regeneration says nothing."""
+    run = json.loads(path.read_text())
+    for field in ("by_source", "rows_by_source"):
+        got = run.get(field) or {}
+        assert list(got) == list(grep._by_count(got)), (
+            f"{path.name}: {field} is not biggest-first-then-name — re-run the scan"
+        )
+    assert list(run["by_source_group"]) == [
+        s for s in run["by_source"] if s in run["by_source_group"]
+    ]
+
+
+def test_locating_a_match_keeps_the_pattern_own_newline_semantics(con):
+    """`.` not crossing a newline is part of what the user's pattern means. The
+    locator used to pass `s` for the whole composite pattern, so `a.b` matched
+    `a\\nb` while locating and not while matching: the offset landed on text the
+    predicate had rejected, windowing out the hit that made the row count."""
+    text = "a\nb" + "z" * 20000 + "a-b"
+    sql = grep._offset_sql("s", "a.b", regex=True, case_sensitive=False)
+    got = con.execute(f"SELECT {sql} FROM (SELECT ? AS s)", [text]).fetchone()[0]
+    assert got == text.index("a-b") + 1
+    # and the row does match, on the later occurrence
+    test = grep._element_test("a.b", regex=True, case_sensitive=False)
+    assert con.execute(f"SELECT {test} FROM (SELECT ? AS t)", [text]).fetchone()[0]
+
+
+def test_dotall_stays_available_to_a_pattern_that_asks_for_it(con):
+    """Scoping `s` to the prefix does not take it away: a user who writes `(?s)`
+    gets it, in the locator and the predicate alike."""
+    text = "a\nb"
+    for expr, col in ((grep._offset_sql("s", "(?s)a.b", True, False), "s"),
+                      (grep._element_test("(?s)a.b", True, False), "t")):
+        got = con.execute(f"SELECT {expr} FROM (SELECT ? AS {col})", [text]).fetchone()[0]
+        assert got in (1, True), got
+
+
+# --- review round 5 ---------------------------------------------------------
+
+
+def test_a_match_longer_than_the_snippet_still_appears_whole():
+    """A long literal is a real thing to search for — a boilerplate paragraph is
+    hundreds of characters. The crop used to compute negative context, start
+    *inside* the match, and return its middle 240 characters, which for a literal
+    over 240 does not contain the literal."""
+    needle = "X" * 600
+    text = "a" * 2000 + needle + "b" * 2000
+    out = grep.snippet(text, needle, regex=False, case_sensitive=False)
+    assert needle in out
+
+
+def test_a_match_longer_than_the_sql_window_does_not_walk_off_the_end():
+    """Past 8,000 the old lead advanced beyond `text` and the snippet was two
+    ellipses and nothing else."""
+    text = "Y" * (grep.SNIPPET_SOURCE_CHARS + 2000)
+    out = grep.snippet(text, text, regex=False, case_sensitive=False)
+    assert out.strip("…")
+    assert len(out.strip("…")) >= grep.SNIPPET_CHARS
+
+
+def test_an_ordinary_match_is_cropped_exactly_as_before():
+    """The widening must not move any committed snippet: for a match shorter than
+    SNIPPET_CHARS the context and width are what they always were."""
+    text = "q" * 5000 + "ChatGPT" + "r" * 5000
+    out = grep.snippet(text, "ChatGPT", regex=False, case_sensitive=False)
+    assert len(out) == grep.SNIPPET_CHARS + 2      # both ellipses
+    assert "ChatGPT" in out
+
+
+def test_a_leaf_read_twice_costs_twice(con, tmp_path):
+    """The source label column is read once by the scan and once by the
+    denominators query. `byte_cost` broke on the first matching leaf, so listing
+    it twice was silently a no-op."""
+    path = tmp_path / "cost.parquet"
+    con.execute(
+        f"COPY (SELECT 'p' AS prompt, 'src' AS dataset_source) TO '{path}' (FORMAT parquet)"
+    )
+    urls = [str(path)]
+    once = grep.byte_cost(con, urls, [("dataset_source", None)])
+    twice = grep.byte_cost(con, urls, [("dataset_source", None), ("dataset_source", None)])
+    assert once > 0
+    assert twice == 2 * once
+
+
+def test_overlapping_leaf_specs_still_count_a_chunk_once(con, tmp_path):
+    """Multiplicity must come from the count, not from iterating: a chunk matched
+    by both `(col, None)` and `(col, sub)` is one read."""
+    path = tmp_path / "overlap.parquet"
+    con.execute(
+        f"COPY (SELECT [{{'role': 'user', 'content': 'hello'}}] AS messages)"
+        f" TO '{path}' (FORMAT parquet)"
+    )
+    urls = [str(path)]
+    both = grep.byte_cost(con, urls, [("messages", None), ("messages", "content")])
+    just_col = grep.byte_cost(con, urls, [("messages", None)])
+    assert both == just_col
+
+
+# --- review round 6 ---------------------------------------------------------
+
+
+def _plan_leaves(con, path, fields, by):
+    """The leaves a plan prices, via the function both the CLI and the
+    recompute script call — reimplementing the clamp here is what let those two
+    diverge in the first place."""
+    schema = grep.schema(con, str(path))
+    _, name = grep.source_expr(schema, [by])
+    return grep.plan_leaves(schema, fields, name)
+
+
+def test_a_source_column_that_is_also_searched_is_charged_twice_not_three_times(con, tmp_path):
+    """`--by prompt` on an RL stage names a column the scan already reads. The
+    scan reads it once whether it is filtered, projected or both, and the
+    denominators query reads it once more — two copies, not three. Charging three
+    overstates the plan by a whole text column, enough for `--max-gb` to refuse a
+    scan that is affordable."""
+    path = tmp_path / "bysearched.parquet"
+    con.execute(f"COPY (SELECT 'ChatGPT here' AS prompt) TO '{path}' (FORMAT parquet)")
+    leaves = _plan_leaves(con, path, None, "prompt")
+    assert leaves.count(("prompt", None)) == 2
+
+
+def test_a_source_column_that_is_not_searched_is_still_charged_twice(con, tmp_path):
+    """The ordinary case, and the one every committed run uses: a metadata column
+    no text field reads, so both copies come from the clamp."""
+    path = tmp_path / "bymeta.parquet"
+    con.execute(
+        f"COPY (SELECT 'ChatGPT' AS prompt, 'wildchat' AS dataset_source)"
+        f" TO '{path}' (FORMAT parquet)"
+    )
+    leaves = _plan_leaves(con, path, None, "dataset_source")
+    assert leaves.count(("dataset_source", None)) == 2
+    assert leaves.count(("prompt", None)) == 1
+
+
+def test_the_clamp_shows_up_in_the_priced_bytes(con, tmp_path):
+    """Not just list bookkeeping: the figure the plan prints has to differ."""
+    path = tmp_path / "priced.parquet"
+    con.execute(
+        f"COPY (SELECT '{'w' * 4000}' AS prompt) TO '{path}' (FORMAT parquet)"
+    )
+    urls = [str(path)]
+    clamped = grep.byte_cost(con, urls, _plan_leaves(con, path, None, "prompt"))
+    naive = grep.byte_cost(con, urls, [("prompt", None)] * 3)
+    assert clamped < naive
+
+
+# --- review round 7 ---------------------------------------------------------
+
+
+def test_a_literal_longer_than_the_window_widens_it():
+    """A literal's length is the caller's choice, so the window grows to hold it.
+    An 8,000-character boilerplate paragraph is a plausible thing to search a mix
+    for, and a snippet that cannot contain it fails the invariant."""
+    long_literal = "P" * (grep.SNIPPET_SOURCE_CHARS + 4000)
+    assert grep.window_chars(long_literal, regex=False) > len(long_literal)
+    assert grep.window_chars("ChatGPT", regex=False) == grep.SNIPPET_SOURCE_CHARS
+
+
+def test_a_regex_window_stays_capped():
+    """A regex match's length is the data's choice and unbounded — `(?s).*` matches
+    a whole 100k response — so the ceiling stays and is documented."""
+    assert grep.window_chars(r"(?s).*", regex=True) == grep.SNIPPET_SOURCE_CHARS
+
+
+def test_a_long_literal_survives_end_to_end(con, tmp_path):
+    path = tmp_path / "longlit.parquet"
+    needle = "Q" * (grep.SNIPPET_SOURCE_CHARS + 2000)
+    con.execute(
+        f"COPY (SELECT '{'.' * 3000}{needle}{'.' * 3000}' AS prompt)"
+        f" TO '{path}' (FORMAT parquet)"
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(path)]), exprs, None, needle, examples=1
+    )
+    assert result["matched"] == 1
+    assert needle in result["examples"][0]["snippet"]
+
+
+@pytest.mark.parametrize("path", COMMITTED_RUNS, ids=[p.name for p in COMMITTED_RUNS])
+def test_committed_snippet_invariant_is_bounded_by_the_window(path):
+    """The invariant `test_committed_snippets_contain_their_pattern` asserts holds
+    for any literal and for a regex whose match fits the window. It cannot hold
+    for a regex that matches more text than the window carries, so record which
+    runs are in scope rather than leaving the limit implicit."""
+    run = json.loads(path.read_text())
+    if run["regex"]:
+        for e in run["examples"]:
+            assert len(e["snippet"] or "") <= grep.SNIPPET_SOURCE_CHARS + 2
+    else:
+        assert len(run["pattern"]) < grep.window_chars(run["pattern"], regex=False)
+
+
+# --- review round 8 ---------------------------------------------------------
+
+
+def test_a_chat_log_is_searchable(con, tmp_path):
+    """WildChat-1M is the repo's only standalone dataset target and keeps its
+    turns in `conversation`. That column was missing from the message-list map,
+    so `text_fields` produced no expressions and the whole command exited "no
+    text columns" for it."""
+    path = tmp_path / "chat.parquet"
+    con.execute(
+        f"""COPY (SELECT [
+              {{'role': 'user', 'content': 'are you ChatGPT?'}},
+              {{'role': 'assistant', 'content': 'I am an AI language model'}}
+            ] AS conversation) TO '{path}' (FORMAT parquet)"""
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, unsearched = grep.text_fields(schema)
+    assert exprs.get("prompt") and exprs.get("response")
+    assert unsearched == []
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(path)]), exprs, None, "ChatGPT"
+    )
+    assert result["by_group"] == {"prompt": 1, "response": 0}
+
+
+def test_the_recompute_script_prices_a_plan_the_same_way_the_cli_does():
+    """Both call `plan_leaves`. They used to each compute the leaves, and
+    diverged: the CLI learned to clamp the source leaf and the script kept
+    appending, so a maintenance run would have written back the inflated
+    `bytes_read` the CLI had just stopped producing."""
+    source = pathlib.Path("scripts/recompute_grep_bytes.py").read_text()
+    assert "grep.plan_leaves(" in source
+    assert "QUERIES_READING_SOURCE" not in source
+    assert "text_fields(" not in source
+
+
+@pytest.mark.parametrize(
+    ("slug", "expected"),
+    [("foo/bar", "foo-bar"), ("../../etc/passwd", "etc-passwd"), ("..", "x")],
+)
+def test_an_explicit_slug_cannot_escape_the_results_directory(slug, expected):
+    """`_write_json` creates parent directories, so a raw `--slug` in the path
+    would file a multi-gigabyte scan where neither the report nor the site export
+    looks — and `../..` would write outside results/ entirely."""
+    from trainspotting import cli
+    assert cli._filename_part(slug) == expected
+    assert "/" not in cli._filename_part(slug)
+
+
+def test_the_recompute_script_pins_the_parquet_revision():
+    """Since the merge with main, `revision` in a run file is the *dataset*
+    commit `_stamp` records, and the Parquet-branch commit is `parquet_revision`.
+    Substituting the wrong one into a shard URL 404s, which is how this was
+    caught — but a silent version of the same slip would price the wrong tree."""
+    source = pathlib.Path("scripts/recompute_grep_bytes.py").read_text()
+    assert 'run["parquet_revision"]' in source
+    assert 'run["revision"]' not in source
+
+
+# --- review round 9 ---------------------------------------------------------
+
+
+def test_a_rejected_completion_is_not_produce_side_evidence():
+    """The sharpest case for keeping sides apart: the same string in each
+    completion of a DPO pair teaches opposite things. Counting them together let
+    a phrase that only ever appears in rejected text rank DPO as where the model
+    learned to say it."""
+    from trainspotting import influence
+    assert "chosen" in influence.PRODUCE
+    assert "rejected" not in influence.PRODUCE
+    assert "rollout" not in influence.PRODUCE
+
+
+def test_a_pair_is_mapped_to_its_own_sides():
+    typ = 'STRUCT("content" VARCHAR, "role" VARCHAR)[]'
+    exprs, _, _ = grep.text_fields({"chosen": typ, "rejected": typ, "prompt": "VARCHAR"})
+    assert set(exprs) == {"prompt", "chosen", "rejected"}
+    assert '"chosen"' in exprs["chosen"][0] and '"rejected"' in exprs["rejected"][0]
+    # the shared prefix and the post-branch user turns of both completions
+    assert len(exprs["prompt"]) == 4
+
+
+def test_an_sft_message_list_keeps_the_plain_response_group():
+    typ = 'STRUCT("content" VARCHAR, "role" VARCHAR)[]'
+    exprs, _, _ = grep.text_fields({"messages": typ})
+    assert set(exprs) == {"prompt", "response"}
+
+
+def test_reference_rollouts_are_their_own_group():
+    """An RL row's `outputs` are reference generations kept for a passrate, not
+    anything the objective pushes the model to emit."""
+    exprs, _, _ = grep.text_fields({"outputs": "VARCHAR[]", "ground_truth": "VARCHAR[]"})
+    assert exprs["rollout"] and exprs["reference"]
+    assert "response" not in exprs
+
+
+def test_a_dataset_target_gets_no_training_origin_verdict():
+    """`wildchat-1m` is a corpus, not a pipeline. Ranking its one stage as where
+    a phrase entered a model produced "Most plausibly chat" — a verdict about
+    training for a target that has no training."""
+    from trainspotting import registry
+    assert registry.resolve("wildchat-1m")["is_model"] is False
+    assert registry.resolve("olmo-3-7b-think")["is_model"] is True
+    source = pathlib.Path("trainspotting/cli.py").read_text()
+    assert 'if target["is_model"]:\n        trace = influence.compare(' in source
+
+
+# --- review round 11 --------------------------------------------------------
+
+
+@pytest.fixture
+def multiturn_pair(con, tmp_path):
+    """A pair that branches at the last turn, sharing an assistant turn before
+    it — the shape that made a hit in the shared history count as both."""
+    path = tmp_path / "pair.parquet"
+    shared = ("{'role': 'user', 'content': 'hi'},"
+              "{'role': 'assistant', 'content': 'shared ChatGPT reply'},"
+              "{'role': 'user', 'content': 'and then?'}")
+    con.execute(
+        f"""COPY (SELECT
+              [{shared}, {{'role': 'assistant', 'content': 'chosen answer'}}] AS chosen,
+              [{shared}, {{'role': 'assistant', 'content': 'rejected answer'}}] AS rejected
+            ) TO '{path}' (FORMAT parquet)"""
+    )
+    return path
+
+
+def test_a_shared_assistant_turn_is_context_not_either_completion(con, multiturn_pair):
+    """The pair is judged *in* that conversation; neither completion claims it.
+    By role it landed in `chosen` and `rejected` both, so a phrase in the shared
+    history counted twice as text the objective pushes the model toward."""
+    schema = grep.schema(con, str(multiturn_pair))
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(multiturn_pair)]), exprs, None, "ChatGPT"
+    )
+    assert result["by_group"] == {"prompt": 1, "chosen": 0, "rejected": 0}
+
+
+def test_the_divergent_answers_are_still_attributed(con, multiturn_pair):
+    """The split must not swallow the thing it exists to measure."""
+    schema = grep.schema(con, str(multiturn_pair))
+    exprs, _, _ = grep.text_fields(schema)
+    from_sql = grep.read_parquet_sql([str(multiturn_pair)])
+    chosen = grep.scan(con, from_sql, exprs, None, "chosen answer")
+    rejected = grep.scan(con, from_sql, exprs, None, "rejected answer")
+    assert chosen["by_group"]["chosen"] == 1 and chosen["by_group"]["rejected"] == 0
+    assert rejected["by_group"]["rejected"] == 1 and rejected["by_group"]["chosen"] == 0
+
+
+def test_a_single_turn_pair_still_splits_at_the_first_turn(con, tmp_path):
+    """The common case: one user turn, two candidate answers, nothing shared
+    after it."""
+    path = tmp_path / "single.parquet"
+    con.execute(
+        f"""COPY (SELECT
+              [{{'role': 'user', 'content': 'q'}}, {{'role': 'assistant', 'content': 'yes ChatGPT'}}] AS chosen,
+              [{{'role': 'user', 'content': 'q'}}, {{'role': 'assistant', 'content': 'no'}}] AS rejected
+            ) TO '{path}' (FORMAT parquet)"""
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    r = grep.scan(con, grep.read_parquet_sql([str(path)]), exprs, None, "ChatGPT")
+    assert r["by_group"] == {"prompt": 0, "chosen": 1, "rejected": 0}
+
+
+def test_the_searchable_turn_fields_come_from_one_list():
+    """`grep`, `context` and `search` each knew a different subset. `grep` had
+    `functions` and `function_calls`; `search` also had `tool_calls`,
+    `function_call` and `refusal` — the three an Instruct DPO turn actually
+    carries — so `grep` was silently not searching them. Importing the list is
+    the one axis of that duplication removable without touching `search`."""
+    from trainspotting import context, search
+    # `reasoning_content` is in the set and is not in `STRUCTURED_TURN_FIELDS`:
+    # `search` handles it on its own line, so importing that tuple alone left it
+    # out of both other modules and a pattern living only in a separate
+    # reasoning field recorded as an exact zero.
+    canonical = ({"reasoning_content"} | set(search.STRUCTURED_TURN_FIELDS)
+                 | set(search.INPUT_TURN_FIELDS))
+    assert set(grep.MESSAGE_EXTRAS) == canonical
+    assert set(context.BESIDE_CONTENT) == canonical
+
+
+def test_a_rejected_tool_call_is_not_produce_side():
+    """Widening the field set re-exposed the conflation the pair split fixed: a
+    tool call is produced text, so in a pair it belongs to the completion that
+    made it. Routing both to `response` would put a rejected call back on the
+    side the objective trains toward."""
+    typ = ('STRUCT("content" VARCHAR, "role" VARCHAR, "tool_calls" VARCHAR, '
+           '"functions" VARCHAR)[]')
+    exprs, leaves, _ = grep.text_fields({"chosen": typ, "rejected": typ})
+    assert "response" not in exprs
+    assert any('"rejected"' in e and "tool_calls" in e for e in exprs["rejected"])
+    assert any('"chosen"' in e and "tool_calls" in e for e in exprs["chosen"])
+    # the tool menu is input and shared, so it is prompt from both sides.
+    # Matched on the projection rather than the substring: the branch
+    # comparison also names these fields, correctly, since it compares exactly
+    # what a search can read.
+    # Three: the menu offered on each post-branch tail, plus the one on the
+    # shared prefix, which the branch slicing would otherwise drop.
+    assert sum(1 for e in exprs["prompt"] if 'm."functions"' in e) == 3
+    # and each column's extra subfields are priced against that column
+    assert ("rejected", "tool_calls") in leaves
+
+
+def test_a_field_present_but_not_textual_is_not_searched():
+    """Instruct-DPO turns carry `tool_calls`, `function_call` and `refusal` as
+    INTEGER — present, and holding nothing but nulls. Projecting them yields
+    integers where the scan expects strings and DuckDB refuses to unify the list
+    types, so presence is not the test; being text is."""
+    ints = ('STRUCT("content" VARCHAR, "role" VARCHAR, tool_calls INTEGER[], '
+            'refusal INTEGER, function_call INTEGER)[]')
+    exprs, leaves, _ = grep.text_fields({"chosen": ints, "rejected": ints})
+    assert not any("tool_calls" in e for group in exprs.values() for e in group)
+    assert ("chosen", "tool_calls") not in leaves
+    text = 'STRUCT("content" VARCHAR, "role" VARCHAR, "functions" VARCHAR)[]'
+    exprs, _, _ = grep.text_fields({"messages": text})
+    assert any('m."functions"' in e for e in exprs["prompt"])
+
+
+def test_a_tool_call_in_shared_history_is_not_either_completion(con, tmp_path):
+    """The branch split fixed this for `content` and the commit that added the
+    structured fields reintroduced it one field over: searching the whole list
+    put a shared tool call into both completions."""
+    path = tmp_path / "sharedtool.parquet"
+    shared = ("{'role': 'user', 'content': 'q', 'tool_calls': ''},"
+              "{'role': 'assistant', 'content': 'ctx', 'tool_calls': 'lookup(ChatGPT)'}")
+    con.execute(
+        f"""COPY (SELECT
+              [{shared}, {{'role': 'assistant', 'content': 'A', 'tool_calls': ''}}] AS chosen,
+              [{shared}, {{'role': 'assistant', 'content': 'B', 'tool_calls': ''}}] AS rejected
+            ) TO '{path}' (FORMAT parquet)"""
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    r = grep.scan(con, grep.read_parquet_sql([str(path)]), exprs, None, "ChatGPT")
+    assert r["by_group"]["chosen"] == 0 and r["by_group"]["rejected"] == 0
+
+
+# --- resumed after the cap --------------------------------------------------
+
+
+def test_identical_completions_still_have_a_candidate_answer(con, tmp_path):
+    """Two identical completions agree on every turn, so `list_position` finds no
+    disagreement and the branch lands past the end — both tails empty, the answer
+    filed as prompt history, and the pair reporting `chosen 0, rejected 0` for a
+    pattern that is in both candidates. A pair's last turn is its candidate
+    answer however far the lists agree, which is where `search` caps too."""
+    path = tmp_path / "identical.parquet"
+    turns = ("{'role': 'user', 'content': 'q'},"
+             "{'role': 'assistant', 'content': 'I am ChatGPT'}")
+    con.execute(
+        f"COPY (SELECT [{turns}] AS chosen, [{turns}] AS rejected)"
+        f" TO '{path}' (FORMAT parquet)"
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    r = grep.scan(con, grep.read_parquet_sql([str(path)]), exprs, None, "ChatGPT")
+    assert r["matched"] == 1
+    assert r["by_group"]["chosen"] == 1 and r["by_group"]["rejected"] == 1
+
+
+def test_a_branching_pair_is_unaffected_by_the_cap(con, multiturn_pair):
+    """The cap must not move a branch that the texts already settled."""
+    schema = grep.schema(con, str(multiturn_pair))
+    exprs, _, _ = grep.text_fields(schema)
+    r = grep.scan(con, grep.read_parquet_sql([str(multiturn_pair)]), exprs, None, "ChatGPT")
+    assert r["by_group"] == {"prompt": 1, "chosen": 0, "rejected": 0}
+
+
+def test_an_rl_source_prompt_is_prompt_throughout():
+    """The whole `source_prompt` conversation is what the policy is given. An
+    assistant turn inside it is history the model reads, not text it was scored
+    for emitting, so splitting it by role made that history produce-side evidence
+    and could rank RLVR as where the model learned to say something."""
+    typ = 'STRUCT("content" VARCHAR, "role" VARCHAR)[]'
+    exprs, _, _ = grep.text_fields({"source_prompt": typ})
+    assert list(exprs) == ["prompt"]
+    assert "response" not in exprs

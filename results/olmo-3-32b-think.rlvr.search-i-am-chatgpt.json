@@ -1,0 +1,29 @@
+{
+  "pattern": "I am ChatGPT",
+  "case_sensitive": false,
+  "dataset": "allenai/Dolci-Think-RL-32B",
+  "generated": "2026-09-01T00:20:29+00:00",
+  "revision": "d581ecde5cb4bb2a550c2499a7408a3b8dca79f6",
+  "stage": "rlvr",
+  "sample": 300,
+  "seed": 0,
+  "scanned": 300,
+  "matched": 0,
+  "ci": [
+    0.0,
+    0.012643429997735661
+  ],
+  "sides": {
+    "prompt": 0,
+    "verifier": 0,
+    "rollout": 0
+  },
+  "sides_unknown": {
+    "prompt": 0,
+    "verifier": 0,
+    "rollout": 0
+  },
+  "truncated_rows": 0,
+  "censored": 0,
+  "records": []
+}

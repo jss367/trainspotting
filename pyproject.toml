@@ -14,7 +14,10 @@ dependencies = [
 trainspotting = "trainspotting.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+# Only the grep layer needs duckdb, and only it needs a query engine at all —
+# every other layer talks to the datasets-server over HTTP.
+grep = ["duckdb>=1.0"]
+dev = ["pytest>=8", "duckdb>=1.0"]
 
 [build-system]
 requires = ["setuptools>=68"]

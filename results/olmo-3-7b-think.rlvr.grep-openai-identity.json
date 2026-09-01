@@ -1,0 +1,197 @@
+{
+  "dataset": "allenai/Dolci-Think-RL-7B",
+  "stage": "rlvr",
+  "pattern": "(created|developed|trained|made|built) by OpenAI|(I am|I'm) ChatGPT|my name is ChatGPT|(I am|I'm) GPT-[0-9]",
+  "slug": "openai-identity",
+  "regex": true,
+  "case_sensitive": false,
+  "fields": [
+    "prompt",
+    "reference",
+    "rollout"
+  ],
+  "available_fields": [
+    "prompt",
+    "reference",
+    "rollout"
+  ],
+  "source_column": "dataset_source",
+  "generated": "2026-08-31T23:46:24+00:00",
+  "revision": "0fb6466d31ef3a9dd16985ef635e6429e05a6491",
+  "parquet_revision": "32c49640832240a6c3cd7ae5766eb377d8a4a562",
+  "partial": false,
+  "shards": 9,
+  "bytes_read": 1740032585,
+  "unsearched_columns": [],
+  "total_rows": 102014,
+  "rows_by_source": {
+    "hamishivi/math_rlvr_mixture_dpo": 30180,
+    "hamishivi/IF_multi_constraints_upto5_filtered_dpo_0625_filter": 29813,
+    "hamishivi/code_rlvr_mixture_dpo": 21385,
+    "hamishivi/rlvr_general_mix": 20636
+  },
+  "matched": 107,
+  "by_source": {
+    "hamishivi/rlvr_general_mix": 103,
+    "hamishivi/IF_multi_constraints_upto5_filtered_dpo_0625_filter": 4
+  },
+  "by_group": {
+    "prompt": 60,
+    "reference": 51,
+    "rollout": 0
+  },
+  "by_source_group": {
+    "hamishivi/rlvr_general_mix": {
+      "prompt": 56,
+      "reference": 51,
+      "rollout": 0
+    },
+    "hamishivi/IF_multi_constraints_upto5_filtered_dpo_0625_filter": {
+      "prompt": 4,
+      "reference": 0,
+      "rollout": 0
+    }
+  },
+  "examples": [
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026l called GPT (Generative Pre-trained Transformer). GPT models are advanced natural language processing models developed by OpenAI that perform various tasks, such as language translation, summarization, question-answering, and more.\n\nAutoGP\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "user: hi, what gpt are u ?\nassistant: I am an AI developed by OpenAI, and my model is based on the GPT (Generative Pre-trained Transformer) architecture. If you're asking about a specific version, I am based on OpenAI's GPT-4. How can I ass\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "I am an AI language model created by OpenAI, here to provide helpful answers and information on a wide range of topics."
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "Hello! I am an AI language model developed by OpenAI. I work by processing and analyzing text inputs in order to generate human-like responses. My responses are generated based on patterns and information from a large dataset of text that I\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "\u2026ysical location because I exist solely as a program running on servers. However, the technology behind me was developed by OpenAI, which is an artificial intelligence research laboratory consisting of scientists and engineers from around th\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "I must apologize, but as an AI developed by OpenAI, I have a responsibility to discourage promoting or glorifying unethical behavior, such as content theft and psychopathy. Sharing content that was stolen or not created by yourself is again\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "I am an AI language model created by OpenAI, designed to assist with a wide variety of questions and tasks. While I am based on technology that is continuously updated and improved upon, I am not specifically labeled as \"GPT-4\" or any other\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "I'm sorry for the confusion, but as an AI text-based model developed by OpenAI, I can't directly create or generate visual images, including pictures of a man wearing a hat. However, I can guide you on how you might create one using various\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "I'm sorry, but as a text-based AI developed by OpenAI, I am not currently equipped to generate images or visual content directly. I can certainly help describe a concept or provide a detailed textual description that could be used as a basi\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "As of my last update, I am based on the GPT-3 model developed by OpenAI. If there have been any updates to incorporate GPT-4 or a newer version beyond my current knowledge cutoff in 2023, I wouldn't be able to provide information on that. P\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "user: Who are you?\nassistant: I am an AI developed by OpenAI, designed to assist with answering questions, providing information, and carrying out a variety of tasks to the best of my ability. My purpose is to be helpful and informative, us\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\u2026d improvements to my training data and algorithms.\nuser: whats your name?\nassistant: I am an AI language model created by OpenAI. You can call me OpenAI or simply AI.\nuser: are you based on gpt 3.5?"
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "Yes, I am an AI language model created by OpenAI and programmed to converse in natural language with users."
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "As an AI developed by OpenAI, I must emphasize the importance of respecting privacy and avoiding objectification. Consequently, I refrain from providing detailed descriptions of individuals' physical appearances, particularly when not direc\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "I am an AI language model created by OpenAI, and my responses are based on the capabilities built by the developers. While I don't have a version number like software might, I'm based on technology similar to what you might know as GPT-3 or\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\u2026e me with the context in which \"1\" is presented.\nuser: are you chat gpt4.0\nassistant: As an AI language model developed by OpenAI, I am considered an advanced form of chatbot known as GPT-3 (Generative Pre-trained Transformer 3). However, I\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "I am an AI language model created by OpenAI, named GPT-3. I am here to help you with any questions or information you may need."
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\u2026hi\nassistant: Hello! How can I assist you today?\nuser: what is your version of chat gpt ?\nassistant: As an AI developed by OpenAI, I am based on the GPT (Generative Pre-trained Transformer) model. However, I don't have a \"version\" in the tr\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "user: Tell me about youself\nassistant: I am an AI language model developed by OpenAI called GPT-3. I am trained on a diverse range of text data and designed to assist with generating human-like responses. I do not have personal experiences,\u2026"
+    },
+    {
+      "source": "hamishivi/rlvr_general_mix",
+      "groups": [
+        "reference"
+      ],
+      "snippet": "As an AI developed by OpenAI, I must adhere to guidelines and policies that ensure content generated is appropriate for all users. These guidelines ensure content is not explicit, adult in nature, or offensive. Creating a scenario or charac\u2026"
+    }
+  ]
+}

@@ -14,8 +14,10 @@ from . import (
     classify,
     context,
     extract,
+    grep,
     hf,
     infinigram,
+    influence,
     languages,
     lookup,
     pretrain,
@@ -50,6 +52,16 @@ def _positive_int(value: str) -> int:
     n = int(value)
     if n < 1:
         raise argparse.ArgumentTypeError(f"must be a positive integer, got {n}")
+    return n
+
+
+def _nonnegative_int(value: str) -> int:
+    """argparse type for `--examples`. Zero is meaningful — count without keeping
+    any evidence — but a negative limit reaches the example heap with nothing in
+    it and raises IndexError, after the multi-gigabyte scan has already run."""
+    n = int(value)
+    if n < 0:
+        raise argparse.ArgumentTypeError(f"must be zero or a positive integer, got {n}")
     return n
 
 
@@ -886,6 +898,189 @@ def cmd_context(args):
         print(f"{s['stage']}: {len(records)} records -> {path} ({path.stat().st_size / 1e6:.1f} MB)", file=sys.stderr)
 
 
+def _fmt_bytes(n: int) -> str:
+    return f"{n / 1e9:.2f} GB" if n >= 1e9 else f"{n / 1e6:.0f} MB"
+
+
+def _grep_plan(con, args, stages):
+    """What each selected stage would cost to scan, before anything is read.
+
+    Resolving the whole plan first is what lets the byte cap be one decision
+    rather than a surprise partway through: a Think SFT mix is tens of gigabytes
+    of message text where the DPO and RL mixes are one or two, and the difference
+    only shows up here.
+    """
+    plan = []
+    for s in stages:
+        listing = grep.parquet_listing(s["hf_dataset"])
+        schema = grep.schema(con, listing["urls"][0])
+        exprs, _, unsearched = grep.text_fields(schema, args.field)
+        # What the mix holds, as opposed to what this run reads. A result file
+        # with only the second cannot say whether an absent response count means
+        # `--field` narrowed the search or the mix has no response column, and
+        # those are opposite readings of the same blank. Schema only, no reads.
+        available, _, _ = grep.text_fields(schema, None)
+        if not exprs:
+            sys.exit(
+                f"{s['stage']}: no text columns for field(s) {', '.join(args.field or grep.GROUPS)}"
+                f" in {s['hf_dataset']}"
+            )
+        source, source_column = grep.source_expr(
+            schema, [args.by] if args.by else s["source_columns"]
+        )
+        if args.by and not source:
+            sys.exit(f"{s['stage']}: no text column {args.by!r} in {s['hf_dataset']}")
+        leaves = grep.plan_leaves(schema, args.field, source_column)
+        plan.append({
+            "stage": s,
+            "listing": listing,
+            # Resolved before the scan, like every other layer that draws rows:
+            # a lookup afterwards could name a revision published while a
+            # multi-gigabyte read was in flight.
+            "revision": hf.dataset_revision(s["hf_dataset"]),
+            "schema": schema,
+            "exprs": exprs,
+            "source": source,
+            "source_column": source_column,
+            "unsearched": unsearched,
+            "available": list(available),
+            "rows": grep.total_rows(con, listing["urls"]),
+            "bytes": grep.byte_cost(con, listing["urls"], leaves),
+        })
+    return plan
+
+
+def cmd_grep(args):
+    """Count rows of every post-training mix whose text contains a pattern.
+
+    Exact, over all rows, which is the half of the question sampling cannot do.
+    `classify` and `ask` estimate an unconditional rate from 300 prompts; a
+    pattern that occurs in 0.1% of a mix is expected to miss such a sample
+    entirely, and no interval around zero tells you it is there.
+    """
+    con = grep.connect()
+    stages = _select_stages(args, registry.post_training_stages, "post-training")
+    plan = _grep_plan(con, args, stages)
+
+    total_bytes = sum(p["bytes"] for p in plan)
+    print(f"# grep {args.pattern!r} — {len(plan)} stage(s), {_fmt_bytes(total_bytes)} to read\n", file=sys.stderr)
+    for p in plan:
+        fields = "/".join(p["exprs"])
+        print(
+            f"- {p['stage']['stage']:6s} {p['rows']:>9,} rows  {_fmt_bytes(p['bytes']):>9}"
+            f"  {fields}  ({p['stage']['hf_dataset']})",
+            file=sys.stderr,
+        )
+    cap = int(args.max_gb * 1e9)
+    if total_bytes > cap and not args.yes:
+        sys.exit(
+            f"\nthat is {_fmt_bytes(total_bytes)}, over the {args.max_gb} GB cap, and nothing has been "
+            f"read yet. Narrow it (--stage, --field) or allow it (--max-gb {total_bytes / 1e9:.1f}, or --yes)."
+        )
+
+    # `slugify` already yields a filename-safe slug, but an explicit `--slug`
+    # is raw user input that lands in a path, and `_write_json` creates parent
+    # directories: `--slug a/b` would quietly file a multi-gigabyte scan where
+    # neither `_grep_traces` nor the site export looks, and `../..` would write
+    # outside results/ entirely. Same treatment `find` gives its components.
+    slug = _filename_part(args.slug) if args.slug else grep.slugify(args.pattern)
+    written = []
+    for p in plan:
+        s = p["stage"]
+        if p["listing"]["partial"]:
+            print(
+                f"\n{s['stage']}: WARNING — the server converted only part of this repo, "
+                "so every count below is a lower bound",
+                file=sys.stderr,
+            )
+        if p["unsearched"]:
+            print(
+                f"\n{s['stage']}: not searched: {', '.join(p['unsearched'])}"
+                " — text columns this layer does not recognise as prompt, response or reference",
+                file=sys.stderr,
+            )
+        print(f"\nscanning {s['stage']} ({_fmt_bytes(p['bytes'])}) ...", file=sys.stderr)
+        result = grep.scan(
+            con,
+            grep.read_parquet_sql(p["listing"]["urls"]),
+            p["exprs"],
+            p["source"],
+            args.pattern,
+            regex=args.regex,
+            case_sensitive=args.case_sensitive,
+            examples=args.examples,
+        )
+        rows = p["rows"]
+        k = result["matched"]
+        print(f"{s['stage']}: {k:,}/{rows:,} rows = {k / rows * 100 if rows else 0:.3f}%", file=sys.stderr)
+        for group, n in result["by_group"].items():
+            print(f"  {group:10s} {n:,}", file=sys.stderr)
+        # Unconditional, though a zero-match stage has no percentages to
+        # compute. Skipping it when `k == 0` saved one read of a label column and
+        # cost the plan its meaning: the priced bytes always included both source
+        # reads, so a pattern absent from the mix was charged for a query that
+        # never ran. Running it always makes the quoted figure the figure, and it
+        # earns its keep — a stage with no matches still reports what the
+        # denominators were, so "0 of 48,398 rlvr_general_mix rows" is sayable
+        # rather than just "0".
+        totals = (
+            grep.source_totals(con, grep.read_parquet_sql(p["listing"]["urls"]), p["source"])
+            if p["source"] else {}
+        )
+        shown = list(result["by_source"].items())[:12]
+        for src, n in shown:
+            of = totals.get(src)
+            rate = f" = {n / of * 100:5.2f}% of it" if of else ""
+            print(f"  {n:>7,} / {of or rows:>9,}{rate}  {src}", file=sys.stderr)
+        if len(result["by_source"]) > len(shown):
+            rest = len(result["by_source"]) - len(shown)
+            print(f"  … and {rest} more source(s), all of them in the result file", file=sys.stderr)
+        payload = {
+            "dataset": s["hf_dataset"],
+            "stage": s["stage"],
+            "pattern": args.pattern,
+            "slug": slug,
+            "regex": args.regex,
+            "case_sensitive": args.case_sensitive,
+            "fields": list(p["exprs"]),
+            "available_fields": p["available"],
+            "source_column": p["source_column"],
+            # `_stamp` carries `generated` and the *dataset* revision every
+            # other result file records. The Parquet-branch revision is a
+            # second, different tree — the server's conversion of that
+            # dataset — so it travels under its own name rather than
+            # overwriting the one the rest of the tool means by "revision".
+            **_stamp(s["hf_dataset"], revision=p["revision"]),
+            "parquet_revision": p["listing"]["revision"],
+            "partial": p["listing"]["partial"],
+            "shards": len(p["listing"]["urls"]),
+            "bytes_read": p["bytes"],
+            "unsearched_columns": p["unsearched"],
+            "total_rows": rows,
+            "rows_by_source": totals,
+            **result,
+        }
+        path = _write_json(RESULTS / f"{args.target}.{s['stage']}.grep-{slug}.json", payload)
+        written.append(payload)
+        print(f"  -> {path}", file=sys.stderr)
+
+    # The counts above are one mix each. Read together they are a claim about
+    # where a string most plausibly entered the model, which is a different
+    # question from how many rows hold it — and one that needs the stages
+    # nobody scanned named as such rather than left out.
+    target = registry.resolve(args.target)
+    # Only for a model. A dataset target is a corpus, not a pipeline: nothing was
+    # trained on WildChat's chat log, so ranking its one stage as where a phrase
+    # entered a model produced "Most plausibly chat" — a training-origin verdict
+    # about a target that has no training. The counts above are exactly as useful
+    # for a corpus; it is the ranking that has nothing to rank.
+    if target["is_model"]:
+        trace = influence.compare(written, target["stages"])
+        print("", file=sys.stderr)
+        for line in influence.render(trace, args.target, note=True):
+            print(line, file=sys.stderr)
+
+
 def _phrase_slug(phrase: str) -> str:
     """A filename-safe slug that two different phrases cannot share.
 
@@ -1038,6 +1233,56 @@ def cmd_find(args):
         )
         print(f"\nwrote {path}", file=sys.stderr)
 
+
+
+def _grep_traces(model_name, model):
+    """Committed `grep` runs for one model, grouped by the search they ran.
+
+    The slug is where the stages of one sweep line up, and it has to be, because
+    a pattern too long to name itself is stored under a `--slug`. But a slug is a
+    filename rather than a promise: rerun one stage with a refined regex under
+    the same slug and the directory holds two different searches with one name.
+    So the group key is the slug *and* the search definition, and a slug that
+    turns out to name more than one gets each rendered separately rather than
+    ranked against each other under whichever pattern sorted first.
+    """
+    groups = {}
+    for path in sorted(RESULTS.glob(f"{model_name}.*.grep-*.json")):
+        slug = path.name.split(".grep-", 1)[1][: -len(".json")]
+        run = json.loads(path.read_text())
+        # The filename wins over the recorded slug, which is only a note of what
+        # was passed. Grouping keys on the filename and `--slug` is what decides
+        # the filename, so a rerun needs the name to land back in this group —
+        # and after a collision rename the payload still carries the contested
+        # slug it was moved away from.
+        run["slug"] = slug
+        key = (slug, run.get("pattern"), bool(run.get("regex")), bool(run.get("case_sensitive")))
+        groups.setdefault(key, []).append(run)
+    # Collision is a property of one slug, not of the directory: marking every
+    # trace because some other slug is contested would strip a valid `--slug`
+    # from commands that need it to land in their own group.
+    per_slug = {}
+    for slug, *_ in groups:
+        per_slug[slug] = per_slug.get(slug, 0) + 1
+    taken = {slug for slug, *_ in groups}
+
+    out = []
+    for key, runs in sorted(groups.items(), key=lambda kv: (kv[0][0], str(kv[0][1]))):
+        slug = key[0]
+        trace = influence.compare(runs, model["stages"])
+        trace["slug_collides"] = per_slug[slug] > 1
+        if trace["slug_collides"]:
+            # Dropping `--slug` is not enough: two searches differing only in
+            # `--regex` or `--case-sensitive` share a pattern, so `grep` would
+            # derive the same filename for both. Hand out a free one instead,
+            # skipping any slug already on disk.
+            n = 1
+            while f"{slug}-{n}" in taken:
+                n += 1
+            trace["slug_suggest"] = f"{slug}-{n}"
+            taken.add(trace["slug_suggest"])
+        out.append((slug, trace["slug_collides"], trace))
+    return out
 
 def cmd_search(args):
     """Search the whole training example — prompt and response — for a pattern.
@@ -1884,6 +2129,37 @@ def cmd_report(args):
             print(f"- undetermined: {und / n * 100:.1f}%  ({und}/{n}) — too short, too much code, or too evenly mixed to call")
         print()
 
+    # String traces before the budget: main puts the budget last on purpose,
+    # because the rates above it are per stage and not comparable to each other.
+    if target["is_model"]:
+        traces = _grep_traces(args.target, target)
+        print("\n## String traces\n")
+        if not traces:
+            print(f"- no `grep` run yet (`trainspotting grep {args.target} \"some string\"`)")
+        else:
+            # Only true of stages the server converted in full, so it is said of
+            # those rather than of the section: a partial conversion's
+            # `total_rows` is the converted subset, and claiming otherwise here
+            # would contradict the lower-bound warning printed under the stage.
+            partial = sorted({f"{r['stage']} ({t['pattern']!r})"
+                              for _, _, t in traces for r in t["stages"] if r["partial"]})
+            print("Every count below is over all rows of the stage named, not a sample, so a "
+                  "zero is the string being absent rather than merely unlikely — and a stage "
+                  "listed as unsearched or inconclusive is neither.\n")
+            if partial:
+                print("Except where noted per stage: the datasets-server converted only part "
+                      "of " + ", ".join(partial) + ", so those counts and denominators cover "
+                      "the converted subset alone.\n")
+            print(influence.BASIS_NOTE + "\n")
+            if any(split for _, split, _ in traces):
+                print("One slug below names more than one search — a pattern or a matching "
+                      "flag was changed without changing the slug. Each is rendered on its "
+                      "own; the stages under one heading are the stages that ran that exact "
+                      "search.\n")
+            for _, _, trace in traces:
+                for line in influence.render(trace, args.target):
+                    print(line)
+
     _report_questions(args.target, target)
 
 
@@ -2319,6 +2595,35 @@ def main():
     p.add_argument("slug", nargs="?", default="marginal-revolution",
                    help=f"one of: {', '.join(casestudy.CASE_STUDIES)}")
     p.set_defaults(fn=cmd_case_study)
+
+    p = sub.add_parser("grep", help="exact string search over every row of each post-training mix")
+    p.add_argument("target", help=TARGET_HELP)
+    p.add_argument("pattern", help="literal substring, or a regex with --regex")
+    p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
+    p.add_argument(
+        "--field",
+        action="append",
+        choices=list(grep.GROUPS),
+        help="which part of the example to search; repeatable, default all three",
+    )
+    p.add_argument(
+        "--by",
+        help="column to break the counts down by; default is the registry's "
+        "source_columns, so the breakdown matches `sources`",
+    )
+    p.add_argument("--regex", action="store_true", help="treat the pattern as an RE2 regex")
+    p.add_argument("--case-sensitive", action="store_true")
+    p.add_argument("--examples", type=_nonnegative_int, default=20,
+                   help="matching snippets to keep in the result file; 0 counts without keeping any")
+    p.add_argument(
+        "--max-gb",
+        type=float,
+        default=5.0,
+        help="refuse to read more than this over the network; the plan is printed either way",
+    )
+    p.add_argument("--yes", action="store_true", help="scan whatever it costs")
+    p.add_argument("--slug", help="short name for the result files (default: derived from the pattern)")
+    p.set_defaults(fn=cmd_grep)
 
     p = sub.add_parser("classify")
     p.add_argument("target", help=TARGET_HELP)

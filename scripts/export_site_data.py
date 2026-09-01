@@ -7,7 +7,9 @@ Context and pretraining-document records are copied minified (they are bulk text
 the site fetches on click); everything else is copied verbatim so its diffs stay
 readable. The two bulk kinds also get a small summary derived from them — a
 `.corpus.json` per document sample and a `.profile.json` per context run — so the
-site can draw a card without pulling megabytes.
+site can draw a card without pulling megabytes. The same bulk files are indexed
+by three-character run into `search-index.json`, which is how the page's search
+box avoids downloading them all.
 """
 
 import json
@@ -19,7 +21,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trainspotting import budget, casestudy, derive, languages, paths, registry, rewards  # noqa: E402
+from trainspotting import (  # noqa: E402
+    budget,
+    casestudy,
+    derive,
+    languages,
+    paths,
+    registry,
+    rewards,
+    searchindex,
+)
 
 # Bulk text the site fetches on demand: full training examples behind a prompt,
 # and sampled pretraining documents. Both are regenerable caches of upstream
@@ -27,6 +38,17 @@ from trainspotting import budget, casestudy, derive, languages, paths, registry,
 # Getting this set wrong is silent: the files stay on disk, drop out of the
 # manifest, and the site stops asking for them.
 BULK = (".context.json", ".docs.json")
+
+# Result files with no reader on the page. The site draws a card per labels/ask/
+# languages run and ignores anything it does not recognise, so exporting these
+# would only add unread weight to what the page ships. Drop a prefix from here
+# when the page learns to render that kind of run.
+#
+# `.search-` is here for the same reason as `.grep-` and is easy to miss: the
+# page has a search box, but it searches the committed samples directly and
+# never reads a `.search-` result file. Exporting one ships bytes nobody
+# fetches.
+UNRENDERED = (".grep-", ".search-")
 
 out = ROOT / "docs" / "data"
 out.mkdir(parents=True, exist_ok=True)
@@ -78,7 +100,9 @@ for f in sorted((ROOT / "results").glob("*.json")):
     # part of what this repo publishes — and copying it here put its name in
     # `copied` a second time when the derive loop wrote the real one, so the
     # manifest listed it twice.
-    if ".budget-" in f.name:
+    #
+    # UNRENDERED is the same idea for runs the page has no card for at all.
+    if ".budget-" in f.name or any(marker in f.name for marker in UNRENDERED):
         continue
     if f.name.endswith(BULK):
         (out / f.name).write_text(json.dumps(json.loads(f.read_text()), separators=(",", ":")))
@@ -182,7 +206,12 @@ stale = [
     # sweep that knew only the second deleted every profile it had just written.
     if not (f.name.endswith(BULK) or f.name in set(derived))
     and f.name not in set(copied)
-    and f.name not in {"registry.json", "language-names.json", "reward-kinds.json", "manifest.json"}
+    # The files this script writes itself rather than copying from results/.
+    # `search-index.json` is built below from the bulk files, so results/ never
+    # holds one — a sweep that only knew the hand-written names deleted it every
+    # run and reported it as stale, on the way to rebuilding it.
+    and f.name not in {"registry.json", "language-names.json", "reward-kinds.json",
+                       "manifest.json", "search-index.json"}
     and not f.name.startswith(tuple(f"{n}.budget-" for n in registry.targets()))
 ]
 for f in stale:
@@ -280,7 +309,26 @@ for name in sorted(n for n in copied if n.startswith("case-study.")):
             f"claim ('As of {d['run_on']}')"
         )
 
+# Everything the search box can read, indexed by trigram. Built from docs/data
+# rather than results/ so it covers the committed bulk files a fresh checkout
+# never rebuilt (the same reason `kept` exists), and built last so it indexes
+# exactly what this run wrote.
+searchable = sorted(out.glob("*.context.json")) + sorted(out.glob("*.docs.json"))
+index = searchindex.build_from_paths(searchable)
+# ensure_ascii would triple the size of every non-Latin trigram, and the page
+# parses the file as UTF-8 either way.
+(out / "search-index.json").write_text(
+    json.dumps(index, separators=(",", ":"), ensure_ascii=False)
+)
+copied.append("search-index.json")
+index_mb = (out / "search-index.json").stat().st_size / 1e6
+total += (out / "search-index.json").stat().st_size
+
 (out / "manifest.json").write_text(json.dumps(sorted(set(copied + kept + derived)), indent=2))
+print(
+    f"indexed {len(index['grams']):,} trigrams across {len(searchable)} sampled files "
+    f"for search ({index_mb:.1f} MB)"
+)
 print(
     f"wrote registry.json + language-names.json + manifest.json, {len(copied)} result files "
     f"and {len(derived)} derived summaries ({total / 1e6:.1f} MB)"

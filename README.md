@@ -4,10 +4,11 @@ Spot what's in a model's training data. Audits what a fully open model was
 trained on — the OLMo 3 pipelines (Ai2), whose pretraining (Dolma 3) and
 post-training (Dolci) data are public, and Pythia (EleutherAI), whose
 pretraining corpus is public and which has no post-training at all — and, with
-the same layers, any dataset on its own. The tool answers eight kinds of
-question. The first five go in increasing order of depth; the sixth is a lookup
-rather than an estimate; the last two read a whole example rather than its
-prompt, and put the answer on a scale the stages share:
+the same layers, any dataset on its own. The tool answers nine kinds of
+question. The first five go in increasing order of depth; the sixth and seventh
+are lookups rather than estimates, and differ in how much of the mix they can
+see; the last two read a whole example rather than its prompt, and put the answer
+on a scale the stages share:
 
 1. **Facts** — stage sizes for a model's whole training pipeline (pretrain →
    midtrain → long-context → SFT → DPO → RLVR), hardcoded in a registry.
@@ -28,17 +29,26 @@ prompt, and put the answer on a scale the stages share:
    response the model is fit to (SFT), the pair it is pushed between (DPO), or
    the verifier that scores it (RL). A prompt on its own can read as the
    opposite of what it teaches, so every count clicks through to this.
-6. **Strings** — where a given string or regex appears in the sampled examples,
-   and on which side. A behaviour like claiming to be ChatGPT is in none of the
-   prompts: it is in what the model is fit to. So this layer searches the
-   response columns as well, and for a DPO pair says whether the hit is in the
-   chosen or the rejected completion — the same string in each teaches opposite
-   things. See [Searching a whole example](#searching-a-whole-example).
-7. **Direction** — which way an example pushes on a question: `toward`, `away`,
+6. **Strings, in the samples** — where a given string or regex appears in the
+   sampled examples, and on which side. A behaviour like claiming to be ChatGPT
+   is in none of the prompts: it is in what the model is fit to. So this layer
+   searches the response columns as well, and for a DPO pair says whether the hit
+   is in the chosen or the rejected completion — the same string in each teaches
+   opposite things. Reads the committed samples, so it finds instances to read
+   rather than a rate. See [Searching a whole example](#searching-a-whole-example).
+7. **Strings, over every row** — how many rows of a mix contain a given string,
+   exactly, over the whole mix rather than a sample. The same question as the
+   layer above with the sampling removed, which is what turns instances into a
+   rate: a pattern in 0.1% of a mix is expected to miss a 300-row sample
+   entirely, and no interval around zero says whether it is absent or just rare.
+   Counts are then read across the pipeline as a ranking — which stage most
+   plausibly taught the string, by rate rather than by hits.
+   See [Searching for a string](#searching-for-a-string).
+8. **Direction** — which way an example pushes on a question: `toward`, `away`,
    or `neither`. A yes/no over prompts cannot say that a stage contains training
    pointing the other way, and this data has some. See
    [Which way an example pushes](#which-way-an-example-pushes).
-8. **Budget** — every stage's rate times its size, in tokens the model was fit
+9. **Budget** — every stage's rate times its size, in tokens the model was fit
    to, so the stages are on one scale and add up. A share of DPO rows and a
    share of Dolma 3 documents are different denominators; this is where they
    become one number. See [How much training is that?](#how-much-training-is-that).
@@ -131,7 +141,8 @@ at the same stages.
 pip install -e .
 ```
 
-The `values` layer needs an Anthropic API key (`ANTHROPIC_API_KEY`).
+The `values` layer needs an Anthropic API key (`ANTHROPIC_API_KEY`). The `grep`
+layer needs DuckDB (`pip install -e '.[grep]'`); nothing else does.
 
 ## Usage
 
@@ -150,7 +161,8 @@ trainspotting trace olmo-3-7b-instruct \
 # Sample 300 prompts per stage and label each one with Claude
 trainspotting classify olmo-3-7b-instruct --sample 300
 
-# Combined markdown report with Wilson 95% CIs on the sampled estimates
+# Combined markdown report: sampled rates with Wilson 95% CIs, and every
+# committed string trace ranked by which stage most plausibly taught it
 trainspotting report olmo-3-7b-instruct
 
 # Free-form question: sample each stage and judge every prompt yes/no
@@ -193,6 +205,9 @@ trainspotting ask olmo-3-7b-think "..." --slug my-question --pretrain
 
 # ...or only the corpora, when the post-training half is already committed
 trainspotting ask olmo-3-7b-think "..." --slug my-question --pretrain-only
+
+# Exact count of the rows of each mix containing a string (needs DuckDB)
+trainspotting grep olmo-3-7b-think "ChatGPT" --stage dpo
 
 # Exact occurrence count + example documents for a phrase, via infini-gram
 trainspotting find "the mitochondria is the powerhouse of the cell"
@@ -453,6 +468,290 @@ The default `--sample 300 --seed 0` is the draw every other layer uses, so a hit
 is a row those runs already labeled and its whole example is in the committed
 context file. A larger `--sample` is a wider net over a different set of rows,
 which no longer lines up with them.
+
+`search` and `grep` ask the same question of different amounts of data, and the
+difference is the whole point of having both. `search` reads the committed
+samples, so it hands back examples to read and cannot report a rate: 300 rows
+per stage is too few to distinguish absent from rare. `grep` reads every row, so
+it reports a rate and a zero that means absence, and cannot hand back more than
+the examples it kept. Start with `search` when the question is "what does this
+look like", and `grep` when it is "how much of the mix is this".
+
+Their side classifications are separate implementations — `search.FIELDS` over
+sampled records, `grep.MESSAGE_LISTS` over Parquet columns — because they read
+different shapes: one has parsed JSON records, the other has a column schema and
+a SQL dialect. That is a duplication worth watching rather than one worth hiding:
+if the two ever disagree about which side a turn is on, the same string gets
+counted as prompt by one and response by the other.
+
+## Searching for a string
+
+`trainspotting grep <model> <pattern>` counts the rows of every post-training
+mix whose text contains a pattern. Exactly, over all of them — not a sample:
+
+```
+$ trainspotting grep olmo-3-7b-think "ChatGPT" --stage dpo
+# grep 'ChatGPT' — 1 stage(s), 1.39 GB to read
+
+- dpo      150,000 rows    1.39 GB  prompt/response  (allenai/Dolci-Think-DPO-7B)
+
+scanning dpo (1.39 GB) ...
+dpo: 773/150,000 rows = 0.515%
+  prompt     647
+  response   521
+      434 /    17,596 =  2.47% of it  filtered_wc_sample_500k
+      192 /     5,220 =  3.68% of it  Wildchat-1m-gpt-4.1-regeneration-not-english
+      105 /    13,955 =  0.75% of it  Wildchat-1M-gpt-4.1-regenerated-english
+       24 /    23,202 =  0.10% of it  ultrafeedback_cleaned_olmo2_7b
+        6 /     3,884 =  0.15% of it  tulu_v3.9_synthetic_finalresp_wildguardmixtrain_decontaminated_50k
+      … seven more sources, one to four rows each
+```
+
+That question cannot be asked of a sample. `classify` and `ask` draw 300 prompts
+per stage; at 0.5% they would expect one or two matches, and at the rates the
+rarer patterns come in they would expect none — with no interval around zero
+saying whether the thing is absent or just rare.
+
+The route is the datasets-server's own Parquet conversion of each repo, scanned
+in place by DuckDB over HTTP range requests. Parquet is columnar, so the scan
+pays for the columns it searches and skips the rest: the Think RL mix is 1.9 GB
+on disk but 1.1 GB of that is the reference rollouts, which `--field prompt`
+never reads. Nothing is downloaded to disk. The two cheaper routes do not work
+here — `/search` and `/filter` both need a server-side index that is not built
+for any Dolci repo (they answer "the dataset index is loading", or 502,
+indefinitely), and `/statistics` counts whole values of a column rather than
+looking inside one.
+
+**Rows, not occurrences.** A row saying "ChatGPT" four times counts once, which
+is the unit a training run sees. A row matching in two groups counts once in the
+total and once in each group, so the group numbers sum to more than the total.
+
+**Which part of the example matched.** Every column is mapped to the part of the
+training example it holds, and the counts are broken down by it — the same cut
+the `context` layer draws:
+
+| Field | What it is | Columns |
+|---|---|---|
+| `prompt` | what the model is asked | `prompt`, the user and system turns of `messages` / `chosen` / `rejected` / `source_prompt`, a tool schema in `functions` |
+| `response` | what it is fit to, or pushed between | the assistant turns of those message lists, `function_calls`, an RL mix's reference `outputs` |
+| `reference` | what scores it | `ground_truth`, `reward_model.ground_truth`, `solution`, `constraint` |
+
+This is the distinction that matters for identity text, and the one the values
+layer cannot make: `classify` and `ask` read prompts, so a phrase that only ever
+appears in the response or in an RL reference answer is invisible to them.
+
+`--field` narrows the search to a subset. It saves bytes only where a column
+belongs to one group: an SFT or DPO mix keeps both sides of the conversation in
+one `messages` column chunk, so `--field prompt` there costs exactly what
+searching all of it costs. The printed plan shows the real figure either way.
+
+**Cost is printed before anything is read**, from the shard footers, and a plan
+over 5 GB stops rather than starting a long transfer by surprise (`--max-gb`,
+`--yes`). The SFT mixes are the expensive ones: 36 GB of message text for
+`Dolci-Think-SFT-7B` against 1.4 for its DPO mix.
+
+**Exactness.** The count is over every row of the revision named in the result
+file, which is the Parquet branch's commit rather than a moving `main`. Two
+things qualify it: a repo the server converted only part of is flagged and its
+counts are a lower bound (none of the Dolci mixes are, today), and any top-level
+text column the layer does not recognise as prompt, response or reference is
+printed as unsearched rather than quietly skipped. Inside a message list only
+`content` and the two tool subfields are read — Dolci-Instruct-DPO's `chosen`
+struct also carries the WildChat request's `country`, `state`, `language` and
+hashed IP, which are request metadata rather than training text and are not
+searched. `tests/test_grep.py` fails if a saved schema stops mapping the way it
+did, so an upstream rename cannot silently shrink a count.
+
+Results land in `results/<model>.<stage>.grep-<slug>.json` with the per-source
+breakdown and `--examples` snippets centred on the match, because a count is
+only worth what reading its matches says. Of the 134 matches in
+`Dolci-Think-RL-7B`, 12 are unit-test string literals asserting on
+`'OpenAI ChatGPT'` — which the snippets say and the number does not. The site
+does not render `grep` runs yet.
+
+### Which stage it most plausibly came from
+
+A count on its own is presence. Stacked across a pipeline it is easy to read
+backwards, because a bigger number is not a bigger effect: a stage with ten
+times the rows shows more of any string for that reason alone. So a multi-stage
+`grep` ends with a comparison, and `trainspotting report` prints the same one for
+every committed run:
+
+```
+### `as an AI language model` — where it most plausibly comes from
+
+- dpo  — 61 of 150,000 rows, 0.041% (1 in 2,459).  prompt 46 · response 39 · reference not counted
+  - produce side: 39 rows, 0.026% of the stage.
+  - concentrated in `tulu-3-sft-coconot-regenerated`: 33 of its 790 rows, 4.2% — 103× the stage's own rate.
+- rlvr — 400 of 102,014 rows, 0.39% (1 in 255).  prompt 209 · response 3 · reference 232
+  - produce side: 232–235 rows, 0.23% of the stage.
+  - concentrated in `hamishivi/rlvr_general_mix`: 387 of its 20,636 rows, 1.9% — 5× the stage's own rate.
+- sft — not searched. That is not a zero: no row of this stage has been read for
+  this pattern.
+- pretrain, midtrain, long-context — out of reach for this layer, which is also
+  not a zero.
+
+Most plausibly rlvr. 387 of the 20,636 `hamishivi/rlvr_general_mix` rows (1.9%,
+5× the stage) hold it, and 232–235 of the stage's matches are on the produce
+side. Highest produce-side rate of the 2 stages with any: 8.7× dpo's.
+```
+
+Three things go into that, and all three are already exact:
+
+**The rate, not the count.** Every stage against its own row count, and every
+source against its own. Inside a stage the same correction applies twice over:
+`llm_judged` holds 267 of Instruct-DPO's 521 `ChatGPT` matches, a clear majority
+— and at 124,980 rows it holds them at 0.21% against 0.20% for the mix, so it is
+the biggest source rather than the origin. A source is called a concentration
+only when it holds at least a tenth of the matches at twice the stage's rate;
+otherwise the line says the matches are spread, which is the more common answer
+and the one a top-N list hides.
+
+**Which side matched.** A string in a prompt is text the model was trained to
+read; a string in the response a stage fits, or in the reference answer a
+verifier scores rollouts against, is text the objective pushes it to emit. When
+the question is why a model *says* something, only the second is evidence, so
+the ranking runs on the produce-side rate and falls back to the overall rate
+only when no run read a produce-side column. The source attribution follows the
+same cut: under the produce-side basis the concentration is computed over
+produce-side rows per source, because a source that supplied only prompts
+supplied none of the evidence the ranking ran on. `by_group` counts rows per
+group and one row can match two, so the union is reported as the interval it is
+(232–235) rather than as the sum — bounded from below by the largest group and
+by the rows that matched no prompt, which settles it outright where nothing
+matched a prompt —  — and the interval is carried into the ranking
+rather than collapsed to its low end. Two stages whose intervals overlap, or
+touch at a single value, are not ordered by these counts, and the verdict says
+so instead of picking one — which on the row basis, where every rate is a point,
+is the plain tie: equal rates are reported as equal rather than resolved by the
+sort. A source's own produce-side count is a union in the same way, so it prints
+as `40–60 of its 1,000 rows` where its groups can overlap.
+
+Every comparison drawn from a bounded count runs against the end that makes it
+hold, or is not drawn. The advantage over the runner-up is the leader's floor
+over the runner-up's ceiling and reads "at least 8.7×", and where that quotient
+falls below one there is no advantage to report. A source is called the largest
+contributor only when its floor clears every other source's ceiling; otherwise
+the line says no largest is established and names the biggest counted floor. The
+runner-up in the advantage clause is the stage with the highest ceiling rather
+than the second-highest floor, because that is the one that binds how big a lead
+the counts guarantee — and where that runner-up did not read all its own columns
+there is no bound to state, so the multiple is dropped rather than printed
+alongside a caveat that contradicts it.
+
+A source concentration is measured over the columns its run opened, so a run
+that read `response` where the mix also has `reference` gets that said alongside
+the number — and the same on the row basis, where a `--field prompt` run's
+concentration is over prompts alone. Where every run in a trace is limited the same way — as
+every committed one is, having been written before result files recorded the
+sides their mix holds — it is said once for the trace instead of under each
+stage and again in the verdict.
+
+Where a source's share rests on that interval, both tests run against the end
+that makes them hold: the lift is the source's floor over the stage's ceiling,
+so it reads "at least 5×" rather than "5×" and collapses to the plain figure
+when the interval does, and the share floor is a share of the ceiling, since a
+source only supplies a tenth of the evidence if it does so against the most the
+evidence could be. Where every stage with produce-side evidence is excluded from
+the ranking, the verdict elects nobody rather than the comparable stage that
+measured zero there.
+
+A run that did not read everything its own mix has on the side being ranked can
+only have undercounted, so its rate is a floor rather than a figure. That is
+harmless where it wins — a floor above the leader beats the leader — and unsound
+where it loses, because the columns nobody opened could put it on top. Losing
+stages in that position are named, and the fallback to the overall rate says
+"nothing matched on the produce side of the runs that read one" rather than
+"no stage matched on the produce side" whenever some run never read one.
+
+**What was not looked at.** A stage scanned and found empty, a stage nobody
+scanned, a stage this layer cannot reach, and a stage scanned but not all the
+way through are four different answers, and flattening them into "no hits" is
+what turns *we did not look* into *it is not there*. They are named apart.
+
+A zero counts for the whole stage only when the whole stage was read. Three
+things break that, and each is printed rather than assumed: the datasets-server
+converted only part of the repo, `--field` narrowed the search to some of the
+sides the mix has, or a text column the layer does not recognise went
+unsearched. Any of them makes the result inconclusive — nothing matched *in what
+was read* — and keeps it out of the stage-wide claim. A run written before result files
+recorded which sides the mix has usually cannot demonstrate it read all of them,
+so it lands there too — unless its `fields` already holds every side this layer
+maps, which no narrowing could have produced and which the older RLVR sweeps
+do. A pattern absent from every stage read end to end does get
+said outright: 0 of N rows, exact over all of them, so a model that produces the
+string anyway did not take it from those stages. What that points at depends on
+what is left. While a reachable stage sits unscanned the ordinary explanation is
+that the string is in it, and the verdict says so first; only once every
+reachable stage has been read does it reach for a stage out of reach, text
+distilled from another model rather than carried across literally, or
+generalisation.
+
+The same rule governs the ranking, because a rate only ranks against another
+rate when both measure the same thing over the same population. A stage whose
+run never opened a produce-side column has no produce-side rate; a stage scanned
+over a partial conversion has a rate over the converted subset, which is a prefix
+rather than a sample. Both keep their counts on the page and are named as out of
+the ranking, rather than sorted to the bottom of it where a gap in the
+measurement reads as a low score. Where that empties the ranking, the verdict
+reports the matches and says no comparison is available — matches never turn
+into a zero because nothing could be ranked.
+
+A "no stage matched on the produce side" reading needs every reachable stage
+read, not just every stage with a result file; short of that it is scoped to the
+stages read and names the ones that were not.
+
+Runs are grouped by their `--slug`, which is a filename rather than a promise:
+rerun one stage under the same slug with a refined regex and the directory holds
+two searches with one name. The group key is the slug *and* the pattern and
+matching flags, so those render separately and `compare()` raises rather than
+ranking one search's counts against another's under whichever pattern sorted
+first. The suggested rerun commands then carry a free slug rather
+than the contested one, because `results/<model>.<stage>.grep-<slug>.json` is a
+write path and pasting the shared one back would overwrite the other search's
+saved stage. Dropping the flag is not enough: two searches differing only in
+`--regex` or `--case-sensitive` share a pattern, and that is what `grep` derives
+a filename from. Collision is judged per slug, so an uncontested one keeps its
+own. The free slug travels with the renames that make it work: `_grep_traces`
+groups by slug, so scanning the missing stage under a new one without moving the
+existing files just opens a third group. The report names the renames and leaves
+them to the reader rather than rewriting `results/` itself; the filename is then
+the authority for a run's slug, since `--slug` is what decides the filename and a
+moved file still carries the contested one in its payload.
+
+What the ranking deliberately does not do is weight the stages against each
+other. Identity behaviour is mostly set after pretraining, so the same rate in
+RLVR and in Dolma 3 are not the same evidence — but by how much is not something
+these counts measure, and folding a guess into a score would bury it. It is
+printed as a caveat and the rates stay comparable on their own terms.
+
+### The same question on the site
+
+The search box in the site's header answers the reading half: it finds a string
+in the committed samples and shows every match in place, across every model and
+stage at once — every turn of the prompt, system instructions included, and the
+response side with it. Type `ChatGPT` and five sampled
+examples come back: the WildChat prompt that opens `Interact as ChatGPT`, a
+DPO prompt asking for `a persona distinct from ChatGPT`, an RL reference answer
+about `working with AI like ChatGPT`, and two long-context documents, one of
+them signed `Generated by ChatGPT`. Each clicks through to the whole training
+example, and each is addressable as a link
+(`#search/ChatGPT/olmo-3-7b-think.dpo/row-65675`).
+
+This is the sample, so it finds instances and never a rate: 300 rows per stage,
+where `grep` reads all 150,000. The two answer different halves of the same
+question, and the empty result says so — a string in none of the samples can
+still be in thousands of rows.
+
+Matching is literal, case-insensitive, and substring, the way ⌘F is. The page
+does not download the 30 MB of samples to do it: `scripts/export_site_data.py`
+writes `docs/data/search-index.json`, a map from every three-character run in
+the samples to the files holding it, and the page intersects the query's
+trigrams to learn which files are worth fetching. `ChatGPT` reads four of the
+twelve; a string in none of them reads nothing at all. Trigrams rather than
+words because the page matches substrings: a word index has no entry for `GPT`
+inside `ChatGPT`, for `quation` inside `équation`, or for anything in a language
+that writes without spaces. `tests/test_searchindex.py` pins those cases.
 
 ## Which way an example pushes
 
@@ -1061,9 +1360,41 @@ The offline suite covers the pure code: the clustered Wilson interval and its
 degenerate branches, language detection on mixed-language prompts, the
 classifier's reply parser, and prompt extraction against one saved row per
 registry stage (`tests/fixtures/rows/`, re-captured by
-`scripts/capture_row_fixtures.py`). Search is checked against those same saved
-rows: every registry stage has to yield more than its prompt, or a search of it
-is the prompt-only search the layer exists to replace.
+`scripts/capture_row_fixtures.py`). `tests/test_influence.py` pins the ways a
+set of counts turns into a wrong story: ranking by hits rather than by rate,
+adding overlapping group counts as if they were a union, ordering two stages
+whose intervals overlap, naming the largest source as the origin when it holds
+the mix rate, crediting a prompt-only source for produce-side evidence, ranking
+an unread produce side or a partial conversion's subset rate against a stage
+rate, reporting a zero for a stage that matched but could not be ranked, reading
+"nothing matched" as a zero when the scan was narrowed, incomplete, or cannot
+show what it covered, and reaching past an unscanned stage for a more
+interesting explanation of a zero. The suggested rerun commands are built with
+shell quoting, which is also pinned: these patterns are regexes, and one holding
+a `$` or a backtick would otherwise run something else when pasted.
+`tests/test_report_traces.py` covers the grouping the report does before any of
+that: one search's stages together, two searches under one slug apart.
+`search` is checked against those same saved rows: every registry stage has to
+yield more than its prompt, or a search of it is the prompt-only search the
+layer exists to replace.
+
+`grep` is covered twice over. Its column-to-field mapping runs against one saved
+Parquet schema per stage (`tests/fixtures/schemas/`, re-captured by
+`scripts/capture_parquet_schemas.py`), and the query it builds runs for real
+against small Parquet files written in the test — locally, so the counts,
+the role split, the null handling and the byte accounting are checked without a
+network. Those tests need DuckDB, which `[dev]` installs.
+
+The site's search index is tested where it can silently lose a match:
+`tests/test_searchindex.py` builds a small index and asserts that a query
+inside a word, inside an accented word, inside a space-free script, or made of
+astral characters still keeps the file that holds it. The same cases run
+against the shipped `docs/data/search-index.json` when a checkout has one.
+
+`--live` re-runs the extraction checks against rows fetched right now, and
+checks each saved Parquet schema against the current one. That is the canary for
+an upstream schema change, which otherwise shows up only as a sampling run that
+quietly labels nothing, or a string search that quietly counts less.
 
 The budget arithmetic is pinned per kind — what counts as a fit token for an
 SFT example, a preference pair, an RL row that ships no generation — along with
@@ -1091,6 +1422,12 @@ sampling run that quietly labels nothing.
   published with the dataset, so those rows are still labeled from the prompt
   alone. The `sources` layer's reward-type breakdown and the `context` layer's
   verifier view are the complement.
+- The stage ranking is evidence about where a string is, and only that. It does
+  not weight the stages against each other, so a rate in RLVR and the same rate
+  in pretraining rank equal even though the late one generally moves behaviour
+  more; and a pattern present in a stage is not a demonstration that any
+  particular behaviour came from it. For "did this exact document train the
+  model", use OLMoTrace.
 - `context` names each RL mix's verifier by matching its `dataset_source`
   against known mixes (math answer match, code unit tests, constraint checker,
   LLM judge). The raw source tag travels with every record, so the inference is
@@ -1147,6 +1484,23 @@ sampling run that quietly labels nothing.
   those. Shards are drawn properly; position within a shard is not corrected
   for. The direct route has no such limit: it reaches every document in the
   corpus.
+- `grep` reads the datasets-server's Parquet conversion of a mix, not the repo
+  files themselves, and covers only the post-training mixes. The pretraining
+  corpora are not converted (the same partial index that stops the shard route),
+  so an exact count over a pretraining corpus is `find`'s job rather than
+  `grep`'s — and for Pythia, which has no post-training at all, `find` is the
+  only one of the two that applies.
+- A `grep` count is over the text, which is not the same as over the tokens the
+  model saw. A phrase split across two message turns, spelled with styled
+  Unicode characters (`𝗖𝗵𝗮𝘁𝗚𝗣𝗧` is in the DPO mix), or transliterated will not
+  match. Every count is a lower bound on the concept and an exact figure only
+  for the pattern.
+- `grep` and `find` answer the same question about different halves of the
+  pipeline and by different routes, so their numbers are not comparable. `grep`
+  counts **rows** of a post-training mix whose text contains a pattern, exactly,
+  over the mix the model was actually trained on. `find` counts **occurrences**
+  of a token sequence in a pretraining index, which for the OLMo 3 models is not
+  their own data.
 - `find` searches the closest public infini-gram index, which for the OLMo 3
   models is OLMo 2's training data rather than their own — no Dolma 3 index
   exists on the public API yet. Pythia is the exception: `v4_piletrain_llama`

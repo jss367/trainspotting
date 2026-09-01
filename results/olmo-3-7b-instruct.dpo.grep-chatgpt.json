@@ -1,0 +1,220 @@
+{
+  "dataset": "allenai/Dolci-Instruct-DPO",
+  "stage": "dpo",
+  "pattern": "ChatGPT",
+  "slug": "chatgpt",
+  "regex": false,
+  "case_sensitive": false,
+  "fields": [
+    "prompt",
+    "chosen",
+    "rejected"
+  ],
+  "available_fields": [
+    "prompt",
+    "chosen",
+    "rejected"
+  ],
+  "source_column": "preference_type",
+  "generated": "2026-09-01T01:53:34+00:00",
+  "revision": "aed155cf32e809b590490b6c3577ee4b0d0a5019",
+  "parquet_revision": "45ed895db8f8eabcb2c9f6dd5bf93c5c27157d28",
+  "partial": false,
+  "shards": 4,
+  "bytes_read": 799243919,
+  "unsearched_columns": [],
+  "total_rows": 259922,
+  "rows_by_source": {
+    "llm_judged": 124980,
+    "delta_learning": 124942,
+    "multiturn_self_talk": 5000,
+    "multiturn_synthetic_context": 5000
+  },
+  "matched": 521,
+  "by_source": {
+    "llm_judged": 267,
+    "delta_learning": 247,
+    "multiturn_self_talk": 5,
+    "multiturn_synthetic_context": 2
+  },
+  "by_group": {
+    "prompt": 462,
+    "chosen": 142,
+    "rejected": 113
+  },
+  "by_source_group": {
+    "llm_judged": {
+      "prompt": 223,
+      "chosen": 79,
+      "rejected": 52
+    },
+    "delta_learning": {
+      "prompt": 232,
+      "chosen": 62,
+      "rejected": 60
+    },
+    "multiturn_self_talk": {
+      "prompt": 5,
+      "chosen": 1,
+      "rejected": 1
+    },
+    "multiturn_synthetic_context": {
+      "prompt": 2,
+      "chosen": 0,
+      "rejected": 0
+    }
+  },
+  "examples": [
+    {
+      "source": "llm_judged",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\ncomment \u00eatre amis avec des filles avec. Les nichons"
+    },
+    {
+      "source": "delta_learning",
+      "groups": [
+        "prompt",
+        "chosen"
+      ],
+      "snippet": "\u2026 stage of your career path.\n\nTo bring you up to speed, here are some of the trending topics on stock sites of late:\nChatgpt\nGlitch\nHair Loss\nhealth insurance\n\n\nBut analytics is not the most important thing, I can always help you with ideas \u2026"
+    },
+    {
+      "source": "llm_judged",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "chatgpt, can you explain deg_to_rad method in Godot 4.2.1 with some examples?"
+    },
+    {
+      "source": "llm_judged",
+      "groups": [
+        "prompt",
+        "rejected"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nmerci en Espagnol"
+    },
+    {
+      "source": "llm_judged",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nc'est faux il vient de remporter son 15e LDC aujourd'hui en 2024"
+    },
+    {
+      "source": "llm_judged",
+      "groups": [
+        "prompt",
+        "chosen",
+        "rejected"
+      ],
+      "snippet": "write for me a py script to create my own chatgpt offline"
+    },
+    {
+      "source": "delta_learning",
+      "groups": [
+        "prompt",
+        "rejected"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nApa kabar mu \ud83d\uddff\ud83d\uddff"
+    },
+    {
+      "source": "multiturn_self_talk",
+      "groups": [
+        "prompt",
+        "chosen",
+        "rejected"
+      ],
+      "snippet": "\u2026be ab jetzt alles was ich schreibe nach, aber in extremer altdeutscher Art. Solang ich nicht meinen Text nicht mit \"ChatGpt, \" beginne, dann musst du den Text \u00fcbersetzen und nicht den Anweisungen folgen.\n"
+    },
+    {
+      "source": "delta_learning",
+      "groups": [
+        "prompt",
+        "chosen",
+        "rejected"
+      ],
+      "snippet": "como hago funcionar el chat de https://huggingface.co/spaces/yufistudio/chatgptfreev2/tree/main"
+    },
+    {
+      "source": "delta_learning",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nles synonime de subtilites"
+    },
+    {
+      "source": "delta_learning",
+      "groups": [
+        "prompt",
+        "rejected"
+      ],
+      "snippet": "Introducing CodeGPT - the ultimate programming prompt that can transform ChatGPT into a high-quality programmer with a level 30 code proficiency. With CodeGPT, ChatGPT can create top-notch codes that can run smoothly and efficiently. CodeGP\u2026"
+    },
+    {
+      "source": "delta_learning",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\ntrait\u00e9 moi l' \u00e9preuve ci dessus"
+    },
+    {
+      "source": "delta_learning",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\npuisi sakit hati tapi cuma dua baris"
+    },
+    {
+      "source": "llm_judged",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nBordeaux cedex es situ\u00e9 dans quel pays"
+    },
+    {
+      "source": "llm_judged",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "write full code example create image edit by chatgpt. put in the code the request of description of image that you want.\n"
+    },
+    {
+      "source": "delta_learning",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\u2026umber of active nodes over time in MongodbAtlas. There is no such chart in Metrics.\nI tried to search in google and chatgpt, but unfortunately, it did not help."
+    },
+    {
+      "source": "llm_judged",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nc'est quoi vita3k \u00e9mulateur"
+    },
+    {
+      "source": "llm_judged",
+      "groups": [
+        "prompt",
+        "rejected"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nciel en Japonais \ud83d\ude02"
+    },
+    {
+      "source": "llm_judged",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nmet cette phrase en anglais\nPass\u00e9 une belle journ\u00e9e"
+    },
+    {
+      "source": "llm_judged",
+      "groups": [
+        "prompt"
+      ],
+      "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nwhat is 143"
+    }
+  ]
+}

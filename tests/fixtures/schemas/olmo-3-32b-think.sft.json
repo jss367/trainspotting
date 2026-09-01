@@ -1,0 +1,28 @@
+{
+  "target": "olmo-3-32b-think",
+  "stage": "sft",
+  "dataset": "allenai/Dolci-Think-SFT-32B",
+  "shards": 156,
+  "partial": false,
+  "schema": {
+    "messages": "STRUCT(\"content\" VARCHAR, \"role\" VARCHAR)[]",
+    "id": "VARCHAR",
+    "source": "VARCHAR"
+  },
+  "groups": {
+    "prompt": 1,
+    "response": 1
+  },
+  "leaves": [
+    [
+      "messages",
+      "content"
+    ],
+    [
+      "messages",
+      "role"
+    ]
+  ],
+  "unsearched": [],
+  "source_column": "source"
+}
