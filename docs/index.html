@@ -1457,6 +1457,8 @@ function budgetRows(m, sources, profiles, corpusSummaries){
       // Whether the sampled mean and the row count it is multiplied by were
       // read from the same tree. These dataset ids move.
       revisions: p ? p.revisions : null,
+      // Rows the sampler fetched and the context layer could not read.
+      dropped: p && p.requested ? p.requested - p.retained : 0,
     };
   });
 }
@@ -1566,6 +1568,9 @@ function budgetCard(m, rows){
             : `<br>no interval: the sample came back as a single fetch of adjacent rows, which carries no information about how much the mean would move on another draw`)
           + (r.deff > 1.05
             ? `<br>widened ${r.deff.toFixed(1)}× for clustering — ${r.clusters} draws of ten consecutive rows, not ${r.lengths.n} independent ones`
+            : "")
+          + (r.dropped
+            ? `<br>${r.dropped} of the ${r.lengths.n + r.dropped} fetched rows had no readable prompt and were dropped; the total assumes they are like the ones that were kept`
             : "")
           + (r.revisions && r.revisions.agree === null
             ? `<br>the sample and the row count are not pinned to the same dataset revision — one of the two runs predates the stamp, so the pairing is unproven`

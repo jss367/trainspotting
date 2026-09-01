@@ -395,6 +395,14 @@ def stage_profile(ctx: dict, examples: int | None = None) -> dict:
     return {
         "dataset": ctx.get("dataset"),
         "stage": ctx.get("stage"),
+        # What was asked for against what survived. A fetched row whose prompt
+        # will not extract is dropped, and dropping is not random — it follows
+        # from the example's structure — so a total that scales the survivors'
+        # mean across every row in the dataset is assuming the ones that could
+        # not be read are like the ones that could. WildChat is the committed
+        # case at 299 of 300. Small, and stated rather than assumed.
+        "requested": ctx.get("sample"),
+        "retained": len(records),
         "kind": records[0].get("kind") if records else None,
         "sample": ctx.get("sample"),
         "seed": ctx.get("seed"),
