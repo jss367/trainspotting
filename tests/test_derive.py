@@ -390,7 +390,9 @@ def test_the_page_refuses_to_guess_when_two_sampled_rows_share_a_key():
     is a wrong answer dressed as a right one. Those keys have to drop out."""
     script = (
         f"const KEY_CHARS = {derive.KEY_CHARS};\n{site_const('keyPrefix')}\n"
-        f"{site_function('promptKey')}\n{site_function('valueByKey')}\n{site_function('crossRows')}\n"
+        f"{site_function('promptKey')}\n{site_function('valueByKey')}\n"
+        f"{site_function('hashResolver')}\n{site_function('rowResolver')}\n"
+        f"{site_function('resolverFor')}\n{site_function('crossRows')}\n"
         """
         const records = [
           {k: "aaa", m: {src: "one"}},            // collides, disagrees
@@ -408,15 +410,33 @@ def test_the_page_refuses_to_guess_when_two_sampled_rows_share_a_key():
           {prompt: "conflicted prompt", label: "honesty"},
           {prompt: "unknown prompt", label: "capability"},
         ];
-        const kv = new Map([[promptKey("clean prompt"), "four"]]);
-        const conflictedKey = promptKey("conflicted prompt");
-        const cross = crossRows(labeled, kv, r => r.label, 12, new Set([conflictedKey]));
+        // Legacy shape: no row on either side, so the join is the prefix hash
+        // and an ambiguous key is undecidable rather than merely absent.
+        const profile = {records: [
+          {k: promptKey("clean prompt"), m: {src: "four"}},
+          {k: promptKey("conflicted prompt"), m: {src: "one"}},
+          {k: promptKey("conflicted prompt"), m: {src: "two"}},
+        ]};
+        const cross = crossRows(labeled, resolverFor(profile, {records: labeled}, "src"), r => r.label);
+        // Given rows on both sides there is no ambiguity to resolve at all:
+        // three prompts, three metadata lookups, nothing dropped.
+        const withRows = {records: [
+          {row: 1, m: {src: "one"}}, {row: 2, m: {src: "two"}}, {row: 3, m: {src: "one"}},
+        ]};
+        const labelledRows = [
+          {row: 1, prompt: "same opening", label: "helpfulness"},
+          {row: 2, prompt: "same opening", label: "honesty"},
+          {row: 3, prompt: "same opening", label: "capability"},
+        ];
+        const byRow = crossRows(labelledRows, resolverFor(withRows, {records: labelledRows}, "src"), r => r.label);
+
         console.log(JSON.stringify({
           kept: [...map.entries()].sort(),
           dropped: [...dropped],
           rows: cross.rows.map(r => [r.name, r.total]),
           undecidable: cross.undecidable,
           unmatched: cross.unmatched,
+          rowJoinAvoidsTheQuestion: byRow.rows.reduce((a, r) => a + r.total, 0),
         }));
         """
     )
@@ -425,6 +445,7 @@ def test_the_page_refuses_to_guess_when_two_sampled_rows_share_a_key():
     # no more decidable than the one that collided with it.
     assert out["kept"] == [["bbb", "three"], ["ccc", "four"]]
     assert out["dropped"] == ["aaa"]
+    assert out["rowJoinAvoidsTheQuestion"] == 3
     # A prompt whose key was dropped is missing from the grid, never misfiled,
     # and it is counted apart from one the sample simply never had.
     assert out["rows"] == [["four", 1]]

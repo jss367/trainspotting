@@ -1477,8 +1477,11 @@ function budgetCard(m, rows){
       <div class="hero-stat"><div class="n">${fmtTok(r.tokens)}</div>
         <div class="cap">tokens, estimated from the ${r.sampled} sampled examples — a mean of
           ${num(Math.round(r.lengths.mean))} characters each, at four characters per token, across
-          ${num(r.examples)} examples. 95% interval ${fmtTok(r.lo)}–${fmtTok(r.hi)} on the sampled
-          mean; the divisor is the larger uncertainty.</div></div>`;
+          ${num(r.examples)} examples. ${r.lo != null
+            ? `95% interval ${fmtTok(r.lo)}–${fmtTok(r.hi)} on the sampled mean; the divisor is the
+               larger uncertainty.`
+            : `No interval: the sample came back as a single fetch of adjacent rows, which carries
+               no information about how much the mean would move on another draw.`}</div></div>`;
     return card;
   }
   const total = sized.reduce((a, r) => a + r.tokens, 0);
@@ -1855,7 +1858,40 @@ function valueByKey(records, col){
   return {map, dropped};
 }
 
-function crossRows(records, keyToValue, labelOf, limit = 12, dropped = new Set()){
+// Where the two runs both recorded the sampler's row numbers, a prompt's
+// metadata is looked up by row and there is nothing to be undecided about. The
+// prefix hash exists because a labels file older than the row field has nothing
+// else to join on, and it is lossy in exactly the way this avoids: it drops 39
+// of WildChat's 299 language records, whose shared Midjourney opening spans
+// several models, and nine in the 7B Think DPO run.
+function rowResolver(profileRecords, col){
+  const byRow = new Map();
+  for (const r of profileRecords)
+    if (r.row != null && r.m[col] != null) byRow.set(r.row, r.m[col]);
+  return rec => rec.row != null && byRow.has(rec.row)
+    ? {value: byRow.get(rec.row)}
+    : {miss: "unmatched"};
+}
+
+function hashResolver(profileRecords, col){
+  const {map, dropped} = valueByKey(profileRecords, col);
+  return rec => {
+    const key = promptKey(rec.prompt);
+    const value = map.get(key);
+    return value === undefined
+      ? {miss: dropped.has(key) ? "undecidable" : "unmatched"}
+      : {value};
+  };
+}
+
+// Row identities when both sides have them, the prefix hash when they do not.
+function resolverFor(profile, run, col){
+  const usable = profile.records.every(r => r.row != null)
+    && (run.records || []).every(r => r.row != null);
+  return usable ? rowResolver(profile.records, col) : hashResolver(profile.records, col);
+}
+
+function crossRows(records, resolve, labelOf, limit = 12){
   const groups = new Map();
   // Two ways a prompt misses the grid, and they mean different things: its key
   // was thrown out as undecidable, or the sample has no row for it at all
@@ -1864,10 +1900,9 @@ function crossRows(records, keyToValue, labelOf, limit = 12, dropped = new Set()
   // as missing data when it is a refusal to guess.
   let undecidable = 0, unmatched = 0;
   for (const r of records){
-    const key = promptKey(r.prompt);
-    const value = keyToValue.get(key);
+    const {value, miss} = resolve(r);
     if (value === undefined){
-      if (dropped.has(key)) undecidable++; else unmatched++;
+      if (miss === "undecidable") undecidable++; else unmatched++;
       continue;
     }
     if (!groups.has(value)) groups.set(value, {name: value, total: 0, byCol: {}});
@@ -2000,7 +2035,6 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
       continue;
     }
     any = true;
-    const {map: keyToValue, dropped} = valueByKey(p.records, col);
     const ctx = ctxFor(s);
     const explain = (name, {rows, undecidable, unmatched, groups}, extra) => {
       const note = document.createElement("p");
@@ -2028,7 +2062,7 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
       noLabels(card, `the sampled examples and the classification run cannot be crossed: ${mismatch}. `
         + `Re-run one of them so both describe the same draw.`);
     } else if (labeled.length){
-      const cross = crossRows(labeled, keyToValue, r => r.label, 12, dropped);
+      const cross = crossRows(labeled, resolverFor(p, labels, col), r => r.label);
       // Row identities when the run recorded them, the match rate when it did
       // not — everything the join placed against everything it was given.
       const evidence = pairingEvidence(p, labels, labeled.length - cross.unmatched, labeled.length);
@@ -2061,7 +2095,7 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
       const cols = [...top.map(c => ({key: c, short: c === "undetermined" ? "?" : c, label: langName(c)})),
         {key: "…", short: "…", label: "every other language"}];
       const build = parent => {
-        const cross = crossRows(langs.records, keyToValue, r => top.includes(r.label) ? r.label : "…", 12, dropped);
+        const cross = crossRows(langs.records, resolverFor(p, langs, col), r => top.includes(r.label) ? r.label : "…");
         // Same guard as the taxonomy grid, one better where it can be: these
         // records carry row indices, so the two runs are compared on the
         // sampler's own numbering rather than on how many prompts happen to
