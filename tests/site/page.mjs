@@ -78,6 +78,11 @@ for (const name of ${JSON.stringify(EXPORTS)}) {
   missing.push(...(globalThis.__MISSING || []));
   if (missing.length)
     throw new Error("docs/index.html no longer defines: " + missing.join(", "));
+  // Present, but not necessarily the one the author meant: these names resolve
+  // after the page has run, so a name declared twice hands back whichever
+  // declaration won. `declarations.test.mjs` is what rules that out, and it has
+  // to, because a suite testing the loser would pass while the browser ran the
+  // winner. That is how `budgetCard` shipped broken.
   return globalThis.__PAGE;
 }
 

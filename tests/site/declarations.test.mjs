@@ -10,12 +10,9 @@
 //
 // Run via pytest (tests/test_site_declarations.py) or directly: node <this file>
 
-import fs from "fs";
-import path from "path";
+import { pageSource } from "./page.mjs";
 
-const ROOT = path.resolve(import.meta.dirname, "..", "..");
-const html = fs.readFileSync(path.join(ROOT, "docs", "index.html"), "utf8");
-const js = html.match(/<script>([\s\S]*)<\/script>/)[1];
+const js = pageSource();
 
 // Top level only: a nested helper is scoped to its function and may reuse a name.
 const declared = new Map();
