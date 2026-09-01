@@ -5,10 +5,11 @@ Run after adding a model or committing new classify/ask/context/pretrain runs:
 
 Context and pretraining-document records are copied minified (they are bulk text
 the site fetches on click); everything else is copied verbatim so its diffs stay
-readable. Each document sample also gets a `.corpus.json` summary — the same file
-without its records — so the site can draw the card without pulling megabytes.
-The same bulk files are indexed by three-character run into `search-index.json`,
-which is how the page's search box avoids downloading them all.
+readable. The two bulk kinds also get a small summary derived from them — a
+`.corpus.json` per document sample and a `.profile.json` per context run — so the
+site can draw a card without pulling megabytes. The same bulk files are indexed
+by three-character run into `search-index.json`, which is how the page's search
+box avoids downloading them all.
 """
 
 import json
@@ -22,6 +23,7 @@ sys.path.insert(0, str(ROOT))
 
 from trainspotting import (  # noqa: E402
     budget,
+    derive,
     languages,
     paths,
     registry,
@@ -32,21 +34,9 @@ from trainspotting import (  # noqa: E402
 # Bulk text the site fetches on demand: full training examples behind a prompt,
 # and sampled pretraining documents. Both are regenerable caches of upstream
 # data, so both are gitignored under results/ and committed under docs/data/.
-BULK = (".context.json", ".docs.json")
-
-# Derived here rather than copied from results/, so a checkout without the
-# gitignored sources produces none of these — but the committed copies are still
-# what the site reads.
-#
-# A budget is pure arithmetic over the committed ask runs, so rebuilding it is
-# how it stays true: copying a committed one would let it survive a re-asked
-# question and keep reporting the old total with nothing on the page to say so.
-DERIVED = (".corpus.json",)
-
-# Everything the manifest must keep listing even when this run did not produce
-# it. Getting this set wrong is silent: the files stay on disk, drop out of the
+# Getting this set wrong is silent: the files stay on disk, drop out of the
 # manifest, and the site stops asking for them.
-COMMITTED = BULK + DERIVED
+BULK = (".context.json", ".docs.json")
 
 # Result files with no reader on the page. The site draws a card per labels/ask/
 # languages run and ignores anything it does not recognise, so exporting these
@@ -116,18 +106,83 @@ for f in sorted((ROOT / "results").glob("*.json")):
     total += (out / f.name).stat().st_size
     copied.append(f.name)
 
-    # A document sample is a few megabytes, nearly all of it the documents
-    # themselves, but the card above them needs only the counts. Split the
-    # summary out so opening the model tab costs kilobytes and the documents
-    # load when someone actually asks to read them.
-    if f.name.endswith(".docs.json"):
-        d = json.loads(f.read_text())
-        summary = {k: v for k, v in d.items() if k != "records"}
-        summary["records"] = len(d["records"])
-        name = f.name.replace(".docs.json", ".corpus.json")
-        (out / name).write_text(json.dumps(summary, separators=(",", ":")))
-        total += (out / name).stat().st_size
-        copied.append(name)
+# Summaries of the bulk files, derived from docs/data rather than results/.
+# Both bulk kinds are gitignored under results/ and committed here, so a fresh
+# checkout has the samples but not their sources — deriving from what was just
+# written means the summaries always describe the sample the site actually
+# serves, instead of going stale the moment a re-sample lands from another
+# machine.
+derived = []
+
+
+def write_derived(name: str, payload: dict) -> None:
+    (out / name).write_text(json.dumps(payload, separators=(",", ":")))
+    derived.append(name)
+
+
+# A document sample is a few megabytes, nearly all of it the documents
+# themselves, but the card above them needs only the counts and the lengths.
+# Split the summary out so opening the model tab costs kilobytes and the
+# documents load when someone actually asks to read them.
+for docs_file in sorted(out.glob("*.docs.json")):
+    d = json.loads(docs_file.read_text())
+    summary = {k: v for k, v in d.items() if k != "records"}
+    summary["records"] = len(d["records"])
+    # How long a pretraining document is, on the same bins as a training example.
+    summary["lengths"] = derive.corpus_lengths(d)
+    write_derived(docs_file.name.replace(".docs.json", ".corpus.json"), summary)
+
+# What a stage's examples are made of: how long they are, how much of that the
+# model is fit to, and which metadata column each sampled row carries — the
+# join that lets the site cross a taxonomy label against where in the mix the
+# prompt came from without downloading the whole context file.
+for ctx_file in sorted(out.glob("*.context.json")):
+    d = json.loads(ctx_file.read_text())
+    target = ctx_file.name.rsplit(f".{d['stage']}.context.json", 1)[0]
+    src_file = out / f"{target}.sources.json"
+    # The exact row count comes from the sources layer, which counts rather than
+    # samples. Without it the shape of an example is still measurable and the
+    # token total is not, so the profile simply carries no estimate.
+    src = json.loads(src_file.read_text()).get(d["stage"], {}) if src_file.exists() else {}
+    # A token total multiplies a mean measured over one tree by a row count
+    # counted over another. These dataset ids move — Ai2 has republished these
+    # mixes — and both layers stamp the revision they read for exactly that
+    # reason, so the two stamps have to agree before the multiplication means
+    # anything. A mismatch is a mixed-tree number and gets no estimate at all;
+    # where either side predates revision recording the pairing is merely
+    # unproven, and the profile says so rather than dropping a figure that is
+    # probably fine.
+    # A run that outlasted a republish records where the dataset went, and its
+    # rows may come from either tree — so a matching starting revision does not
+    # make it comparable to anything. Both commands emit the field for exactly
+    # this reason; a run that carries it can only be paired by re-running it.
+    revisions = {
+        "context": d.get("revision"),
+        "sources": src.get("revision"),
+        "moved": [
+            layer
+            for layer, run in (("context", d), ("sources", src))
+            if run.get("revision_moved_to")
+        ],
+    }
+    if revisions["moved"]:
+        agree = False
+    elif revisions["context"] and revisions["sources"]:
+        agree = revisions["context"] == revisions["sources"]
+    else:
+        agree = None
+    profile = derive.stage_profile(d, src.get("total") if agree is not False else None)
+    profile["revisions"] = {**revisions, "agree": agree}
+    if agree is False:
+        why = (
+            f"the {' and '.join(revisions['moved'])} run spans two dataset trees"
+            if revisions["moved"]
+            else f"sampled at {revisions['context'][:7]} but counted at {revisions['sources'][:7]}"
+        )
+        print(f"  ! {ctx_file.name}: {why} — no token estimate, re-run it")
+    write_derived(ctx_file.name.replace(".context.json", ".profile.json"), profile)
+
+total += sum((out / name).stat().st_size for name in derived)
 
 # Ordinary result files that results/ no longer has. The copy loop only ever
 # writes, so deleting a run — or moving it to another slug — used to leave its
@@ -141,9 +196,17 @@ for f in sorted((ROOT / "results").glob("*.json")):
 stale = [
     f
     for f in sorted(out.glob("*.json"))
-    if not f.name.endswith(COMMITTED)
+    # `derived` rather than a suffix list: this branch derives a `.profile.json`
+    # per context run as well as a `.corpus.json` per document sample, and a
+    # sweep that knew only the second deleted every profile it had just written.
+    if not (f.name.endswith(BULK) or f.name in set(derived))
     and f.name not in set(copied)
-    and f.name not in {"registry.json", "language-names.json", "reward-kinds.json", "manifest.json"}
+    # The files this script writes itself rather than copying from results/.
+    # `search-index.json` is built below from the bulk files, so results/ never
+    # holds one — a sweep that only knew the hand-written names deleted it every
+    # run and reported it as stale, on the way to rebuilding it.
+    and f.name not in {"registry.json", "language-names.json", "reward-kinds.json",
+                       "manifest.json", "search-index.json"}
     and not f.name.startswith(tuple(f"{n}.budget-" for n in registry.targets()))
 ]
 for f in stale:
@@ -178,9 +241,7 @@ for name in registry.targets():
 # pretraining sample". Everything else still comes from results/ alone, so
 # deleting a labels or ask run there drops it from the site as before.
 kept = sorted(
-    f.name
-    for f in out.glob("*.json")
-    if f.name.endswith(COMMITTED) and f.name not in set(copied)
+    f.name for f in out.glob("*.json") if f.name.endswith(BULK) and f.name not in set(copied)
 )
 # The same drift, one class over: the README quotes measured figures from the
 # committed samples, and re-sampling moves them. Checking dataset ids alone let
@@ -223,12 +284,13 @@ copied.append("search-index.json")
 index_mb = (out / "search-index.json").stat().st_size / 1e6
 total += (out / "search-index.json").stat().st_size
 
-(out / "manifest.json").write_text(json.dumps(sorted(copied + kept), indent=2))
+(out / "manifest.json").write_text(json.dumps(sorted(set(copied + kept + derived)), indent=2))
 print(
     f"indexed {len(index['grams']):,} trigrams across {len(searchable)} sampled files "
     f"for search ({index_mb:.1f} MB)"
 )
 print(
-    f"wrote registry.json + language-names.json + manifest.json and {len(copied)} result files ({total / 1e6:.1f} MB)"
+    f"wrote registry.json + language-names.json + manifest.json, {len(copied)} result files "
+    f"and {len(derived)} derived summaries ({total / 1e6:.1f} MB)"
     + (f"; manifest also lists {len(kept)} committed file(s) this run did not build" if kept else "")
 )

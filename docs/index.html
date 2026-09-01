@@ -31,6 +31,21 @@
     /* one-hue ordinal ramp for parts of a single training example */
     --ramp-lo:   #86b6ef;
     --ramp-hi:   #2a78d6;
+    /* The three corpus stages are ordered (pretrain → midtrain → long-context),
+       so where they share a chart with the post-training stages they take an
+       ordinal neutral ramp rather than a 4th, 5th and 6th categorical hue —
+       which the all-pairs CVD floors would not clear. Validated --ordinal
+       against this surface. */
+    --corpus-1:  #b3b2a7;
+    --corpus-2:  #918f86;
+    --corpus-3:  #6d6c65;
+    /* sequential blue, 100→650: continuous magnitude in a heatmap cell, where
+       the lightest step means "near zero" and may recede into the surface */
+    --heat-1:    #cde2fb;
+    --heat-2:    #9ec5f4;
+    --heat-3:    #5598e7;
+    --heat-4:    #2a78d6;
+    --heat-5:    #184f95;
     --meter-track: #cde2fb;
     --scrim:     rgba(11,11,11,0.4);
     --shadow-card: 0 1px 2px rgba(11,11,11,.03), 0 8px 24px rgba(11,11,11,.04);
@@ -56,6 +71,15 @@
       --neg:       #e66767;
       --ramp-lo:   #184f95;
       --ramp-hi:   #3987e5;
+      /* same ramps, stepped for this surface rather than flipped */
+      --corpus-1:  #504f4a;
+      --corpus-2:  #74736c;
+      --corpus-3:  #9e9d93;
+      --heat-1:    #0d366b;
+      --heat-2:    #184f95;
+      --heat-3:    #256abf;
+      --heat-4:    #3987e5;
+      --heat-5:    #6da7ec;
       --meter-track: #0d366b;
       --scrim:     rgba(0,0,0,0.6);
       --shadow-card: none;
@@ -367,6 +391,95 @@
     transition: background .12s;
   }
   .ctxbtn:hover { background: var(--track); }
+  /* ---- token budget ---- */
+  .hero-stat { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin: 2px 0 18px; }
+  /* proportional figures: tabular-nums makes a display-size number read loose */
+  .hero-stat .n { font-size: 40px; font-weight: 650; line-height: 1; letter-spacing: -0.02em; }
+  .hero-stat .cap { font-size: 13px; color: var(--text-secondary); max-width: 48ch; }
+  .striprow { margin: 0 0 16px; }
+  .striprow .t {
+    display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    font-size: 12px; color: var(--text-secondary); margin: 0 0 5px;
+  }
+  .striprow .t em { font-style: normal; color: var(--muted); }
+  .striprow .strip { height: 18px; margin: 0; }
+  .striprow .strip > div { cursor: default; }
+  /* ---- log axis ---- */
+  .logwrap { position: relative; padding-bottom: 18px; margin-top: 10px; }
+  /* Offsets are the .row grid: the 170px label column plus its 10px gap on the
+     left, the 130px value column plus its gap on the right. A gridline that
+     misses the bars it explains by 10px is worse than no gridline. */
+  .logaxis { position: absolute; left: 180px; right: 140px; top: 0; bottom: 18px; pointer-events: none; }
+  .logaxis i { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--grid); }
+  .logaxis b {
+    position: absolute; bottom: -17px; transform: translateX(-50%);
+    font-size: 11px; font-weight: 400; color: var(--muted); white-space: nowrap;
+  }
+  .row.log { position: relative; }
+  .row.log .val { text-align: right; }
+  @media (max-width: 640px) { .logaxis { left: 120px; right: 96px; } }
+  /* ---- length histograms (small multiples on one shared axis) ---- */
+  .histrow { display: grid; grid-template-columns: 170px 1fr 130px; gap: 10px; align-items: end; padding: 5px 6px; margin: 0 -6px; border-radius: 7px; }
+  .histrow .lbl { font-size: 13px; color: var(--text-secondary); text-align: right; padding-bottom: 2px; }
+  .histrow .val { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; padding-bottom: 2px; }
+  .spark { display: flex; align-items: flex-end; gap: 2px; height: 40px; }
+  .spark > i { flex: 1 1 0; min-height: 1px; border-radius: 2px 2px 0 0; background: var(--bar, var(--series-1)); }
+  .histaxis { display: grid; grid-template-columns: 170px 1fr 130px; gap: 10px; margin: 2px -6px 0; padding: 0 6px; }
+  .histaxis .ticks { position: relative; height: 15px; font-size: 11px; color: var(--muted); }
+  .histaxis .ticks span { position: absolute; top: 0; white-space: nowrap; }
+  @media (max-width: 640px) {
+    .histrow, .histaxis { grid-template-columns: 110px 1fr 86px; }
+  }
+  /* ---- one row per label, one dot per stage ---- */
+  .dotrow { display: grid; grid-template-columns: 170px 1fr 130px; gap: 10px; align-items: center; padding: 4px 6px; margin: 0 -6px; }
+  .dotrow .lbl { font-size: 13px; color: var(--text-secondary); text-align: right; }
+  .dotrow .val { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .dottrack { position: relative; height: 16px; }
+  .dottrack::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--track); }
+  .dottrack .span { position: absolute; top: 50%; height: 1px; background: var(--baseline); }
+  .dottrack .dot {
+    position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px;
+    border-radius: 50%; box-shadow: 0 0 0 2px var(--surface-1);
+  }
+  .dotaxis { display: grid; grid-template-columns: 170px 1fr 130px; gap: 10px; margin: 2px -6px 6px; padding: 0 6px; }
+  .dotaxis > div:nth-child(2) { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+  @media (max-width: 640px) {
+    .dotrow, .dotaxis { grid-template-columns: 110px 1fr 86px; }
+    .dotrow .val { display: none; }
+  }
+
+  /* ---- crosstab heatmap ---- */
+  .hmwrap { overflow-x: auto; }
+  table.hm { border-collapse: separate; border-spacing: 2px; font-size: 12px; }
+  table.hm th {
+    font-weight: 400; font-size: 11px; color: var(--text-secondary);
+    text-align: center; vertical-align: bottom; padding: 0 2px 4px; line-height: 1.25;
+  }
+  table.hm th.rowlbl {
+    text-align: right; font-size: 12px; padding: 0 8px 0 0; max-width: 210px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  table.hm td {
+    min-width: 52px; text-align: center; padding: 6px 4px; border-radius: 4px;
+    font-variant-numeric: tabular-nums; color: var(--text-primary);
+  }
+  table.hm td.on { cursor: pointer; }
+  table.hm td.on:hover { box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 3px var(--baseline); }
+  table.hm td.lightink { color: #fff; }
+  table.hm td.n { background: none; color: var(--text-secondary); text-align: right; }
+  .scalelegend { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); margin: 10px 0 0; }
+  .scalelegend i { width: 26px; height: 10px; border-radius: 2px; display: inline-block; }
+  /* ---- treemap ---- */
+  .tmap { position: relative; width: 100%; height: 340px; margin: 6px 0 10px; }
+  .tmap > div {
+    position: absolute; border-radius: 4px; overflow: hidden;
+    padding: 5px 7px; color: var(--text-primary);
+  }
+  .tmap > div > b { display: block; font-size: 12px; font-weight: 600; line-height: 1.2; }
+  .tmap > div > span { display: block; font-size: 11px; opacity: .75; }
+  .tmap > div.lightink, .tmap > div.lightink > b { color: #fff; }
+  @media (max-width: 640px) { .tmap { height: 420px; } }
+
   footer {
     color: var(--muted); font-size: 13px; margin-top: 32px;
     padding-top: 18px; border-top: 1px solid var(--grid);
@@ -589,7 +702,11 @@ const STAGE_HUE = {sft: "var(--stage-sft)", dpo: "var(--stage-dpo)", rlvr: "var(
 const hueFor = stage => STAGE_HUE[stage] || "var(--series-1)";
 const fmtBytes = n => n >= 1e12 ? (n/1e12).toFixed(1)+" TB" : n >= 1e9 ? Math.round(n/1e9)+" GB" : Math.round(n/1e6)+" MB";
 const niceGroup = g => g.replace(/_/g, " ");
-const fmtTok = n => n >= 1e12 ? (n/1e12).toFixed(1)+"T" : n >= 1e9 ? Math.round(n/1e9)+"B" : n.toLocaleString();
+// Trailing ".0" is noise on an axis tick, and an estimated token count arrives
+// as a float — neither should reach the page as "1.0T" or "20,702,775.833".
+const trim = s => s.replace(/\.0(?=[A-Z]|$)/, "");
+const fmtTok = n => trim(n >= 1e12 ? (n/1e12).toFixed(1)+"T" : n >= 1e9 ? (n/1e9).toFixed(1)+"B"
+  : n >= 1e6 ? (n/1e6).toFixed(1)+"M" : Math.round(n).toLocaleString());
 const fmtEx = n => n >= 1e6 ? (n/1e6).toFixed(2)+"M" : n >= 1e3 ? Math.round(n/1e3)+"K" : String(n);
 const pct = x => (x*100).toFixed(1)+"%";
 const num = n => (n ?? 0).toLocaleString();
@@ -1451,6 +1568,66 @@ function openContext(rec, stage, dataset, stageName, link){
 
 // ------------------------------------------------------------------ charts ---
 
+// The literal sampled prompts behind a count, each with a button into the whole
+// training example. Every count on this page is a sample, so every count that
+// can be clicked opens this — a bar, and a heatmap cell.
+function drillPanel(records, ctx){
+  const panel = document.createElement("div");
+  panel.className = "drill";
+  panel.style.setProperty("--bar", hueFor(ctx.stage));
+  const dpoNote = ctx.stage === "dpo"
+    ? " These prompts are often deliberately harmful: the training signal is the preference between the two responses, not the prompt."
+    : "";
+  // What sits behind a prompt differs by kind, and a chat log has no
+  // training half at all — promising "the response the model is fit to"
+  // there would describe a target that does not exist.
+  const behind = ctx.kind === "chat"
+    ? "open it to read the rest of the exchange."
+    : "open the training context for the response the model is fit to, the pair it is pushed between, or the verifier that scores it.";
+  const half = ctx.kind === "chat"
+    ? `the ${records.length} sampled prompt${records.length>1?"s":""} behind this ${ctx.unit || "bar"}. Each opened a
+       real conversation —`
+    : `the ${records.length} sampled prompt${records.length>1?"s":""} behind
+    this ${ctx.unit || "bar"}. A prompt is half of a training example —`;
+  panel.innerHTML = ctx.isCorpus
+    ? `<p class="dnote">the ${records.length} sampled document${records.length>1?"s":""} behind this bar.
+        These are raw corpus documents, not requests to a model — nothing here was written to teach
+        anything, so what the model takes from them is whatever fitting the text implies.</p>`
+    : `<p class="dnote">${half} ${ctx.hasContext
+      ? behind
+      : `no context run is committed for this stage, so only the prompts are here (run <code>trainspotting context ${ctx.model}</code>).`}${dpoNote}</p>`;
+  for (const r of records){
+    const item = document.createElement("div");
+    item.className = "pitem";
+    item.innerHTML = `<details><summary>${esc(r.prompt.slice(0,200))}</summary><pre>${esc(r.prompt)}</pre></details>`;
+    if (ctx.hasContext){
+      const b = document.createElement("button");
+      b.className = "ctxbtn";
+      b.textContent = "see it in training context ›";
+      b.onclick = async () => {
+        const nav = NAV;
+        b.disabled = true;
+        b.textContent = "loading…";
+        let rec = await contextFor(ctx.model, ctx.stage, r);
+        // Any hash move (nav moved on) or a closed drill-down (button
+        // detached) mid-download makes this modal stale — drop it.
+        if (nav !== NAV || !b.isConnected) return;
+        // the labeled record keeps a longer prompt copy than the context record
+        if (rec && r.prompt.length > rec.prompt_full.chars)
+          rec = {...rec, prompt_full: {text: r.prompt, chars: r.prompt.length}};
+        b.disabled = false;
+        b.textContent = "see it in training context ›";
+        if (rec) openContext(rec, ctx.stage, ctx.dataset, ctx.stageName,
+          ctx.linkKey && rec.row != null ? [ctx.view || ctx.model, ctx.stage, ctx.linkKey, "row-" + rec.row] : null);
+        else b.textContent = "this prompt is not in the committed context run";
+      };
+      item.appendChild(b);
+    }
+    panel.appendChild(item);
+  }
+  return panel;
+}
+
 // One bar row on a shared 0–max% scale. CI whisker in muted ink.
 // With `records`, clicking the row toggles the literal sampled examples behind
 // the count; each one opens the whole training example it came from.
@@ -1504,59 +1681,7 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
           if (other !== row && other._isOpen()) other._toggle(false);
         setHash(ctx.view || ctx.model, ctx.stage, ctx.linkKey);
       }
-      panel = document.createElement("div");
-      panel.className = "drill";
-      panel.style.setProperty("--bar", hueFor(ctx.stage));
-      const dpoNote = ctx.stage === "dpo"
-        ? " These prompts are often deliberately harmful: the training signal is the preference between the two responses, not the prompt."
-        : "";
-      // What sits behind a prompt differs by kind, and a chat log has no
-      // training half at all — promising "the response the model is fit to"
-      // there would describe a target that does not exist.
-      const behind = ctx.kind === "chat"
-        ? "open it to read the rest of the exchange."
-        : "open the training context for the response the model is fit to, the pair it is pushed between, or the verifier that scores it.";
-      const half = ctx.kind === "chat"
-        ? `the ${records.length} sampled prompt${records.length>1?"s":""} behind this bar. Each opened a
-           real conversation —`
-        : `the ${records.length} sampled prompt${records.length>1?"s":""} behind
-        this bar. A prompt is half of a training example —`;
-      panel.innerHTML = ctx.isCorpus
-        ? `<p class="dnote">the ${records.length} sampled document${records.length>1?"s":""} behind this bar.
-            These are raw corpus documents, not requests to a model — nothing here was written to teach
-            anything, so what the model takes from them is whatever fitting the text implies.</p>`
-        : `<p class="dnote">${half} ${ctx.hasContext
-          ? behind
-          : `no context run is committed for this stage, so only the prompts are here (run <code>trainspotting context ${ctx.model}</code>).`}${dpoNote}</p>`;
-      for (const r of records){
-        const item = document.createElement("div");
-        item.className = "pitem";
-        item.innerHTML = `<details><summary>${esc(r.prompt.slice(0,200))}</summary><pre>${esc(r.prompt)}</pre></details>`;
-        if (ctx.hasContext){
-          const b = document.createElement("button");
-          b.className = "ctxbtn";
-          b.textContent = "see it in training context ›";
-          b.onclick = async () => {
-            const nav = NAV;
-            b.disabled = true;
-            b.textContent = "loading…";
-            let rec = await contextFor(ctx.model, ctx.stage, r);
-            // Any hash move (nav moved on) or a closed drill-down (button
-            // detached) mid-download makes this modal stale — drop it.
-            if (nav !== NAV || !b.isConnected) return;
-            // the labeled record keeps a longer prompt copy than the context record
-            if (rec && r.prompt.length > rec.prompt_full.chars)
-              rec = {...rec, prompt_full: {text: r.prompt, chars: r.prompt.length}};
-            b.disabled = false;
-            b.textContent = "see it in training context ›";
-            if (rec) openContext(rec, ctx.stage, ctx.dataset, ctx.stageName,
-              ctx.linkKey && rec.row != null ? [ctx.view || ctx.model, ctx.stage, ctx.linkKey, "row-" + rec.row] : null);
-            else b.textContent = "this prompt is not in the committed context run";
-          };
-          item.appendChild(b);
-        }
-        panel.appendChild(item);
-      }
+      panel = drillPanel(records, ctx);
       row.after(panel);
     };
     row._isOpen = () => !!panel;
@@ -1617,6 +1742,243 @@ function corpusComposition(parent, groups, totalBytes, limit = 14){
     p.textContent = `+${rest} more source/topic groups`;
     parent.appendChild(p);
   }
+}
+
+// ------------------------------------------------------------ chart forms ---
+// The pieces the size charts are built from. Each takes numbers and returns
+// elements; what those numbers mean is decided by the cards below.
+
+const fmtChars = n => trim(n >= 1e6 ? (n/1e6).toFixed(1) + "M" : n >= 1e3 ? Math.round(n/1e3) + "k" : String(Math.round(n)));
+
+// Ink that stays readable on a filled mark. The two ramps used for fills run
+// light-to-dark on the light surface and dark-to-light on the dark one, so
+// which end needs white text flips with the mode — resolve the actual colour
+// rather than deciding per step. Cached, and the cache is dropped when the
+// mode changes under a live page.
+let INK = {};
+// Guarded for a non-browser evaluator: tests/site runs this script under
+// node, where `window` is not defined at all.
+if (typeof window !== "undefined" && window.matchMedia)
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { INK = {}; });
+function inkOn(color){
+  if (INK[color]) return INK[color];
+  const probe = document.createElement("div");
+  probe.style.cssText = `position:absolute;visibility:hidden;color:${color}`;
+  document.body.appendChild(probe);
+  const rgb = (getComputedStyle(probe).color.match(/[\d.]+/g) || [0,0,0]).slice(0,3).map(Number);
+  probe.remove();
+  const lin = c => (c /= 255) <= 0.03928 ? c/12.92 : ((c + 0.055)/1.055) ** 2.4;
+  const L = 0.2126*lin(rgb[0]) + 0.7152*lin(rgb[1]) + 0.0722*lin(rgb[2]);
+  // Fixed inks, not the theme's text token: the choice is made against the
+  // fill, and on a dark page a pale fill still wants dark text.
+  return INK[color] = L > 0.42 ? "#0b0b0b" : "#ffffff";
+}
+
+// A 100%-wide part-to-whole strip. Segments are laid out by value, so a segment
+// worth 0.03% of the total is a hairline — which is the finding, not a defect.
+// A 2px gap separates fills; identity comes from the card's legend and the
+// tooltip, never from the segment alone.
+function stackedStrip(parent, title, right, segments){
+  const total = segments.reduce((a, s) => a + s.v, 0) || 1;
+  const wrap = document.createElement("div");
+  wrap.className = "striprow";
+  wrap.innerHTML = `<div class="t"><span>${title}</span><em>${right}</em></div>
+    <div class="strip">${segments.filter(s => s.v > 0).map(s =>
+      `<div style="flex:${s.v};background:${s.c}" data-tip="<b>${escAttr(s.k)}</b><br>${escAttr(s.detail)}<br>${pct(s.v/total)} of the total"></div>`
+    ).join("")}</div>`;
+  wireTips(wrap);
+  parent.appendChild(wrap);
+  return wrap;
+}
+
+// Bars on a log axis, one decade per gridline. Bar length is not proportional
+// here — that is what the strip above it is for — so every bar is direct
+// labeled and the decades are ticked, and the two charts are always shown
+// together. Six orders of magnitude cannot be read any other way.
+function logChart(parent, rows){
+  const values = rows.map(r => r.v).filter(v => v > 0);
+  if (!values.length) return;
+  // Start a decade below the smallest bar so the smallest is a bar and not a
+  // hairline at the axis origin.
+  const lo = Math.floor(Math.log10(Math.min(...values))) - 1;
+  const hi = Math.ceil(Math.log10(Math.max(...values)));
+  const at = v => Math.max(0, Math.min(100, (Math.log10(v) - lo) / (hi - lo) * 100));
+  const wrap = document.createElement("div");
+  wrap.className = "logwrap";
+  for (const r of rows){
+    const row = document.createElement("div");
+    row.className = "row log";
+    const ci = r.lo && r.hi && r.hi > r.lo
+      ? `<div class="ci" style="left:${at(r.lo)}%;width:${Math.max(0, at(r.hi)-at(r.lo))}%"></div>` : "";
+    row.innerHTML = `
+      <div class="lbl">${r.label}</div>
+      <div class="trackbar" style="background:none">
+        <div class="fill" style="width:${at(r.v)}%;background:${r.c}"></div>${ci}
+      </div>
+      <div class="val">${r.value}${r.note ? ` <small>${r.note}</small>` : ""}</div>`;
+    hover(row.querySelector(".trackbar"), r.tip);
+    wrap.appendChild(row);
+  }
+  // Appended last so the hairlines read over the fills rather than under them.
+  const axis = document.createElement("div");
+  axis.className = "logaxis";
+  for (let d = lo; d <= hi; d++){
+    const left = (d - lo) / (hi - lo) * 100;
+    axis.innerHTML += `<i style="left:${left}%"></i><b style="left:${left}%">${fmtTok(10 ** d)}</b>`;
+  }
+  wrap.appendChild(axis);
+  parent.appendChild(wrap);
+}
+
+// One stage's length distribution, on bins shared by every other stage so the
+// rows read as small multiples of one axis.
+function histRow(parent, label, stats, color, tipHead){
+  const bins = stats.hist || [];
+  const max = Math.max(...bins, 1);
+  const row = document.createElement("div");
+  row.className = "histrow";
+  row.innerHTML = `<div class="lbl">${label}</div>
+    <div class="spark">${bins.map((c, i) => {
+      const from = HIST_EDGES[i], to = HIST_EDGES[i+1];
+      return `<i style="height:${Math.max(c ? 2 : 0, c/max*100)}%;background:${color}" data-tip="<b>${escAttr(tipHead)}</b><br>${c} of ${stats.n} sampled (${pct(c/stats.n)})<br>${fmtChars(from)}–${fmtChars(to)} characters"></i>`;
+    }).join("")}</div>
+    <div class="val">${fmtChars(stats.median)} <small>median</small></div>`;
+  wireTips(row);
+  parent.appendChild(row);
+}
+
+// Every stage's share of one label on a single axis: one dot per stage, a
+// hairline connecting the extremes. Three bars per label would be twenty-one
+// bars; this is the same numbers as one glance, and the per-stage bars below
+// remain the place to read the values off.
+function dotRow(parent, label, points, max, isValue){
+  const row = document.createElement("div");
+  row.className = "dotrow";
+  const at = f => Math.max(0, Math.min(100, f/max*100));
+  const spread = points.length > 1
+    ? `<div class="span" style="left:${at(Math.min(...points.map(p => p.f)))}%;width:${at(Math.max(...points.map(p => p.f))) - at(Math.min(...points.map(p => p.f)))}%"></div>`
+    : "";
+  row.innerHTML = `
+    <div class="lbl" style="${isValue ? "font-weight:600;color:var(--text-primary)" : ""}">${label}</div>
+    <div class="dottrack">${spread}${points.map(p =>
+      `<div class="dot" style="left:${at(p.f)}%;background:${p.c}" data-tip="${escAttr(p.tip)}"></div>`).join("")}</div>
+    <div class="val">${points.length ? `${pct(Math.max(...points.map(p => p.f)))} <small>${esc(points.reduce((a, p) => p.f > a.f ? p : a).stage)}</small>` : ""}</div>`;
+  wireTips(row);
+  parent.appendChild(row);
+}
+
+// A grid of counts: rows are one metadata column's values, columns are the
+// labels, cells carry the count and a sequential blue for the share of the row.
+// The number is in the cell as well as in the colour, so the grid is its own
+// table view; a cell with prompts behind it opens them like any bar does.
+function heatTable(parent, rows, cols, ctx){
+  const wrap = document.createElement("div");
+  wrap.className = "hmwrap";
+  const table = document.createElement("table");
+  table.className = "hm";
+  const head = document.createElement("tr");
+  head.innerHTML = `<th class="rowlbl"></th>`
+    + cols.map(c => `<th>${esc(c.short)}</th>`).join("")
+    + `<th style="text-align:right">n</th>`;
+  table.appendChild(head);
+  const STEPS = ["var(--heat-1)", "var(--heat-2)", "var(--heat-3)", "var(--heat-4)", "var(--heat-5)"];
+  for (const r of rows){
+    const tr = document.createElement("tr");
+    const lbl = document.createElement("th");
+    lbl.className = "rowlbl";
+    lbl.textContent = r.name;
+    lbl.title = r.name;
+    tr.appendChild(lbl);
+    for (const c of cols){
+      const recs = r.byCol[c.key] || [];
+      const f = r.total ? recs.length / r.total : 0;
+      const td = document.createElement("td");
+      // Five steps, so a cell's colour is read as a band and the count is read
+      // as the number. Zero stays on the surface rather than taking the
+      // lightest step, which would make "none" and "a couple" look alike.
+      const step = f <= 0 ? null : STEPS[Math.min(STEPS.length - 1, Math.floor(f * STEPS.length))];
+      td.style.background = step || "var(--track)";
+      if (step) td.style.color = inkOn(step);
+      td.textContent = recs.length || "·";
+      hover(td, `<b>${escAttr(r.name)}</b> · ${escAttr(c.label)}<br>${recs.length} of ${r.total} sampled prompts (${pct(f)})`
+        + (recs.length && ctx ? "<br>click to read them" : ""));
+      if (recs.length && ctx){
+        td.classList.add("on");
+        td.setAttribute("role", "button");
+        td.tabIndex = 0;
+        td.title = `${recs.length} prompts — ${r.name} · ${c.label}`;
+        let panel = null;
+        const toggle = () => {
+          if (panel){ panel.remove(); panel = null; return; }
+          panel = drillPanel(recs, {...ctx, unit: "cell"});
+          panel.style.margin = "4px 0 12px";
+          // Under the whole table: a row of a <table> is no place to mount a
+          // block of prompts.
+          wrap.after(panel);
+        };
+        td.addEventListener("click", toggle);
+        td.addEventListener("keydown", e => {
+          if (e.key === "Enter" || e.key === " "){ e.preventDefault(); toggle(); }
+        });
+      }
+      tr.appendChild(td);
+    }
+    const n = document.createElement("td");
+    n.className = "n";
+    n.textContent = r.total;
+    tr.appendChild(n);
+    table.appendChild(tr);
+  }
+  wrap.appendChild(table);
+  parent.appendChild(wrap);
+  const scale = document.createElement("div");
+  scale.className = "scalelegend";
+  scale.innerHTML = `share of the row: 0%`
+    + STEPS.map(s => `<i style="background:${s}"></i>`).join("")
+    + `100% · the count is in the cell`;
+  parent.appendChild(scale);
+  return wrap;
+}
+
+// Squarified treemap. Returns rectangles in the order given, so the caller can
+// keep colour tied to the entity rather than to the layout.
+function treemapLayout(items, W, H, minSide = 3){
+  const total = items.reduce((a, i) => a + i.v, 0) || 1;
+  const list = items.filter(i => i.v > 0).sort((a, b) => b.v - a.v)
+    .map(i => ({item: i, area: i.v / total * W * H}));
+  const rects = [];
+  let x = 0, y = 0, w = W, h = H, i = 0;
+  const worst = (row, side) => {
+    const s = row.reduce((a, r) => a + r.area, 0);
+    if (!s || !side) return Infinity;
+    const mx = Math.max(...row.map(r => r.area)), mn = Math.min(...row.map(r => r.area));
+    return Math.max(side * side * mx / (s * s), s * s / (side * side * mn));
+  };
+  while (i < list.length && w > 0 && h > 0){
+    const column = w >= h, side = column ? h : w;
+    const row = [list[i++]];
+    while (i < list.length && worst(row, side) >= worst([...row, list[i]], side)) row.push(list[i++]);
+    const sum = row.reduce((a, r) => a + r.area, 0);
+    const thick = Math.min(sum / side, column ? w : h);
+    let off = 0;
+    for (const r of row){
+      const len = thick ? r.area / thick : 0;
+      rects.push(column
+        ? {...r.item, x, y: y + off, w: thick, h: len}
+        : {...r.item, x: x + off, y, w: len, h: thick});
+      off += len;
+    }
+    if (column){ x += thick; w -= thick; } else { y += thick; h -= thick; }
+  }
+  // A tile worth 0.03% of the area is smaller than a pixel. Drawing it at zero
+  // would say it isn't there; drawing it at 3px is a distortion, so the caller
+  // is expected to say out loud that these tiles are not to scale.
+  for (const r of rects){
+    r.clamped = r.w < minSide || r.h < minSide;
+    r.w = Math.max(r.w, minSide);
+    r.h = Math.max(r.h, minSide);
+  }
+  return rects;
 }
 
 let REG, MANIFEST, LANG_NAMES = {}, REWARDS = {kinds:{}, mixes:{}}, DATA = {}, CTXMAPS = {};
@@ -1701,7 +2063,34 @@ async function getData(name){
   return DATA[name];
 }
 const KEY_CHARS = 400;  // must match trainspotting/context.py
+
+// The prompt opening every join on this page is keyed on. Python cut it by code
+// point, so this has to as well: String.slice counts UTF-16 units, and one
+// emoji before the cut moves it a character. Three committed context records
+// have a non-BMP character in their first 400, and under the old slice every
+// lookup for them missed — the crosstab dropped the prompt, and the "see it in
+// training context" button reported the row as uncommitted.
+const keyPrefix = prompt => [...prompt].slice(0, KEY_CHARS).join("");
 const ctxFile = (model, stage) => `${model}.${stage}.context.json`;
+const profileFile = (model, stage) => `${model}.${stage}.profile.json`;
+
+// Half-decade bins from 10 characters up — must match derive.HIST_* .
+const HIST_EDGES = Array.from({length: 12}, (_, i) => 10 ** (1 + i * 0.5));
+
+// The third join on this page, and the cheapest: a profile record carries no
+// prompt text at all, only this hash of the same 400-character opening
+// `context.build` keys on. 32-bit FNV-1a over code points — mirrored from
+// derive.prompt_key, and tests/test_derive.py runs both over the committed
+// samples so the two cannot drift apart silently.
+function promptKey(prompt){
+  let h = 0x811c9dc5;
+  // Sliced by code point, not by `String.slice`, which counts UTF-16 units: a
+  // prompt with an emoji in its first 400 characters would otherwise be cut a
+  // character short of where Python cut it, hash differently, and drop out of
+  // the grid silently. Three of the committed samples do exactly that.
+  for (const ch of keyPrefix(prompt)) h = Math.imul(h ^ ch.codePointAt(0), 0x01000193) >>> 0;
+  return h.toString(16).padStart(8, "0");
+}
 
 // Two joins, and the row is the real one. The prompt-prefix map cannot tell
 // apart two rows that open with the same 400 characters, and it keeps the first
@@ -1726,7 +2115,7 @@ async function ctxMaps(model, stage){
 async function contextFor(model, stage, rec){
   const {byKey, byRow} = await ctxMaps(model, stage);
   if (rec.row != null && byRow.has(rec.row)) return byRow.get(rec.row);
-  return byKey.get(rec.prompt.slice(0, KEY_CHARS));
+  return byKey.get(keyPrefix(rec.prompt));
 }
 // Deep links address a training example by its HuggingFace row number.
 async function contextRowFor(model, stage, row){
@@ -1757,6 +2146,749 @@ function jumpToStage(stage){
   el.scrollIntoView({behavior: "smooth", block: "start"});
   el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
   return true;
+}
+
+// ------------------------------------------------------------ token budget ---
+// Every other card on this page is about post-training, which is where the
+// detail is. This is the card that says what fraction of the model's training
+// that detail describes.
+//
+// The numbers are not all of one kind and the card never pretends otherwise:
+// a corpus stage's tokens are published in the paper, a post-training stage's
+// are estimated from the same 300 examples every other card samples. What makes
+// the comparison worth drawing anyway is its size — the gap is four orders of
+// magnitude, and no plausible tokenizer moves it by one.
+
+// The corpus stages are ordered, so they take an ordinal ramp rather than
+// categorical hues they could not clear the CVD floors in.
+const CORPUS_RAMP = ["var(--corpus-1)", "var(--corpus-2)", "var(--corpus-3)"];
+
+// One row per stage, with everything the size cards need already resolved:
+// where its token count came from, what the model was fit to, and what this
+// page has actually looked at.
+function budgetRows(m, sources, profiles, corpusSummaries){
+  const corpusStages = m.stages.filter(s => !s.hf_dataset);
+  return m.stages.map(s => {
+    const base = !s.hf_dataset;
+    const p = profiles[s.stage];
+    const est = p && p.tokens;
+    const corpus = corpusSummaries[s.stage];
+    const src = sources && sources[s.stage];
+    return {
+      stage: s.stage,
+      name: s.name,
+      stageEntry: s,
+      base,
+      color: base ? CORPUS_RAMP[Math.min(corpusStages.indexOf(s), CORPUS_RAMP.length - 1)] : hueFor(s.stage),
+      tokens: base ? s.tokens : (est ? est.tokens : null),
+      // Absent where the sample was one fetch: no between-draw information,
+      // so no interval rather than one that assumes the rows were independent.
+      lo: est && est.lo != null ? est.lo : null,
+      hi: est && est.hi != null ? est.hi : null,
+      estimated: !base,
+      // Every pretraining token is a next-token target; what a post-training
+      // stage fits is a fraction of the example, and for RL none of it.
+      fitTokens: base ? s.tokens : (p && p.target_tokens ? p.target_tokens.tokens : (p ? 0 : null)),
+      fitShare: base ? 1 : (p && p.chars && p.chars.mean
+        ? p.target_chars.mean / p.chars.mean : null),
+      examples: base ? null : (src ? src.total : null),
+      // What this page looked at: the committed sample behind every chart below.
+      sampled: base ? (corpus ? corpus.records : null) : (p ? p.chars.n : null),
+      lengths: base ? (corpus && corpus.lengths ? corpus.lengths.chars : null) : (p ? p.chars : null),
+      targetLengths: base ? null : (p ? p.target_chars : null),
+      perExample: est ? est.per_example : null,
+      // Why the whisker is as wide as it is: the sampler's draws, and how much
+      // correlation inside them cost. A wide interval with no explanation reads
+      // as a small sample.
+      deff: p && p.chars ? p.chars.deff : null,
+      clusters: p && p.chars ? p.chars.clusters : null,
+      // Whether the sampled mean and the row count it is multiplied by were
+      // read from the same tree. These dataset ids move.
+      revisions: p ? p.revisions : null,
+      // Rows the sampler fetched and the context layer could not read.
+      dropped: p && p.requested ? p.requested - p.retained : 0,
+    };
+  });
+}
+
+function budgetCard(m, rows){
+  const sized = rows.filter(r => r.tokens);
+  if (!sized.length) return null;
+  const card = document.createElement("section");
+  card.className = "card";
+  // A dataset is one stage with nothing to compare it against. One number is a
+  // stat, not a chart. A lone stage whose size was published rather than
+  // measured has nothing to say here at all — the pipeline tile above already
+  // says it.
+  if (sized.length === 1){
+    const r = sized[0];
+    if (!r.estimated || !r.lengths) return null;
+    card.innerHTML = `<h2>How big is it?</h2>
+      <div class="hero-stat"><div class="n">${fmtTok(r.tokens)}</div>
+        <div class="cap">tokens, estimated from the ${r.sampled} sampled examples — a mean of
+          ${num(Math.round(r.lengths.mean))} characters each, at four characters per token, across
+          ${num(r.examples)} examples. ${r.lo != null
+            ? `95% interval ${fmtTok(r.lo)}–${fmtTok(r.hi)} on the sampled mean; the divisor is the
+               larger uncertainty.`
+            : `No interval: the sample came back as a single fetch of adjacent rows, which carries
+               no information about how much the mean would move on another draw.`}</div></div>`;
+    return card;
+  }
+  const total = sized.reduce((a, r) => a + r.tokens, 0);
+  const post = sized.filter(r => !r.base);
+  const postTokens = post.reduce((a, r) => a + r.tokens, 0);
+  const share = postTokens / total;
+  const legend = `<div class="legend" style="margin:0 0 14px">${sized.map(r =>
+    `<span class="k"><i style="background:${r.color}"></i>${esc(r.stage)}</span>`).join("")}</div>`;
+  // With no post-training stage sized there is no estimate to explain and no
+  // share to lead with — the card is then just the corpus stages against each
+  // other, which is still worth drawing.
+  card.innerHTML = `<h2>Where the token budget went</h2>
+    <p class="sub">Corpus tokens are the paper's own (Table 4).${post.length ? ` Post-training tokens are
+      estimated here — mean characters over the same ${post[0].sampled}-example sample every card
+      below draws from, at four characters per token, times the exact row count. The estimate's 95%
+      interval is on the log chart; the divisor is the larger uncertainty and no value in the
+      plausible 3.5–4.5 range changes what this shows.` : ""}</p>
+    ${post.length ? `<div class="hero-stat"><div class="n">${share < 0.001 ? (share*100).toPrecision(2) + "%" : pct(share)}</div>
+      <div class="cap">of the text behind this model, counted in tokens, came after pretraining —
+        and nearly every other card on this page is about that sliver. The pipeline tiles above are
+        in the order training happened; this is the same pipeline to scale.</div></div>` : ""}
+    ${legend}`;
+  stackedStrip(card, "text in each stage, in tokens", fmtTok(total) + " total", sized.map(r => ({
+    k: `${r.stage} — ${r.name}`, v: r.tokens, c: r.color,
+    detail: `${fmtTok(r.tokens)} tokens${r.estimated ? " (estimated)" : ""}`,
+  })));
+  const sampledRows = rows.filter(r => r.sampled);
+  if (sampledRows.length > 1){
+    const totalSampled = sampledRows.reduce((a, r) => a + r.sampled, 0);
+    stackedStrip(card, "examples and documents sampled for this page",
+      num(totalSampled) + " sampled", sampledRows.map(r => ({
+        k: `${r.stage} — ${r.name}`, v: r.sampled, c: r.color,
+        detail: `${num(r.sampled)} sampled` + (r.examples ? ` of ${num(r.examples)} examples (${(r.sampled/r.examples*100).toFixed(3)}%)` : " documents"),
+      })));
+    // A stage with tokens but no committed sample is missing from the second
+    // strip entirely, which is a stronger version of the same point and has to
+    // be said rather than left as an absence.
+    const unsampled = sized.filter(r => !r.sampled);
+    const p = document.createElement("p");
+    p.className = "note";
+    p.style.margin = "-8px 0 14px";
+    p.textContent = "The two strips are the same pipeline weighted two ways, each to its own total: "
+      + "what the model read, and what this page read. Every stage gets roughly the same sample, "
+      + "which is why the second strip is nothing like the first."
+      + (unsampled.length
+        ? ` ${unsampled.map(r => r.stage).join(", ")} ${unsampled.length === 1 ? "has" : "have"} no committed sample at all, so ${unsampled.length === 1 ? "it is" : "they are"} absent from the second strip — run trainspotting pretrain to put ${unsampled.length === 1 ? "it" : "them"} there.`
+        : "");
+    card.appendChild(p);
+  }
+  // A stage whose sample and row count come from different trees has no
+  // honest total, so the export withholds one — and an absence on a size chart
+  // reads as "nothing here" rather than "not comparable". Say which.
+  const mixed = rows.filter(r => !r.base && !r.tokens && r.revisions && r.revisions.agree === false);
+  if (mixed.length){
+    const p = document.createElement("p");
+    p.className = "note";
+    p.style.margin = "0 0 14px";
+    p.textContent = `${mixed.map(r => r.stage).join(", ")} ${mixed.length === 1 ? "is" : "are"} missing above: `
+      + (mixed.some(r => r.revisions.moved && r.revisions.moved.length)
+        ? `the dataset was republished while a run was in flight, so its rows may come from either tree. `
+        : `the sampled examples and the exact row count were read from different revisions of the dataset, `
+          + `so multiplying one by the other would report a mixed-tree number as one measurement. `)
+      + `Re-run trainspotting context or trainspotting sources for ${mixed.length === 1 ? "it" : "them"}.`;
+    card.appendChild(p);
+  }
+  const grp = document.createElement("div");
+  grp.className = "grp";
+  grp.textContent = "the same tokens on a log axis";
+  card.appendChild(grp);
+  logChart(card, sized.map(r => ({
+    label: `${esc(r.stage.toUpperCase())}`,
+    v: r.tokens, lo: r.lo, hi: r.hi, c: r.color,
+    value: fmtTok(r.tokens),
+    note: r.stage === "rlvr" ? "prompts only" : r.estimated ? "est" : "paper",
+    tip: `<b>${esc(r.stage)}</b> — ${esc(r.name)}<br>${fmtTok(r.tokens)} tokens`
+      + (r.stage === "rlvr" ? "<br>the prompt set only — RL's completions are generated during training and stored nowhere, so the tokens this stage actually processes cannot be counted from the data" : "")
+      + (r.estimated
+        ? `<br>estimated: ${num(Math.round(r.perExample))} tokens/example × ${num(r.examples)} examples`
+          + (r.lo != null
+            ? `<br>95% CI ${fmtTok(r.lo)}–${fmtTok(r.hi)} on the sampled mean length`
+              + `<br>at t(${r.lengths.df}) — the error is estimated from ${r.clusters} draws, not known`
+            : `<br>no interval: the sample came back as a single fetch of adjacent rows, which carries no information about how much the mean would move on another draw`)
+          + (r.deff > 1.05
+            ? `<br>widened ${r.deff.toFixed(1)}× for clustering — ${r.clusters} draws of ten consecutive rows, not ${r.lengths.n} independent ones`
+            : "")
+          + (r.dropped
+            ? `<br>${r.dropped} of the ${r.lengths.n + r.dropped} fetched rows had no readable prompt and were dropped; the total assumes they are like the ones that were kept`
+            : "")
+          + (r.revisions && r.revisions.agree === null
+            ? `<br>the sample and the row count are not pinned to the same dataset revision — one of the two runs predates the stamp, so the pairing is unproven`
+            : "")
+        : `<br>published in the OLMo 3 paper`),
+  })));
+  const note = document.createElement("p");
+  note.className = "note";
+  note.style.marginTop = "22px";
+  note.innerHTML = "Every gridline is 10×, so bar length here is not proportional — the strip above "
+    + "is the same numbers to scale. Whiskers on the estimated stages are the 95% interval on the "
+    + "sampled mean example length, which is sampling error only: it says nothing about the "
+    + "characters-per-token divisor."
+    // What this is a count of, said plainly, because the two obvious readings
+    // differ and only one of them is measurable from the data. Tokens
+    // *processed* would count a DPO prompt twice (it is read once with each
+    // completion) and would have to include RL's generated rollouts, which are
+    // not in the dataset at any length and cannot be recovered from it.
+    + " The interval is over the sampler's draws rather than its rows: rows arrive in"
+    + " chunks of ten consecutive positions and neighbours on disk are correlated, so 300 rows"
+    + " are about thirty independent draws and treating them as 300 would make every whisker"
+    + " here about twice too narrow."
+    + " These are tokens of text in each stage's data, not tokens processed during training."
+    + " A DPO example's shared prompt is read once with each completion at training time and is"
+    + " counted once here; an RL stage is only its prompts, because the completions RL actually"
+    + " trains on are generated during the run and stored nowhere. Read the RL bar as the size of"
+    + " the prompt set, not the size of the RL update.";
+  card.appendChild(note);
+  return card;
+}
+
+// The second half of the token question: of the text in a stage, how much does
+// the model actually get fit to? A stage's answer is a property of the loss,
+// not of the data, so this is the one chart on the page whose bars are exact
+// for the corpus stages and sampled for the rest.
+function fitCard(m, rows){
+  const usable = rows.filter(r => r.fitShare != null);
+  if (usable.length < 2) return null;
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<h2>How much of it the model is fit to</h2>
+    <p class="sub">Share of each stage's text that carries a gradient. Pretraining fits every token
+      it reads. An SFT example is mostly prompt and tool output the model reads but is not scored on.
+      A DPO example scores only the two completions after the pair branches — in opposite directions.
+      An RL row stores no response at all: the model writes its own during training, so none of the
+      text in the dataset is a target.</p>`;
+  const FIT_NOTE = {
+    sft: "the assistant turns, reasoning span included",
+    dpo: "both completions after the branch — chosen positively, rejected negatively",
+    rlvr: "nothing in the data — the response RL fits is generated during the run, scored by the verifier, and stored nowhere, so this share is 0% of the stored text rather than 0% of the update",
+    chat: "nothing — a chat log is not a training example",
+  };
+  for (const r of usable){
+    const row = document.createElement("div");
+    row.className = "row";
+    const what = r.base ? "every token is a next-token target" : (FIT_NOTE[r.stage] || "");
+    row.innerHTML = `
+      <div class="lbl">${esc(r.stage.toUpperCase())}</div>
+      <div class="trackbar"><div class="fill ${r.fitShare ? "" : "zero"}" style="width:${r.fitShare*100}%;background:${r.color}"></div></div>
+      <div class="val">${pct(r.fitShare)}${r.fitTokens ? ` <small>${fmtTok(r.fitTokens)} tok</small>` : ""}</div>`;
+    hover(row.querySelector(".trackbar"),
+      `<b>${esc(r.stage)}</b> — ${esc(what)}`
+      + (r.base ? "" : `<br>${num(Math.round(r.targetLengths.mean))} of ${num(Math.round(r.lengths.mean))} characters per example, on average`)
+      + (r.fitTokens ? `<br>≈ ${fmtTok(r.fitTokens)} of ${fmtTok(r.tokens)} tokens` : ""));
+    card.appendChild(row);
+  }
+  return card;
+}
+
+// How long one example is, per stage, on bins every stage shares. This is what
+// makes an example count and a token count the same kind of statement: 2.1M SFT
+// examples and 5.93T pretraining tokens are only comparable once you know that
+// one example is about 2,800 characters and one document about 11,000.
+function lengthCard(m, rows){
+  const usable = rows.filter(r => r.lengths && r.lengths.n);
+  if (!usable.length) return null;
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<h2>How long is one example?</h2>
+    <p class="sub">Characters per training example (per document, for the corpus stages), counted
+      before any display truncation. Half-decade bins, shared by every row, so these read as one
+      chart: a pretraining document, an SFT conversation and an RL prompt are three orders of
+      magnitude apart.</p>`;
+  for (const r of usable){
+    histRow(card, `${esc(r.stage.toUpperCase())}`, r.lengths, r.color,
+      `${r.stage} — ${r.base ? "documents" : "examples"}`);
+  }
+  // Ticks sit on their own bin edge rather than being spread evenly: the bins
+  // are equal-width, so an evenly spread label row would put "1M" a tenth of
+  // the axis away from where a million characters actually is.
+  const axis = document.createElement("div");
+  axis.className = "histaxis";
+  const last = HIST_EDGES.length - 1;
+  axis.innerHTML = `<div></div><div class="ticks">${[0, 2, 4, 6, 8, 10, last].map(i =>
+    `<span style="left:${i/last*100}%;transform:translateX(${i === 0 ? "0" : i === last ? "-100%" : "-50%"})">${fmtChars(HIST_EDGES[i])}</span>`
+  ).join("")}</div><div></div>`;
+  card.appendChild(axis);
+  const note = document.createElement("p");
+  note.className = "note";
+  const longest = usable.reduce((a, r) => r.lengths.max > a.lengths.max ? r : a);
+  note.textContent = `Bars are counts within the sample, each row on its own vertical scale; the `
+    + `median is printed beside it. The longest single item sampled is ${num(Math.round(longest.lengths.max))} `
+    + `characters, in ${longest.stage}. Anything past ${fmtChars(HIST_EDGES[11])} characters is counted in the last bin.`;
+  card.appendChild(note);
+  return card;
+}
+
+// ----------------------------------------------------------------- treemap ---
+// The bars in the cards above compare sources within one stage. This is the
+// only view that puts every source in the pipeline in one frame at once: area
+// is tokens, so Common Crawl against FineMath against the whole of DPO is a
+// single picture rather than three charts with three different denominators.
+// Appends rather than returns: the boxes are laid out in pixels against the
+// container's real width, so the card has to be in the document before it can
+// be drawn.
+function appendTreemap(parent, m, rows, corpusSummaries){
+  const base = rows.filter(r => r.base && r.tokens);
+  if (!base.length) return;
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<h2>The whole pipeline as area</h2>
+    <p class="sub">Every box is tokens. Stages come from the paper; a stage's own boxes come from
+      the mix's published composition where it has one, and otherwise from the shard listing of the
+      corpus itself, which measures compressed bytes rather than tokens and is scaled into the
+      stage's published total. Colour is the stage; the boxes inside one stage are separated by the
+      gap between them, not by hue.</p>`;
+  const wrap = document.createElement("div");
+  wrap.className = "tmap";
+  card.appendChild(wrap);
+
+  const post = rows.filter(r => !r.base && r.tokens);
+  const postTokens = post.reduce((a, r) => a + r.tokens, 0);
+  const stages = base.map(r => ({...r, children: childrenOf(r, corpusSummaries)}));
+  if (postTokens) stages.push({
+    stage: "post-training", name: post.map(r => r.stage).join(" + "), tokens: postTokens,
+    color: hueFor(post[0].stage), estimated: true, children: null,
+  });
+
+  // Laid out in pixels against the real width, so re-laying out on resize is
+  // the only way the boxes stay square-ish. A ResizeObserver also covers the
+  // first layout, which a rAF would miss in a background tab.
+  let note = null;
+  const draw = () => {
+    const W = wrap.clientWidth, H = wrap.clientHeight;
+    if (!W || !H) return;
+    wrap.innerHTML = "";
+    if (note){ note.remove(); note = null; }
+    let clamped = 0;
+    for (const rect of treemapLayout(stages.map(s => ({...s, v: s.tokens})), W, H)){
+      if (rect.clamped) clamped++;
+      // A stage with room for its own name gets a caption band and its
+      // composition inside; anything smaller is one tile with a tooltip.
+      const roomy = rect.w > 90 && rect.h > 54 && rect.children && rect.children.length;
+      const kids = roomy
+        ? treemapLayout(rect.children.map(c => ({...c, v: c.v})), rect.w - 4, rect.h - 22)
+        : [];
+      wrap.appendChild(tile(rect, rect.x, rect.y, rect.w, rect.h, rect.color, roomy ? "head" : "solid",
+        `<b>${esc(rect.stage)}</b><br>${esc(rect.name)}<br>${fmtTok(rect.tokens)} tokens${rect.estimated ? " (estimated)" : ""}`
+        + (rect.clamped ? "<br>drawn at minimum size — its true area here is under a pixel" : "")));
+      for (const k of kids){
+        // A child hits the minimum long before a stage does — Wikipedia is
+        // 0.04% of the pretraining mix — so counting only the top level left
+        // the warning off a treemap that was already not to scale.
+        if (k.clamped) clamped++;
+        wrap.appendChild(tile({stage: k.name, tokens: k.tokens, unit: k.unit}, rect.x + 2 + k.x, rect.y + 20 + k.y,
+          k.w, k.h, rect.color, "child",
+          `<b>${esc(k.name)}</b> — in ${esc(rect.stage)}<br>${esc(k.detail)}`
+          + (k.clamped ? "<br>drawn at minimum size — its true area here is under a pixel" : "")));
+      }
+    }
+    if (clamped){
+      note = document.createElement("p");
+      note.className = "note";
+      note.textContent = `${clamped} box${clamped === 1 ? " is" : "es are"} drawn at a 3-pixel minimum `
+        + `because ${clamped === 1 ? "its" : "their"} true area is smaller than a pixel at this size. `
+        + `Everything else is to scale.`;
+      wrap.after(note);
+    }
+  };
+  parent.appendChild(card);
+  draw();
+  // Boxes laid out in pixels have to be re-laid out when the width changes.
+  if (window.ResizeObserver) new ResizeObserver(draw).observe(wrap);
+}
+
+// One box. Captions only where they fit — a clipped label is worse than none,
+// and the tooltip carries the same text at any size.
+function tile(item, x, y, w, h, color, kind, tipHtml){
+  const el = document.createElement("div");
+  el.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;background:${color}`;
+  el.style.color = inkOn(color);
+  if (kind === "child") el.style.boxShadow = "inset 0 0 0 1px var(--surface-1)";
+  const fits = w > 74 && h > (kind === "head" ? 18 : 30);
+  if (fits) el.innerHTML = `<b>${esc(kind === "head" ? item.stage.toUpperCase() : item.stage)}</b>`
+    + (kind === "head" || h > 42 ? `<span>${fmtTok(item.tokens)}${item.unit ? " " + item.unit : ""}</span>` : "");
+  hover(el, tipHtml);
+  return el;
+}
+
+// What a corpus stage is made of: the mix's own published composition when the
+// registry has one, and otherwise the shard listing, whose byte shares are
+// scaled into the stage's published token total. The two are different
+// measurements of the same mix and the tooltip says which one a box is.
+function childrenOf(row, corpusSummaries){
+  const stage = row.stageEntry;
+  if (stage && stage.composition && stage.composition.length){
+    const total = stage.composition.reduce((a, c) => a + c.tokens, 0);
+    // Same test the published-composition card makes: a stage that trains on
+    // less than the full recipe (the 32B runs 5.50T of a 5.93T mix) has
+    // per-source counts that describe the mix, not the run, so they are scaled
+    // and labeled approximate. Where the two agree, the mix's own numbers are
+    // the numbers — scaling them would put a different figure on this box than
+    // on the bar above it.
+    const exact = Math.abs(total - row.tokens) <= 0.005 * row.tokens;
+    return stage.composition.map(c => ({
+      name: c.name, v: c.tokens, tokens: exact ? c.tokens : c.tokens / total * row.tokens,
+      detail: exact
+        ? `${fmtTok(c.tokens)} of this stage's ${fmtTok(row.tokens)} tokens (${pct(c.tokens/total)})`
+        : `${pct(c.tokens/total)} of the mix recipe — ≈${fmtTok(c.tokens/total*row.tokens)} of this ${fmtTok(row.tokens)}-token run`,
+    }));
+  }
+  const corpus = corpusSummaries[row.stage];
+  if (corpus && corpus.groups){
+    const entries = Object.entries(corpus.groups);
+    const total = entries.reduce((a, [, g]) => a + g.bytes, 0) || 1;
+    return entries.map(([name, g]) => ({
+      name: niceGroup(name), v: g.bytes, tokens: g.bytes / total * row.tokens,
+      detail: `${fmtBytes(g.bytes)} compressed, ${pct(g.bytes/total)} of the shards — ≈${fmtTok(g.bytes/total*row.tokens)} tokens`,
+    }));
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------- crosstab ---
+// The taxonomy says how much of a stage is about being harmless. The mix
+// composition says which datasets the stage was built from. Neither says which
+// of those datasets the harmless prompts came from — and that is usually one or
+// two of them, which is worth knowing before reading a stage-level share as a
+// property of the stage.
+//
+// The join costs nothing to ship: a profile record carries a hash of the same
+// prompt opening the label record holds, so the crossing happens in the browser
+// over files it already has.
+
+// Columns worth grouping rows by, best first. Everything else the rows happen
+// to carry is still offered, but a source dataset beats a difficulty bucket.
+const GROUP_PREFERENCE = ["source_dataset", "dataset_source", "data_source", "dataset",
+  "model", "domain", "ability", "preference_type", "country", "language"];
+const SHORT_LABEL = {helpfulness: "helpful", honesty: "honest", harmlessness: "harmless",
+  capability: "capability", instruction_following: "instruction", tool_use: "tool use", other: "other"};
+
+function pickGroupColumn(columns){
+  // One value for every row groups nothing; sixty is already more rows than a
+  // grid can be read at.
+  const usable = Object.entries(columns || {}).filter(([, d]) => d >= 2 && d <= 60);
+  for (const name of GROUP_PREFERENCE){
+    if (usable.some(([n]) => n === name)) return name;
+  }
+  return usable.sort((a, b) => b[1] - a[1]).map(([n]) => n)[0] || null;
+}
+
+// Sampled records grouped by the metadata value of the prompt behind each one,
+// then by whatever the record was labeled. Returns the rows a heat table needs.
+// One metadata value per prompt key, and nothing where the sample disagrees.
+//
+// The key is a prompt's opening, so two sampled rows can share one. Where they
+// carry the same value for this column that costs nothing — the prompt belongs
+// to that value either way. Where they carry different ones (7B Think DPO has a
+// key spanning two source datasets; a WildChat key spans eight countries), no
+// join can say which row a labeled prompt came from, and last-one-wins would
+// file every prompt under whichever row happened to be sampled last. Drop those
+// keys instead and let the count of them travel with the grid: a prompt missing
+// from the table is recoverable, a prompt in the wrong row is not.
+function valueByKey(records, col){
+  const map = new Map(), dropped = new Set(), missing = new Set();
+  for (const r of records){
+    const v = r.m[col];
+    // A row with no value for this column is not a row to skip past: if
+    // another row shares its key, a prompt on that key might belong to either,
+    // and leaving the other row's value in the map files it under a source it
+    // may not have. Missing-against-present is the same ambiguity as two
+    // different values, so it drops the key too. Nullable source columns are a
+    // supported case — tests/test_context.py allows a row to leave one null.
+    if (v == null){ missing.add(r.k); continue; }
+    if (map.has(r.k) && map.get(r.k) !== v) dropped.add(r.k);
+    else if (!map.has(r.k)) map.set(r.k, v);
+  }
+  for (const k of missing) if (map.has(k)) dropped.add(k);
+  for (const k of dropped) map.delete(k);
+  return {map, dropped};
+}
+
+// Where the two runs both recorded the sampler's row numbers, a prompt's
+// metadata is looked up by row and there is nothing to be undecided about. The
+// prefix hash exists because a labels file older than the row field has nothing
+// else to join on, and it is lossy in exactly the way this avoids: it drops 39
+// of WildChat's 299 language records, whose shared Midjourney opening spans
+// several models, and nine in the 7B Think DPO run.
+function rowResolver(profileRecords, col){
+  const byRow = new Map();
+  for (const r of profileRecords)
+    if (r.row != null && r.m[col] != null) byRow.set(r.row, r.m[col]);
+  return rec => rec.row != null && byRow.has(rec.row)
+    ? {value: byRow.get(rec.row)}
+    : {miss: "unmatched"};
+}
+
+function hashResolver(profileRecords, col){
+  const {map, dropped} = valueByKey(profileRecords, col);
+  return rec => {
+    const key = promptKey(rec.prompt);
+    const value = map.get(key);
+    return value === undefined
+      ? {miss: dropped.has(key) ? "undecidable" : "unmatched"}
+      : {value};
+  };
+}
+
+// Row identities when both sides have them, the prefix hash when they do not.
+function resolverFor(profile, run, col){
+  const usable = profile.records.every(r => r.row != null)
+    && (run.records || []).every(r => r.row != null);
+  return usable ? rowResolver(profile.records, col) : hashResolver(profile.records, col);
+}
+
+function crossRows(records, resolve, labelOf, limit = 12){
+  const groups = new Map();
+  // Two ways a prompt misses the grid, and they mean different things: its key
+  // was thrown out as undecidable, or the sample has no row for it at all
+  // (the row records nothing for this column, or its stored prompt no longer
+  // matches the labeled copy). Counting them together would describe the first
+  // as missing data when it is a refusal to guess.
+  let undecidable = 0, unmatched = 0;
+  for (const r of records){
+    const {value, miss} = resolve(r);
+    if (value === undefined){
+      if (miss === "undecidable") undecidable++; else unmatched++;
+      continue;
+    }
+    if (!groups.has(value)) groups.set(value, {name: value, total: 0, byCol: {}});
+    const g = groups.get(value);
+    g.total++;
+    (g.byCol[labelOf(r)] ||= []).push(r);
+  }
+  const sorted = [...groups.values()].sort((a, b) => b.total - a.total);
+  const rows = sorted.slice(0, limit);
+  const rest = sorted.slice(limit);
+  // Never drop the tail silently: fold it into one row that is still countable
+  // and still opens its prompts.
+  if (rest.length){
+    const folded = {name: `${rest.length} smaller values`, total: 0, byCol: {}, folded: true};
+    for (const g of rest){
+      folded.total += g.total;
+      for (const [k, v] of Object.entries(g.byCol)) (folded.byCol[k] ||= []).push(...v);
+    }
+    rows.push(folded);
+  }
+  return {rows, undecidable, unmatched, groups: sorted.length};
+}
+
+// Whether two committed runs describe the same draw, and if not, what differs.
+//
+// The crosstab crosses a profile against a labels or languages run as though
+// they sampled the same rows. They usually did — sampling is deterministic in
+// --sample and --seed — but the CLI lets each command run with its own, and a
+// classify at --sample 500 crossed against a context at 300 produces a grid of
+// whatever the two draws happen to share. That is a biased intersection wearing
+// the same clothes as a real one, and the note under it would blame the gap on
+// key collisions.
+function sameDraw(profile, run){
+  if (profile.dataset !== run.dataset)
+    return `they were run against different datasets (${profile.dataset} and ${run.dataset})`;
+  if (profile.sample !== run.sample || profile.seed !== run.seed)
+    return `they were drawn with different sampling — the examples at --sample ${profile.sample} --seed ${profile.seed}, `
+      + `the labels at --sample ${run.sample} --seed ${run.seed}`;
+  // A revision on both sides that disagrees is two trees.
+  if (profile.revisions && profile.revisions.context && run.revision
+      && profile.revisions.context !== run.revision)
+    return `they read different revisions of the dataset (${profile.revisions.context.slice(0,7)} and ${run.revision.slice(0,7)})`;
+  // Either side spanning a republish is unpairable whatever its starting
+  // revision says — including the context side, which the first version of
+  // this check forgot to look at.
+  if (run.revision_moved_to || (profile.revisions && profile.revisions.moved || []).length)
+    return `the dataset was republished while one of the runs was in flight, so its rows may come from either tree`;
+  return null;
+}
+
+// What is left when the metadata cannot settle it. Every committed labels and
+// languages run predates revision stamping while the profiles now carry one, so
+// for those pairs the stamps prove nothing — refusing on that basis would take
+// down every grid on the page over a hypothetical.
+//
+// The join is the evidence instead, and it is better evidence than a stamp: the
+// key is a hash of a prompt's opening, so two runs that sampled different rows
+// do not match on them. A complete join is a demonstration that the same rows
+// were drawn. A poor one is the failure this guards against, and it refuses.
+const JOIN_FLOOR = 0.9;
+
+// Where both sides kept row indices there is nothing to infer: the sampler's
+// own numbering says whether two runs drew the same rows. A languages run
+// records one per prompt and so does a profile, so that pair is decided here
+// and never reaches the hash-rate evidence below.
+function sameRows(profile, run){
+  const mine = profile.records.map(r => r.row).filter(r => r != null);
+  const theirs = (run.records || []).map(r => r.row).filter(r => r != null);
+  if (mine.length !== profile.records.length || theirs.length !== run.records.length) return null;
+  const set = new Set(mine);
+  const shared = theirs.filter(r => set.has(r)).length;
+  return {shared, mine: mine.length, theirs: theirs.length,
+          identical: shared === mine.length && shared === theirs.length};
+}
+
+function joinEvidence(matched, total, profile, run){
+  const proven = profile.revisions && profile.revisions.context && run.revision;
+  const rate = total ? matched / total : 1;
+  if (rate < JOIN_FLOOR)
+    return {refuse: `only ${matched} of ${total} prompts in that run match a sampled example`
+      + `${proven ? "" : ", and neither run is pinned to a dataset revision"} — these are not the same draw`};
+  return {note: proven || rate === 1 ? null
+    : `The runs are not both pinned to a dataset revision, so their pairing rests on ${matched} of ${total} prompts matching a sampled example rather than on the stamps.`};
+}
+
+// The evidence that two runs describe one draw, best available first. Both
+// grids ask through here: writing the question out twice is what left the
+// taxonomy grid on hash rates after the language grid had row identities, and
+// `classify` records a row per label exactly as `languages` does — only the
+// files committed before it did are legacy.
+function pairingEvidence(profile, run, matched, total){
+  const rows = sameRows(profile, run);
+  if (!rows) return joinEvidence(matched, total, profile, run);
+  return rows.identical ? {note: null}
+    : {refuse: `they drew different rows — ${rows.shared} of ${rows.theirs} in that run are among the ${rows.mine} sampled examples`};
+}
+
+async function crosstabCard(model, m, post, profiles, ctxFor, gen){
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<h2>Where in the mix each kind of content comes from</h2>
+    <p class="sub">The same sampled prompts as the card above, crossed against the source column
+      their row carries. A cell is the count; its colour is that share of the row. Click one to read
+      the prompts behind it. Where both runs recorded the sampler's row numbers the two are joined on
+      those; for a run committed before they were recorded, the join is the prompt's opening, the
+      same one every drill-down on this page uses.</p>`;
+  let any = false;
+  for (const s of post){
+    const p = profiles[s.stage];
+    if (!p) continue;
+    const col = pickGroupColumn(p.columns);
+    const labels = await getData(`${model}.${s.stage}.labels.json`);
+    if (gen !== GEN) return null;
+    const h = document.createElement("h3");
+    h.className = "stage";
+    h.style.setProperty("--bar", hueFor(s.stage));
+    h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())}
+      <span class="ds">— ${esc(s.name)}${col ? ` · by <code>${esc(col)}</code>` : ""}</span>`;
+    card.appendChild(h);
+    if (!col){
+      noLabels(card, `the sampled rows of this stage carry no metadata column to group by — `
+        + `its examples record ${Object.keys(p.columns || {}).length ? "only single-valued fields" : "nothing about where they came from"}`);
+      continue;
+    }
+    const langs = await getData(`${model}.${s.stage}.languages.json`);
+    if (gen !== GEN) return null;
+    const labeled = labels ? labels.records.filter(r => r.label) : [];
+    if (!labeled.length && !(langs && langs.records.length)){
+      noLabels(card, `nothing is committed for this stage to cross against ${col} — `
+        + `run trainspotting classify or trainspotting languages on it`);
+      continue;
+    }
+    any = true;
+    const ctx = ctxFor(s);
+    const explain = (name, {rows, undecidable, unmatched, groups}, extra) => {
+      const note = document.createElement("p");
+      note.className = "note";
+      // Two ways to miss the grid, counted apart, and only named when they
+      // happened. One cause needs no breakdown; two do.
+      const undecidableWhy = `their opening 400 characters are shared by two sampled rows carrying different ${col} values, which makes the row they came from undecidable`;
+      const unmatchedWhy = `they matched no sampled row — its row records no ${col}, or stores a different copy of the prompt`;
+      const total = undecidable + unmatched;
+      const why = undecidable && unmatched
+        ? `: ${undecidable} because ${undecidableWhy}, and ${unmatched} because ${unmatchedWhy}`
+        : undecidable ? `, because ${undecidableWhy}` : `, because ${unmatchedWhy}`;
+      note.textContent = `${groups} distinct ${col} value${groups === 1 ? "" : "s"} across the sampled ${name}`
+        + (rows.length && rows[rows.length-1].folded ? `, the top 12 drawn and the rest folded into the last row` : "")
+        + (extra || "")
+        + (total
+          ? `. ${total} sampled prompt${total === 1 ? " is" : "s are"} left out of this grid${why}.`
+          : ".");
+      return note;
+    };
+
+    const mismatch = labeled.length ? sameDraw(p, labels) : null;
+    let drewLabels = false;
+    if (mismatch){
+      noLabels(card, `the sampled examples and the classification run cannot be crossed: ${mismatch}. `
+        + `Re-run one of them so both describe the same draw.`);
+    } else if (labeled.length){
+      const cross = crossRows(labeled, resolverFor(p, labels, col), r => r.label);
+      // Row identities when the run recorded them, the match rate when it did
+      // not — everything the join placed against everything it was given.
+      const evidence = pairingEvidence(p, labels, labeled.length - cross.unmatched, labeled.length);
+      if (evidence.refuse){
+        noLabels(card, `the sampled examples and the classification run cannot be crossed: ${evidence.refuse}.`);
+      } else {
+        drewLabels = true;
+        heatTable(card, cross.rows, LABELS.map(l => ({key: l, short: SHORT_LABEL[l], label: NICE[l]})), ctx);
+        card.appendChild(explain("prompts", cross));
+        if (evidence.note){
+          const n = document.createElement("p");
+          n.className = "note";
+          n.textContent = evidence.note;
+          card.appendChild(n);
+        }
+      }
+    }
+
+    // The same grid against the detected language, which answers a different
+    // question with the same join: whether the non-English prompts come from
+    // one corner of the mix or from all of it. Secondary where a taxonomy grid
+    // is already drawn, primary where none is.
+    const langMismatch = langs && langs.records.length ? sameDraw(p, langs) : null;
+    if (langMismatch){
+      noLabels(card, `the language run cannot be crossed against these examples: ${langMismatch}.`);
+    } else if (langs && langs.records.length){
+      const counts = {};
+      for (const r of langs.records) counts[r.label] = (counts[r.label]||0) + 1;
+      const top = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 7);
+      const cols = [...top.map(c => ({key: c, short: c === "undetermined" ? "?" : c, label: langName(c)})),
+        {key: "…", short: "…", label: "every other language"}];
+      const build = parent => {
+        const cross = crossRows(langs.records, resolverFor(p, langs, col), r => top.includes(r.label) ? r.label : "…");
+        // Same guard as the taxonomy grid, one better where it can be: these
+        // records carry row indices, so the two runs are compared on the
+        // sampler's own numbering rather than on how many prompts happen to
+        // hash into the map.
+        const evidence = pairingEvidence(p, langs, langs.records.length - cross.unmatched, langs.records.length);
+        if (evidence.refuse){
+          noLabels(parent, `the language run cannot be crossed against these examples: ${evidence.refuse}.`);
+          return;
+        }
+        heatTable(parent, cross.rows, cols, ctx);
+        parent.appendChild(explain("prompts", cross,
+          `, the top ${top.length} detected languages drawn and everything else in the last column`));
+        if (evidence.note){
+          const n = document.createElement("p");
+          n.className = "note";
+          n.textContent = evidence.note;
+          parent.appendChild(n);
+        }
+      };
+      if (!drewLabels){
+        const sub = document.createElement("p");
+        sub.className = "stage-sub";
+        sub.textContent = mismatch
+          ? "by detected language — the classification run for this stage could not be crossed, so there is no taxonomy grid above"
+          : "by detected language — no classification run is committed for this stage, so there is no taxonomy grid to draw";
+        card.appendChild(sub);
+        build(card);
+      } else {
+        const det = document.createElement("details");
+        det.innerHTML = `<summary class="stage-sub" style="cursor:pointer;margin:10px 0 0">the same rows by detected language</summary>`;
+        const body = document.createElement("div");
+        det.appendChild(body);
+        let built = false;
+        det.addEventListener("toggle", () => { if (det.open && !built){ built = true; build(body); } });
+        card.appendChild(det);
+      }
+    }
+  }
+  return any ? card : null;
 }
 
 // A divider between the two halves of the pipeline, so the page reads top to
@@ -2124,6 +3256,20 @@ async function renderModel(model, gen){
     if (d) corpusData.push([s, d]);
   }
 
+  // ---- how big each stage is ----
+  // Profiles are kilobytes (lengths, and one metadata row per sampled example
+  // with no prompt text on it), so they load with the tab rather than on click.
+  const profiles = {};
+  for (const s of post){
+    const p = await getData(profileFile(model, s.stage));
+    if (gen !== GEN) return;
+    if (p) profiles[s.stage] = p;
+  }
+  const sizes = budgetRows(m, sources, profiles,
+    Object.fromEntries(corpusData.map(([s, d]) => [s.stage, d])));
+  for (const c of [budgetCard(m, sizes), fitCard(m, sizes), lengthCard(m, sizes)])
+    if (c) main.appendChild(c);
+
   const base = m.stages.filter(s => !s.hf_dataset);
   if (base.length || corpusData.length)
     main.appendChild(part("Pretraining", "what the base model read, before any instruction tuning"));
@@ -2178,6 +3324,7 @@ async function renderModel(model, gen){
       card.appendChild(div);
     }
     main.appendChild(card);
+    appendTreemap(main, m, sizes, Object.fromEntries(corpusData.map(([s, d]) => [s.stage, d])));
   }
 
   if (corpusData.length){
@@ -2429,6 +3576,12 @@ async function renderModel(model, gen){
           and says nothing about what came back. Whiskers: Wilson 95% CI.</p>`
     : `<h2>How much of post-training is about being helpful, honest, harmless?</h2>
        <p class="sub">Share of sampled prompts per stage whose primary training signal is each label. Whiskers: Wilson 95% CI.</p>`;
+  // Filled after the loop below, which is where the per-stage counts land. One
+  // row per label with a dot per stage answers "does this stage differ?"
+  // without scrolling three screens of bars to compare them.
+  const glance = document.createElement("div");
+  hhh.appendChild(glance);
+  const perStage = [];
   let any = false;
   for (const s of post){
     const d = await getData(`${model}.${s.stage}.labels.json`);
@@ -2439,6 +3592,7 @@ async function renderModel(model, gen){
     const n = recs.length;
     const counts = {};
     for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
+    if (n) perStage.push({s, counts, n});
     const h = document.createElement("h3");
     h.className = "stage";
     h.id = "hhh-" + s.stage;
@@ -2483,8 +3637,49 @@ async function renderModel(model, gen){
         recs.filter(r => r.label === l), {...ctxFor(s), linkKey: l});
     }
   }
+  // ---- every stage on one axis, per label ----
+  if (perStage.length > 1){
+    const max = Math.max(...perStage.flatMap(p => LABELS.map(l => (p.counts[l]||0)/p.n)), 0.01);
+    const head = document.createElement("div");
+    head.className = "grp";
+    head.textContent = "every stage on one axis";
+    glance.appendChild(head);
+    const legend = document.createElement("div");
+    legend.className = "legend";
+    legend.style.margin = "2px 0 8px";
+    legend.innerHTML = perStage.map(p =>
+      `<span class="k"><i style="background:${hueFor(p.s.stage)};border-radius:50%"></i>${esc(p.s.stage)}</span>`).join("");
+    glance.appendChild(legend);
+    let lastGrp = null;
+    for (const l of LABELS){
+      const grp = VALUE_LABELS.has(l) ? "values" : "skills";
+      if (grp !== lastGrp){
+        const g = document.createElement("div"); g.className = "grp"; g.textContent = grp;
+        glance.appendChild(g); lastGrp = grp;
+      }
+      dotRow(glance, NICE[l], perStage.map(p => ({
+        stage: p.s.stage, f: (p.counts[l]||0)/p.n, c: hueFor(p.s.stage),
+        tip: `<b>${p.s.stage}</b> · ${NICE[l]}<br>${p.counts[l]||0} of ${p.n} sampled prompts (${pct((p.counts[l]||0)/p.n)})`,
+      })), max, VALUE_LABELS.has(l));
+    }
+    const axis = document.createElement("div");
+    axis.className = "dotaxis";
+    axis.innerHTML = `<div></div><div><span>0%</span><span>${pct(max/2)}</span><span>${pct(max)}</span></div><div></div>`;
+    glance.appendChild(axis);
+    const note = document.createElement("p");
+    note.className = "note";
+    note.style.margin = "0 0 4px";
+    note.textContent = "The hairline spans the stages, so a long line is a label the stages disagree "
+      + "about. Every value here is also a bar below, with its interval and the prompts behind it.";
+    glance.appendChild(note);
+  }
   if (!any) hhh.innerHTML += `<p class="note">No classification runs committed for ${esc(model)} yet — run <code>trainspotting classify ${model}</code>.</p>`;
   main.appendChild(hhh);
+
+  // ---- label × source crosstab ----
+  const cross = await crosstabCard(model, m, post, profiles, ctxFor, gen);
+  if (gen !== GEN) return;
+  if (cross) main.appendChild(cross);
 
   // ---- language breakdown ----
   // A stage detects a dozen-odd languages and all but English are slivers, so
@@ -3452,7 +4647,7 @@ async function applyHashState(nav){
     // fallback and not the test.
     if (rec && !el._records.some(r => r.row != null
           ? r.row === rec.row
-          : r.prompt.slice(0, KEY_CHARS) === rec.key)) rec = null;
+          : keyPrefix(r.prompt) === rec.key)) rec = null;
     const s = REG[model] && REG[model].stages.find(x => x.stage === st.stage);
     if (rec && s) openContext(rec, st.stage, s.hf_dataset, s.name, [VIEW, st.stage, st.key, "row-" + st.row]);
     // Lookup failed (stale/edited hash naming a row that no longer exists):
