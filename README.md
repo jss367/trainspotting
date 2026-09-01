@@ -876,7 +876,10 @@ question is "what fraction of training".
 
 **Corpus documents depend on the route they were drawn by**, which is the point
 worth being careful about: being a corpus is not what decides the correction,
-how the documents were sampled is.
+how the documents were sampled is. The route travels with the run — the document
+sample records it and the `ask` run copies it out of the sample — so pointing a
+stage at the other route later leaves stored results weighed the way their own
+draw earned, and asks to be re-sampled rather than reinterpreted.
 
 *Shard-drawn corpora are weighed by nothing extra.* `trainspotting pretrain`
 draws shards with probability proportional to compressed size and takes one

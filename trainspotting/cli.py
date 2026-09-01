@@ -438,6 +438,26 @@ def _label_pretrain_docs(args, question, slug, stages=None):
                 # from that tree, whatever `main` points at today. A sample
                 # written before this field existed records null, not today's.
                 **_stamp(data["dataset"], revision=data.get("revision")),
+                # And where it went, when the draw outlasted a republish. The
+                # sample records this; without carrying it here the site's
+                # revision link on an ask card shows the starting SHA alone and
+                # drops the warning that these documents may span two trees.
+                # Re-detecting it now would be a different question — the window
+                # that matters closed when the documents were drawn.
+                **(
+                    {"revision_moved_to": data["revision_moved_to"]}
+                    if data.get("revision_moved_to")
+                    else {}
+                ),
+                # How these documents were drawn, taken from the sample rather
+                # than looked up in the registry when this run is read back.
+                # `budget` weighs a rows-drawn rate by document length and a
+                # shard-drawn one not at all, so a stage whose `sample_via`
+                # changes after the fact would otherwise have its stored runs
+                # silently reinterpreted under a design that did not produce
+                # them. A sample written before `route` existed carries none,
+                # and that rollup falls back to the registry as it did before.
+                **({"route": data["route"]} if data.get("route") else {}),
                 "stage": s["stage"],
                 "sample": data["sample"],
                 "seed": data["seed"],
