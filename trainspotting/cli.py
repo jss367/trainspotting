@@ -230,7 +230,9 @@ def cmd_facts(args):
             n = hf.num_rows(s["hf_dataset"])
             line += f" — {n:,} examples ({s['hf_dataset']})"
         elif s.get("sample_dataset"):
-            line += f" — samplable ({s['sample_dataset']})"
+            route = registry.sample_route(s)
+            how = "by shard" if route == "shards" else "in full, uniformly"
+            line += f" — samplable {how} ({s['sample_dataset']})"
         print(line)
         if s.get("note"):
             print(f"    {s['note']}")
@@ -557,13 +559,29 @@ def cmd_ask(args):
     # One short name ties a question's post-training and pretraining files together.
     slug = args.slug or _slug(args.question)
     print(f"question: {args.question}\n", file=sys.stderr)
+    target = registry.resolve(args.target)
     if args.pretrain:
         # A dataset has no corpora to score. Accepting the flag and quietly
         # scoring only the prompts would answer half the question asked.
-        if not registry.pretrain_stages(registry.resolve(args.target)):
+        if not registry.pretrain_stages(target):
             sys.exit(f"--pretrain: {args.target} has no pretraining stages")
         _warn_missing_pretrain_samples(args)
-    _label_post_training(args, question=args.question, slug=slug)
+    # A base model has prompts nowhere. Scoring only its corpus is the whole
+    # question for Pythia, so say what is being skipped and go on — the
+    # alternative is `ask --pretrain` exiting on the half that cannot run.
+    if registry.post_training_stages(target):
+        _label_post_training(args, question=args.question, slug=slug)
+    elif args.pretrain:
+        print(
+            f"{args.target} has no post-training stages — scoring its"
+            " pretraining documents only.",
+            file=sys.stderr,
+        )
+    else:
+        sys.exit(
+            f"{args.target} has no post-training stages; pass --pretrain to"
+            " score its pretraining documents instead"
+        )
     if args.pretrain:
         _label_pretrain_docs(args, args.question, slug)
 
@@ -590,16 +608,48 @@ def _pretrain_docs_source(target_name: str, stage: str) -> Path | None:
     return None
 
 
-def cmd_pretrain(args):
-    """Sample documents from a stage's Dolma 3 shard repo.
+def _pretrain_rows(args, s, dataset):
+    """Sample a corpus the datasets-server has indexed in full.
 
-    The datasets-server cannot serve these corpora (it indexes only the first
-    ~5 GB and the shards are topic-ordered), so this reads the repo files by
-    range request instead. No model is called; this is the deterministic half,
-    and `ask --pretrain` scores whatever it wrote.
+    Returns the documents and the corpus facts to store alongside them. There is
+    no shard listing here, so the composition is the registry's published one
+    rather than a breakdown this run counted, and the site reads `route` to know
+    not to claim a measured one it does not have.
+    """
+    print(f"sampling {args.sample} documents from {dataset} ...", file=sys.stderr)
+    # Resolved before the draw, so the stamp names the tree the rows came from
+    # rather than one published while the run was in flight.
+    revision = hf.dataset_revision(dataset)
+    docs, total = pretrain.sample_rows_documents(
+        dataset, args.sample, seed=args.seed, text_column=s.get("text_column", "text")
+    )
+    print(f"  {total:,} documents in the corpus", file=sys.stderr)
+    return docs, {
+        **_stamp(dataset, revision=revision),
+        "route": "rows",
+        "rows_total": total,
+        "caveat": pretrain.rows_sampling_caveat(),
+    }
+
+
+def cmd_pretrain(args):
+    """Sample documents from a stage's pretraining corpus.
+
+    Two routes, chosen by `registry.sample_route`. Dolma 3 goes by shard: the
+    datasets-server indexes only the first ~5 GB of those repos and the shards
+    are topic-ordered, so this reads the repo files by range request instead.
+    A corpus the server *has* indexed in full — the deduplicated Pile — is paged
+    directly, which is both simpler and a better sample.
+
+    Either way no model is called; this is the deterministic half, and
+    `ask --pretrain` scores whatever it wrote.
     """
     for s in _select_stages(args, registry.pretrain_stages, "pretraining"):
         dataset = s["sample_dataset"]
+        if registry.sample_route(s) == "rows":
+            docs, corpus_facts = _pretrain_rows(args, s, dataset)
+            _write_pretrain_docs(args, s, dataset, docs, corpus_facts)
+            continue
         print(f"listing shards in {dataset} ...", file=sys.stderr)
         shards, revision = pretrain.list_shards(dataset)
         groups = pretrain.group_sizes(shards)
@@ -623,64 +673,88 @@ def cmd_pretrain(args):
             progress=progress,
         )
         print(file=sys.stderr)
-        records = [
+        _write_pretrain_docs(
+            args,
+            s,
+            dataset,
+            docs,
             {
-                "id": d["id"],
-                # An excerpt spanning the document, not its first 12k characters.
-                # These run past 200k in the long-context mixes, and a prefix
-                # would be the nav bar and the abstract — unrepresentative both
-                # to read on the site and to classify. `chars` keeps the true
-                # length so nothing pretends the excerpt is the whole document.
-                "text": extract.excerpt(d["text"]),
-                "chars": len(d["text"]),
-                "source": d["source"],
-                "topic": d["topic"],
-                "shard": d["shard"],
-                "metadata": d["metadata"],
-            }
-            for d in docs
-        ]
-        if len(records) < args.sample:
-            # A corpus can genuinely fail to fill the request — 55 huge shards
-            # cannot yield 300 documents at one apiece — so say so rather than
-            # letting "sample" claim a size the file does not have.
-            print(
-                f"  note: asked for {args.sample}, corpus yielded {len(records)}",
-                file=sys.stderr,
-            )
-        path = _write_json(
-            _pretrain_docs_path(args.target, s["stage"]),
-            {
-                "dataset": dataset,
                 # The exact commit the composition and documents came from.
                 # "main" moves; a result file that cites exact byte shares
                 # has to say which revision it counted.
                 **_stamp(dataset, revision=revision),
-                "stage": s["stage"],
-                "name": s["name"],
-                "sample": len(records),
-                "requested": args.sample,
-                "seed": args.seed,
+                "route": "shards",
                 "docs_per_shard": args.docs_per_shard,
                 # Shard draws that contributed fewer documents than asked
                 # for. Non-zero means the sample is weighted by reachable
                 # document density as well as by size.
                 "short_draws": short,
-                "scope": s.get("sample_scope"),
                 "caveat": pretrain.sampling_caveat(args.docs_per_shard),
                 "shards": len(shards),
                 "bytes": total_bytes,
                 "groups": groups,
-                "records": records,
             },
+            note=f", {short} short draw(s) made up by others" if short else "",
         )
 
+
+def _write_pretrain_docs(args, s, dataset, docs, corpus_facts, note=""):
+    """Store one stage's document sample, whichever route drew it.
+
+    The route-specific facts arrive already assembled in `corpus_facts` and are
+    merged in whole, so a shard run keeps its shard count, byte total, group
+    breakdown and pinned revision, and a rows run carries the corpus row count
+    instead of pretending to any of them. `route` is what the site branches on.
+    """
+    records = [
+        {
+            "id": d["id"],
+            # An excerpt spanning the document, not its first 12k characters.
+            # These run past 200k in the long-context mixes, and a prefix
+            # would be the nav bar and the abstract — unrepresentative both
+            # to read on the site and to classify. `chars` keeps the true
+            # length so nothing pretends the excerpt is the whole document.
+            "text": extract.excerpt(d["text"]),
+            "chars": len(d["text"]),
+            "source": d["source"],
+            "topic": d["topic"],
+            "shard": d["shard"],
+            "metadata": d["metadata"],
+            **({"row": d["row"]} if d.get("row") is not None else {}),
+            # A cell the server shortened: `chars` is then the length of what
+            # arrived, not of the document, and the site says so rather than
+            # letting a clipped document read as a short one.
+            **({"truncated": True} if d.get("truncated") else {}),
+        }
+        for d in docs
+    ]
+    if len(records) < args.sample:
+        # A corpus can genuinely fail to fill the request — 55 huge shards
+        # cannot yield 300 documents at one apiece — so say so rather than
+        # letting "sample" claim a size the file does not have.
         print(
-            f"{s['stage']}: {len(records)} documents -> {path}"
-            f" ({path.stat().st_size / 1e6:.1f} MB)"
-            + (f", {short} short draw(s) made up by others" if short else ""),
+            f"  note: asked for {args.sample}, corpus yielded {len(records)}",
             file=sys.stderr,
         )
+    path = _write_json(
+        _pretrain_docs_path(args.target, s["stage"]),
+        {
+            "dataset": dataset,
+            "stage": s["stage"],
+            "name": s["name"],
+            "sample": len(records),
+            "requested": args.sample,
+            "seed": args.seed,
+            "scope": s.get("sample_scope"),
+            **corpus_facts,
+            "records": records,
+        },
+    )
+    print(
+        f"{s['stage']}: {len(records)} documents -> {path}"
+        f" ({path.stat().st_size / 1e6:.1f} MB)" + note,
+        file=sys.stderr,
+    )
 
 
 def cmd_languages(args):
@@ -1082,6 +1156,19 @@ def cmd_report(args):
                 print(f"- {s['stage']}: {s['name']} ({s['hf_dataset']})")
     elif target.get("note"):
         print(target["note"])
+    if not registry.post_training_stages(target):
+        # Pythia is the case: a base model with no post-training at all. Both
+        # sections below read prompts, and an empty heading over each says "we
+        # have not run this yet" — a very different claim from "this model has
+        # no such stage to run it on". Say the latter once and stop.
+        print(
+            f"\n{target['hf_model'] or target['name']} has no post-training"
+            " stages — it was released as a base model, so there are no prompts"
+            " to classify, no responses to classify them against, and no"
+            " language to detect. `trainspotting pretrain` and `ask --pretrain`"
+            " are what apply here."
+        )
+        return
     # The same seven labels mean different things by kind, and the heading is
     # the only place the report says which.
     print(
@@ -1193,7 +1280,7 @@ def main():
     p.add_argument("--slug", help="short name for the result file (default: derived from the phrase)")
     p.set_defaults(fn=cmd_find)
 
-    p = sub.add_parser("pretrain", help="sample documents from the Dolma 3 pretraining shards")
+    p = sub.add_parser("pretrain", help="sample documents from a model's pretraining corpora")
     p.add_argument("target", help=TARGET_HELP)
     p.add_argument("--stage", help="only this stage (pretrain/midtrain/long-context)")
     p.add_argument("--sample", type=_positive_int, default=300)
@@ -1252,10 +1339,15 @@ def main():
     # filename meant `classify WildChat-1M` produced a file the site — which
     # indexes the registry key — never asks for, and the run silently didn't
     # exist.
-    try:
-        args.target = registry.resolve(args.target)["target"]
-    except KeyError as e:
-        sys.exit(e.args[0])
+    #
+    # `find` is the one subcommand that takes no target — it searches an index,
+    # not a registered model — so it has no attribute to canonicalize and this
+    # used to crash it with an AttributeError before it ran at all.
+    if hasattr(args, "target"):
+        try:
+            args.target = registry.resolve(args.target)["target"]
+        except KeyError as e:
+            sys.exit(e.args[0])
     args.fn(args)
 
 

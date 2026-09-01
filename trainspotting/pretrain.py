@@ -24,6 +24,14 @@ every result file: shards are drawn properly, documents within a shard are not
 — we always see a shard's opening documents. With thousands of shards across
 dozens of source/topic groups, the shard draw carries most of the variance, but
 this is not a uniform sample over documents and nothing here should claim it is.
+
+All of that is the price of a corpus the datasets-server only partly indexed.
+Where it indexed one *whole* — the deduplicated Pile is 134,318,121 rows with
+`partial: false` — none of it is necessary, and `sample_rows_documents` takes
+the direct route instead: uniform over every document in the corpus, no shard
+listing, no range requests, no position caveat. `registry.sample_route` decides
+which a stage gets, and the two return the same record shape so everything
+downstream reads one kind of document.
 """
 
 import hashlib
@@ -38,6 +46,8 @@ from pathlib import Path
 import requests
 import requests.exceptions
 import zstandard
+
+from . import hf
 
 HF_API = "https://huggingface.co/api/datasets"
 HF_RESOLVE = "https://huggingface.co/datasets/{dataset}/resolve/{revision}/{path}"
@@ -456,6 +466,75 @@ def sample_documents(
         out.extend(draw[: n - len(out)])
     return out, short_draws
 
+
+
+ROWS_CAVEAT = (
+    "Documents are drawn from the whole corpus through the HuggingFace "
+    "datasets-server, which has this dataset indexed in full — no shard "
+    "weighting to approximate, no position bias to correct for, and any row "
+    "could have been drawn. The draw is by pages of ten adjacent rows, which "
+    "would cluster a sample in a corpus stored in source order; the Pile was "
+    "shuffled before release, so neighbouring rows come from unrelated sources."
+)
+
+
+def rows_sampling_caveat() -> str:
+    """How a `rows` corpus was drawn. Sibling of `sampling_caveat`.
+
+    Deliberately not a variation on the shard caveat. The shard one exists to
+    disclose a bias; this one exists to say there isn't one, and blurring the
+    two would let a reader carry the shard sampler's limits onto a sample that
+    does not have them.
+    """
+    return ROWS_CAVEAT
+
+
+def sample_rows_documents(
+    dataset: str,
+    n: int,
+    seed: int = 0,
+    text_column: str = "text",
+    progress=None,
+) -> tuple[list[dict], int]:
+    """`n` documents drawn uniformly from a fully-indexed corpus, plus its size.
+
+    Same draw the post-training layers use for prompts — `hf.sample_rows_with_truncation`
+    is deterministic in (n, seed) and dedupes on the absolute row index — so a
+    corpus document and a training example are addressed the same way and a
+    re-run at the same seed reads the same rows.
+
+    Records come back in the shape `sample_documents` returns, with the fields a
+    shard corpus has and this one does not left empty rather than invented:
+    `source` and `topic` because the deduplicated Pile dropped the `meta` column
+    that held `pile_set_name`, `shard` because there is no file to point at. The
+    row index takes its place, which addresses the document in the Hub viewer.
+
+    A document the server shortened to fit its response limit is flagged rather
+    than silently treated as short: `chars` would otherwise report the truncated
+    length as the document's true one.
+    """
+    total = hf.num_rows(dataset)
+    if progress:
+        progress(0, n, dataset)
+    rows = hf.sample_rows_with_truncation(dataset, n, seed=seed)
+    docs = []
+    for index, row, truncated in rows:
+        text = row.get(text_column)
+        if not text or not str(text).strip():
+            continue
+        docs.append(
+            {
+                "id": f"row-{index}",
+                "row": index,
+                "text": str(text),
+                "source": "",
+                "topic": "",
+                "shard": "",
+                "truncated": text_column in truncated,
+                "metadata": {},
+            }
+        )
+    return docs, total
 
 # Dolma 3 keeps its per-document provenance in a JSON string. These are the
 # fields worth surfacing: which crawl it came from, what the quality classifier

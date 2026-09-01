@@ -20,6 +20,11 @@ but it is a different corpus, and a count here is not a count over what OLMo 3
 saw. When Ai2 publishes a Dolma 3 index, adding it to INDEXES is the only
 change needed.
 
+Pythia is the exception, and the reason `caveat_for` is a table rather than one
+string: `v4_piletrain_llama` indexes the Pile itself, so for a Pythia question
+this is the training corpus and not a stand-in for it. The only gap left there
+is deduplication.
+
 Two API quirks the caller should know:
 - Queries are tokenized, and matches align to token boundaries: querying "a"
   counts the token " a", not the letter.
@@ -54,6 +59,9 @@ INDEXES = {
     ),
     "v4_olmo-mix-1124_llama": "olmo-mix-1124, OLMo 2 pretraining only",
     "v4_dolma-v1_7_llama": "Dolma 1.7, OLMo 1.7 pretraining (~2.6T tokens)",
+    "v4_piletrain_llama": (
+        "The Pile, train split — the corpus Pythia was pretrained on (~300B tokens)"
+    ),
 }
 
 DEFAULT_INDEX = "v4_olmo-2-0325-32b-instruct_llama"
@@ -64,17 +72,38 @@ NO_OLMO3_CAVEAT = (
     "available, not the one the registered models were trained on."
 )
 
+PILE_DEDUP_CAVEAT = (
+    "This index covers the Pile as assembled, which is what the plain Pythia "
+    "models trained on. The registered `pythia-12b-deduped` trained on the "
+    "deduplicated Pile, and deduplication is exactly what changes a count: a "
+    "string repeated across near-identical documents is collapsed there and is "
+    "not here."
+)
+
+# The caveat that is true of each known index. An index whose corpus a
+# registered model actually trained on still gets one where something about it
+# differs from what the model saw — being the right corpus is not the same as
+# being the same distribution.
+CAVEATS = {name: NO_OLMO3_CAVEAT for name in INDEXES}
+CAVEATS["v4_piletrain_llama"] = PILE_DEDUP_CAVEAT
+
 
 def caveat_for(index: str) -> str | None:
     """The corpus caveat that is true of `index`, or None.
 
-    Every index in INDEXES predates Dolma 3, so the no-OLMo-3 caveat holds for
-    all of them. An index this module does not know — including the Dolma 3
-    one this file hopes Ai2 publishes — must not be characterized: asserting
-    "closest available, not what the model saw" about an arbitrary index would
-    be exactly wrong the day someone passes the real thing.
+    Per index rather than blanket, because they are not all wrong in the same
+    way: the OLMo indexes predate Dolma 3 and stand in for a corpus nobody has
+    indexed, while the Pile index is the real corpus behind a registered model
+    and differs only by deduplication. Telling a Pythia user their count is
+    "over a different corpus than the one this tool samples" would be a
+    stronger warning than the truth.
+
+    An index this module does not know — including the Dolma 3 one this file
+    hopes Ai2 publishes — must not be characterized: asserting "closest
+    available, not what the model saw" about an arbitrary index would be
+    exactly wrong the day someone passes the real thing.
     """
-    return NO_OLMO3_CAVEAT if index in INDEXES else None
+    return CAVEATS.get(index)
 
 
 def _post(payload: dict, timeout: int = 90) -> dict:

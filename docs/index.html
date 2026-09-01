@@ -409,7 +409,8 @@
         <h1>trainspotting</h1>
         <p class="tagline">Spot what's in a model's training data — stage sizes, exact mix
            composition, and how much of post-training is about being helpful, honest, and harmless.
-           The last tabs are datasets on their own, with no model around them.</p>
+           A base model with no post-training shows the pretraining half alone. The last tabs are
+           datasets on their own, with no model around them.</p>
       </div>
       <a class="ghlink" href="https://github.com/jss367/trainspotting">GitHub&nbsp;↗</a>
     </div>
@@ -430,7 +431,9 @@
     counts as English; a prompt split evenly between two languages is left
     undetermined rather than assigned to one.
     Data: Ai2's <a href="https://allenai.org/blog/olmo3">OLMo 3</a> release
-    (Dolma 3 / Dolci). Regenerate with <code>trainspotting classify</code>,
+    (Dolma 3 / Dolci) and EleutherAI's
+    <a href="https://www.eleuther.ai/artifacts/pythia">Pythia</a> (the Pile).
+    Regenerate with <code>trainspotting classify</code>,
     <code>trainspotting context</code> + <code>scripts/export_site_data.py</code>.
   </footer>
 </div>
@@ -901,7 +904,12 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
 // shard link to the commit the document was sampled at.
 function docBlock(rec){
   const m = rec.metadata || {};
-  const tags = [`<span class="prov">${esc(rec.source)}${rec.topic ? " · " + esc(niceGroup(rec.topic)) : ""}</span>`];
+  // A rows-sampled corpus carries no per-document source: the deduplicated Pile
+  // dropped the column that held it. Say so rather than rendering a blank chip
+  // that reads as a source of "".
+  const tags = [rec.source
+    ? `<span class="prov">${esc(rec.source)}${rec.topic ? " · " + esc(niceGroup(rec.topic)) : ""}</span>`
+    : `<span class="prov">row ${num(rec.row)}</span>`];
   if (m.cc_dump) tags.push(`<span>${esc(m.cc_dump)}</span>`);
   if (m.quality_score != null) tags.push(`<span>quality ${m.quality_score.toFixed(2)}</span>`);
   if (m.lang) tags.push(`<span>${esc(m.lang)}${m.lang_score ? " " + m.lang_score.toFixed(2) : ""}</span>`);
@@ -911,13 +919,18 @@ function docBlock(rec){
   // what fraction is on screen rather than letting an excerpt read as the file.
   const excerpted = rec.chars && rec.chars > rec.text.length;
   if (excerpted) tags.push(`<span>excerpt of ${num(rec.chars)} chars</span>`);
+  // The server shortened this cell before we saw it, so `chars` is the length of
+  // what arrived, not of the document.
+  if (rec.truncated) tags.push(`<span>shortened in transit</span>`);
   const head = rec.text.slice(0, 150).replace(/\s+/g, " ").trim() || "(empty)";
   return `<div class="doc">
     <div class="doctags">${tags.join("")}</div>
     <details><summary>${esc(head)}${rec.text.length > 150 ? "…" : ""}</summary>
       ${excerpted ? `<p class="note" style="margin:6px 0 0">Three spans sampled across a ${num(rec.chars)}-character document; <code>[…]</code> marks what is cut. This is also exactly the text the classifier judged.</p>` : ""}
       <pre>${esc(rec.text)}</pre>
-      <a class="shard" href="https://huggingface.co/datasets/${escAttr(rec.dataset)}/blob/${escAttr(rec.revision || "main")}/${escAttr(rec.shard)}" target="_blank" rel="noopener">${esc(rec.shard)} ›</a>
+      ${rec.shard
+        ? `<a class="shard" href="https://huggingface.co/datasets/${escAttr(rec.dataset)}/blob/${escAttr(rec.revision || "main")}/${escAttr(rec.shard)}" target="_blank" rel="noopener">${esc(rec.shard)} ›</a>`
+        : `<a class="shard" href="https://huggingface.co/datasets/${escAttr(rec.dataset)}/viewer/default/train?row=${escAttr(rec.row)}" target="_blank" rel="noopener">row ${num(rec.row)} in the dataset viewer ›</a>`}
     </details>
   </div>`;
 }
@@ -1046,7 +1059,7 @@ async function renderModel(model, gen){
        <p class="sub">${esc(m.note || "A dataset on its own — no model trained on it here.")}</p>
        <div class="pipe"></div>`
     : `<h2>Training pipeline</h2>
-       <p class="sub">${m.hf_model} — token counts from the OLMo 3 paper; example counts from the datasets themselves.</p>
+       <p class="sub">${m.hf_model} — token counts as the release published them; example counts from the datasets themselves.</p>
        <div class="pipe"></div>`;
   const pipe = facts.querySelector(".pipe");
   m.stages.forEach((s, i) => {
@@ -1102,10 +1115,14 @@ async function renderModel(model, gen){
   if (base.length){
     const card = document.createElement("section");
     card.className = "card";
+    // Only a shard-sampled corpus gets measured independently below; a corpus
+    // read through the dataset viewer has no file listing to count, so its
+    // composition is the published one and nothing here re-derives it.
+    const measured = corpusData.some(([, d]) => (d.route || "shards") === "shards");
     card.innerHTML = `<h2>What the base model was trained on</h2>
-      <p class="sub">Token counts and mix composition from the OLMo 3 paper (Table 4) and each mix's
-        dataset card — the release's own numbers, not measured here. The card below measures the
-        same mixes independently by sampling their shards, so the two are worth comparing.</p>`;
+      <p class="sub">Token counts and mix composition as each release published them — its own
+        numbers, not measured here.${measured ? ` The card below measures the same mixes
+        independently by sampling their shards, so the two are worth comparing.` : ""}</p>`;
     // shares under 0.1% would round to a flat 0.0%
     const pctc = f => f < 0.001 ? (f*100).toFixed(2)+"%" : pct(f);
     for (const s of base){
@@ -1122,26 +1139,44 @@ async function renderModel(model, gen){
           <span class="ds">— ${esc(s.name)}${s.tokens ? " · " + fmtTok(s.tokens) + " tokens" : ""}</span>${link}</h3>
         <p class="kv" style="margin:2px 0 8px">${esc(s.note || "No further details recorded in the registry.")}</p>`;
       if (s.composition && s.composition.length){
-        const total = s.composition.reduce((a,c) => a + c.tokens, 0);
-        const maxf = Math.max(...s.composition.map(c => c.tokens/total));
+        // Mixes publish token counts; a corpus like the Pile publishes sizes.
+        // Reading the wrong field would render every bar as NaN, so the unit
+        // picks both the field and the formatter.
+        const bytes = s.composition_unit === "bytes";
+        const amount = c => bytes ? c.bytes : c.tokens;
+        const fmtAmt = bytes ? fmtBytes : fmtTok;
+        const total = s.composition.reduce((a,c) => a + amount(c), 0);
+        const maxf = Math.max(...s.composition.map(c => amount(c)/total));
         // Some stages train on less than the full published mix (the 32B runs
         // 5.50T of a recipe whose card counts 5.93T). When the stage's declared
         // tokens don't match the composition total, the absolute per-source
         // counts describe the mix, not this run — show only the mix's own
         // shares, and put a clearly-approximate scaled count in the tooltip.
-        const exact = !s.tokens || Math.abs(total - s.tokens) <= 0.005 * s.tokens;
+        // A byte composition is never comparable to the stage's token count, so
+        // it is exact on its own terms rather than "approximate" against a
+        // number measuring something else.
+        const exact = bytes || !s.tokens || Math.abs(total - s.tokens) <= 0.005 * s.tokens;
         for (const c of s.composition){
-          const f = c.tokens/total;
+          const f = amount(c)/total;
           const row = document.createElement("div");
           row.className = "row";
           row.innerHTML = `
             <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</div>
             <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
-            <div class="val">${pctc(f)}${exact ? ` <small>${fmtTok(c.tokens)}</small>` : ""}</div>`;
+            <div class="val">${pctc(f)}${exact ? ` <small>${fmtAmt(amount(c))}</small>` : ""}</div>`;
           hover(row.querySelector(".trackbar"), exact
-            ? `<b>${escAttr(c.name)}</b><br>${fmtTok(c.tokens)} of ${fmtTok(total)} tokens (${pctc(f)})`
+            ? `<b>${escAttr(c.name)}</b><br>${fmtAmt(amount(c))} of ${fmtAmt(total)}${bytes ? "" : " tokens"} (${pctc(f)})`
             : `<b>${escAttr(c.name)}</b><br>${pctc(f)} of the mix recipe — ≈${fmtTok(f*s.tokens)} of this ${fmtTok(s.tokens)}-token run`);
           div.appendChild(row);
+        }
+        // What the shares are shares *of*, when that is not the same corpus as
+        // the one sampled below.
+        if (s.composition_scope){
+          const note = document.createElement("p");
+          note.className = "note";
+          note.style.margin = "8px 0 0";
+          note.textContent = s.composition_scope;
+          div.appendChild(note);
         }
       }
       card.appendChild(div);
@@ -1152,12 +1187,22 @@ async function renderModel(model, gen){
   if (corpusData.length){
     const card = document.createElement("section");
     card.className = "card corpus";
-    card.innerHTML = `<h2>What's actually in the pretraining data</h2>
-      <p class="sub">The dataset viewer indexes only the first few GB of these corpora and the
-        shards are ordered by topic, so sampling it returns one cluster at a time. These documents
+    // Two ways in, and they leave very different samples. Describing the shard
+    // route over a corpus drawn uniformly would invent a bias that isn't there;
+    // describing the uniform route over Dolma 3 would hide one that is.
+    const anyShards = corpusData.some(([, d]) => (d.route || "shards") === "shards");
+    const anyRows = corpusData.some(([, d]) => d.route === "rows");
+    const blurb = [
+      anyShards ? `The dataset viewer indexes only the first few GB of these corpora and the
+        shards are ordered by topic, so sampling it returns one cluster at a time. Those documents
         come from the shard files directly: shards drawn in proportion to their size, each one's
-        head pulled with a range request. Composition below is exact — it is the whole file
-        listing, not a sample.</p>`;
+        head pulled with a range request. Composition is exact — it is the whole file listing,
+        not a sample.` : "",
+      anyRows ? `Where the viewer <em>has</em> indexed a corpus in full, there is nothing to work
+        around: those documents are drawn uniformly from every row in it.` : "",
+    ].filter(Boolean).join(" ");
+    card.innerHTML = `<h2>What's actually in the pretraining data</h2>
+      <p class="sub">${blurb}</p>`;
     for (const [s, d] of corpusData){
       const h = document.createElement("h3");
       h.className = "stage";
@@ -1173,10 +1218,15 @@ async function renderModel(model, gen){
       const rev = d.revision
         ? ` <span>at <a href="https://huggingface.co/datasets/${escAttr(d.dataset)}/tree/${escAttr(d.revision)}" target="_blank" rel="noopener"><code>${esc(d.revision.slice(0,7))}</code></a></span>`
         : "";
-      facts.innerHTML = `<span><b>${num(d.shards)}</b> shards</span>
-        <span><b>${fmtBytes(d.bytes)}</b> compressed</span>
-        <span><b>${Object.keys(d.groups).length}</b> source/topic groups</span>
-        <span><b>${num(d.records)}</b> documents sampled</span>${rev}`;
+      // A rows-sampled corpus has no shards, no compressed byte total and no
+      // per-group listing. Printing zeros for those would read as a measured
+      // result; the corpus size it does know goes in their place.
+      facts.innerHTML = (d.route === "rows"
+        ? `<span><b>${num(d.rows_total)}</b> documents in the corpus</span>\n`
+        : `<span><b>${num(d.shards)}</b> shards</span>
+           <span><b>${fmtBytes(d.bytes)}</b> compressed</span>
+           <span><b>${Object.keys(d.groups || {}).length}</b> source/topic groups</span>\n`)
+        + `<span><b>${num(d.records)}</b> documents sampled</span>${rev}`;
       card.appendChild(facts);
 
       // A draw that yields nothing is silently replaced by another, which
@@ -1193,7 +1243,7 @@ async function renderModel(model, gen){
         card.appendChild(scope);
       }
 
-      corpusComposition(card, d.groups, d.bytes);
+      if (d.groups && Object.keys(d.groups).length) corpusComposition(card, d.groups, d.bytes);
 
       const det = document.createElement("details");
       det.innerHTML = `<summary class="stage-sub" style="cursor:pointer;margin:12px 0 0">
@@ -1241,6 +1291,23 @@ async function renderModel(model, gen){
     main.appendChild(m.is_model === false
       ? part("The data", "what is in it, and what the prompts in it are about")
       : part("Post-training", "the examples that turned the base model into an assistant"));
+  else if (m.is_model){
+    // A base model. The cards below all read sampled prompts, and each has a
+    // "no runs committed yet" fallback that would read as work not done rather
+    // than as a stage that does not exist — so say which it is, once, and skip
+    // them entirely.
+    main.appendChild(part("Post-training", "there wasn't any"));
+    const none = document.createElement("section");
+    none.className = "card";
+    none.innerHTML = `<h2>This model was never post-trained</h2>
+      <p class="sub">${esc(m.hf_model)} was released as a base model, so there are no SFT, DPO or
+        RL stages — no prompts to sample, nothing fit to a response, and no verifier to read a
+        label off. The helpful/honest/harmless question this page leads with has no answer here,
+        which is a fact about the model rather than a gap in the audit. Everything above measures
+        the corpus it read; ask a free-form question of that corpus with
+        <code>trainspotting ask ${esc(model)} "…" --pretrain</code>.</p>`;
+    main.appendChild(none);
+  }
 
   // ---- exact mix composition ----
   if (sources){
@@ -1421,7 +1488,7 @@ async function renderModel(model, gen){
     }
   }
   if (!any) hhh.innerHTML += `<p class="note">No classification runs committed for ${esc(model)} yet — run <code>trainspotting classify ${model}</code>.</p>`;
-  main.appendChild(hhh);
+  if (post.length) main.appendChild(hhh);
 
   // ---- language breakdown ----
   // A stage detects a dozen-odd languages and all but English are slivers, so
@@ -1518,7 +1585,7 @@ async function renderModel(model, gen){
     });
   }
   if (!anyLang) langCard.innerHTML += `<p class="note">No language run committed for ${esc(model)} yet — run <code>trainspotting languages ${model}</code>.</p>`;
-  main.appendChild(langCard);
+  if (post.length) main.appendChild(langCard);
 
   // ---- custom questions (trainspotting ask) ----
   const askFiles = MANIFEST.filter(f => f.startsWith(model + ".") && f.includes(".ask-"));
