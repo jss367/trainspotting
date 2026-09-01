@@ -32,13 +32,22 @@ jobs:
 
       - run: pip install -e '.[dev]'
 
+      # One run, read twice. `-rs` lists the skips in the same output that
+      # reports the failures, so the "did a site suite skip" check is a question
+      # about a run that already happened rather than a reason to run the suite
+      # again — which is what this was, at roughly double the pytest time.
+      #
+      # `pipefail` because the exit code that matters is pytest's and the pipe
+      # would otherwise hand back tee's. The default shell here is `bash -e`,
+      # which does not imply it.
       - name: pytest
-        run: pytest -q
+        run: |
+          set -o pipefail
+          pytest -q -rs 2>&1 | tee /tmp/pytest.out
 
       - name: no site suite silently skipped
         run: |
-          pytest -q -rs 2>&1 | tee /tmp/out
-          if grep -q "node is not installed" /tmp/out; then
+          if grep -q "node is not installed" /tmp/pytest.out; then
             echo "::error::a site suite skipped for want of node, on a runner that has it"
             exit 1
           fi
