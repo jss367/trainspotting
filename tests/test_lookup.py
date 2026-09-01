@@ -290,3 +290,75 @@ def test_a_site_is_the_same_site_however_the_url_is_written(url):
     )
 
     assert rec["domain"] == "marginalrevolution.com"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://[not-an-address/x",     # urlsplit raises ValueError on the bracket
+        "https://[::1",
+        12345,                          # a corpus that recorded an id, not a URL
+        {"href": "http://example.com"},
+        [],
+    ],
+    ids=["bad-bracket", "unclosed-v6", "integer", "dict", "list"],
+)
+def test_a_url_that_will_not_parse_costs_one_document_its_domain(url):
+    """Not the whole sample. Five corpora with disagreeing subsets feed this and
+    the metadata is whatever a crawl recorded, so a URL that raises on parse is
+    a document with no readable host — the same answer as a document that
+    recorded none. Letting it raise discarded every document drawn with it."""
+    rec = lookup.normalize(
+        {"doc_ix": 1, "spans": [["t", None]],
+         "metadata": json.dumps({"metadata": {"metadata": {"url": url}}})}
+    )
+
+    assert rec["domain"] is None
+    # A string that will not parse is still what the corpus recorded and is
+    # worth showing; only its host is unreadable. Anything that is not a string
+    # is not a URL at all, and is dropped — `_identity` puts this value in a
+    # dict key, and a dict cannot be one.
+    assert rec["url"] is None or isinstance(rec["url"], str)
+
+
+@pytest.mark.parametrize(
+    "score",
+    [None, "n/a", {}, [], float("nan"), float("inf")],
+    ids=["null", "text", "dict", "list", "nan", "inf"],
+)
+def test_a_quality_score_that_will_not_convert_is_unavailable(score):
+    """Same rule as the URL, one field over: unusable is absent, not fatal.
+
+    NaN and the infinities convert but do not serialize — `json` writes them as
+    bare tokens no browser will parse — so a score the study cannot publish is
+    also unavailable rather than stored.
+    """
+    attrs = {"dolma17_hq": [[0, 100, score]]}
+    rec = lookup.normalize(
+        {"doc_ix": 1, "spans": [["t", None]],
+         "metadata": json.dumps({"metadata": {"attributes": attrs}})}
+    )
+
+    assert rec["quality"] is None
+
+
+def test_the_excerpt_is_the_window_around_the_match():
+    """The spans are the window infini-gram centred on the hit; `text` is the
+    document from its beginning. Reading `text` first and cutting it to fit
+    meant a long document's excerpt was its opening paragraphs, which need not
+    contain the query at all — and a study whose whole point is "read the
+    documents and see what the number meant" cannot show a reader an excerpt
+    that omits what matched."""
+    rec = lookup.normalize({
+        "doc_ix": 1,
+        "text": "the opening paragraphs, which do not say it",
+        "spans": [["…before ", None], ["the needle", "q"], [" after…", None]],
+    })
+
+    assert rec["excerpt"] == "…before the needle after…"
+
+
+def test_text_is_still_read_when_there_are_no_spans():
+    rec = lookup.normalize({"doc_ix": 1, "text": "all there is", "spans": []})
+
+    assert rec["excerpt"] == "all there is"

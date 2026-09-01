@@ -13,6 +13,7 @@ box avoids downloading them all.
 """
 
 import json
+import math
 import re
 import shutil
 import sys
@@ -119,9 +120,39 @@ for f in sorted((ROOT / "results").glob("*.json")):
 # machine.
 derived = []
 
+# Significant digits kept for a derived float. Everything under this heading is
+# computed — a mean, a standard error, a design effect, an estimated token
+# total — and the last few digits of a float are an artifact of the order the
+# arithmetic happened in and the libm that did it, not of the data.
+#
+# These files are committed, so those digits are a diff. CI caught it the first
+# time it ran: the same export on the same tree produced
+# `deff: 3.4905799081030855` here and `...846` on the runner, a one-unit
+# difference in the seventeenth digit, and the check that the committed export
+# matches the tree failed on it. Rounding at the boundary makes a derived file a
+# function of the sample rather than of the machine.
+#
+# Twelve is far past anything meaningful here — the widest quantity is a token
+# estimate around 1e9, whose interval is ±60% — and four digits clear of where
+# the noise lives.
+FLOAT_DIGITS = 12
+
+
+def stable(value):
+    """`value` with every float rounded to `FLOAT_DIGITS` significant digits."""
+    if isinstance(value, float):
+        if not math.isfinite(value) or value == 0:
+            return value
+        return round(value, FLOAT_DIGITS - 1 - math.floor(math.log10(abs(value))))
+    if isinstance(value, dict):
+        return {k: stable(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [stable(v) for v in value]
+    return value
+
 
 def write_derived(name: str, payload: dict) -> None:
-    (out / name).write_text(json.dumps(payload, separators=(",", ":")))
+    (out / name).write_text(json.dumps(stable(payload), separators=(",", ":")))
     derived.append(name)
 
 
@@ -235,7 +266,10 @@ for name in registry.targets():
         if not any(st.get("measured") for st in est["stages"]):
             continue
         out_name = f"{name}.budget-{slug}.json"
-        (out / out_name).write_text(json.dumps(est, separators=(",", ":")))
+        # Derived the same way the profiles are, and rounded the same way: a
+        # budget is stage sizes times measured rates, so its floats carry the
+        # same machine-dependent tail.
+        (out / out_name).write_text(json.dumps(stable(est), separators=(",", ":")))
         total += (out / out_name).stat().st_size
         copied.append(out_name)
 
@@ -303,10 +337,25 @@ for name in sorted(n for n in copied if n.startswith("case-study.")):
             + "\n".join(f"    {k}: {v}" for k, v in casestudy.quoted_figures(d).items())
             + f"\nThen put this line under it:\n    {marker}"
         )
-    if f"As of {d['run_on']}" not in flat_readme:
+    # In this study's own section, not anywhere in the file. Two studies run on
+    # one day would otherwise satisfy each other's check, and the second could
+    # carry no date at all — or a stale one — while the export passed.
+    #
+    # The section runs from the nearest boundary above the marker to the marker
+    # itself. Two things can be that boundary: the previous study's marker, or
+    # the heading this study sits under. Both are needed. Taking only the
+    # previous marker left the *first* study unbounded — there is none above it,
+    # so the "section" was the whole README prefix and the check was global
+    # again, which is the bug this is here to fix and which the only study in
+    # the file today would have hit.
+    before = readme.split(marker)[0]
+    start = max(before.rfind("<!-- figures: "), before.rfind("\n#"))
+    section = before[start:] if start >= 0 else before
+    if f"As of {d['run_on']}" not in section.replace("\n", " "):
         sys.exit(
-            f"{study.name} was run on {d['run_on']}, which the README does not "
-            f"claim ('As of {d['run_on']}')"
+            f"{study.name} was run on {d['run_on']}, which its own README section "
+            f"does not claim ('As of {d['run_on']}'). A date elsewhere in the file "
+            "belongs to another study."
         )
 
 # Everything the search box can read, indexed by trigram. Built from docs/data

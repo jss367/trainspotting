@@ -15,12 +15,12 @@ So the joins are tested against the committed samples themselves, not fixtures.
 import json
 import math
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
+import sitejs
 from trainspotting import derive
 
 DATA = Path(__file__).resolve().parent.parent / "docs" / "data"
@@ -301,7 +301,10 @@ def test_a_stage_with_no_row_count_measures_shape_but_claims_no_budget():
 
 
 def test_stage_profile_reports_ambiguous_keys_rather_than_hiding_them():
-    rec = lambda key: {"kind": "sft", "key": key, "turns": [turn("assistant", 10)], "meta": {"source": "s"}}
+    def rec(key):
+        return {"kind": "sft", "key": key, "turns": [turn("assistant", 10)],
+                "meta": {"source": "s"}}
+
     p = derive.stage_profile({"stage": "sft", "records": [rec("same"), rec("same"), rec("other")]}, 10)
     assert p["ambiguous_keys"] == 1
     assert p["columns"] == {"source": 1}
@@ -361,15 +364,17 @@ def site_const(name: str) -> str:
     """A one-line `const name = ...` lifted out of docs/index.html, so a test
     exercising a function that closes over it runs the file's own definition."""
     src = SITE.read_text().splitlines()
-    line = next((l for l in src if l.startswith(f"const {name} = ")), None)
+    line = next((ln for ln in src if ln.startswith(f"const {name} = ")), None)
     assert line is not None, f"docs/index.html no longer defines {name}"
     return line
 
 
 def run_node(script: str, *args: str) -> str:
-    node = shutil.which("node")
-    if not node:
-        pytest.skip("node not installed")
+    # `sitejs` owns the skip reason. This module spelled it "node not
+    # installed", one word off the string CI greps the skip summary for, so the
+    # guard that fails the job when a node test skips on a runner that has node
+    # would have passed straight over these two.
+    node = sitejs._node_or_skip()
     return subprocess.run(
         [node, "-e", script, *args], capture_output=True, text=True, check=True
     ).stdout.strip()

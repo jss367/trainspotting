@@ -7,8 +7,8 @@ pretraining corpus is public and which has no post-training at all — and, with
 the same layers, any dataset on its own. The tool answers nine kinds of
 question. The first five go in increasing order of depth; the sixth and seventh
 are lookups rather than estimates, and differ in how much of the mix they can
-see; the last two read a whole example rather than its prompt, and put the answer
-on a scale the stages share:
+see; the eighth reads a whole example rather than its prompt, and the ninth puts
+every stage's answer on one scale:
 
 1. **Facts** — stage sizes for a model's whole training pipeline (pretrain →
    midtrain → long-context → SFT → DPO → RLVR), hardcoded in a registry.
@@ -287,11 +287,14 @@ that opens the whole example, drawn the way its stage trains:
 | RL | no stored response — the verifier, what it checks (ground truth, constraint), and how often reference rollouts passed |
 
 The DPO view has a second level: **show how this pair updates the model** opens
-the loss itself. Chosen tokens are pushed up, rejected tokens are pushed down,
-and only the gap between the two is visible to the loss, so the panel diffs the
-two responses and marks three kinds of span. A byte-exact shared opening is the
-only place cancellation is exact, because both sides are conditioned on identical
-text there. Wording that reappears after the responses diverge follows a
+the loss itself. Every chosen token contributes a term pushing its probability
+up and every rejected token a term pushing its down, but those terms are summed
+into one update to shared parameters — so they are what the step is made of, not
+a promise about each token, and a chosen token can come out less likely once the
+rest of the update lands. Only the gap between the two sides is visible to the
+loss, so the panel diffs the two responses and marks three kinds of span. A
+byte-exact shared opening is the only place cancellation is exact, because both
+sides are conditioned on identical text there. Wording that reappears after the responses diverge follows a
 different prefix on each side, so it is the same words but not the same training
 signal; the panel counts it as overlap and claims nothing about cancellation.
 Everything else is unique to one side, and that is what the update acts on. No
@@ -493,18 +496,19 @@ mix whose text contains a pattern. Exactly, over all of them — not a sample:
 $ trainspotting grep olmo-3-7b-think "ChatGPT" --stage dpo
 # grep 'ChatGPT' — 1 stage(s), 1.39 GB to read
 
-- dpo      150,000 rows    1.39 GB  prompt/response  (allenai/Dolci-Think-DPO-7B)
+- dpo      150,000 rows    1.39 GB  prompt/chosen/rejected  (allenai/Dolci-Think-DPO-7B)
 
 scanning dpo (1.39 GB) ...
 dpo: 773/150,000 rows = 0.515%
   prompt     647
-  response   521
+  chosen     342
+  rejected   388
       434 /    17,596 =  2.47% of it  filtered_wc_sample_500k
       192 /     5,220 =  3.68% of it  Wildchat-1m-gpt-4.1-regeneration-not-english
       105 /    13,955 =  0.75% of it  Wildchat-1M-gpt-4.1-regenerated-english
        24 /    23,202 =  0.10% of it  ultrafeedback_cleaned_olmo2_7b
         6 /     3,884 =  0.15% of it  tulu_v3.9_synthetic_finalresp_wildguardmixtrain_decontaminated_50k
-      … seven more sources, one to four rows each
+      … six more sources, one to four rows each
 ```
 
 That question cannot be asked of a sample. `classify` and `ask` draw 300 prompts
@@ -533,8 +537,22 @@ the `context` layer draws:
 | Field | What it is | Columns |
 |---|---|---|
 | `prompt` | what the model is asked | `prompt`, the user and system turns of `messages` / `chosen` / `rejected` / `source_prompt`, a tool schema in `functions` |
-| `response` | what it is fit to, or pushed between | the assistant turns of those message lists, `function_calls`, an RL mix's reference `outputs` |
+| `response` | what it is fit to | the assistant turns of `messages`, plus `reasoning_content` and a turn's tool calls |
+| `chosen` | what a pair is pushed toward | the chosen completion's turns, from the point the pair branches |
+| `rejected` | what a pair is pushed away from | the rejected completion's turns, from the same point |
 | `reference` | what scores it | `ground_truth`, `reward_model.ground_truth`, `solution`, `constraint` |
+| `rollout` | what was scored, and not trained on | an RL mix's reference generations in `outputs` |
+
+Which groups a stage has depends on its shape, and `--field` names groups rather
+than columns: a DPO mix has `chosen` and `rejected` and no `response`, so
+`--field response` there selects nothing. The printed plan names the groups the
+stage actually offers before anything is read.
+
+A pair's two sides are separate groups because they teach opposite things.
+Counting a string under one `response` heading adds a completion the objective
+pushes the model toward to one it pushes away from, and `rollout` is split off
+the same way: a reference generation is what the verifier scored, not text the
+model was fit to.
 
 This is the distinction that matters for identity text, and the one the values
 layer cannot make: `classify` and `ask` read prompts, so a phrase that only ever
@@ -1235,11 +1253,14 @@ to get backwards:
 - **The count is occurrences, not documents.** A page that repeats a phrase
   three times contributes three. Reading a count as "copies in the training
   data" inflates it.
-- **Documents are exhaustive only at or under ten.** That is the API's
-  per-call cap. Above it the index draws occurrences uniformly at random and a
-  re-run returns different ones, so a committed result is a snapshot. Result
-  files carry `exhaustive` per pull and a `run_on` date instead of a revision,
-  because a live index has nothing to pin.
+- **Documents are exhaustive only at or under ten occurrences, and only when
+  the run asked for all of them.** Ten is the API's per-call cap. Above it the
+  index draws occurrences uniformly at random and a re-run returns different
+  ones, so a committed result is a snapshot; below it, `--docs 3` against a
+  phrase occurring eight times is still a sample of three, and the flag says so.
+  It is also cleared when the index returns fewer documents than were asked for.
+  Result files carry `exhaustive` per pull and a `run_on` date instead of a
+  revision, because a live index has nothing to pin.
 
 ### The committed study
 
@@ -1263,7 +1284,7 @@ in here?* tab reads. As of 2026-08-31:
   else typed it into their own prose. What looks like heavy duplication of a writer
   is mostly other people's copies.
 
-<!-- figures: case-study.marginal-revolution 07049b6fd4e5 -->
+<!-- figures: case-study.marginal-revolution 2d7f2bf5cb99 -->
 
 The study labels every query group with how it was chosen. Queries picked from
 knowing the blog can measure coverage; queries found by reading documents that

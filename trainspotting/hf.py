@@ -7,6 +7,7 @@ row counts, /statistics for exact column value frequencies, /rows for sampling.
 import os
 import random
 import re
+import sys
 import time
 from pathlib import Path
 
@@ -41,6 +42,14 @@ def _token() -> str | None:
 
 HEADERS = {"Authorization": f"Bearer {tok}"} if (tok := _token()) else {}
 
+# Set once a request has been rejected for its credentials. Every dataset this
+# tool reads is public and the token only buys a higher rate limit, so a token
+# the Hub will not accept — revoked, expired, or a paste that lost a character —
+# should cost the run its rate limit and nothing else. Before this, one stale
+# login in ~/.cache/huggingface/token disabled every command in the tool with a
+# 401 until someone thought to delete the file.
+_CREDENTIALS_REJECTED = False
+
 
 def _get(path: str, server_error_retries: int = 6, **params) -> dict:
     """GET with backoff, patient about the errors that mean "later", not "no".
@@ -60,10 +69,12 @@ def _get(path: str, server_error_retries: int = 6, **params) -> dict:
     is capped so twenty attempts is a bounded wait rather than an exponential
     one.
     """
+    global _CREDENTIALS_REJECTED
     attempt = transport = 0
     for _ in range(60):
+        headers = {} if _CREDENTIALS_REJECTED else HEADERS
         try:
-            r = requests.get(f"{BASE}/{path}", params=params, timeout=120, headers=HEADERS)
+            r = requests.get(f"{BASE}/{path}", params=params, timeout=120, headers=headers)
         except (requests.Timeout, requests.ConnectionError):
             # A slow page is worth waiting on; a dead network is not. Five
             # tries with growing pauses tells the two apart without letting an
@@ -73,6 +84,20 @@ def _get(path: str, server_error_retries: int = 6, **params) -> dict:
             if transport >= 5:
                 raise
             time.sleep(15 * transport)
+            continue
+        if r.status_code in (401, 403) and headers:
+            # Retried once without the token, not once per request: the flag is
+            # module-level so the rest of the run goes straight to anonymous
+            # rather than paying a rejected round trip per call. Said out loud,
+            # because a run that quietly drops to the anonymous rate limit and
+            # then dies on 429s an hour later is a worse failure than the 401.
+            _CREDENTIALS_REJECTED = True
+            print(
+                f"HuggingFace rejected the token ({r.status_code}); continuing without it. "
+                "These datasets are public, so only the rate limit changes — but it is "
+                "much lower. Fix or remove the token to get it back.",
+                file=sys.stderr,
+            )
             continue
         if r.status_code == 429:
             time.sleep(int(r.headers.get("retry-after", 0)) or 60)

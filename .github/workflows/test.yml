@@ -1,0 +1,97 @@
+# Everything that runs offline, on every push and every pull request.
+#
+# There was no CI until now. The suite existed and passed — 800-odd tests — but
+# nothing ran it except a person remembering to, and what got through in the
+# meantime was two disagreements between the site's search and the CLI's about
+# which side of a preference pair a string is on. Both were caught by tests
+# written after the fact. The point of this file is that the next one is caught
+# before the merge.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# This job reads the tree, runs tests, and reports. It writes nothing back, so
+# the token it is handed should not be able to. The default is write access to
+# most scopes, and `pip install -e .` runs setup code from the tree — on a fork's
+# pull request that is somebody else's tree, next to a credential the checkout
+# leaves in `.git/config` by default.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Nothing here pushes, so the token does not need to outlive the
+          # checkout step or sit in the local git config while installs run.
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The site's assertions are JavaScript, because the page is JavaScript.
+      # Without node they skip rather than fail, which on CI would be a quiet
+      # hole exactly where the last two bugs were.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: pip install -e '.[dev]'
+
+      # One run, read twice. `-rs` lists the skips in the same output that
+      # reports the failures, so the "did a site suite skip" check is a question
+      # about a run that already happened rather than a reason to run the suite
+      # again — which is what this was, at roughly double the pytest time.
+      #
+      # `pipefail` because the exit code that matters is pytest's and the pipe
+      # would otherwise hand back tee's. The default shell here is `bash -e`,
+      # which does not imply it.
+      - name: pytest
+        run: |
+          set -o pipefail
+          pytest -q -rs 2>&1 | tee /tmp/pytest.out
+
+      - name: no site suite silently skipped
+        run: |
+          if grep -q "node is not installed" /tmp/pytest.out; then
+            echo "::error::a site suite skipped for want of node, on a runner that has it"
+            exit 1
+          fi
+
+      # Pinned. An unpinned install makes the lint a property of the day a job
+      # ran rather than of the tree it ran on, and the rule set is pinned too,
+      # in pyproject — both, because a version bump and a rule-set change should
+      # each be somebody's decision.
+      - name: ruff
+        run: |
+          pip install 'ruff==0.15.20'
+          ruff check .
+
+      # The export re-derives everything the page serves and checks the README's
+      # quoted figures against it. Running it here means a result file and the
+      # paragraph describing it cannot drift apart in a merge.
+      - name: the export agrees with the README
+        run: |
+          python scripts/export_site_data.py
+          # `git status --porcelain`, not `git diff`. A diff compares against the
+          # index and so says nothing about a file that is not in it — and a new
+          # file is exactly what the export produces when a result, a context run
+          # or a derived summary is added, which is the case where forgetting to
+          # commit it matters most. The site would then ship without the artifact
+          # while this job reported the export was in sync.
+          #
+          # Porcelain covers modified, deleted and untracked in one answer, and
+          # nothing under docs/data is gitignored, so there is no ignored-file
+          # noise to filter.
+          changed=$(git status --porcelain -- docs/data)
+          if [ -n "$changed" ]; then
+            echo "::error::scripts/export_site_data.py leaves docs/data dirty — commit the export"
+            echo "$changed"
+            exit 1
+          fi

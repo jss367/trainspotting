@@ -69,3 +69,43 @@ def test_a_stage_with_no_declared_columns_still_records_what_it_can():
     row = {"messages": [{"role": "user", "content": "hi"}], "source_dataset": "Wildchat"}
 
     assert context.build(row, "sft", "hi", 0)["meta"] == {"source_dataset": "Wildchat"}
+
+
+class TestTheAnswerKey:
+    """What a record keeps of what the verifier scores against.
+
+    An RL row's `ground_truth` is a list wherever the mix accepts more than one
+    form of the answer. The record kept the first element, so the alternatives
+    were invisible to the site's search while `search.fields` and whole-mix
+    `grep` both matched them — the count could prove a string was in the answer
+    key and the drill-down said it was not.
+    """
+
+    def build(self, row):
+        return context.build(row, "rlvr", "prompt", 0)["reward"]["ground_truth"]
+
+    def test_every_alternative_is_kept(self):
+        got = self.build({"ground_truth": ["7", "seven", "VII"]})
+        assert got["text"] == "7\nseven\nVII"
+
+    def test_it_renders_a_list_the_way_a_search_would(self):
+        """The same function `search` and `grep` use, so the record holds the
+        text a search would have matched against rather than a second opinion
+        about what a cell says."""
+        from trainspotting import search
+
+        row = {"ground_truth": ["alpha", "beta"]}
+        assert self.build(row)["text"] == search.flatten(row["ground_truth"])
+
+    def test_a_plain_string_is_unchanged(self):
+        assert self.build({"ground_truth": "42"})["text"] == "42"
+
+    def test_it_falls_back_to_the_reward_model(self):
+        assert self.build({"reward_model": {"ground_truth": "x"}})["text"] == "x"
+
+    def test_an_empty_list_falls_back_rather_than_storing_nothing(self):
+        row = {"ground_truth": [], "reward_model": {"ground_truth": "x"}}
+        assert self.build(row)["text"] == "x"
+
+    def test_no_answer_key_at_all_is_none(self):
+        assert self.build({}) is None

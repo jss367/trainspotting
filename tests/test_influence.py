@@ -1453,7 +1453,7 @@ def test_the_largest_contributor_is_named_per_side_too():
     total hits it named `bunched` and then printed its readable numbers, which
     are zero."""
     t = influence.compare([SPREAD_READ_BUNCHED_REJECTED], THINK)
-    line = next(l for l in influence.render(t, "olmo-3-7b-think") if "contributor" in l)
+    line = next(ln for ln in influence.render(t, "olmo-3-7b-think") if "contributor" in ln)
     assert "spread_a" in line and "bunched" not in line
 
 
