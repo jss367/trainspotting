@@ -465,7 +465,7 @@ in here?* tab reads. As of 2026-08-31:
   else typed it into their own prose. What looks like heavy duplication of a writer
   is mostly other people's copies.
 
-<!-- figures: case-study.marginal-revolution 1ee4e7b35cb9 -->
+<!-- figures: case-study.marginal-revolution 07049b6fd4e5 -->
 
 The study labels every query group with how it was chosen. Queries picked from
 knowing the blog can measure coverage; queries found by reading documents that

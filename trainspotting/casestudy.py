@@ -249,6 +249,17 @@ def quoted_figures(study: dict) -> dict:
                 for d in study["spread"].get("domains", [])
                 if not d.get("domain") or d["domain"] == "(no url recorded)"
             ),
+            # Which sites, not merely how many. The README characterises this
+            # sample — "bookmark mirrors, aggregators and SEO scrapers" — and a
+            # re-run can swap one known off-site domain for another with every
+            # count above unmoved, leaving that sentence describing a set of
+            # pages nobody looked at. The draw is random, so any re-sample
+            # changes this and forces the paragraph to be re-read, which is the
+            # contract rather than a side effect.
+            "domains": {
+                d["domain"]: d["occurrences"]
+                for d in sorted(study["spread"].get("domains", []), key=lambda d: str(d["domain"]))
+            },
         },
         # Per-query, per-index counts: the headline "333 occurrences in Dolma
         # 1.7, 883 in DCLM-baseline" comes straight out of here.
