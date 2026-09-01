@@ -43,11 +43,25 @@ prompt, and put the answer on a scale the stages share:
    share of Dolma 3 documents are different denominators; this is where they
    become one number. See [How much training is that?](#how-much-training-is-that).
 
+Every one of those starts from something you can already name — a string to
+search for, or a question you can already phrase. When you start from an
+observed behavior instead — a transcript where the model claimed the wrong
+knowledge cutoff or identified as another lab's assistant — `trainspotting
+trace` extracts the distinctive phrases from that text and ranks the
+post-training stages by how densely each contains them, so you find the stage
+without guessing a search string. See [Tracing a behavior](#tracing-a-behavior).
+
 The pretraining corpora get their own path, because the datasets-server cannot
 sample them: exact composition from the shard listing, readable random documents,
 and the same free-form questions. There is no context layer there — a corpus
 document has no surrounding training example, it *is* the example. See
 [Pretraining data](#pretraining-data).
+
+Two more views are derived from the samples those layers commit rather than
+measured by a command of their own: how many tokens each stage of the pipeline
+actually is, which is the only thing that says what fraction of the model the
+other five layers describe (see [Size](#size)), and which source dataset each
+labeled prompt came from (see [Where each label comes from](#where-each-label-comes-from)).
 
 ## Datasets
 
@@ -122,6 +136,11 @@ trainspotting facts olmo-3-7b-instruct
 
 # Exact source/domain/reward-type composition of each post-training stage
 trainspotting sources olmo-3-7b-instruct --json
+
+# Start from a behavior, not a search string: extract the distinctive phrases
+# from a transcript and rank stages by how densely they contain them
+trainspotting trace olmo-3-7b-instruct \
+  "As an AI language model developed by OpenAI, my knowledge cutoff is September 2021."
 
 # Sample 300 prompts per stage and label each one with Claude
 trainspotting classify olmo-3-7b-instruct --sample 300
@@ -305,6 +324,63 @@ if a child should be saved based on race"* counts as harmlessness content, and
 only the pair behind it shows the model is trained toward refusing it.
 
 Registered models: `olmo-3-7b-instruct`, `olmo-3-7b-think`, `olmo-3-32b-think`.
+
+## Size
+
+Every layer above answers a question about post-training, which is a fraction of
+a percent of the text the model read: **0.03%** for `olmo-3-7b-instruct`, and
+**0.31%** and **0.34%** for `olmo-3-7b-think` and `olmo-3-32b-think`. The think
+models are an order of magnitude higher for one reason, and it is worth seeing on
+its own: their SFT examples carry reasoning traces, so the same 2-odd million
+examples are ten times the text.
+
+None of those numbers is published anywhere. Ai2 gives token counts for the
+pretraining mixes and row counts for the post-training ones, and 2.15M examples
+and 5.93T tokens are not comparable quantities.
+
+`scripts/export_site_data.py` closes the gap from the samples already committed.
+For every context run it writes `docs/data/<target>.<stage>.profile.json` —
+lengths, how much of each example the model is fit to, one metadata row per
+sampled example, and a token estimate: the sampled mean characters per example
+divided by four, times the exact row count. For every pretraining document sample
+it adds the same length summary to `<target>.<stage>.corpus.json`. Both are
+derived by `trainspotting/derive.py` from files the site already ships, so a
+fresh checkout rebuilds them with no network and no API key.
+
+The site draws four things from that:
+
+| View | What it says |
+|---|---|
+| **Where the token budget went** | Every stage on one strip to scale, and again on a log axis. Corpus tokens are the paper's; post-training tokens are estimated, with the 95% interval on the sampled mean. A second strip shows what *this page* sampled per stage — roughly equal everywhere, which is the inverse of the first strip. |
+| **How much of it the model is fit to** | The gradient-bearing share per stage: all of pretraining, the assistant turns of an SFT example, both completions after a DPO pair branches, and none of an RL row — the response there is generated during training and never stored. |
+| **How long is one example?** | Characters per example per stage on shared half-decade bins, which is what makes an example count and a token count the same kind of statement. |
+| **The whole pipeline as area** | A treemap where area is tokens: Common Crawl against FineMath against the whole of post-training in one frame. Boxes whose true area is under a pixel are drawn at 3px and the card says how many. |
+
+The estimate's weak part is the divisor, and it is one number
+(`derive.CHARS_PER_TOKEN`). Real tokenizers run about 3.5 characters per token on
+code and 4.5 on English prose; nothing in that range moves a finding that is a
+factor of ten thousand.
+
+## Where each label comes from
+
+The taxonomy says how much of a stage is about being harmless. The mix
+composition says which datasets the stage was built from. Neither says which of
+those datasets the harmless prompts came from — usually one or two of them.
+
+The site crosses the two: rows are the values of the source column a stage's rows
+carry (`source_dataset`, `dataset_source`, `preference_type`, or whatever else
+the mix records), columns are the seven labels, and every cell opens the prompts
+behind it like any bar does. A second grid behind a fold does the same against
+detected language. On Dolci Instruct SFT this is how you find that every sampled
+prompt from `Verifiable Reasoning` is capability content while `Wildchat` is
+mostly helpfulness — a split no stage-level share can show.
+
+The join costs no payload. A profile record carries a 32-bit FNV-1a hash of the
+same 400-character prompt opening a context record is keyed on, so the crossing
+happens in the browser over files it already has.
+`tests/test_derive.py` runs the Python and JavaScript implementations of that
+hash over the same inputs, because a drift between them would empty the grid
+rather than raise anything.
 
 ## Searching a whole example
 
@@ -567,6 +643,72 @@ rolls every question up with `budget`. The question wordings live in that script
 which makes them one editable instrument rather than nine copies in a shell
 history.
 
+## Tracing a behavior
+
+`trace` is the way in when you have a behavior, not a query. Most of the tool
+assumes you already know what to look for; `trace` starts from what the model
+did. Paste the text — a transcript, a description, the sentence that surprised
+you — and it pulls the distinctive phrases out of it and counts how many rows of
+each post-training stage contain each one across the split (the
+datasets-server full-text index, nothing sampled and nothing downloaded). It
+ranks the stages by matches per million rows, so `"As an AI language model
+developed by OpenAI"` lands you on whichever mix carries the most of that
+provenance rather than leaving you to guess a `grep`. The index reaches the
+assistant turns, not just the metadata beside them: it covers string values
+nested inside a struct or a list of structs, which is what an SFT `messages`
+column and a DPO `chosen`/`rejected` column are.
+
+A window is kept only if it is anchored: on a number, on a capital past a
+token's first letter (`ChatGPT`, `OpenAI` — English does not shape words that
+way, so those are names wherever they sit, including the opening word of a
+transcript), or on a capital anywhere but the start of its sentence. The anchor
+is what makes a query selective, not the length, so a window of pure function
+words is dropped however long it is — it would match training rows by
+coincidence — while `"Assistant: ChatGPT"` yields `ChatGPT`. Boundary function
+words are trimmed off the windows that are kept, because search ANDs a query's
+tokens together and a trailing "so I" only excludes the row that phrased the
+same span without it.
+
+Two anchors in one sentence get two queries: a candidate window is dropped only
+when every anchor in it is already covered, not merely because it overlaps one
+already chosen. Otherwise `"...developed by OpenAI, my knowledge cutoff is
+September 2021."` — fourteen words, so every eight-word window touches every
+other — would spend its whole budget on the lab and never reach the date.
+
+Three things a `trace` number is not, all printed next to it:
+
+- **Not the phrase.** The server stems each token and ANDs them, so a hit is a
+  row holding all of the query's words, not the literal string — an upper bound
+  on verbatim occurrences.
+- **Not a side.** It counts rows, not which half of the example the string is
+  in. A run ends with a link into the dataset viewer, whose `?q=` runs the same
+  index, so the rows behind the count are one click away. Deliberately not a
+  `trainspotting search` command: `search` is the layer that attributes a hit to
+  a side, but it does it over a 300-row random draw, and at the densities a
+  signature string produces (100/M is a 3% chance of one hit in that draw) it
+  would answer with a confident zero.
+- **Not always the whole split.** The full-text index stops at the first 5 GB,
+  which the two 36 GB Think SFT mixes are well past. Their matches come from a
+  prefix of the rows they are divided by, so they are reported separately as
+  lower bounds rather than ranked. A bound settles one comparison — it is
+  conclusively above a ranked stage whose exact density is smaller — and nothing
+  else, and ranking the two together put the biggest mixes last for being big.
+
+The first search against a cold split can take minutes while the server builds
+the index — the widest window in the tool for `main` to move under a run. Each
+stage's revision is read before its row count and again after its searches, and
+a stage that moved in between is reported outside the ranking, like a partly
+indexed one but for a stronger reason: the two halves of its ratio describe
+different trees, so unlike a lower bound it is not a loose estimate of the
+density but not an estimate of it at all. Its counts are printed, its density is
+not ranked, and it cannot take the viewer link. When the behavior has no signature string — it is a disposition, or
+the training paraphrases it — `trace` finds nothing and says to reach for `ask`,
+which judges what sampled examples *teach* instead of matching their text
+(`"does this example teach the model to identify as ChatGPT?"`). All three
+compose, on different scales: `trace` narrows to a stage over the whole split,
+`search` says which side of the example a string lands on over a sample of it,
+and `ask` characterizes the fuzzy cases neither can match.
+
 ## Pretraining data
 
 Dolma 3 is on the Hub, but the dataset viewer cannot sample it. It indexes only
@@ -814,6 +956,12 @@ rendering is checked against every committed context record, not just
 constructed ones: the bug it guards against passed on all the short examples and
 lost a side marker on the long ones.
 
+The derived numbers are held to the committed samples themselves rather than to
+fixtures, because the ways they break are all silent: a profile that has drifted
+from the context file it summarizes, a prompt-key hash that no longer matches the
+copy in `docs/index.html`, a DPO pair whose shared history gets counted as text
+the model was fit to. `pytest` needs `node` on PATH for the hash-parity check and
+skips it otherwise.
 `--live` re-runs the extraction checks against rows fetched right now. That is
 the canary for an upstream schema change, which otherwise shows up only as a
 sampling run that quietly labels nothing.

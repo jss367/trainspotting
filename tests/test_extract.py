@@ -203,3 +203,34 @@ def test_the_classifier_and_the_site_see_the_same_text():
     """extract.py commits to this equality in a comment; if the two budgets ever
     drift, "read the matched documents" stops being true of the site."""
     assert extract.MAX_DOCUMENT_CHARS == extract.MAX_STORE_CHARS
+
+
+@pytest.mark.parametrize(("target_name", "stage"), STAGES, ids=STAGE_IDS)
+def test_the_size_layer_sees_the_whole_prompt(target_name, stage):
+    """`derive` measures an RL example as its stored prompt, and the stored
+    prompt is whatever `extract_prompt` returned.
+
+    That is lossless while these mixes keep their prompts as strings, and it
+    stops being lossless the day one arrives as a message list: extraction takes
+    the user turn and the size layer would then miss the system message and any
+    turn after it, silently undercounting that stage's tokens. Registering such
+    a mix should fail here rather than quietly shrink a number on the site.
+    """
+    # Only the RL kind: every other kind stores the example's turns and is
+    # measured from those, so what `extract_prompt` returned is display text
+    # there rather than the size of anything.
+    if registry.stage_kind(stage) != "rlvr":
+        return
+    saved = row_fixture(target_name, stage["stage"])
+    raw = saved["row"].get(stage["prompt_path"])
+    if not isinstance(raw, list):
+        return
+
+    extracted = extract.extract_prompt(saved["row"], stage["prompt_path"])
+    whole = sum(len(str(m.get("content") or "")) for m in raw if isinstance(m, dict))
+
+    assert len(extracted) >= whole, (
+        f"{stage['hf_dataset']}: the stored prompt is {len(extracted)} of {whole} characters, so "
+        "the token estimate for this stage would undercount — give context.build a full-prompt "
+        "field before registering a mix whose prompts are message lists"
+    )
