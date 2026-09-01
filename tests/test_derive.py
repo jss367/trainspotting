@@ -161,8 +161,12 @@ def test_estimate_scales_the_sampled_mean_and_carries_its_interval():
     assert est["per_example"] == pytest.approx(600 / derive.CHARS_PER_TOKEN)
     assert est["tokens"] == pytest.approx(150_000_000)
     assert est["lo"] < est["tokens"] < est["hi"]
-    # The interval is the sample's own standard error, not a fixed fraction.
-    assert est["hi"] - est["tokens"] == pytest.approx(1.96 * stats["se"] / 4 * 1_000_000)
+    # The interval is the sample's own standard error, not a fixed fraction, and
+    # it is scaled by t rather than z: the error was estimated from this sample,
+    # so the critical value has to answer to how much of it there was.
+    assert est["hi"] - est["tokens"] == pytest.approx(
+        derive.t95(stats["df"]) * stats["se"] / 4 * 1_000_000)
+    assert derive.t95(stats["df"]) > 1.96
 
 
 def test_clusters_are_the_samplers_draws_not_its_rows():
@@ -247,17 +251,31 @@ def test_a_sample_with_no_row_indices_falls_back_to_the_independent_error():
     assert stats["clusters"] is None and stats["deff"] == 1.0
 
 
-def test_one_cluster_reports_the_independent_error_rather_than_none():
-    """A sample that arrived as a single run leaves the design effect
-    unestimable, not 1. Taking the cluster variance there would print a
-    zero-width interval and call it certainty."""
+def test_one_cluster_reports_no_interval_at_all():
+    """A `--sample 10` run is one fetch of ten adjacent rows. There is no
+    between-draw information in it, so there is no honest sampling error: the
+    cluster variance would be a zero-width interval presented as certainty, and
+    the independent error would assume the very independence the correction
+    exists to deny."""
     values = [10, 20, 30, 40, 50, 60]
 
     stats = derive.summarize(values, list(range(6)))
 
     assert stats["clusters"] == 1
-    assert stats["se"] == pytest.approx(derive.summarize(values)["se"])
-    assert stats["se"] > 0
+    assert stats["se"] is None
+
+    est = derive._estimate(stats, 1_000_000)
+    assert est["tokens"] > 0
+    assert "lo" not in est and "hi" not in est
+
+
+def test_the_critical_value_answers_to_the_number_of_draws():
+    """Thirty clusters is not a known variance. Using the normal 1.96 there
+    states a confidence the sample does not support — about 4% too narrow."""
+    assert derive.t95(29) == pytest.approx(2.045, abs=0.001)
+    assert derive.t95(1) > 12          # two draws prove almost nothing
+    assert derive.t95(500) == pytest.approx(1.96, abs=0.01)
+    assert derive.t95(0) == float("inf")
 
 
 def test_a_stage_with_no_row_count_measures_shape_but_claims_no_budget():

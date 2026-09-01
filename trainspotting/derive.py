@@ -252,12 +252,14 @@ def _cluster_se(values: list[float], mean: float, groups: list[list[int]]) -> tu
     C = len(groups)
     var_ind = sum((v - mean) ** 2 for v in values) / (n - 1) / n if n > 1 else 0.0
     if C < 2:
-        # One cluster leaves the design effect unestimable, not 1 — there is
-        # nothing to compare it against. Returning the cluster variance here
-        # would report a zero-width interval with total confidence, so fall back
-        # to the independent error, which is the narrowest honest claim
-        # available rather than a claim of none.
-        return math.sqrt(var_ind), 1.0
+        # One cluster leaves the design effect unestimable, and there is no
+        # honest number to put here. The cluster variance would be a zero-width
+        # interval presented as certainty; the independent error would assume
+        # the rows are independent draws, which is the assumption this whole
+        # correction exists to deny — a `--sample 10` run is one fetch of ten
+        # adjacent rows, and they are correlated by construction. So: no error,
+        # and the consumers report no interval rather than a wrong one.
+        return None, 1.0
     ss = sum((sum(values[i] for i in g) - mean * len(g)) ** 2 for g in groups)
     var_cluster = C / ((C - 1) * n**2) * ss
     # The floor belongs on the error, not just on the number reported beside it.
@@ -289,10 +291,16 @@ def summarize(values: list[int], rows: list[int | None] | None = None) -> dict:
     se, deff, groups = math.sqrt(var / n), 1.0, clusters_of(rows) if rows is not None else None
     if groups:
         se, deff = _cluster_se(values, mean, groups)
+    # Degrees of freedom for the interval built on that error: the number of
+    # independent things it was estimated from, less one. Without clusters that
+    # is the rows, which is the pre-cluster assumption and only right when the
+    # rows really were drawn independently.
+    df = (len(groups) if groups else n) - 1
     return {
         "n": n,
         "mean": mean,
         "se": se,
+        "df": df,
         "deff": deff,
         "clusters": len(groups) if groups else None,
         "p10": _quantile(ordered, 0.10),
@@ -301,6 +309,31 @@ def summarize(values: list[int], rows: list[int | None] | None = None) -> dict:
         "max": ordered[-1],
         "hist": histogram(values),
     }
+
+
+# Two-sided 95% critical values of Student's t, by degrees of freedom. The
+# error these multiply is *estimated* — from about thirty fetch clusters, not
+# from a known variance — so the normal 1.96 states a confidence the sample does
+# not support. At 29 degrees of freedom it is 2.045, which is 4% wider; at 1 it
+# is 12.7, and a sample small enough to hit that end is exactly where pretending
+# otherwise does the most damage.
+T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365,
+       8: 2.306, 9: 2.262, 10: 2.228, 11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145,
+       15: 2.131, 16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086, 21: 2.080,
+       22: 2.074, 23: 2.069, 24: 2.064, 25: 2.060, 26: 2.056, 27: 2.052, 28: 2.048,
+       29: 2.045, 30: 2.042}
+Z95 = 1.96
+
+
+def t95(df: int) -> float:
+    """The 95% critical value at `df`, tabulated where it matters and
+    approximated past the table, where t is within a fraction of a percent of
+    the Cornish-Fisher expansion around z."""
+    if df < 1:
+        return float("inf")
+    if df in T95:
+        return T95[df]
+    return Z95 + (Z95**3 + Z95) / (4 * df)
 
 
 def _estimate(stats: dict, examples: int | None) -> dict | None:
@@ -314,13 +347,16 @@ def _estimate(stats: dict, examples: int | None) -> dict | None:
     if not stats.get("n") or not examples:
         return None
     per = stats["mean"] / CHARS_PER_TOKEN
-    half = 1.96 * stats["se"] / CHARS_PER_TOKEN
-    return {
-        "tokens": per * examples,
-        "lo": max(0.0, per - half) * examples,
-        "hi": (per + half) * examples,
-        "per_example": per,
-    }
+    out = {"tokens": per * examples, "per_example": per}
+    # A sample that came back as one fetch has no estimable sampling error, so
+    # it gets a total and no interval rather than an interval that assumes what
+    # the correction denies.
+    if stats.get("se") is None:
+        return out
+    half = t95(stats.get("df") or 0) * stats["se"] / CHARS_PER_TOKEN
+    out["lo"] = max(0.0, per - half) * examples
+    out["hi"] = (per + half) * examples
+    return out
 
 
 def stage_profile(ctx: dict, examples: int | None = None) -> dict:

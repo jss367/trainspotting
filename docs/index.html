@@ -1433,8 +1433,10 @@ function budgetRows(m, sources, profiles, corpusSummaries){
       base,
       color: base ? CORPUS_RAMP[Math.min(corpusStages.indexOf(s), CORPUS_RAMP.length - 1)] : hueFor(s.stage),
       tokens: base ? s.tokens : (est ? est.tokens : null),
-      lo: est ? est.lo : null,
-      hi: est ? est.hi : null,
+      // Absent where the sample was one fetch: no between-draw information,
+      // so no interval rather than one that assumes the rows were independent.
+      lo: est && est.lo != null ? est.lo : null,
+      hi: est && est.hi != null ? est.hi : null,
       estimated: !base,
       // Every pretraining token is a next-token target; what a post-training
       // stage fits is a fraction of the example, and for RL none of it.
@@ -1555,7 +1557,10 @@ function budgetCard(m, rows){
       + (r.stage === "rlvr" ? "<br>the prompt set only — RL's completions are generated during training and stored nowhere, so the tokens this stage actually processes cannot be counted from the data" : "")
       + (r.estimated
         ? `<br>estimated: ${num(Math.round(r.perExample))} tokens/example × ${num(r.examples)} examples`
-          + `<br>95% CI ${fmtTok(r.lo)}–${fmtTok(r.hi)} on the sampled mean length`
+          + (r.lo != null
+            ? `<br>95% CI ${fmtTok(r.lo)}–${fmtTok(r.hi)} on the sampled mean length`
+              + `<br>at t(${r.lengths.df}) — the error is estimated from ${r.clusters} draws, not known`
+            : `<br>no interval: the sample came back as a single fetch of adjacent rows, which carries no information about how much the mean would move on another draw`)
           + (r.deff > 1.05
             ? `<br>widened ${r.deff.toFixed(1)}× for clustering — ${r.clusters} draws of ten consecutive rows, not ${r.lengths.n} independent ones`
             : "")
