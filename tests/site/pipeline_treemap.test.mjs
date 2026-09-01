@@ -9,25 +9,9 @@
 //
 // Run via pytest (tests/test_pipeline_treemap.py) or directly: node <this file>
 
-import fs from "fs";
-import path from "path";
+import { loadPage, read } from "./page.mjs";
 
-const ROOT = path.resolve(import.meta.dirname, "..", "..");
-const html = fs.readFileSync(path.join(ROOT, "docs", "index.html"), "utf8");
-const js = html.match(/<script>([\s\S]*)<\/script>/)[1];
-const read = f => JSON.parse(fs.readFileSync(path.join(ROOT, "docs", "data", f), "utf8"));
-
-// Same stubs as the other site suites: land the declarations, swallow the boot
-// sequence, then reach in for the functions under test. The eval'd string is
-// this repo's own docs/index.html, read from disk offline.
-const el = () => ({ addEventListener(){}, appendChild(){}, querySelectorAll: () => [],
-  querySelector: () => el(), style: {setProperty(){}}, dataset: {},
-  set innerHTML(v){}, set onclick(v){}, set textContent(v){} });
-globalThis.document = { getElementById: el, querySelectorAll: () => [], createElement: el, body: el() };
-globalThis.location = { hash: "" };
-globalThis.fetch = async () => ({ ok: false });
-eval(js + ";globalThis.TM = {childrenOf, treemapLayout};");
-const T = globalThis.TM;
+const T = loadPage();
 
 let failures = 0;
 const ok = (cond, name) => {

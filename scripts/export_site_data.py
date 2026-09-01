@@ -303,10 +303,18 @@ for name in sorted(n for n in copied if n.startswith("case-study.")):
             + "\n".join(f"    {k}: {v}" for k, v in casestudy.quoted_figures(d).items())
             + f"\nThen put this line under it:\n    {marker}"
         )
-    if f"As of {d['run_on']}" not in flat_readme:
+    # In this study's own section, not anywhere in the file. Two studies run on
+    # one day would otherwise satisfy each other's check, and the second could
+    # carry no date at all — or a stale one — while the export passed. The
+    # section is the text after the marker line the fingerprint check just
+    # confirmed, up to the next one, which is what makes the marker do double
+    # duty as a section boundary.
+    section = readme.split(marker)[0].rsplit("<!-- figures: ", 1)[-1]
+    if f"As of {d['run_on']}" not in section.replace("\n", " "):
         sys.exit(
-            f"{study.name} was run on {d['run_on']}, which the README does not "
-            f"claim ('As of {d['run_on']}')"
+            f"{study.name} was run on {d['run_on']}, which its own README section "
+            f"does not claim ('As of {d['run_on']}'). A date elsewhere in the file "
+            "belongs to another study."
         )
 
 # Everything the search box can read, indexed by trigram. Built from docs/data

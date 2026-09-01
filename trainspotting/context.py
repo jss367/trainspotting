@@ -160,14 +160,25 @@ def _reward(row: dict) -> dict:
     kind = rewards.kind_for(row)
     explain = rewards.KINDS[kind]["explain"]
     rm = row.get("reward_model") or {}
+    # Every accepted answer, not the first of them. `ground_truth` is a list on
+    # the RL mixes that accept more than one form of the answer, and keeping
+    # only its first element made the rest unfindable on the site while
+    # `search` and `grep` both matched them — a hit the whole-mix count could
+    # prove was there and the drill-down said was not.
+    #
+    # `search.flatten` rather than a join written here, because "how does a cell
+    # become searchable text" is one question and this is the third layer to ask
+    # it. It joins scalars with newlines and renders anything structured as
+    # JSON, so the record holds what a search would have matched against.
     gt = row.get("ground_truth")
-    if isinstance(gt, list):
-        gt = next((g for g in gt if g), None)
+    if gt is None or gt == [] or gt == "":
+        gt = rm.get("ground_truth")
+    ground_truth = search.flatten(gt)
     return {
         "kind": kind,
         "explain": explain,
         "style": rm.get("style"),
-        "ground_truth": _text(gt or rm.get("ground_truth")) if (gt or rm.get("ground_truth")) else None,
+        "ground_truth": _text(ground_truth) if ground_truth else None,
         "solution": _text(row["solution"]) if row.get("solution") else None,
         "constraint": _text(row["constraint"]) if row.get("constraint") else None,
         "constraint_type": row.get("constraint_type"),

@@ -92,9 +92,15 @@ SIDES = {
 }
 
 
-def _flatten(value) -> str:
+def flatten(value) -> str:
     """A cell's searchable text. Cells arrive as strings, lists of strings
-    (`ground_truth`, `outputs`), structured payloads (a tool call), or None."""
+    (`ground_truth`, `outputs`), structured payloads (a tool call), or None.
+
+    Public because `grep` and `context` both have to turn a cell into text the
+    same way this does, or their answers diverge from it: a list of accepted
+    answers that one of them reduces to its first element is a false negative in
+    whichever layer reduced it, and that is what `context._reward` used to do.
+    """
     if value is None:
         return ""
     if isinstance(value, str):
@@ -130,7 +136,7 @@ def _turns(messages, start: int = 0):
             yield i, f"{role}/reasoning", str(m["reasoning_content"])
         for name in STRUCTURED_TURN_FIELDS + INPUT_TURN_FIELDS:
             if m.get(name):
-                yield i, f"{role}/{name}", _flatten(m[name])
+                yield i, f"{role}/{name}", flatten(m[name])
 
 
 def _turn_text(m: dict) -> tuple:
@@ -143,9 +149,9 @@ def _turn_text(m: dict) -> tuple:
     """
     return (
         m.get("role"),
-        _flatten(m.get("content")),
-        _flatten(m.get("reasoning_content")),
-        *(_flatten(m.get(name)) for name in STRUCTURED_TURN_FIELDS + INPUT_TURN_FIELDS),
+        flatten(m.get("content")),
+        flatten(m.get("reasoning_content")),
+        *(flatten(m.get(name)) for name in STRUCTURED_TURN_FIELDS + INPUT_TURN_FIELDS),
     )
 
 
@@ -196,7 +202,7 @@ def fields(row: dict, stage: str) -> list[dict]:
     out: list[dict] = []
 
     def add(side, role, column, value, turn=None):
-        text = _flatten(value)
+        text = flatten(value)
         if text.strip():
             out.append(
                 {"side": side, "role": role, "column": column, "turn": turn, "text": text}
@@ -234,7 +240,7 @@ def fields(row: dict, stage: str) -> list[dict]:
             for i, role, text in _turns(row["prompt"]):
                 if text not in prefix:
                     add("prompt", role, "prompt", text, i)
-        elif _flatten(row.get("prompt")) not in prefix:
+        elif flatten(row.get("prompt")) not in prefix:
             add("prompt", "prompt", "prompt", row.get("prompt"))
         seen_after = set()
         for side, turns in (("chosen", chosen), ("rejected", rejected)):
@@ -256,7 +262,7 @@ def fields(row: dict, stage: str) -> list[dict]:
                 column.add((i, text))
         else:
             add("prompt", "prompt", "prompt", row.get("prompt"))
-            column.add((None, _flatten(row.get("prompt"))))
+            column.add((None, flatten(row.get("prompt"))))
         for i, role, text in _turns(row.get("source_prompt")):
             # Some RL rows carry the same conversation in both columns. A turn
             # is a copy when it holds the same text at the same position, or

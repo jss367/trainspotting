@@ -6,14 +6,17 @@ data again. Everything else in these files is left exactly as the scan wrote it.
 Pinned to each run's recorded revision so the figure belongs to the tree the run
 actually read.
 """
-import json, sys, glob
+import glob
+import json
+import sys
 sys.path.insert(0, ".")
 from trainspotting import grep
 
 con = grep.connect()
 listings = {}
 changed = []
-for path in sorted(glob.glob("results/*.grep-*.json")):
+paths = sorted(glob.glob("results/*.grep-*.json"))
+for path in paths:
     run = json.loads(open(path).read())
     # The Parquet-branch revision, not `revision`. Since the merge with main,
     # `revision` is the *dataset* commit that `_stamp` records, and substituting
@@ -38,4 +41,4 @@ for path in sorted(glob.glob("results/*.grep-*.json")):
         open(path, "w").write(json.dumps(run, indent=2))
 for p, old, new in changed:
     print(f"{p.split('/')[-1]:58s} {old} -> {new}  (+{new-old})")
-print(f"\n{len(changed)} of 12 updated")
+print(f"\n{len(changed)} of {len(paths)} updated")

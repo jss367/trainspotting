@@ -17,9 +17,22 @@ from pathlib import Path
 
 import pytest
 
+import sitejs
 from trainspotting import searchindex
 
 DATA = Path(__file__).resolve().parent.parent / "docs" / "data"
+
+
+def side_of(field: str) -> str:
+    """Which side of a training example the page's field label names.
+
+    The label is the side and the role — "chosen assistant", "rejected
+    assistant reasoning" — or a bare role for text neither candidate claims.
+    """
+    for side in ("chosen", "rejected"):
+        if field.startswith(side + " "):
+            return side
+    return "prompt"
 
 
 def index_of(**files):
@@ -151,45 +164,19 @@ class TestPageFieldsAgainstCommittedSamples:
     committed samples to keep the two honest.
     """
 
-    SRC = Path(__file__).resolve().parent.parent / "docs" / "index.html"
-
-    @staticmethod
-    def _function_source(name):
-        """`function name(...){...}` out of index.html, by brace matching."""
-        src = TestPageFieldsAgainstCommittedSamples.SRC.read_text()
-        start = src.index(f"function {name}(")
-        depth, i = 0, src.index("{", start)
-        while True:
-            if src[i] == "{":
-                depth += 1
-            elif src[i] == "}":
-                depth -= 1
-                if depth == 0:
-                    return src[start:i + 1]
-            i += 1
-
     @pytest.fixture(scope="class")
-    def run_search_fields(self, tmp_path_factory):
-        """Call the page's searchFields on a list of records, via node."""
-        import shutil
-        import subprocess
-        if not shutil.which("node"):
-            pytest.skip("needs node to run the page's own function")
-        if not self.SRC.exists():
-            pytest.skip("no docs/index.html in this checkout")
-        script = tmp_path_factory.mktemp("js") / "fields.js"
-        script.write_text(
-            self._function_source("searchFields")
-            + "\nconst recs = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
-            + "\nconsole.log(JSON.stringify(recs.map(searchFields)));\n"
-        )
+    def run_search_fields(self):
+        """Call the page's searchFields on a list of records, via node.
 
+        Through the shared harness, which boots the whole page. This used to
+        lift the function's source out of the file by brace-matching it, which
+        worked only for as long as `searchFields` called nothing defined
+        elsewhere — and it stopped the day the DPO branch rule was pulled out
+        into a `branchPoint` the whole page shares, which is exactly the kind of
+        refactor a test should not be able to veto.
+        """
         def run(records):
-            out = subprocess.run(
-                ["node", str(script)], input=json.dumps(records),
-                capture_output=True, text=True, check=True,
-            )
-            return json.loads(out.stdout)
+            return sitejs.call("output = input.map(page.searchFields);", records)
         return run
 
     @pytest.fixture(scope="class")
@@ -230,10 +217,51 @@ class TestPageFieldsAgainstCommittedSamples:
                 checked += 1
         assert checked, "no multi-turn or system-prompted records in the samples to check"
 
-    def test_returns_each_text_once(self, run_search_fields, context_records):
+    def test_returns_each_text_once_per_side(self, run_search_fields, context_records):
         """A DPO pair repeats the user turn in both sides and the prompt again
-        at the top; the same text under three names is three copies of one hit."""
+        at the top; the same text under three names is three copies of one hit.
+
+        Per side, not overall. This asserted global uniqueness once, and in
+        doing so pinned a real bug: when both completions of a pair close on the
+        same sentence, one global set keeps whichever copy it reaches first —
+        always the chosen one — and the page reported a string that is on both
+        sides as preferred-only. Eight committed records had it. A hit in the
+        chosen completion and the same words in the rejected one are two
+        findings that mean opposite things, so the invariant is uniqueness
+        within a side.
+        """
         for name, records in context_records.items():
             for got in run_search_fields(records[:60]):
-                texts = [f["text"] for f in got]
-                assert len(texts) == len(set(texts)), name
+                keyed = [(side_of(f["field"]), f["text"]) for f in got]
+                assert len(keyed) == len(set(keyed)), name
+
+    def test_a_string_on_both_sides_is_reported_on_both(
+        self, run_search_fields, context_records
+    ):
+        """The converging-close shape, over the samples the site serves.
+
+        Where both completions of a pair end on the same text, that text has to
+        come back under both sides. It is the case the page is least allowed to
+        get wrong — the whole reason a DPO hit carries a side is that the same
+        string chosen and rejected teaches opposite things.
+        """
+        checked = 0
+        for name, records in context_records.items():
+            pairs = [r for r in records if r.get("chosen") or r.get("rejected")]
+            if not pairs:
+                continue
+            for rec, got in zip(pairs[:60], run_search_fields(pairs[:60])):
+                by_side = {}
+                for f in got:
+                    by_side.setdefault(side_of(f["field"]), set()).add(f["text"])
+                both = by_side.get("chosen", set()) & by_side.get("rejected", set())
+                # Nothing to check unless the record has such a shape; where it
+                # does, the assertion is that the intersection was reachable at
+                # all, which a global dedup makes impossible by construction.
+                if both:
+                    checked += 1
+                    assert all(t for t in both), name
+        assert checked, (
+            "no committed pair closes on text shared by both completions — if that is "
+            "really true the fixture has changed, because eight records had it"
+        )

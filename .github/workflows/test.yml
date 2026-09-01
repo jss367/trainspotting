@@ -1,0 +1,60 @@
+# Everything that runs offline, on every push and every pull request.
+#
+# There was no CI until now. The suite existed and passed — 800-odd tests — but
+# nothing ran it except a person remembering to, and what got through in the
+# meantime was two disagreements between the site's search and the CLI's about
+# which side of a preference pair a string is on. Both were caught by tests
+# written after the fact. The point of this file is that the next one is caught
+# before the merge.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The site's assertions are JavaScript, because the page is JavaScript.
+      # Without node they skip rather than fail, which on CI would be a quiet
+      # hole exactly where the last two bugs were.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: pip install -e '.[dev]'
+
+      - name: pytest
+        run: pytest -q
+
+      - name: no site suite silently skipped
+        run: |
+          pytest -q -rs 2>&1 | tee /tmp/out
+          if grep -q "node is not installed" /tmp/out; then
+            echo "::error::a site suite skipped for want of node, on a runner that has it"
+            exit 1
+          fi
+
+      - name: ruff
+        run: |
+          pip install ruff
+          ruff check .
+
+      # The export re-derives everything the page serves and checks the README's
+      # quoted figures against it. Running it here means a result file and the
+      # paragraph describing it cannot drift apart in a merge.
+      - name: the export agrees with the README
+        run: |
+          python scripts/export_site_data.py
+          git diff --exit-code -- docs/data || {
+            echo "::error::scripts/export_site_data.py changes docs/data — commit the export"
+            exit 1
+          }

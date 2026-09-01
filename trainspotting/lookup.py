@@ -147,19 +147,55 @@ def _snapshot(deep: dict) -> str | None:
     return None
 
 
+def _hostname(url) -> str | None:
+    """The host a document's recorded URL points at, or None if it will not parse.
+
+    `hostname` rather than `netloc`: the latter keeps a port and any userinfo,
+    so https://marginalrevolution.com:443/x would compare unequal to the
+    subject's own site and be tallied as somebody else's — which is the study's
+    headline number.
+
+    Anything that is not a parseable string URL is no host. `urlsplit` raises on
+    a non-string and on a malformed bracketed IPv6 host, and a crawl's metadata
+    is exactly where such a URL turns up; letting it raise here would throw away
+    the whole retrieved sample over one bad record.
+    """
+    if not isinstance(url, str) or not url:
+        return None
+    try:
+        return urlsplit(url).hostname
+    except ValueError:
+        return None
+
+
 def _quality(attrs: dict) -> float | None:
     """Dolma's quality-classifier score for the document, where it recorded one.
 
     Stored as a list of [start, end, score] spans over the text. One span covers
     the whole document in every case seen here, and averaging would be a fiction
     anyway, so take the first.
+
+    A score that will not convert is treated as unavailable, the same as one
+    that is absent. Everything else this module reads out of a document's
+    metadata already works that way, and it has to: the sample is drawn from a
+    live index across five corpora whose subsets disagree about every field, so
+    one heterogeneous record raising here would discard every document
+    retrieved with it rather than losing one number off one of them.
     """
     for key, spans in (attrs or {}).items():
         if "hq" not in key or not isinstance(spans, list) or not spans:
             continue
         first = spans[0]
         if isinstance(first, list) and len(first) == 3:
-            return round(float(first[2]), 5)
+            try:
+                score = float(first[2])
+            except (TypeError, ValueError):
+                return None
+            # NaN and the infinities are floats that will not serialize: `json`
+            # writes them as bare `NaN` / `Infinity` tokens, which no browser's
+            # parser accepts, so one of them in a study would stop the page
+            # loading the file at all rather than showing a missing score.
+            return round(score, 5) if -1e308 < score < 1e308 else None
     return None
 
 
@@ -232,6 +268,13 @@ def normalize(doc: dict) -> dict:
         or deep.get("WARC-Target-URI")
         or (inner.get("id") if str(inner.get("id", "")).startswith("http") else None)
     )
+    # Only a string is a URL. A subset that recorded an integer id or a nested
+    # object under one of these keys would otherwise put that object in the
+    # record — where the site renders it as a link and `_identity` puts it in a
+    # dict key, which a dict is not allowed to be. Unreadable is unavailable
+    # here as everywhere else in this function.
+    if not isinstance(url, str) or not url:
+        url = None
     # Fold `www.` here rather than at each call site. The subsets disagree —
     # CCNet's recorded `source_domain` keeps the prefix, a domain parsed out of
     # a URL may not — and left alone that splits one site across two rows of
@@ -241,8 +284,8 @@ def normalize(doc: dict) -> dict:
     # subject's site and be tallied as somebody else's — which is the study's
     # headline number. `hostname` also lowercases, which the fold below then
     # only has to strip `www.` from.
-    domain = deep.get("source_domain") or (urlsplit(url).hostname if url else None)
-    domain = domain.lower().removeprefix("www.") if domain else None
+    domain = deep.get("source_domain") or _hostname(url)
+    domain = domain.lower().removeprefix("www.") if isinstance(domain, str) else None
 
     # How much of the page survived line-level filtering. This is the number
     # that explains why a long blog post is a short training document, so it is
@@ -252,9 +295,18 @@ def normalize(doc: dict) -> dict:
     # The window around the match comes back as [text, label] spans — the
     # matched needle carries a label, the surrounding context does not — so the
     # readable document is their concatenation.
-    text = doc.get("text") or "".join(
+    #
+    # The spans come first, and `text` is only the fallback. They are the window
+    # the index centred on the match; `text` is the document from its beginning,
+    # and it is then cut to fit, so for anything longer than the cap the excerpt
+    # was the opening paragraphs and did not contain the query at all. The
+    # committed probe has one: a document retrieved for "There is no great
+    # stagnation, cereal edition" whose stored excerpt never says it, which
+    # leaves a reader unable to check the one thing the study asks them to.
+    spans = "".join(
         str(span[0]) for span in doc.get("spans", []) if isinstance(span, list) and span and span[0]
     )
+    text = spans or doc.get("text") or ""
     return {
         "doc_ix": doc.get("doc_ix"),
         # Tokens, not characters: infini-gram measures documents in the Llama

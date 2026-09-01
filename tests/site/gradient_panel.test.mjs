@@ -11,26 +11,9 @@
 //
 // Run via pytest (tests/test_gradient_panel.py) or directly: node <this file>
 
-import fs from "fs";
-import path from "path";
+import { loadPage, read, dataFiles } from "./page.mjs";
 
-const ROOT = path.resolve(import.meta.dirname, "..", "..");
-const html = fs.readFileSync(path.join(ROOT, "docs", "index.html"), "utf8");
-const js = html.match(/<script>([\s\S]*)<\/script>/)[1];
-
-// The page's top level touches the DOM and fetches its data; stub enough of both
-// that the function declarations land, and swallow the boot sequence.
-const el = () => ({ addEventListener(){}, appendChild(){}, querySelectorAll: () => [],
-  querySelector: () => el(), style: {setProperty(){}}, dataset: {},
-  set innerHTML(v){}, set onclick(v){}, set textContent(v){} });
-globalThis.document = { getElementById: el, querySelectorAll: () => [], createElement: el, body: el() };
-globalThis.location = { hash: "" };
-globalThis.fetch = async () => ({ ok: false });
-eval(js + `
-;globalThis.PANEL = {diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix,
-                     gradientSection, rawResponseStored, renderDPO, sharedTurns,
-                     candidateTurns, postBranchContext};`);
-const P = globalThis.PANEL;
+const P = loadPage();
 
 let failures = 0;
 const ok = (cond, name) => {
@@ -331,14 +314,13 @@ ok(!/chosen response's \d/.test(thinkOut),
   "nor reports an answer-only total as the response's length");
 
 // --------------------------------------------------- against the real rows ---
-const dataDir = path.join(ROOT, "docs", "data");
-const files = fs.readdirSync(dataDir).filter(f => f.includes(".dpo.context."));
+const files = dataFiles().filter(f => f.includes(".dpo.context."));
 ok(files.length > 0, "committed DPO context runs are present to check against");
 
 let rows = 0, openings = 0, zeros = 0, demotions = 0, slowest = 0;
 const reasons = {};
 for (const f of files){
-  for (const rec of JSON.parse(fs.readFileSync(path.join(dataDir, f), "utf8")).records){
+  for (const rec of read(f).records){
     rows++;
     const t0 = process.hrtime.bigint();
     const raw = P.renderDPO(rec, "ds");

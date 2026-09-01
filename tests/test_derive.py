@@ -301,7 +301,10 @@ def test_a_stage_with_no_row_count_measures_shape_but_claims_no_budget():
 
 
 def test_stage_profile_reports_ambiguous_keys_rather_than_hiding_them():
-    rec = lambda key: {"kind": "sft", "key": key, "turns": [turn("assistant", 10)], "meta": {"source": "s"}}
+    def rec(key):
+        return {"kind": "sft", "key": key, "turns": [turn("assistant", 10)],
+                "meta": {"source": "s"}}
+
     p = derive.stage_profile({"stage": "sft", "records": [rec("same"), rec("same"), rec("other")]}, 10)
     assert p["ambiguous_keys"] == 1
     assert p["columns"] == {"source": 1}
@@ -361,7 +364,7 @@ def site_const(name: str) -> str:
     """A one-line `const name = ...` lifted out of docs/index.html, so a test
     exercising a function that closes over it runs the file's own definition."""
     src = SITE.read_text().splitlines()
-    line = next((l for l in src if l.startswith(f"const {name} = ")), None)
+    line = next((ln for ln in src if ln.startswith(f"const {name} = ")), None)
     assert line is not None, f"docs/index.html no longer defines {name}"
     return line
 

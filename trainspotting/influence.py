@@ -500,11 +500,8 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
     # cannot decide the basis the other stages are ranked on.
     for r in hitting:
         r["only_against"] = _only_against(r)
-    # Rank on the produce side where any stage measured it, because that is the
-    # text the model is trained to emit; fall back to the overall rate when no
-    # run searched a produce-side column, so a prompt-only sweep still ranks.
-    # Stages that only matched against themselves do not get a say in that
-    # choice either — otherwise a rejected-only stage with no produce rate drags
+    # Stages that only matched against themselves do not get a say in the choice
+    # of basis either — otherwise a rejected-only stage with no produce rate drags
     # every other stage onto the row basis.
     basis = ("produced" if any(r["produced_rate"] for r in hitting if not r["only_against"])
              else "rows")

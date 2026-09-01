@@ -1197,3 +1197,64 @@ def test_an_rl_source_prompt_is_prompt_throughout():
     exprs, _, _ = grep.text_fields({"source_prompt": typ})
     assert list(exprs) == ["prompt"]
     assert "response" not in exprs
+
+
+class TestTheReadmeTranscript:
+    """The `grep` example in the README, held to the run it claims to be.
+
+    It is a transcript of one committed run, and it went stale the moment DPO
+    grew `chosen` and `rejected` groups: the plan line still said
+    `prompt/response` and the breakdown under it still had a `response` row, for
+    a stage that no longer has one. Nobody reads a README against a JSON file,
+    so the check has to.
+
+    Abridged on purpose — the real output lists twelve source lines — so this
+    pins the figures it does quote rather than the whole block.
+    """
+
+    RESULT = Path(__file__).resolve().parent.parent / "results" / (
+        "olmo-3-7b-think.dpo.grep-chatgpt.json"
+    )
+    README = Path(__file__).resolve().parent.parent / "README.md"
+
+    @pytest.fixture(scope="class")
+    def transcript(self):
+        readme = self.README.read_text()
+        start = readme.index('$ trainspotting grep olmo-3-7b-think "ChatGPT" --stage dpo')
+        return readme[start:readme.index("```", start)]
+
+    @pytest.fixture(scope="class")
+    def result(self):
+        if not self.RESULT.exists():
+            pytest.skip("no committed grep run to check the README against")
+        return json.loads(self.RESULT.read_text())
+
+    def test_the_plan_names_the_groups_the_stage_actually_has(self, transcript, result):
+        assert "/".join(result["available_fields"]) in transcript
+
+    def test_every_group_is_quoted_with_its_own_count(self, transcript, result):
+        for group, n in result["by_group"].items():
+            assert f"{group:10s} {n:,}" in transcript, (
+                f"the README does not show {group} = {n:,}"
+            )
+
+    def test_no_group_is_quoted_that_the_stage_does_not_have(self, transcript, result):
+        for group in grep.GROUPS:
+            if group in result["by_group"]:
+                continue
+            assert f"  {group:10s} " not in transcript, (
+                f"the README shows a {group!r} line for a stage that has no such group"
+            )
+
+    def test_the_headline_matches(self, transcript, result):
+        k, n = result["matched"], result["total_rows"]
+        assert f"dpo: {k:,}/{n:,} rows = {k / n * 100:.3f}%" in transcript
+
+    def test_the_elision_counts_the_sources_it_skips(self, transcript, result):
+        shown = sum(1 for line in transcript.splitlines() if " of it  " in line)
+        rest = len(result["by_source"]) - shown
+        words = {6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+        assert f"… {words.get(rest, rest)} more sources" in transcript, (
+            f"the README shows {shown} sources of {len(result['by_source'])}, "
+            f"so {rest} are elided"
+        )
