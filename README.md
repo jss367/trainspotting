@@ -205,10 +205,16 @@ Registered models: `olmo-3-7b-instruct`, `olmo-3-7b-think`, `olmo-3-32b-think`.
 
 ## Size
 
-Every layer above answers a question about post-training, which is 0.03% of what
-the model read. That number is not published anywhere: Ai2 gives token counts for
-the pretraining mixes and row counts for the post-training ones, and 2.15M
-examples and 5.93T tokens are not comparable quantities.
+Every layer above answers a question about post-training, which is a fraction of
+a percent of the text the model read: **0.03%** for `olmo-3-7b-instruct`, and
+**0.31%** and **0.34%** for `olmo-3-7b-think` and `olmo-3-32b-think`. The think
+models are an order of magnitude higher for one reason, and it is worth seeing on
+its own: their SFT examples carry reasoning traces, so the same 2-odd million
+examples are ten times the text.
+
+None of those numbers is published anywhere. Ai2 gives token counts for the
+pretraining mixes and row counts for the post-training ones, and 2.15M examples
+and 5.93T tokens are not comparable quantities.
 
 `scripts/export_site_data.py` closes the gap from the samples already committed.
 For every context run it writes `docs/data/<target>.<stage>.profile.json` —

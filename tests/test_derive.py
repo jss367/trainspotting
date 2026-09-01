@@ -170,6 +170,15 @@ def site_function(name: str) -> str:
     return "\n".join(src[start : end + 1])
 
 
+def site_const(name: str) -> str:
+    """A one-line `const name = ...` lifted out of docs/index.html, so a test
+    exercising a function that closes over it runs the file's own definition."""
+    src = SITE.read_text().splitlines()
+    line = next((l for l in src if l.startswith(f"const {name} = ")), None)
+    assert line is not None, f"docs/index.html no longer defines {name}"
+    return line
+
+
 def run_node(script: str, *args: str) -> str:
     node = shutil.which("node")
     if not node:
@@ -195,7 +204,7 @@ def test_the_page_computes_the_same_prompt_key_as_python():
                "a" * 399 + "🙂" + "b" * 100,
                "𝗖𝗵𝗮𝘁𝗚𝗣𝗧 " * 80]
     script = (
-        f"const KEY_CHARS = {derive.KEY_CHARS};\n{fn}\n"
+        f"const KEY_CHARS = {derive.KEY_CHARS};\n{site_const('keyPrefix')}\n{fn}\n"
         f"console.log(JSON.parse(process.argv[1]).map(promptKey).join(','))"
     )
     out = run_node(script, json.dumps(samples))
@@ -208,7 +217,7 @@ def test_the_page_refuses_to_guess_when_two_sampled_rows_share_a_key():
     labeled prompt came from — filing it under whichever row was sampled last
     is a wrong answer dressed as a right one. Those keys have to drop out."""
     script = (
-        f"const KEY_CHARS = {derive.KEY_CHARS};\n"
+        f"const KEY_CHARS = {derive.KEY_CHARS};\n{site_const('keyPrefix')}\n"
         f"{site_function('promptKey')}\n{site_function('valueByKey')}\n{site_function('crossRows')}\n"
         """
         const records = [

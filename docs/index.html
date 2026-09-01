@@ -1315,6 +1315,14 @@ async function getData(name){
   return DATA[name];
 }
 const KEY_CHARS = 400;  // must match trainspotting/context.py
+
+// The prompt opening every join on this page is keyed on. Python cut it by code
+// point, so this has to as well: String.slice counts UTF-16 units, and one
+// emoji before the cut moves it a character. Three committed context records
+// have a non-BMP character in their first 400, and under the old slice every
+// lookup for them missed — the crosstab dropped the prompt, and the "see it in
+// training context" button reported the row as uncommitted.
+const keyPrefix = prompt => [...prompt].slice(0, KEY_CHARS).join("");
 const ctxFile = (model, stage) => `${model}.${stage}.context.json`;
 const profileFile = (model, stage) => `${model}.${stage}.profile.json`;
 
@@ -1332,7 +1340,7 @@ function promptKey(prompt){
   // prompt with an emoji in its first 400 characters would otherwise be cut a
   // character short of where Python cut it, hash differently, and drop out of
   // the grid silently. Three of the committed samples do exactly that.
-  for (const ch of [...prompt].slice(0, KEY_CHARS)) h = Math.imul(h ^ ch.codePointAt(0), 0x01000193) >>> 0;
+  for (const ch of keyPrefix(prompt)) h = Math.imul(h ^ ch.codePointAt(0), 0x01000193) >>> 0;
   return h.toString(16).padStart(8, "0");
 }
 
@@ -1359,7 +1367,7 @@ async function ctxMaps(model, stage){
 async function contextFor(model, stage, rec){
   const {byKey, byRow} = await ctxMaps(model, stage);
   if (rec.row != null && byRow.has(rec.row)) return byRow.get(rec.row);
-  return byKey.get(rec.prompt.slice(0, KEY_CHARS));
+  return byKey.get(keyPrefix(rec.prompt));
 }
 // Deep links address a training example by its HuggingFace row number.
 async function contextRowFor(model, stage, row){
@@ -1479,11 +1487,11 @@ function budgetCard(m, rows){
       interval is on the log chart; the divisor is the larger uncertainty and no value in the
       plausible 3.5–4.5 range changes what this shows.` : ""}</p>
     ${post.length ? `<div class="hero-stat"><div class="n">${share < 0.001 ? (share*100).toPrecision(2) + "%" : pct(share)}</div>
-      <div class="cap">of the tokens behind this model came after pretraining — and nearly every
-        other card on this page is about those tokens. The pipeline tiles above are in the order
-        training happened; this is the same pipeline to scale.</div></div>` : ""}
+      <div class="cap">of the text behind this model, counted in tokens, came after pretraining —
+        and nearly every other card on this page is about that sliver. The pipeline tiles above are
+        in the order training happened; this is the same pipeline to scale.</div></div>` : ""}
     ${legend}`;
-  stackedStrip(card, "tokens the model was trained on", fmtTok(total) + " total", sized.map(r => ({
+  stackedStrip(card, "text in each stage, in tokens", fmtTok(total) + " total", sized.map(r => ({
     k: `${r.stage} — ${r.name}`, v: r.tokens, c: r.color,
     detail: `${fmtTok(r.tokens)} tokens${r.estimated ? " (estimated)" : ""}`,
   })));
@@ -1518,8 +1526,9 @@ function budgetCard(m, rows){
     label: `${esc(r.stage.toUpperCase())}`,
     v: r.tokens, lo: r.lo, hi: r.hi, c: r.color,
     value: fmtTok(r.tokens),
-    note: r.estimated ? "est" : "paper",
+    note: r.stage === "rlvr" ? "prompts only" : r.estimated ? "est" : "paper",
     tip: `<b>${esc(r.stage)}</b> — ${esc(r.name)}<br>${fmtTok(r.tokens)} tokens`
+      + (r.stage === "rlvr" ? "<br>the prompt set only — RL's completions are generated during training and stored nowhere, so the tokens this stage actually processes cannot be counted from the data" : "")
       + (r.estimated
         ? `<br>estimated: ${num(Math.round(r.perExample))} tokens/example × ${num(r.examples)} examples`
           + `<br>95% CI ${fmtTok(r.lo)}–${fmtTok(r.hi)} on the sampled mean length`
@@ -1531,7 +1540,17 @@ function budgetCard(m, rows){
   note.innerHTML = "Every gridline is 10×, so bar length here is not proportional — the strip above "
     + "is the same numbers to scale. Whiskers on the estimated stages are the 95% interval on the "
     + "sampled mean example length, which is sampling error only: it says nothing about the "
-    + "characters-per-token divisor.";
+    + "characters-per-token divisor."
+    // What this is a count of, said plainly, because the two obvious readings
+    // differ and only one of them is measurable from the data. Tokens
+    // *processed* would count a DPO prompt twice (it is read once with each
+    // completion) and would have to include RL's generated rollouts, which are
+    // not in the dataset at any length and cannot be recovered from it.
+    + " These are tokens of text in each stage's data, not tokens processed during training."
+    + " A DPO example's shared prompt is read once with each completion at training time and is"
+    + " counted once here; an RL stage is only its prompts, because the completions RL actually"
+    + " trains on are generated during the run and stored nowhere. Read the RL bar as the size of"
+    + " the prompt set, not the size of the RL update.";
   card.appendChild(note);
   return card;
 }
@@ -1554,7 +1573,7 @@ function fitCard(m, rows){
   const FIT_NOTE = {
     sft: "the assistant turns, reasoning span included",
     dpo: "both completions after the branch — chosen positively, rejected negatively",
-    rlvr: "nothing is stored; the response is generated during training and scored by the verifier",
+    rlvr: "nothing in the data — the response RL fits is generated during the run, scored by the verifier, and stored nowhere, so this share is 0% of the stored text rather than 0% of the update",
     chat: "nothing — a chat log is not a training example",
   };
   for (const r of usable){
@@ -2875,7 +2894,7 @@ async function applyHashState(nav){
     // fallback and not the test.
     if (rec && !el._records.some(r => r.row != null
           ? r.row === rec.row
-          : r.prompt.slice(0, KEY_CHARS) === rec.key)) rec = null;
+          : keyPrefix(r.prompt) === rec.key)) rec = null;
     const s = REG[model] && REG[model].stages.find(x => x.stage === st.stage);
     if (rec && s) openContext(rec, st.stage, s.hf_dataset, s.name, [VIEW, st.stage, st.key, "row-" + st.row]);
     // Lookup failed (stale/edited hash naming a row that no longer exists):
