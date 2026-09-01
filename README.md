@@ -765,10 +765,17 @@ sampling run that quietly labels nothing.
   length. Long documents are slightly underweighted for that reason, and the
   `short_draws` bias documented above pushes the same way.
 - A `budget` total is withheld, in the CLI and on the site, when the stages
-  under one slug were scored against different wordings of the question. A slug
-  is not a question: `--slug` takes any string and a generated one is cut to 60
-  characters, so a collision is possible and a sum across it is a number no
-  single question measured.
+  under one slug were not scored by the same instrument — different wordings of
+  the question, different classifiers, or different rubrics for the same words
+  (compared by the `system_sha` every result file already carries). A slug is
+  not a question: `--slug` takes any string and a generated one is cut to 60
+  characters, so a collision is possible, and a sum across one is a number no
+  single measurement produced.
+- Stage sizes are estimated over the whole stored context sample, not over the
+  prompts the classifier answered about. Refusals land on jailbreak-style
+  prompts, so letting classifier success pick which examples set the mean length
+  would put that bias into every token figure. The match rate is still over the
+  labeled subset, which is the only part there is a judgment for.
 - `stance` and `ask` answer different questions and their counts do not nest.
   An example can be `about` human lives and push `away` from valuing them, which
   is the case the direction layer exists for.

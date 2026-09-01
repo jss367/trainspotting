@@ -1049,6 +1049,18 @@ function tokens(n){
 // three-orders-of-magnitude gap that is the actual finding.
 const shareText = f => (f * 100 >= 0.01 || f === 0) ? (f*100).toFixed(2)+"%" : (f*100).toPrecision(2)+"%";
 
+// What made two runs under one slug incomparable. "Two wordings" and "one
+// wording, two judges" read very differently to someone deciding whether the
+// withheld total was worth withholding.
+function mixedWhat(est){
+  const words = (est.question_variants || []).length > 1;
+  const judges = (est.classifiers || []).length > 1;
+  if (words && judges) return "wordings and classifiers";
+  if (words) return "wordings of the question";
+  if (judges) return "classifiers";
+  return "judging rubrics for the same words";
+}
+
 // One card per question, rolling every stage onto the scale the question is
 // actually about: tokens the model was fit to. The per-stage rates above this
 // are not comparable to each other — a share of DPO rows and a share of Dolma 3
@@ -1092,7 +1104,7 @@ async function budgetCard(main, model, slug){
   // against different wordings — which the ask card above already splits into
   // separate cards. Summing them here would put a number under a total that no
   // single question produced, so the total is withheld rather than qualified.
-  const mixed = (est.question_variants || []).length > 1;
+  const mixed = (est.instruments || 1) > 1;
   const total = document.createElement("tr");
   total.className = "total";
   // The denominator is every sized stage, asked or not, so with one still
@@ -1101,7 +1113,7 @@ async function budgetCard(main, model, slug){
   const partial = all.measured < all.stages;
   total.innerHTML = `<td>whole pipeline</td><td>${tokens(all.size_tokens)}</td>`
     + (mixed
-      ? `<td colspan="3">no single total — these stages were scored against ${est.question_variants.length} different wordings</td>`
+      ? `<td colspan="3">no single total — these stages were scored with different ${mixedWhat(est)}</td>`
       : `<td colspan="2">${all.measured} of ${all.stages} stages measured</td>`
         + `<td>${tokens(all.matching_tokens)}<span class="est">${partial ? "≥ " : ""}${shareText(all.share)}</span></td>`);
   body.appendChild(total);
@@ -1110,8 +1122,11 @@ async function budgetCard(main, model, slug){
 
   const notes = [];
   if (mixed){
-    notes.push("Stages under this slug were scored against different wordings of the question, "
-      + "so they do not add up to one measurement: " + est.question_variants.map(q => `“${q}”`).join("  ·  "));
+    const detail = (est.question_variants || []).length > 1
+      ? ": " + est.question_variants.map(q => `“${q}”`).join("  ·  ")
+      : ((est.classifiers || []).length > 1 ? ": " + est.classifiers.join(", ") : "");
+    notes.push(`Stages under this slug were scored with different ${mixedWhat(est)}, `
+      + `so they do not add up to one measurement${detail}.`);
   }
   if (partial){
     // The single most misleading thing this page could do is show a pipeline
@@ -1168,7 +1183,7 @@ const STANCE_TIP = {
 // `trainspotting stance`: the same question asked of whole examples instead of
 // prompts, so the answer can be signed. A yes/no over prompts cannot say that a
 // stage contains training pushing the other way, and this data has some.
-async function stanceCard(main, model, slug, stages, ctxFor, post){
+async function stanceCard(main, model, slug, stages, ctxFor, post, askKeys){
   const loaded = [];
   for (const stage of stages){
     const d = await getData(`${model}.${stage}.stance-${slug}.json`);
@@ -1186,7 +1201,13 @@ async function stanceCard(main, model, slug, stages, ctxFor, post){
     if (!byQuestion.has(key)) byQuestion.set(key, []);
     byQuestion.get(key).push(row);
   }
-  for (const rows of byQuestion.values()) stanceGroup(main, slug, rows, ctxFor, post, byQuestion.size > 1);
+  // "The same question" is a claim, so only make it when it has been checked
+  // against the ask cards above. A slug with one stance file can still hold a
+  // different wording — or the same wording judged by a different model — than
+  // the ask results it is rendered under, and comparing stance files only to
+  // each other cannot see that.
+  for (const [key, rows] of byQuestion)
+    stanceGroup(main, slug, rows, ctxFor, post, byQuestion.size > 1 || !askKeys.has(key));
   return true;
 }
 
@@ -1233,8 +1254,9 @@ function stanceGroup(main, slug, rows, ctxFor, post, showQuestion){
   if (showQuestion){
     const p2 = document.createElement("p");
     p2.className = "note";
-    p2.textContent = "Only the stages judged against this exact wording are shown here. "
-      + "Others under the same slug were judged against different words and are in their own card.";
+    p2.textContent = "The wording is spelled out because it is not simply the question asked above — "
+      + "either other stages under this slug were judged against different words, or this run used "
+      + "a wording or a classifier that no ask card here matches.";
     card.appendChild(p2);
   }
   main.appendChild(card);
@@ -1846,7 +1868,11 @@ async function renderModel(model, gen){
     if (askDivider){
       // Direction first, then the budget: which way it pushes, then how much of
       // it there is. A total is only worth reading once the sign is settled.
-      await stanceCard(main, model, slug, stanceStages[slug] || [], ctxFor, post);
+      // The instruments the ask cards for this slug were drawn from, keyed the
+      // same way the stance files are, so a stance run that used other words or
+      // another judge can be told apart from one that matches.
+      const askKeys = new Set([...buckets.values()].map(b => `${b.question}\u0000${b.classifier}`));
+      await stanceCard(main, model, slug, stanceStages[slug] || [], ctxFor, post, askKeys);
       if (gen !== GEN) return;
       await budgetCard(main, model, slug);
     }

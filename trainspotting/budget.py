@@ -161,6 +161,18 @@ def load(name: str) -> dict | None:
     return json.loads(path.read_text()) if path else None
 
 
+def context_records(target_name: str, stage: str) -> list[dict]:
+    """Every stored example for a stage, labeled or not.
+
+    The whole draw, which is what a stage's *size* has to be estimated from. An
+    ask file holds only the rows the classifier answered about — see
+    `_label_post_training` — and how long an example is has nothing to do with
+    whether a model was willing to judge it.
+    """
+    data = load(f"{target_name}.{stage}.context.json")
+    return data["records"] if data else []
+
+
 def load_context(target_name: str, stage: str) -> dict:
     """Context records for a stage, keyed both ways a result record can address one.
 
@@ -169,11 +181,8 @@ def load_context(target_name: str, stage: str) -> dict:
     map so a caller does not have to know which vintage it is holding — see
     `context.build`.
     """
-    data = load(f"{target_name}.{stage}.context.json")
-    if not data:
-        return {}
     out = {}
-    for rec in data["records"]:
+    for rec in context_records(target_name, stage):
         if rec.get("row") is not None:
             out[("row", rec["row"])] = rec
         out.setdefault(("key", rec["key"]), rec)
@@ -223,6 +232,7 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
         out["measured"] = False
         return out
     records = ask["records"]
+    all_examples = context_records(target_name, name)
     by_key = load_context(target_name, name)
     joined = [(r, context_for(r, by_key)) for r in records]
     unjoined = sum(1 for _, c in joined if c is None)
@@ -240,6 +250,11 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
         {
             "measured": True,
             "question": ask["question"],
+            # The instrument, not just its words: the site separates ask results
+            # by question *and* classifier, and a total assembled from two
+            # judges is as mixed as one assembled from two wordings.
+            "classifier": ask.get("classifier"),
+            "system_sha": ask.get("system_sha"),
             "n": n,
             "matched": k,
             "count_rate": count_rate,
@@ -259,6 +274,12 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
             f"{unjoined} of {n} judged records have no stored training example, so the"
             " rate below is weighed over the rest"
         )
+    if all_examples and len(weighable) < len(all_examples):
+        out["notes"].append(
+            f"the rate is over {len(weighable)} judged example(s); the stage size uses"
+            f" all {len(all_examples)} stored, because how long an example is does not"
+            " depend on whether the classifier answered about it"
+        )
     if len(weighable) < len(fit):
         # RL is where this bites: a row with no stored reference generation has
         # no length to weigh by, and for Dolci-Instruct-RL that is most of them.
@@ -268,15 +289,24 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
         )
 
     rows = stage_rows(target_name, name)
-    if rows is None or not weighable:
+    # Size is a property of the stage, so it is estimated over the whole stored
+    # draw rather than over the rows the classifier happened to answer about.
+    # Refusals are not random — they land on jailbreak-style prompts, which the
+    # README already flags as a biased slice — so letting classifier success
+    # decide the mean example length would put that bias into `size_tokens` and
+    # every matching-token figure derived from it. The *rate* stays over the
+    # labeled subset, which is the only part there is a judgment for.
+    sample_fit = [f for f in (fit_chars(c) for c in all_examples) if f is not None]
+    if rows is None or not sample_fit:
         out["notes"].append(
             f"stage size unknown — run `trainspotting sources {target_name} --json`"
             if rows is None
             else "stage size unknown — no example stores text the model was fit to"
         )
         return out
-    mean_fit = total_chars / len(weighable)
+    mean_fit = sum(sample_fit) / len(sample_fit)
     out["rows"] = rows
+    out["sized_over"] = len(sample_fit)
     out["mean_fit_chars"] = mean_fit
     out["size_tokens"] = rows * mean_fit / CHARS_PER_TOKEN
     out["size_basis"] = (
@@ -326,6 +356,8 @@ def _pretrain_stage(target_name: str, stage: dict, slug: str) -> dict:
         {
             "measured": True,
             "question": ask["question"],
+            "classifier": ask.get("classifier"),
+            "system_sha": ask.get("system_sha"),
             "n": n,
             "matched": k,
             "count_rate": count_rate,
@@ -420,16 +452,29 @@ def estimate(target_name: str, slug: str) -> dict:
     for stage in registry.post_training_stages(target):
         stages.append(_post_training_stage(target_name, stage, slug))
 
-    question = next((s["question"] for s in stages if s.get("question")), None)
-    # A question reworded between runs is two different measurements summed into
-    # one total, and nothing else in the output would show it.
-    variants = sorted({s["question"] for s in stages if s.get("question")})
+    measured = [s for s in stages if s.get("question")]
+    question = measured[0]["question"] if measured else None
+    # What produced a number, not just what it was asked. A question reworded
+    # between runs is two measurements summed into one total — and so is the
+    # same question put to two different judges, or the same judge under a
+    # reworded rubric, neither of which the question text shows. The system
+    # hash is already stamped into every result file for exactly this reason.
+    instruments = {
+        (s["question"], s.get("classifier"), s.get("system_sha")) for s in measured
+    }
+    variants = sorted({s["question"] for s in measured})
+    judges = sorted({s.get("classifier") for s in measured if s.get("classifier")})
     return {
         "target": target_name,
         "is_model": target["is_model"],
         "slug": slug,
         "question": question,
-        "question_variants": variants if len(variants) > 1 else [],
+        "question_variants": variants if len(instruments) > 1 else [],
+        # Named separately, because "two wordings" and "one wording, two
+        # judges" read very differently to someone deciding whether to trust a
+        # withheld total.
+        "classifiers": judges if len(instruments) > 1 else [],
+        "instruments": len(instruments),
         "chars_per_token": CHARS_PER_TOKEN,
         "stages": stages,
         "totals": totals(stages),

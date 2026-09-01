@@ -1163,13 +1163,24 @@ def _warn_mixed_questions(est: dict) -> bool:
     stderr beside it, because the table is what gets piped into a document and
     the caveat has to travel with it.
     """
-    variants = est.get("question_variants") or []
-    if len(variants) < 2:
+    if est.get("instruments", 1) < 2:
         return False
+    variants = est.get("question_variants") or []
+    judges = est.get("classifiers") or []
+    # Two wordings and one-wording-two-judges are both mixed, and they read very
+    # differently to someone deciding whether the withheld total was worth
+    # withholding — so say which it was.
+    what = []
+    if len(variants) > 1:
+        what.append(f"{len(variants)} different wordings of the question")
+    if len(judges) > 1:
+        what.append(f"{len(judges)} different classifiers ({', '.join(judges)})")
+    if not what:
+        what.append("different judging rubrics for the same words")
     print(
-        f"WARNING: the stages under slug {est['slug']!r} were scored against"
-        f" {len(variants)} different wordings of the question, so they do not add"
-        " up to one measurement. No total is shown.\n"
+        f"WARNING: the stages under slug {est['slug']!r} were scored with"
+        f" {' and '.join(what)}, so they do not add up to one measurement."
+        " No total is shown.\n"
     )
     for q in variants:
         print(f"  - {q}")

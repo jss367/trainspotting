@@ -188,7 +188,8 @@ def test_one_slug_over_two_wordings_gets_no_total(capsys):
     """
     from trainspotting.cli import _warn_mixed_questions
 
-    est = {"slug": "s", "question_variants": ["wording one?", "wording two?"]}
+    est = {"slug": "s", "instruments": 2,
+           "question_variants": ["wording one?", "wording two?"], "classifiers": []}
     assert _warn_mixed_questions(est) is True
     out = capsys.readouterr().out
     # On stdout, not stderr: the table is what gets piped into a document, and
@@ -196,8 +197,27 @@ def test_one_slug_over_two_wordings_gets_no_total(capsys):
     assert "no total is shown" in out.lower()
     assert "wording one?" in out and "wording two?" in out
 
-    assert _warn_mixed_questions({"slug": "s", "question_variants": []}) is False
+    assert _warn_mixed_questions({"slug": "s", "instruments": 1}) is False
     assert capsys.readouterr().out == ""
+
+
+def test_one_wording_judged_by_two_classifiers_also_gets_no_total(capsys):
+    """The instrument is what produced the number, not just what it asked.
+
+    The same words put to two different judges are two measurements, and the
+    question text alone cannot show it — which is why the site already buckets
+    ask results by question *and* classifier.
+    """
+    from trainspotting.cli import _warn_mixed_questions
+
+    est = {"slug": "s", "instruments": 2, "question_variants": ["one wording?"],
+           "classifiers": ["claude-opus-5", "claude-sonnet-5"]}
+    assert _warn_mixed_questions(est) is True
+    out = capsys.readouterr().out
+    assert "2 different classifiers" in out
+    assert "claude-opus-5" in out and "claude-sonnet-5" in out
+    # Not described as a wording collision, because it is not one.
+    assert "different wordings" not in out
 
 
 def test_a_corpus_rate_is_not_weighed_by_length_a_second_time():
