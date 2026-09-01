@@ -14,8 +14,6 @@ Records are keyed by the same prompt text the classifier saw, so the site can
 join them onto committed label and ask results without re-running any model.
 """
 
-import json
-
 from trainspotting import rewards, search
 
 MAX_TEXT = 4000  # per field; the full row stays one click away on HuggingFace
@@ -43,43 +41,99 @@ def _split_think(text: str) -> tuple[str | None, str]:
     return head.strip(), text[i + len("</think>") :].strip()
 
 
-# Text a turn can carry besides `content`: the tools it was offered, and the
-# call it made. Both are real training text — `grep` and `search` search them —
-# and dropping them here made them invisible to anything reading the export,
-# so a tool name occurring only in a function definition came back as a clean
-# "no match" from the site rather than as "not exported".
-# The same list `search` searches, imported rather than repeated — `grep` and
-# this module each had their own shorter copy, so a `tool_calls` or a `refusal`
-# was searchable from the CLI and absent from the export the page reads.
-TURN_FIELDS = search.STRUCTURED_TURN_FIELDS + search.INPUT_TURN_FIELDS
+# Output a message can carry beside its `content`. `search` reads these as part
+# of the turn; this record keeps none of them, so a turn holding any is not
+# stored whole however well its text matches.
+BESIDE_CONTENT = ("reasoning_content",) + search.STRUCTURED_TURN_FIELDS + search.INPUT_TURN_FIELDS
 
 
 def _turns(messages) -> list[dict]:
     out = []
     for m in messages or []:
-        # Type check first. Building `extra` above it called `.get` on whatever
-        # the list held, so one null element — valid in a list-of-struct — took
-        # down the whole export with an AttributeError instead of being skipped.
-        # The original ordering guarded this and I moved the guard behind the
-        # new field read.
         if not isinstance(m, dict):
             continue
-        extra = {k: m.get(k) for k in TURN_FIELDS if m.get(k)}
-        if not (m.get("content") or extra):
-            continue
-        reasoning, answer = _split_think(str(m.get("content") or ""))
+        # `is not None` rather than truthiness: a falsy content that is not
+        # absent, `""` or a bare `0`, is still what the turn said.
+        raw_content = m.get("content")
+        content = "" if raw_content is None else str(raw_content)
+        omitted = [k for k in BESIDE_CONTENT if m.get(k)]
+        # Every message in the list is kept, including one that is nothing but a
+        # tool call and one that is empty. Both are turns in the sequence the
+        # model was scored on — a message with no content still contributes its
+        # role header and end-of-turn token — and `_shared_turns` branches at one
+        # that appears on a single side. Dropping either would close the gap it
+        # leaves: two completions differing only there would read as the same
+        # conversation, and the answers behind them as a shared opening. They are
+        # kept, empty, so the turn counts stay aligned and nothing about them is
+        # marked as stored whole.
+        reasoning, answer = _split_think(content)
         turn = {"role": m.get("role", "?"), **_text(answer)}
         if reasoning:
             turn["reasoning"] = _text(reasoning)
-        for k, v in extra.items():
-            # `ensure_ascii=False`, matching `search._flatten`. The default
-            # turns `météo` into the literal `m\u00e9t\u00e9o`, which the CLI
-            # search never sees — it reads the row — while the page's index and
-            # scan are built from this export and would miss the word the user
-            # actually typed.
-            turn[k] = _text(v if isinstance(v, str) else json.dumps(v, ensure_ascii=False))
+        if omitted:
+            turn["omitted"] = omitted
+        # Whether what is stored is the turn as it was written. Splitting a
+        # thinking span out drops the <think> markers and the whitespace around
+        # them, and long fields are cut, so a turn that went through either can no
+        # longer be compared byte for byte with the sequence the model was scored
+        # on. The absence of a reasoning field does not say this on its own: a
+        # turn whose thinking span was empty loses its markers and keeps no field
+        # to show it. Nor does `content` alone — a message can carry output beside
+        # it, a separate reasoning field or tool calls or a refusal, which
+        # `search` reads as part of the turn and this record does not keep.
+        # Anything claiming two turns are identical needs this, not a guess.
+        # Structured content — a list of parts, a dict — survives `str()` as a
+        # Python repr, which is a serialization of the turn and not the text the
+        # model was scored on, so only a string (or an absent content, faithfully
+        # empty) can be stored as written.
+        stored_as_written = raw_content is None or isinstance(raw_content, str)
+        if stored_as_written and turn["text"] == content and not omitted:
+            turn["raw"] = True
         out.append(turn)
     return out
+
+
+def _turn_key(turn: dict) -> tuple:
+    """A stored turn reduced to what makes it the same turn as another.
+
+    `text` is cut at MAX_TEXT and `chars` is not, so two different turns that
+    agree on their first 4,000 characters still differ here.
+    """
+    reasoning = turn.get("reasoning") or {}
+    return (
+        turn.get("role"),
+        turn.get("text"),
+        turn.get("chars"),
+        reasoning.get("text"),
+        reasoning.get("chars"),
+    )
+
+
+def branch_point(chosen: list[dict], rejected: list[dict]) -> int:
+    """How many leading turns of a stored pair are shared history.
+
+    A multi-turn pair branches somewhere and shares everything before it,
+    assistant turns included. Those shared turns are the conversation the pair
+    is judged in, not either candidate answer, so splitting the pair by role
+    puts earlier assistant turns on both sides — text neither completion is
+    being preferred for. `search` draws the same line on raw rows
+    (`search._shared_turns`); this is it for the records `context` stores.
+
+    The last turn of each side is its candidate answer by definition and is
+    never shared however far the two lists agree, so a pair whose completions
+    are identical branches at the final turn rather than having no completions
+    at all.
+
+    12 of the 300 sampled Dolci-Instruct-DPO pairs are multi-turn, and counting
+    their shared history on both sides inflates the stage's fit characters by
+    5.9%. The think mixes are single-turn throughout, so nothing there moves.
+    """
+    n = 0
+    for a, b in zip(chosen or [], rejected or []):
+        if _turn_key(a) != _turn_key(b):
+            break
+        n += 1
+    return min(n, max(0, len(chosen or []) - 1), max(0, len(rejected or []) - 1))
 
 
 def _meta(row: dict, keys: list[str]) -> dict:

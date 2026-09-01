@@ -1091,9 +1091,14 @@ def test_the_searchable_turn_fields_come_from_one_list():
     carries — so `grep` was silently not searching them. Importing the list is
     the one axis of that duplication removable without touching `search`."""
     from trainspotting import context, search
-    canonical = set(search.STRUCTURED_TURN_FIELDS) | set(search.INPUT_TURN_FIELDS)
+    # `reasoning_content` is in the set and is not in `STRUCTURED_TURN_FIELDS`:
+    # `search` handles it on its own line, so importing that tuple alone left it
+    # out of both other modules and a pattern living only in a separate
+    # reasoning field recorded as an exact zero.
+    canonical = ({"reasoning_content"} | set(search.STRUCTURED_TURN_FIELDS)
+                 | set(search.INPUT_TURN_FIELDS))
     assert set(grep.MESSAGE_EXTRAS) == canonical
-    assert set(context.TURN_FIELDS) == canonical
+    assert set(context.BESIDE_CONTENT) == canonical
 
 
 def test_a_rejected_tool_call_is_not_produce_side():

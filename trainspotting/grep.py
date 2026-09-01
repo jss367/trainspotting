@@ -95,9 +95,14 @@ MESSAGE_LISTS = ("messages", "chosen", "rejected", "source_prompt", "conversatio
 # struct actually carries — so `grep` was silently not searching them. One list,
 # imported, cannot drift; the side each field is on is still stated here,
 # because that is a claim about training rather than about the schema.
+# `reasoning_content` is listed first for the same reason `context` lists it:
+# `search` handles it outside `STRUCTURED_TURN_FIELDS`, so importing that tuple
+# alone left it out of this mapping and a pattern living only in a separate
+# reasoning field recorded as an exact zero. It is text the model produced, so
+# it sits with the other produced fields.
 MESSAGE_EXTRAS = {
     **{f: "prompt" for f in search.INPUT_TURN_FIELDS},
-    **{f: "response" for f in search.STRUCTURED_TURN_FIELDS},
+    **{f: "response" for f in ("reasoning_content",) + search.STRUCTURED_TURN_FIELDS},
 }
 
 # Text columns that are provenance, labels, or identifiers rather than training
