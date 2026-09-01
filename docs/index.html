@@ -446,10 +446,10 @@
   .eqs .tag.up { color: var(--series-1); }
   .eqs .tag.down { color: var(--neg); }
   .eqs .bit { border-radius: 3px; padding: 1px 2px; margin: 0 -2px; transition: background-color .12s ease; }
-  .flow:has(.step[data-s="1"]:is(:hover, :focus)) ~ .eqs .bit[data-s~="1"],
-  .flow:has(.step[data-s="2"]:is(:hover, :focus)) ~ .eqs .bit[data-s~="2"],
-  .flow:has(.step[data-s="3"]:is(:hover, :focus)) ~ .eqs .bit[data-s~="3"],
-  .flow:has(.step[data-s="4"]:is(:hover, :focus)) ~ .eqs .bit[data-s~="4"] { background: var(--lit); }
+  .flow:has(.step[data-s="1"]:is(:hover, :focus-visible)) ~ .eqs .bit[data-s~="1"],
+  .flow:has(.step[data-s="2"]:is(:hover, :focus-visible)) ~ .eqs .bit[data-s~="2"],
+  .flow:has(.step[data-s="3"]:is(:hover, :focus-visible)) ~ .eqs .bit[data-s~="3"],
+  .flow:has(.step[data-s="4"]:is(:hover, :focus-visible)) ~ .eqs .bit[data-s~="4"] { background: var(--lit); }
   @media (prefers-reduced-motion: reduce) { .flow .step[data-s], .eqs .bit { transition: none; } }
   /* the two responses: shared opening dimmed, later overlap marked as matched
      wording rather than cancellation, text unique to one side highlighted */
@@ -474,9 +474,12 @@
   }
   /* hovering a step tints the part of the objective below that it names.
      Nothing is hidden behind a step, so they are not links and the tint is
-     the whole of the interaction. */
+     the whole of the interaction. Keyboard focus gets the same tint plus the
+     page-wide focus ring, so a tab stop stays locatable; a mouse click leaves
+     no ring behind, since a ring parked on a step would read as "selected". */
   .flow .step[data-s] { cursor: default; transition: background-color .12s ease, border-color .12s ease; }
-  .flow .step[data-s]:is(:hover, :focus) { outline: none; background: var(--lit); border-color: var(--lit-edge); }
+  .flow .step[data-s]:is(:hover, :focus-visible) { background: var(--lit); border-color: var(--lit-edge); }
+  .flow .step[data-s]:focus:not(:focus-visible) { outline: none; }
   /* the RLVR flow accents the one step that carries this row's own data (its
      verifier), so it is tinted rather than ringed — a ring reads as a focus state. */
   .flow .step.accent { background: var(--lit); border-color: var(--lit-edge); }
@@ -1183,7 +1186,7 @@ function gradientSection(rec, shared = 0){
     ${step(3, "margin", "how much further the chosen one has moved")}
     <div class="arrow">→</div>
     ${step(4, "update", "one step from both sets of token terms")}
-    <div class="hint">Hover a step to light up the part of the objective it names.</div>
+    <div class="hint">Hover or tab to a step to light up the part of the objective it names.</div>
   </div>`;
 
   return `<div class="grad" id="gradpanel" hidden>
