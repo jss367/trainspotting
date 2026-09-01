@@ -13,6 +13,7 @@ box avoids downloading them all.
 """
 
 import json
+import math
 import re
 import shutil
 import sys
@@ -119,9 +120,39 @@ for f in sorted((ROOT / "results").glob("*.json")):
 # machine.
 derived = []
 
+# Significant digits kept for a derived float. Everything under this heading is
+# computed — a mean, a standard error, a design effect, an estimated token
+# total — and the last few digits of a float are an artifact of the order the
+# arithmetic happened in and the libm that did it, not of the data.
+#
+# These files are committed, so those digits are a diff. CI caught it the first
+# time it ran: the same export on the same tree produced
+# `deff: 3.4905799081030855` here and `...846` on the runner, a one-unit
+# difference in the seventeenth digit, and the check that the committed export
+# matches the tree failed on it. Rounding at the boundary makes a derived file a
+# function of the sample rather than of the machine.
+#
+# Twelve is far past anything meaningful here — the widest quantity is a token
+# estimate around 1e9, whose interval is ±60% — and four digits clear of where
+# the noise lives.
+FLOAT_DIGITS = 12
+
+
+def stable(value):
+    """`value` with every float rounded to `FLOAT_DIGITS` significant digits."""
+    if isinstance(value, float):
+        if not math.isfinite(value) or value == 0:
+            return value
+        return round(value, FLOAT_DIGITS - 1 - math.floor(math.log10(abs(value))))
+    if isinstance(value, dict):
+        return {k: stable(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [stable(v) for v in value]
+    return value
+
 
 def write_derived(name: str, payload: dict) -> None:
-    (out / name).write_text(json.dumps(payload, separators=(",", ":")))
+    (out / name).write_text(json.dumps(stable(payload), separators=(",", ":")))
     derived.append(name)
 
 
@@ -235,7 +266,10 @@ for name in registry.targets():
         if not any(st.get("measured") for st in est["stages"]):
             continue
         out_name = f"{name}.budget-{slug}.json"
-        (out / out_name).write_text(json.dumps(est, separators=(",", ":")))
+        # Derived the same way the profiles are, and rounded the same way: a
+        # budget is stage sizes times measured rates, so its floats carry the
+        # same machine-dependent tail.
+        (out / out_name).write_text(json.dumps(stable(est), separators=(",", ":")))
         total += (out / out_name).stat().st_size
         copied.append(out_name)
 
