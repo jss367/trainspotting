@@ -1190,6 +1190,25 @@ def _warn_mixed_questions(est: dict) -> bool:
     return True
 
 
+def _share_phrase(t: dict) -> str:
+    """The whole-pipeline share, said as precisely as it is true.
+
+    Three cases, and only one of them is a bound:
+
+    - every stage sized, every stage measured — the share, flat.
+    - every stage sized, some unmeasured — a genuine lower bound. Those stages
+      are already in the denominator, so measuring one can only add matches.
+    - some stage unsized — not a bound in either direction. `totals()` drops an
+      unsized stage from the denominator *and* the numerator, so sizing it later
+      moves both, and if its own rate is below this aggregate the share falls.
+      Saying "at least" there is arithmetic nobody can defend.
+    """
+    pct = _fmt_share(t["share"])
+    if t["unsized"]:
+        return f"{pct} of the {_fmt_est(t['size_tokens'])} that could be sized"
+    return f"at least {pct}" if t["measured"] < t["stages"] else pct
+
+
 def _fmt_share(share: float) -> str:
     """A share as a percentage, with enough digits to be a number.
 
@@ -1267,11 +1286,9 @@ def cmd_budget(args):
             # still unasked this is a lower bound on the whole pipeline — not a
             # share of the part that was measured. Saying "at least" is the
             # difference between a number and a wrong number: the corpora are
-            # 99.7% of these tokens.
-            line += (
-                f"  →  {_fmt_est(t['matching_tokens'])} matching"
-                f"  ({'at least ' if partial else ''}{_fmt_share(t['share'])} of it)"
-            )
+            # 99.7% of these tokens. `_share_phrase` also knows when it is not
+            # a bound at all.
+            line += f"  →  {_fmt_est(t['matching_tokens'])} matching  ({_share_phrase(t)})"
         if partial:
             line += f"  [{t['stages'] - t['measured']} stage(s) not measured"
             # Naming the measured size is what stops the share above reading as
@@ -1507,20 +1524,40 @@ def _report_questions(target_name: str, target: dict) -> None:
         # A measured stage that could not be sized is dropped from both the
         # denominator and the matching sum, so the share is as partial as an
         # unasked one — `unsized` has to count here too.
-        partial = t["measured"] < t["stages"] or bool(t["unsized"])
         print(
             f"\nwhole pipeline: {_fmt_est(t['size_tokens'])} fit tokens — no single"
             " total, see the warning above"
             if mixed
             else f"\nwhole pipeline: {_fmt_est(t['matching_tokens'])} of"
-            f" {_fmt_est(t['size_tokens'])} fit tokens"
-            f" ({'at least ' if partial else ''}{_fmt_share(t['share'])})"
+            f" {_fmt_est(t['size_tokens'])} fit tokens ({_share_phrase(t)})"
         )
-        if t["measured"] < t["stages"]:
+        # "Never asked" and "asked, and nothing usable came back" need different
+        # advice: `--pretrain-only` does not re-run a failed post-training stage,
+        # and telling someone to ask a question that already ran and failed sends
+        # them in a circle. The rows above already print each stage's reason.
+        unasked = [x for x in est["stages"] if not x.get("measured") and not x.get("unusable")]
+        unusable = [x for x in est["stages"] if x.get("unusable")]
+        if unasked:
+            corpora = [x["stage"] for x in unasked if x["family"] == "pretrain"]
+            how = (
+                f" --pretrain-only` to close the gap" if corpora and len(corpora) == len(unasked)
+                else "` for the stages below"
+            )
             print(
-                f"  {t['stages'] - t['measured']} of {t['stages']} stages were never"
-                f" asked this question — run `trainspotting ask {target_name} \"...\""
-                f" --slug {slug} --pretrain-only` to close the gap"
+                f"  {len(unasked)} of {t['stages']} stages were never asked this question"
+                f" ({', '.join(x['stage'] for x in unasked)}) — run"
+                f" `trainspotting ask {target_name} \"...\" --slug {slug}{how}"
+            )
+        if unusable:
+            print(
+                f"  {len(unusable)} stage(s) were asked and produced nothing usable"
+                f" ({', '.join(x['stage'] for x in unusable)}) — see the reason on each"
+                " row above; re-asking without fixing that will fail the same way"
+            )
+        if t["unsized"]:
+            print(
+                f"  {', '.join(t['unsized'])} could not be sized, so"
+                " the share above is over the stages that could be"
             )
         print()
 

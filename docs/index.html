@@ -1111,16 +1111,23 @@ async function budgetCard(main, model, slug){
   // The denominator is every sized stage, asked or not, so with one still
   // unasked this is a lower bound on the whole pipeline — not a share of the
   // part that was measured. The two differ by three orders of magnitude here.
-  // A stage that was measured but could not be sized is excluded from both the
-  // denominator and the matching sum, so the share is as partial as if the
-  // stage had never been asked — `unsized` has to count here too, or the card
-  // prints a bare percentage and claims every stage was measured.
-  const partial = all.measured < all.stages || (all.unsized || []).length > 0;
+  // Three cases, and only one of them is a bound.
+  //
+  // Every stage sized and measured: the share, flat. Every stage sized with
+  // some unmeasured: a genuine lower bound — those stages are already in the
+  // denominator, so measuring one can only add matches. Some stage unsized:
+  // not a bound in either direction, because `totals()` drops an unsized stage
+  // from the denominator *and* the numerator, so sizing it later moves both and
+  // the share falls if that stage's own rate is below this aggregate.
+  const unsized = (all.unsized || []).length > 0;
+  const bounded = !unsized && all.measured < all.stages;
+  const partial = unsized || all.measured < all.stages;
   total.innerHTML = `<td>whole pipeline</td><td>${tokens(all.size_tokens)}</td>`
     + (mixed
       ? `<td colspan="3">no single total — these stages were scored with different ${mixedWhat(est)}</td>`
       : `<td colspan="2">${all.measured} of ${all.stages} stages measured</td>`
-        + `<td>${tokens(all.matching_tokens)}<span class="est">${partial ? "≥ " : ""}${shareText(all.share)}</span></td>`);
+        + `<td>${tokens(all.matching_tokens)}<span class="est">${bounded ? "≥ " : ""}${shareText(all.share)}`
+          + `${unsized ? " of what could be sized" : ""}</span></td>`);
   body.appendChild(total);
   t.appendChild(body);
   card.appendChild(t);
@@ -1150,10 +1157,17 @@ async function budgetCard(main, model, slug){
       said.push(`${unasked.map(st => st.stage).join(", ")} ${unasked.length > 1 ? "were" : "was"} never asked this question`);
     if (unusable.length)
       said.push(`${unusable.map(st => st.stage).join(", ")} ${unusable.length > 1 ? "were" : "was"} asked but produced nothing usable (see the row above)`);
+    const tail = unsized
+      ? `The share beside it is over the stages that could be sized only, so it is not a bound in either `
+        + `direction: sizing ${all.unsized.join(", ")} would move the matching total and the denominator both.`
+      : `The share is still over the whole pipeline, which makes it a lower bound: only `
+        + `${tokens(all.measured_size_tokens)} of it was looked at, and measuring the rest can only add matches.`;
     notes.push(`${said.join("; ")}, so ${tokens(missingTokens)} of the ${tokens(all.size_tokens)} fit tokens above `
-      + `— ${shareText(missingTokens / all.size_tokens)} of the pipeline — are unmeasured. The share is still `
-      + `over the whole pipeline, which makes it a lower bound: only ${tokens(all.measured_size_tokens)} `
-      + `of it was looked at, and measuring the rest can only add matches.`);
+      + `— ${shareText(missingTokens / all.size_tokens)} of the pipeline — are unmeasured. ${tail}`);
+  }
+  if (unsized && !missing.length){
+    notes.push(`${all.unsized.join(", ")} could not be sized, so the share above is over the stages that `
+      + `could be — not over the whole pipeline, and not a bound on it.`);
   }
   if (all.floor.length){
     notes.push(`${all.floor.join(", ")} sized at one reference rollout per prompt — a floor. `

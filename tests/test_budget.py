@@ -670,3 +670,29 @@ def test_a_measured_but_unsized_stage_makes_the_total_partial():
     t = budget.totals(stages)["post-training"]
     assert t["measured"] == t["stages"] == 2      # nothing looks missing
     assert t["unsized"] == ["dpo"]                 # but one side is gone
+
+
+def test_only_a_fully_sized_pipeline_can_claim_a_lower_bound():
+    """"At least" is a claim about what measuring more can do to the number.
+
+    With every stage sized, an unmeasured one is already in the denominator, so
+    measuring it can only add matches and the share can only rise. With a stage
+    *unsized*, `totals()` drops it from the denominator and the numerator both —
+    so sizing it moves both, and if its own rate is below the aggregate the
+    share falls. Prefixing that with "at least" is arithmetic nobody can defend.
+    """
+    from trainspotting.cli import _share_phrase
+
+    sized_and_measured = {"share": 0.5, "measured": 2, "stages": 2, "unsized": [],
+                          "size_tokens": 1_000}
+    assert _share_phrase(sized_and_measured) == "50.00%"
+
+    sized_some_unasked = {"share": 0.5, "measured": 1, "stages": 2, "unsized": [],
+                          "size_tokens": 1_000}
+    assert _share_phrase(sized_some_unasked) == "at least 50.00%"
+
+    one_unsized = {"share": 0.5, "measured": 2, "stages": 2, "unsized": ["rlvr"],
+                   "size_tokens": 1_000}
+    phrase = _share_phrase(one_unsized)
+    assert "at least" not in phrase
+    assert "could be sized" in phrase
