@@ -26,6 +26,20 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["trainspotting*"]
 
+[tool.ruff.lint]
+# Ruff's own default set, written down. Unwritten, it is whatever the ruff on the
+# machine happens to default to, and a ruff release then turns an unrelated pull
+# request red — which is how this section came to exist: CI installed an
+# unpinned ruff, picked up some forty newly-defaulted rules, and failed a branch
+# that changed none of the code they fired on.
+#
+# `E501` is deliberately out, and is why this is not simply `E`. The prose in
+# this repo — module docstrings that explain why a layer exists, and Markdown
+# tables in the README — is wrapped for reading rather than to a column, and a
+# line-length rule would either rewrap the explanations or be suppressed
+# everywhere they are.
+select = ["E4", "E7", "E9", "F"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

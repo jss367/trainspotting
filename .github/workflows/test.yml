@@ -43,9 +43,13 @@ jobs:
             exit 1
           fi
 
+      # Pinned. An unpinned install makes the lint a property of the day a job
+      # ran rather than of the tree it ran on, and the rule set is pinned too,
+      # in pyproject — both, because a version bump and a rule-set change should
+      # each be somebody's decision.
       - name: ruff
         run: |
-          pip install ruff
+          pip install 'ruff==0.15.20'
           ruff check .
 
       # The export re-derives everything the page serves and checks the README's
