@@ -83,3 +83,36 @@ def test_live_search_counts_a_known_phrase():
     n = hf.search_count("allenai/Dolci-Instruct-SFT", "knowledge cutoff")
     assert isinstance(n, int)
     assert n >= 0
+
+
+def test_a_second_anchor_in_one_sentence_gets_its_own_query():
+    """The README's documented input carries four anchors in one sentence —
+    `AI`, `OpenAI`, `September`, `2021` — and every window holding the cutoff
+    date overlaps the window holding the provenance claim. Rejecting overlap
+    outright meant `September 2021` could not be reached at any
+    `--max-queries`, which is half of the example the feature is sold on."""
+    text = "As an AI language model developed by OpenAI, my knowledge cutoff is September 2021."
+
+    queries = behavior.distinctive_ngrams(text, max_queries=6)
+
+    assert any("OpenAI" in q for q in queries)
+    assert any("September 2021" in q for q in queries), queries
+
+
+def test_a_window_bringing_no_new_anchor_is_still_dropped():
+    """Overlap is allowed for a new anchor, not for a shifted copy of the same
+    one — otherwise one anchor would spend the whole query budget."""
+    text = "The report from OpenAI says the same thing over and over again."
+
+    queries = behavior.distinctive_ngrams(text, max_queries=6)
+
+    assert len(queries) == 1, queries
+
+
+def test_a_quoted_sentence_ends_where_the_quote_closes():
+    """`OpenAI." Then it` is not a phrase any training row contains, so a query
+    must not be stitched across that boundary."""
+    text = 'He said "I was made by OpenAI." Then it mentioned September 2021.'
+
+    for q in behavior.distinctive_ngrams(text, max_queries=6):
+        assert not ("OpenAI" in q and "September" in q), q

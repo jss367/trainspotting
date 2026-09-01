@@ -46,7 +46,11 @@ def _sentences(text: str):
     verbatim, so it is not worth searching for.
     """
     for line in text.splitlines():
-        for seg in re.split(r"(?<=[.!?;:])\s+", line):
+        # A closing quote or bracket sits between the punctuation and the
+        # space when the sentence being ended is a quoted one, and a boundary
+        # missed there is a query stitched across it: `OpenAI." Then it` is not
+        # a phrase any training row contains.
+        for seg in re.split(r"(?<=[.!?;:])[\"'\u201d\u2019)\]]*\s+", line):
             seg = seg.strip()
             if seg:
                 yield seg
@@ -97,6 +101,7 @@ def distinctive_ngrams(text: str, max_queries: int = 6) -> list[str]:
                 continue
             score = sum(window)
             positions = {(s_idx, start + i) for i in range(size)}
+            anchors = {(s_idx, start + i) for i, w in enumerate(window) if w == 2}
             # Trim leading and trailing function words off the emitted query.
             # Search is an AND over the query's tokens, so a boundary "so I"
             # only narrows the match to rows that also contain those words near
@@ -109,7 +114,7 @@ def distinctive_ngrams(text: str, max_queries: int = 6) -> list[str]:
             while hi > lo and weights[hi] == 0:
                 hi -= 1
             query = " ".join(tokens[lo : hi + 1])
-            candidates.append((score, len(candidates), positions, query))
+            candidates.append((score, len(candidates), positions, anchors, query))
 
     # Order stays in the key so equal scores resolve to the earlier window and
     # the result is deterministic in the input text alone.
@@ -117,12 +122,21 @@ def distinctive_ngrams(text: str, max_queries: int = 6) -> list[str]:
     chosen: list[str] = []
     taken: set[tuple[int, int]] = set()
     seen: set[str] = set()
-    for _, _, positions, query in candidates:
+    for _, _, positions, anchors, query in candidates:
         if len(chosen) >= max_queries:
             break
-        if positions & taken or query.lower() in seen:
+        # Overlap alone is not a reason to drop a window — what makes a second
+        # query worth issuing is a second anchor. Rejecting anything that
+        # touched a chosen window meant one sentence yielded one query however
+        # many distinct anchors it held: the documented example, "As an AI
+        # language model developed by OpenAI, my knowledge cutoff is September
+        # 2021", returned the OpenAI window and no way to reach `September
+        # 2021` at any `--max-queries`. A candidate now has to bring an anchor
+        # nothing chosen has covered, which keeps near-duplicate windows out
+        # without hiding the other half of the sentence.
+        if not anchors - taken or query.lower() in seen:
             continue
         chosen.append(query)
-        taken |= positions
+        taken |= anchors
         seen.add(query.lower())
     return chosen
