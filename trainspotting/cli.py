@@ -1076,10 +1076,10 @@ def cmd_trace(args):
     The entry point for someone who has a transcript, not a grep string: paste
     the text the model produced, and this pulls the distinctive phrases out of
     it, counts how many rows of each post-training stage contain each phrase
-    (exact full-text search over the whole split, nothing sampled), and ranks
-    the stages by how densely the behavior appears.
+    (full-text search over the whole split, nothing sampled and nothing
+    downloaded), and ranks the stages by how densely the behavior appears.
 
-    This is provenance by verbatim match, so it only answers when the behavior
+    This is provenance by near-verbatim match, so it only answers when the behavior
     left a distinctive string. When it finds nothing — the phrases are generic,
     or the behavior is a disposition with no signature words — the fix is
     `trainspotting ask`, which judges the meaning of sampled examples instead of
@@ -1274,21 +1274,6 @@ def main():
     p.set_defaults(fn=cmd_ask)
 
     p = sub.add_parser(
-        "trace",
-        help="find which stages a pasted behavior's distinctive phrases occur in",
-    )
-    p.add_argument("target", help=TARGET_HELP)
-    p.add_argument("text", help="transcript or description to trace ('-' reads stdin)")
-    p.add_argument("--stage", help="only this stage (sft/dpo/rlvr for a model; a dataset has one)")
-    p.add_argument(
-        "--max-queries",
-        type=_positive_int,
-        default=6,
-        help="most distinctive phrases to extract and search for",
-    )
-    p.set_defaults(fn=cmd_trace)
-
-    p = sub.add_parser(
         "find",
         help="exact occurrence count + example documents for a phrase, via infini-gram",
     )
@@ -1310,6 +1295,21 @@ def main():
     p.add_argument("--json", action="store_true", help="also write results/find.<index>.<slug>.json")
     p.add_argument("--slug", help="short name for the result file (default: derived from the phrase)")
     p.set_defaults(fn=cmd_find)
+
+    p = sub.add_parser(
+        "trace",
+        help="find which stages a pasted behavior's distinctive phrases occur in",
+    )
+    p.add_argument("target", help=TARGET_HELP)
+    p.add_argument("text", help="transcript or description to trace ('-' reads stdin)")
+    p.add_argument("--stage", help="only this stage (sft/dpo/rlvr for a model; a dataset has one)")
+    p.add_argument(
+        "--max-queries",
+        type=_positive_int,
+        default=6,
+        help="most distinctive phrases to extract and search for",
+    )
+    p.set_defaults(fn=cmd_trace)
 
     p = sub.add_parser("pretrain", help="sample documents from the Dolma 3 pretraining shards")
     p.add_argument("target", help=TARGET_HELP)

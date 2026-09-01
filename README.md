@@ -289,9 +289,10 @@ A phrase is kept only if it is anchored on a name, a number, or a mid-sentence
 capital; a window of pure function words matches rows by coincidence, so those
 are dropped, and boundary function words are trimmed off the ones kept because
 search ANDs a query's tokens together. Two anchors in one sentence get two
-queries — a candidate window has to bring half a window of new text, not be
-fully disjoint, or `"...developed by OpenAI, my knowledge cutoff is September
-2021."` would spend its whole budget on the lab and never reach the date.
+queries — a candidate window is dropped only when every anchor in it is already
+covered, not merely because it overlaps, or `"...developed by OpenAI, my
+knowledge cutoff is September 2021."` would spend its whole budget on the lab
+and never reach the date.
 
 Two things a `trace` number is not, both printed next to it:
 

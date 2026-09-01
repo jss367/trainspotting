@@ -44,16 +44,13 @@ def _sentences(text: str):
     Newlines and sentence punctuation both end a segment: a phrase stitched
     across a sentence boundary is not something the training data can contain
     verbatim, so it is not worth searching for.
-
-    Closing quotes and brackets sit between the punctuation and the space in
-    quoted or parenthesized prose (`... developed by OpenAI." Next sentence`),
-    so they are consumed as part of the boundary rather than left to glue two
-    sentences into one segment — which would let a query straddle the join and,
-    worse, promote the following sentence's opening capital to an anchor by
-    putting it mid-segment.
     """
     for line in text.splitlines():
-        for seg in re.split(r"(?<=[.!?;:])[\"'”’)\]}]*\s+", line):
+        # A closing quote or bracket sits between the punctuation and the
+        # space when the sentence being ended is a quoted one, and a boundary
+        # missed there is a query stitched across it: `OpenAI." Then it` is not
+        # a phrase any training row contains.
+        for seg in re.split(r"(?<=[.!?;:])[\"'\u201d\u2019)\]]*\s+", line):
             seg = seg.strip()
             if seg:
                 yield seg
@@ -87,21 +84,12 @@ def distinctive_ngrams(text: str, max_queries: int = 6) -> list[str]:
     by the summed weights of its tokens; a window with no anchor is dropped
     outright, because an all-common-word phrase matches training rows by
     coincidence rather than provenance. Selection is greedy by score, and a
-    window is skipped when it repeats an already-chosen query verbatim (boiler-
-    plate recurs in transcripts) or when fewer than half its words are text no
-    chosen query already covers — so the result spreads over the input rather
-    than emitting eight offsets of its best sentence.
-
-    Half, not all: requiring windows to be disjoint meant a sentence shorter
-    than two windows could only ever yield one query, and one sentence often
-    carries two separable anchors. "As an AI language model developed by
-    OpenAI, my knowledge cutoff is September 2021." is fourteen words, so every
-    eight-word window overlaps every other one, and the date — the more
-    diagnostic half of that behavior — was unreachable at any `max_queries`.
-    A half-window of new text is still a different span; a one-word shift is
-    not.
+    window is skipped when it brings no anchor an already-chosen query covers
+    already, or when it repeats one verbatim (boilerplate recurs in
+    transcripts) — so `max_queries` buys `max_queries` distinct anchors rather
+    than eight offsets of the best sentence.
     """
-    candidates = []  # (score, order, positions, query)
+    candidates = []  # (score, order, anchors, query)
     for s_idx, seg in enumerate(_sentences(text)):
         tokens = seg.split()
         if len(tokens) < MIN_WORDS:
@@ -113,20 +101,21 @@ def distinctive_ngrams(text: str, max_queries: int = 6) -> list[str]:
             if 2 not in window:
                 continue
             score = sum(window)
-            positions = {(s_idx, start + i) for i in range(size)}
+            anchors = {(s_idx, start + i) for i, w in enumerate(window) if w == 2}
             # Trim leading and trailing function words off the emitted query.
             # Search is an AND over the query's tokens, so a boundary "so I"
             # only narrows the match to rows that also contain those words near
             # the anchor — excluding the training row that phrased the same
-            # distinctive span slightly differently. The window still counts
-            # those positions as covered, so dedup stays conservative.
+            # distinctive span slightly differently. Dedup reads the window's
+            # anchors, not the trimmed span, so trimming cannot let the same
+            # anchor through twice.
             lo, hi = start, start + size - 1
             while lo < hi and weights[lo] == 0:
                 lo += 1
             while hi > lo and weights[hi] == 0:
                 hi -= 1
             query = " ".join(tokens[lo : hi + 1])
-            candidates.append((score, len(candidates), positions, query))
+            candidates.append((score, len(candidates), anchors, query))
 
     # Order stays in the key so equal scores resolve to the earlier window and
     # the result is deterministic in the input text alone.
@@ -134,12 +123,21 @@ def distinctive_ngrams(text: str, max_queries: int = 6) -> list[str]:
     chosen: list[str] = []
     taken: set[tuple[int, int]] = set()
     seen: set[str] = set()
-    for _, _, positions, query in candidates:
+    for _, _, anchors, query in candidates:
         if len(chosen) >= max_queries:
             break
-        if query.lower() in seen or 2 * len(positions - taken) < len(positions):
+        # Overlap alone is not a reason to drop a window — what makes a second
+        # query worth issuing is a second anchor. Rejecting anything that
+        # touched a chosen window meant one sentence yielded one query however
+        # many distinct anchors it held: the documented example, "As an AI
+        # language model developed by OpenAI, my knowledge cutoff is September
+        # 2021", returned the OpenAI window and no way to reach `September
+        # 2021` at any `--max-queries`. A candidate now has to bring an anchor
+        # nothing chosen has covered, which keeps near-duplicate windows out
+        # without hiding the other half of the sentence.
+        if not anchors - taken or query.lower() in seen:
             continue
         chosen.append(query)
-        taken |= positions
+        taken |= anchors
         seen.add(query.lower())
     return chosen

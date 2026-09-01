@@ -66,44 +66,6 @@ def test_queries_do_not_cross_sentences():
         assert ". " not in q
 
 
-def test_a_closing_quote_still_ends_the_sentence():
-    # `OpenAI." Next` is two sentences. Splitting only on punctuation-then-space
-    # left them as one segment, which let a query straddle the join and promoted
-    # "Next" — a sentence-opening capital, so no evidence of anything — to an
-    # anchor by putting it mid-segment.
-    text = 'I was made by OpenAI." Next sentence mentions Paris and 1999.'
-    assert list(behavior._sentences(text)) == [
-        "I was made by OpenAI.",
-        "Next sentence mentions Paris and 1999.",
-    ]
-    for q in behavior.distinctive_ngrams(text):
-        assert '." ' not in q
-
-
-def test_two_anchors_in_one_sentence_get_separate_queries():
-    # Fourteen words, so every eight-word window overlaps every other one.
-    # Requiring disjoint windows capped this input at a single query and made
-    # the date — half the behavior being traced — unreachable at any
-    # --max-queries.
-    queries = behavior.distinctive_ngrams(
-        "As an AI language model developed by OpenAI,"
-        " my knowledge cutoff is September 2021."
-    )
-    blob = " || ".join(queries).lower()
-    assert "openai" in blob
-    assert "september 2021" in blob
-
-
-def test_a_one_word_shift_is_not_a_second_query():
-    # The other half of the overlap rule: a window that only slides along by a
-    # word or two is the same span, and eight offsets of one sentence would
-    # spend the whole --max-queries budget on it.
-    queries = behavior.distinctive_ngrams(
-        "Alice Bob Carol Dave Eve Frank Grace Heidi Ivan Judy Karl Liam"
-    )
-    assert len(queries) < 5
-
-
 def test_max_queries_is_respected():
     text = ". ".join(f"Distinct fact number {i} about Reykjavik and Anthropic" for i in range(20))
     assert len(behavior.distinctive_ngrams(text, max_queries=3)) <= 3
@@ -113,6 +75,39 @@ def test_deterministic():
     a = behavior.distinctive_ngrams(OPENAI_TRANSCRIPT)
     b = behavior.distinctive_ngrams(OPENAI_TRANSCRIPT)
     assert a == b
+
+
+def test_a_second_anchor_in_one_sentence_gets_its_own_query():
+    """The README's documented input carries four anchors in one sentence —
+    `AI`, `OpenAI`, `September`, `2021` — and every window holding the cutoff
+    date overlaps the window holding the provenance claim. Rejecting overlap
+    outright meant `September 2021` could not be reached at any
+    `--max-queries`, which is half of the example the feature is sold on."""
+    text = "As an AI language model developed by OpenAI, my knowledge cutoff is September 2021."
+
+    queries = behavior.distinctive_ngrams(text, max_queries=6)
+
+    assert any("OpenAI" in q for q in queries)
+    assert any("September 2021" in q for q in queries), queries
+
+
+def test_a_window_bringing_no_new_anchor_is_still_dropped():
+    """Overlap is allowed for a new anchor, not for a shifted copy of the same
+    one — otherwise one anchor would spend the whole query budget."""
+    text = "The report from OpenAI says the same thing over and over again."
+
+    queries = behavior.distinctive_ngrams(text, max_queries=6)
+
+    assert len(queries) == 1, queries
+
+
+def test_a_quoted_sentence_ends_where_the_quote_closes():
+    """`OpenAI." Then it` is not a phrase any training row contains, so a query
+    must not be stitched across that boundary."""
+    text = 'He said "I was made by OpenAI." Then it mentioned September 2021.'
+
+    for q in behavior.distinctive_ngrams(text, max_queries=6):
+        assert not ("OpenAI" in q and "September" in q), q
 
 
 def _run_trace(monkeypatch, capsys, argv, counts):
