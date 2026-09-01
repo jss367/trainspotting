@@ -603,7 +603,9 @@ Three things a `trace` number is not, all printed next to it:
   else, and ranking the two together put the biggest mixes last for being big.
 
 The first search against a cold split can take minutes while the server builds
-the index. When the behavior has no signature string — it is a disposition, or
+the index — the widest window in the tool for `main` to move under a run, so
+each stage's revision is read before and after its searches and a republish is
+reported next to the density it would otherwise have quietly corrupted. When the behavior has no signature string — it is a disposition, or
 the training paraphrases it — `trace` finds nothing and says to reach for `ask`,
 which judges what sampled examples *teach* instead of matching their text
 (`"does this example teach the model to identify as ChatGPT?"`). All three

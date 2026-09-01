@@ -1431,12 +1431,20 @@ def cmd_trace(args):
 
     results = []
     for s in _select_stages(args, registry.post_training_stages, "post-training"):
+        # Before the row count, like every other paged path, and checked again
+        # after: a trace holds a stage open longer than any of them, because a
+        # cold split spends minutes building its index before answering. If
+        # `main` moves in that window, the matches and the row count they are
+        # divided by describe different trees, and the density is a ratio
+        # between two datasets.
+        revision = hf.dataset_revision(s["hf_dataset"])
         total = hf.num_rows(s["hf_dataset"])
         per_query, partial = {}, False
         for q in queries:
             print(f"  {s['stage']}: searching {q!r} ...", file=sys.stderr)
             per_query[q], q_partial = hf.search_count(s["hf_dataset"], q)
             partial = partial or q_partial
+        moved = hf.dataset_revision(s["hf_dataset"])
         # Summed across queries, so a row matching two of them counts twice —
         # this ranks where the behavior concentrates, it is not a distinct-row
         # count. The per-query lines below let a single dominant phrase be told
@@ -1446,6 +1454,8 @@ def cmd_trace(args):
             {
                 "stage": s["stage"],
                 "dataset": s["hf_dataset"],
+                "revision": revision,
+                "revision_moved_to": moved if revision and moved and moved != revision else None,
                 "total": total,
                 "hits": hits,
                 "density": hits / total * 1e6 if total else 0.0,
@@ -1470,6 +1480,13 @@ def cmd_trace(args):
             f"## {r['stage']} — {'≥' if r['partial'] else ''}{r['density']:.1f}/M"
             f"  ({r['hits']} matches in {r['total']:,} rows, {r['dataset']})"
         )
+        if r["revision_moved_to"]:
+            print(
+                "  note: the dataset was republished while this stage was being"
+                f" searched ({r['revision'][:7]} -> {r['revision_moved_to'][:7]}),"
+                " so the matches and the row count they are divided by are not"
+                " certainly from the same tree. Re-run it."
+            )
         for q, c in sorted(r["per_query"].items(), key=lambda kv: -kv[1]):
             # `!r`, like the stderr echo above: a query is a slice of text the
             # user pasted, and an escape sequence survives tokenization (`\x1b`

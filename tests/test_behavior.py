@@ -161,13 +161,16 @@ def test_a_quoted_sentence_ends_where_the_quote_closes():
         assert not ("OpenAI" in q and "September" in q), q
 
 
-def _run_trace(monkeypatch, capsys, argv, counts):
+def _run_trace(monkeypatch, capsys, argv, counts, revisions=("abc1234", "abc1234")):
     """Run `trainspotting trace` with the network stubbed. `counts` maps a
-    dataset id to the (matches, partial) every query against it returns."""
+    dataset id to the (matches, partial) every query against it returns, and
+    `revisions` is what the before/after revision lookups answer."""
     monkeypatch.setattr(hf, "num_rows", lambda dataset, *a, **k: 1_000_000)
     monkeypatch.setattr(
         hf, "search_count", lambda dataset, query, *a, **k: counts[dataset]
     )
+    seen = iter(revisions * len(counts))
+    monkeypatch.setattr(hf, "dataset_revision", lambda dataset, *a, **k: next(seen))
     monkeypatch.setattr(sys, "argv", argv)
     cli.main()
     return capsys.readouterr().out
@@ -297,6 +300,28 @@ def test_nothing_found_does_not_speak_for_the_unindexed_rows(monkeypatch, capsys
     )
     assert "No stage contained these phrases" in out
     assert "sft was only partly indexed" in out
+
+
+def test_a_republish_mid_trace_is_reported_rather_than_divided_through(
+    monkeypatch, capsys
+):
+    """A trace holds a stage open longer than any sampling path — a cold split
+    spends minutes building its index — so the window for `main` to move under
+    it is the widest in the tool. The row count is read before the searches, so
+    a republish makes the density a ratio between two datasets."""
+    out = _run_trace(
+        monkeypatch,
+        capsys,
+        ["trainspotting", "trace", "olmo-3-7b-instruct", "I am ChatGPT, by OpenAI"],
+        {
+            "allenai/Dolci-Instruct-SFT": (3, False),
+            "allenai/Dolci-Instruct-DPO": (1, False),
+            "allenai/Dolci-Instruct-RL": (0, False),
+        },
+        revisions=("aaaaaaa", "bbbbbbb"),
+    )
+    assert out.count("was republished while this stage was being searched") == 3
+    assert "aaaaaaa -> bbbbbbb" in out
 
 
 def _live_search_count(dataset, phrase, split="train"):
