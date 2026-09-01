@@ -184,9 +184,42 @@ def test_an_uncorrelated_sample_is_not_widened_for_nothing():
     assert stats["deff"] == pytest.approx(1.0, abs=0.5)
 
 
+def test_clustering_never_narrows_the_interval():
+    """The floor has to apply to the error, not only to the design effect
+    printed beside it. A sample whose draws happen to look unalike has not
+    bought precision, and a page that says "widened for clustering" must not be
+    reporting an interval that clustering narrowed."""
+    # Twenty separate draws of ten, deliberately anti-correlated inside each.
+    values, rows = [], []
+    for draw in range(20):
+        for i in range(10):
+            values.append(0 if i % 2 else 1000)
+            rows.append(draw * 1000 + i)
+
+    clustered = derive.summarize(values, rows)
+    independent = derive.summarize(values)
+
+    assert clustered["deff"] == 1.0
+    assert clustered["se"] >= independent["se"]
+    assert clustered["se"] == pytest.approx(independent["se"])
+
+
 def test_a_sample_with_no_row_indices_falls_back_to_the_independent_error():
     stats = derive.summarize([1, 2, 3, 4], [None, None, None, None])
     assert stats["clusters"] is None and stats["deff"] == 1.0
+
+
+def test_one_cluster_reports_the_independent_error_rather_than_none():
+    """A sample that arrived as a single run leaves the design effect
+    unestimable, not 1. Taking the cluster variance there would print a
+    zero-width interval and call it certainty."""
+    values = [10, 20, 30, 40, 50, 60]
+
+    stats = derive.summarize(values, list(range(6)))
+
+    assert stats["clusters"] == 1
+    assert stats["se"] == pytest.approx(derive.summarize(values)["se"])
+    assert stats["se"] > 0
 
 
 def test_a_stage_with_no_row_count_measures_shape_but_claims_no_budget():

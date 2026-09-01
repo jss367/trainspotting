@@ -82,6 +82,13 @@ def _shared_turns(chosen: list[dict], rejected: list[dict]) -> int:
     shared history twice and call it text the model was fit to, which is exactly
     backwards — the shared part is context, and only what comes after the branch
     carries the preference signal.
+
+    `search._shared_turns` is the same scan over raw rows and deliberately does
+    NOT agree with this one at the edges: it clamps so that a pair whose sides
+    are identical still has two completions, because search asks which side a
+    string is on and the honest answer there is "both". This asks which tokens
+    carry gradient, and for that pair the answer is none. Two layers, two
+    questions, two right answers — so do not reconcile them.
     """
     # Every part of a turn a reader can see, because every part of it is text
     # the pair either shares or branches on. A turn's reasoning span is stored
@@ -217,13 +224,26 @@ def _cluster_se(values: list[float], mean: float, groups: list[list[int]]) -> tu
     """
     n = len(values)
     C = len(groups)
+    var_ind = sum((v - mean) ** 2 for v in values) / (n - 1) / n if n > 1 else 0.0
     if C < 2:
-        return 0.0, 1.0
+        # One cluster leaves the design effect unestimable, not 1 — there is
+        # nothing to compare it against. Returning the cluster variance here
+        # would report a zero-width interval with total confidence, so fall back
+        # to the independent error, which is the narrowest honest claim
+        # available rather than a claim of none.
+        return math.sqrt(var_ind), 1.0
     ss = sum((sum(values[i] for i in g) - mean * len(g)) ** 2 for g in groups)
     var_cluster = C / ((C - 1) * n**2) * ss
-    var_ind = sum((v - mean) ** 2 for v in values) / (n - 1) / n if n > 1 else 0.0
+    # The floor belongs on the error, not just on the number reported beside it.
+    # Clustering costs precision or costs nothing; a sample whose draws happen to
+    # look unalike has not *bought* precision, and returning the raw cluster
+    # variance where it lands below the independent one narrowed two committed
+    # profiles by about 7% under a heading that says "widened". Deriving the
+    # error from the floored design effect also keeps the two consistent, which
+    # they were not: the page could report deff 1.0 beside an interval that had
+    # been quietly narrowed.
     deff = max(1.0, var_cluster / var_ind) if var_ind else 1.0
-    return math.sqrt(var_cluster), deff
+    return math.sqrt(var_ind * deff), deff
 
 
 def summarize(values: list[int], rows: list[int | None] | None = None) -> dict:

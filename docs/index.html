@@ -1696,9 +1696,14 @@ function appendTreemap(parent, m, rows, corpusSummaries){
         `<b>${esc(rect.stage)}</b><br>${esc(rect.name)}<br>${fmtTok(rect.tokens)} tokens${rect.estimated ? " (estimated)" : ""}`
         + (rect.clamped ? "<br>drawn at minimum size — its true area here is under a pixel" : "")));
       for (const k of kids){
+        // A child hits the minimum long before a stage does — Wikipedia is
+        // 0.04% of the pretraining mix — so counting only the top level left
+        // the warning off a treemap that was already not to scale.
+        if (k.clamped) clamped++;
         wrap.appendChild(tile({stage: k.name, tokens: k.tokens, unit: k.unit}, rect.x + 2 + k.x, rect.y + 20 + k.y,
           k.w, k.h, rect.color, "child",
-          `<b>${esc(k.name)}</b> — in ${esc(rect.stage)}<br>${esc(k.detail)}`));
+          `<b>${esc(k.name)}</b> — in ${esc(rect.stage)}<br>${esc(k.detail)}`
+          + (k.clamped ? "<br>drawn at minimum size — its true area here is under a pixel" : "")));
       }
     }
     if (clamped){
