@@ -62,7 +62,12 @@ def _turns(messages) -> list[dict]:
         if reasoning:
             turn["reasoning"] = _text(reasoning)
         for k, v in extra.items():
-            turn[k] = _text(v if isinstance(v, str) else json.dumps(v))
+            # `ensure_ascii=False`, matching `search._flatten`. The default
+            # turns `météo` into the literal `m\u00e9t\u00e9o`, which the CLI
+            # search never sees — it reads the row — while the page's index and
+            # scan are built from this export and would miss the word the user
+            # actually typed.
+            turn[k] = _text(v if isinstance(v, str) else json.dumps(v, ensure_ascii=False))
         out.append(turn)
     return out
 

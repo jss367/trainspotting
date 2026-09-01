@@ -87,23 +87,27 @@ def produced(result) -> tuple[int, int] | None:
     return _union(result.get("matched", 0), sum(elsewhere), counts)
 
 
-def _readable(result, rows: int) -> float | None:
-    """Share of a stage's rows matching somewhere the model reads.
+READ = ("prompt", *PRODUCE)
 
-    Prompt and the produce side; not `rejected`, which it is trained away from,
-    nor `rollout`, which is never shown to it. Bounded the same way the produce
-    union is, and for the same reason: per-group counts overlap, so the honest
-    figure is an interval and the low end is what a ranking may lean on.
+
+def _readable_bounds(by_group: dict, fields: set, matched: int) -> tuple[int, int] | None:
+    """Rows matching somewhere the model reads: the prompt or the produce side.
+
+    Not `rejected`, which the objective trains away from, nor `rollout`, which
+    it is never shown. An interval for the same reason the produce union is —
+    per-group counts overlap, so a sum is a ceiling and the largest single group
+    is a floor — and the low end is what a ranking may lean on.
+
+    This exists as one function because the row basis needs the same pair the
+    produce basis has, in every place: the rank key, the tie ceiling, the
+    verdict, and each source line. Adding it at the rank key alone is what let
+    the reported evidence and the ranked evidence disagree.
     """
-    by_group = dict(result.get("by_group") or {})
-    fields = set(result.get("fields") or [])
-    live = [g for g in ("prompt", *PRODUCE) if g in fields]
+    live = [g for g in READ if g in fields]
     if not live:
         return None
-    elsewhere = sum(by_group.get(g, 0) for g in GROUPS
-                    if g not in ("prompt", *PRODUCE) and g in fields)
-    lo, _ = _union(result.get("matched", 0), elsewhere, [by_group.get(g, 0) for g in live])
-    return lo / rows if rows else None
+    elsewhere = sum(by_group.get(g, 0) for g in GROUPS if g not in READ and g in fields)
+    return _union(matched, elsewhere, [by_group.get(g, 0) for g in live])
 
 
 def _only_against(r) -> bool:
@@ -182,6 +186,9 @@ def _sources(result) -> list[dict]:
                           if g not in PRODUCE and g in fields)
         p_lo, p_hi = (_union(hits, p_elsewhere, p_counts)
                       if (p_counts and per_group) else (None, None))
+        # The same pair on the row basis, so a rows-basis source line quotes the
+        # rows the model reads rather than every matched row.
+        r_bounds = _readable_bounds(per_group, fields, hits) if per_group else None
         p_rate = (p_lo / n) if (p_lo is not None and n) else None
         out.append({
             "name": name,
@@ -192,6 +199,10 @@ def _sources(result) -> list[dict]:
             "produced_hits": p_lo,
             "produced_hits_hi": p_hi,
             "produced_rate": p_rate,
+            "read_hits": r_bounds[0] if r_bounds else None,
+            "read_hits_hi": r_bounds[1] if r_bounds else None,
+            "read_rate": (r_bounds[0] / n) if (r_bounds and n) else None,
+            "read_rate_hi": (r_bounds[1] / n) if (r_bounds and n) else None,
             "produced_rate_hi": (p_hi / n) if (p_hi is not None and n) else None,
             # The source's floor over the stage's ceiling, which is the lift the
             # counts guarantee. Dividing two floors proves nothing: a source
@@ -278,6 +289,10 @@ def stage_trace(result) -> dict:
     partial = bool(result.get("partial"))
     gaps = coverage_gaps(result)
     bounds = produced(result)
+    read_bounds = _readable_bounds(
+        dict(result.get("by_group") or {}), set(result.get("fields") or []),
+        result.get("matched", 0),
+    )
     sources = _sources(result)
     return {
         "stage": result["stage"],
@@ -297,7 +312,9 @@ def stage_trace(result) -> dict:
         # the model was trained to read. A stage with no readable hit at all is
         # `only_against` and is blocked from the ranking outright; this is for
         # the ones with a few.
-        "read_rate": (_readable(result, rows) if rows else None),
+        "read": read_bounds,
+        "read_rate": (read_bounds[0] / rows) if (read_bounds and rows) else None,
+        "read_rate_hi": (read_bounds[1] / rows) if (read_bounds and rows) else None,
         "by_group": dict(result.get("by_group") or {}),
         "fields": list(result.get("fields") or []),
         # Groups the mix actually has, when the run recorded them: it is what
@@ -329,7 +346,11 @@ def _ceiling(r: dict, basis: str) -> float:
     is exact, so it is its own ceiling; a produce-side rate is an interval."""
     if basis == "produced":
         return r["produced_rate_hi"] or 0
-    return r["rate"] or 0
+    # Not `rate`: over every matched row, a stage that is 99% rejected text has
+    # a ceiling of 100% and joins as a contender, so the renderer calls a
+    # settled ordering tied. The readable pair is what the row basis ranks on
+    # and so is what bounds it.
+    return r["read_rate_hi"] if r.get("read_rate_hi") is not None else (r["rate"] or 0)
 
 
 def _understated(r: dict, basis: str) -> str | None:
@@ -419,7 +440,8 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
             # of, so no argument to this command would have covered them.
             "status": UNSEARCHED if s.get("hf_dataset") else UNREACHABLE,
             "rows": None, "hits": None, "rate": None, "by_group": {}, "fields": [],
-            "available_fields": [], "coverage_gaps": [], "read_rate": None,
+            "available_fields": [], "coverage_gaps": [], "read": None,
+            "read_rate": None, "read_rate_hi": None,
             "produced": None, "produced_rate": None,
             "produced_rate_hi": None,
             "sources": [], "concentration": None, "concentration_all": None,
@@ -634,18 +656,21 @@ def _largest(sources: list[dict], side: str) -> tuple[dict, bool]:
 
 
 def _source_count(src: dict, side: str) -> str:
-    """A source's matching rows. On the produce side that is a union of its own,
-    so a source matching in both groups is an interval like the stage is."""
-    if side != "produced":
+    """A source's matching rows, on whichever basis is being reported. Both are
+    unions of overlapping groups, so both can be an interval."""
+    lo, hi = ((src["produced_hits"], src["produced_hits_hi"]) if side == "produced"
+              else (src.get("read_hits"), src.get("read_hits_hi")))
+    if lo is None:
         return f"{src['hits']:,}"
-    lo, hi = src["produced_hits"], src["produced_hits_hi"]
     return f"{lo:,}" if lo == hi else f"{lo:,}–{hi:,}"
 
 
 def _source_rate(src: dict, side: str) -> str:
-    if side != "produced":
+    if side == "produced":
+        return _span(src["produced_rate"], src["produced_rate_hi"])
+    if src.get("read_rate") is None:
         return _pct(src["rate"])
-    return _span(src["produced_rate"], src["produced_rate_hi"])
+    return _span(src["read_rate"], src["read_rate_hi"])
 
 
 def _stage_lines(r: dict, hoisted: bool = False) -> list[str]:
@@ -692,11 +717,13 @@ def _stage_lines(r: dict, hoisted: bool = False) -> list[str]:
                            "it did not open could hold matches in other sources.")
         elif r["sources"]:
             top, biggest = _largest(r["sources"], side)
-            stage_rate = _span(r["produced_rate"], r["produced_rate_hi"]) if side == "produced" \
-                else _pct(r["rate"])
+            stage_rate = (_span(r["produced_rate"], r["produced_rate_hi"]) if side == "produced"
+                          else _span(r["read_rate"], r["read_rate_hi"])
+                          if r.get("read_rate") is not None else _pct(r["rate"]))
             where = (f"{_source_count(top, side)} of its {top['rows']:,} rows, "
                      f"{_source_rate(top, side)}"
-                     if top["rows"] and top[hk] is not None else f"{top['hits']:,} matching rows")
+                     if top["rows"] and top[hk] is not None
+                     else f"{_source_count(top, side)} matching rows")
             which = ("the largest contributor" if biggest else
                      "no single source is established as the largest, and `%s` has the biggest "
                      "counted floor — it" % top["name"])
@@ -817,8 +844,9 @@ def _verdict(t: dict) -> list[str]:
             "was not counted."
         ]
 
-    key = "produced_rate" if t["basis"] == "produced" else "rate"
-    measure = "produce-side rate" if t["basis"] == "produced" else "hit rate"
+    key = "produced_rate" if t["basis"] == "produced" else "read_rate"
+    measure = ("produce-side rate" if t["basis"] == "produced"
+               else "rate over the rows the model reads")
     line = [f"**Most plausibly {best['stage']}.**"]
     src, on_produce = best["concentration"], best["conc_side"] == "produced"
     bounds = best["produced"]
@@ -836,11 +864,17 @@ def _verdict(t: dict) -> list[str]:
         return _tail(t, best, other, key, measure, line)
     if src:
         line.append(f"{src['hits']:,} of the {src['rows']:,} `{src['name']}` rows "
-                    f"({_pct(src['rate'])}, {src['lift']:.0f}× the stage) hold it,")
+                    f"({_source_rate(src, 'rows')}, {src['lift']:.0f}× the stage) hold it,")
         rows_gap = _understated(best, "rows")
     else:
         rows_gap = None
-        line.append(f"{best['hits']:,} of its {best['rows']:,} rows hold it, spread across its "
+        # On the row basis this is the readable count, not every matched row:
+        # the ranking chose this stage on rows the model reads, and quoting the
+        # total here puts the excluded rejected and rollout rows back into the
+        # sentence the ranking was careful to keep them out of.
+        lo, hi = best["read"] if best.get("read") else (best["hits"], best["hits"])
+        held = f"{lo:,}" if lo == hi else f"{lo:,}–{hi:,}"
+        line.append(f"{held} of its {best['rows']:,} rows hold it, spread across its "
                     "sources at roughly the rate their sizes predict,")
     if bounds is None:
         # A prompt-only sweep found every one of its matches in the prompt
