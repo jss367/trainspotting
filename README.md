@@ -993,7 +993,9 @@ names the result files.
 `classify`, `languages`, `context`, `ask` and `report` all run on it with no
 special case; only `pretrain` refuses, because a dataset has no corpus behind
 it. Re-run `python scripts/capture_row_fixtures.py` for the row fixture, and
-`python scripts/export_site_data.py` to give it a tab on the site.
+`python scripts/export_site_data.py` to give it a tab on the site, under the
+tab bar's own **datasets** group — the site splits the two kinds of target
+apart, because a dataset tab answers a different question from a model tab.
 
 A `prompt_path` the dataset needs and `extract.py` doesn't implement is the one
 piece that costs more than a registry entry: WildChat's `conversation` column
