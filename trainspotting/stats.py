@@ -2,8 +2,9 @@
 
 Two of them, because the two halves of this tool sample differently. A
 post-training run draws rows independently, so the ordinary Wilson interval
-applies. A pretraining run draws shards and reads documents out of each, so its
-observations are clustered and the binomial interval would be too narrow.
+applies. A pretraining run draws documents in groups — shards for the shard
+route, pages of adjacent rows for the rows route — so its observations are
+clustered and the binomial interval would be too narrow.
 
 Kept in one module because the CLI computes an interval and the site displays
 one, and a second implementation of either is a number that can silently
@@ -29,8 +30,13 @@ def cluster_wilson(records: list[dict], key: str = "shard") -> tuple[float, floa
 
     Documents drawn from one shard share a topic cluster, so they are not
     independent observations and a binomial interval over the document count is
-    too narrow. Rescaling the match count to the number of distinct shards, which
-    is what this used to do, is not an interval over shards either: a shard
+    too narrow. The shard is the default because it is the shard sampler's unit;
+    the rows sampler's is the page of adjacent rows it drew, and callers name
+    whichever applies through `key`. Nothing below cares which — it only needs
+    documents grouped by whatever they were drawn together in.
+
+    Rescaling the match count to the number of distinct clusters, which is what
+    this used to do, is not an interval over clusters either: a shard
     contributing five matches and one contributing a single non-match would round
     to "two successes out of two clusters", hiding the disagreement between them.
 

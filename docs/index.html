@@ -18,6 +18,8 @@
     --baseline:  #c3c2b7;
     --border:    rgba(11,11,11,0.10);
     --series-1:  #2a78d6;
+    --lit:       rgba(42,120,214,0.17);
+    --lit-edge:  rgba(42,120,214,0.45);
     /* categorical slots 2–3 (one per model in the compare view) */
     --series-2:  #eb6834;
     --series-3:  #1baf7a;
@@ -62,6 +64,8 @@
       --baseline:  #383835;
       --border:    rgba(255,255,255,0.10);
       --series-1:  #3987e5;
+      --lit:       rgba(57,135,229,0.22);
+      --lit-edge:  rgba(57,135,229,0.55);
       --series-2:  #d95926;
       --series-3:  #199e70;
       --stage-sft:  #3987e5;
@@ -622,6 +626,12 @@
   .eqs .tag { font: 500 0.76em/1 system-ui, -apple-system, sans-serif; }
   .eqs .tag.up { color: var(--series-1); }
   .eqs .tag.down { color: var(--neg); }
+  .eqs .bit { border-radius: 3px; padding: 1px 2px; margin: 0 -2px; transition: background-color .12s ease; }
+  .flow:has(.step[data-s="1"]:is(:hover, :focus)) ~ .eqs .bit[data-s~="1"],
+  .flow:has(.step[data-s="2"]:is(:hover, :focus)) ~ .eqs .bit[data-s~="2"],
+  .flow:has(.step[data-s="3"]:is(:hover, :focus)) ~ .eqs .bit[data-s~="3"],
+  .flow:has(.step[data-s="4"]:is(:hover, :focus)) ~ .eqs .bit[data-s~="4"] { background: var(--lit); }
+  @media (prefers-reduced-motion: reduce) { .flow .step[data-s], .eqs .bit { transition: none; } }
   /* the two responses: shared opening dimmed, later overlap marked as matched
      wording rather than cancellation, text unique to one side highlighted */
   .ctxtext .pre { color: var(--muted); }
@@ -643,7 +653,21 @@
     flex: 1 1 150px; border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px;
     background: var(--track);
   }
-  .flow .step.accent { background: transparent; border-color: var(--series-1); box-shadow: inset 0 0 0 1px var(--series-1); }
+  /* hovering a step tints the part of the objective below that it names.
+     Nothing is hidden behind a step, so they are not links and the tint is
+     the whole of the interaction. The tint keys off plain :focus so a tap on a
+     touch screen, which never synthesises :hover and does not match
+     :focus-visible, still lights the mapping. Keyboard focus additionally gets
+     the page-wide focus ring so a tab stop stays locatable; pointer focus has
+     the ring suppressed, since a ring parked on a step would read as
+     "selected". */
+  .flow .step[data-s] { cursor: default; transition: background-color .12s ease, border-color .12s ease; }
+  .flow .step[data-s]:is(:hover, :focus) { background: var(--lit); border-color: var(--lit-edge); }
+  .flow .step[data-s]:focus:not(:focus-visible) { outline: none; }
+  /* the RLVR flow accents the one step that carries this row's own data (its
+     verifier), so it is tinted rather than ringed — a ring reads as a focus state. */
+  .flow .step.accent { background: var(--lit); border-color: var(--lit-edge); }
+  .flow .hint { flex: 0 0 100%; font-size: 12px; color: var(--muted); }
   .flow .step .t { font-size: 12px; color: var(--muted); }
   .flow .step .v { font-size: 13px; font-weight: 600; }
   .flow .arrow { align-self: center; color: var(--muted); font-size: 15px; }
@@ -682,7 +706,8 @@
         <h1>trainspotting</h1>
         <p class="tagline">Spot what's in a model's training data — stage sizes, exact mix
            composition, and how much of post-training is about being helpful, honest, and harmless.
-           The <em>datasets</em> tabs run the same layers over a dataset on its own: it arrives as a
+           A base model with no post-training shows the pretraining half alone. The
+           <em>datasets</em> tabs run the same layers over a dataset on its own: it arrives as a
            single stage, with no training pipeline around it and no response anything was fit to.</p>
       </div>
       <a class="ghlink" href="https://github.com/jss367/trainspotting">GitHub&nbsp;↗</a>
@@ -709,11 +734,14 @@
     counts as English; a prompt split evenly between two languages is left
     undetermined rather than assigned to one.
     Data: Ai2's <a href="https://allenai.org/blog/olmo3">OLMo 3</a> release
-    (Dolma 3 / Dolci), except the <em>is my writing in here?</em> tab, which counts
-    exact strings in the older public corpora that have an
-    <a href="https://infini-gram.io">infini-gram</a> index — Dolma 1.7,
-    DCLM-baseline, RedPajama, C4 and the Pile. No public index covers Dolma 3, so
-    that tab describes neighbouring corpora rather than what OLMo 3 read.
+    (Dolma 3 / Dolci) and EleutherAI's
+    <a href="https://www.eleuther.ai/artifacts/pythia">Pythia</a> (the Pile) — except
+    the <em>is my writing in here?</em> tab, which counts exact strings in the older
+    public corpora that have an <a href="https://infini-gram.io">infini-gram</a>
+    index: Dolma 1.7, DCLM-baseline, RedPajama, C4 and the Pile. No public index
+    covers Dolma 3, so for the OLMo 3 models that tab describes neighbouring
+    corpora rather than what they read; for Pythia the Pile index is the corpus
+    itself, give or take deduplication.
     Regenerate with <code>trainspotting classify</code>,
     <code>trainspotting context</code>, <code>trainspotting case-study</code>
     + <code>scripts/export_site_data.py</code>.
@@ -1349,23 +1377,26 @@ function gradientSection(rec, shared = 0){
     reason.a === reason.b;
   const cut = sideCut(rec.chosen, shared) || sideCut(rec.rejected, shared);
 
+  const step = (n, title, body) =>
+    `<div class="step" data-s="${n}" tabindex="0"><div class="t">${n} · ${title}</div><div class="v">${body}</div></div>`;
   const flow = `<div class="flow">
-    <div class="step"><div class="t">1 · score</div><div class="v">sum the log-probability of each response's tokens</div></div>
+    ${step(1, "score", "sum the log-probability of each response's tokens")}
     <div class="arrow">→</div>
-    <div class="step"><div class="t">2 · compare</div><div class="v">against a frozen copy of the SFT checkpoint</div></div>
+    ${step(2, "compare", "against a frozen copy of the SFT checkpoint")}
     <div class="arrow">→</div>
-    <div class="step accent"><div class="t">3 · margin</div><div class="v">how much further the chosen one has moved</div></div>
+    ${step(3, "margin", "how much further the chosen one has moved")}
     <div class="arrow">→</div>
-    <div class="step"><div class="t">4 · update</div><div class="v">one step from both sets of token terms</div></div>
+    ${step(4, "update", "one step from both sets of token terms")}
+    <div class="hint">Hover, tap, or tab to a step to light up the part of the objective it names.</div>
   </div>`;
 
   return `<div class="grad" id="gradpanel" hidden>
     <h4>the update</h4>
     ${flow}
     <div class="eqs">
-      <span class="lhs">margin</span><span class="rel">=</span><span class="rhs"><i>β</i> <span class="brk">[</span> <span class="par">(</span><span class="fn">log</span><i>π</i>(<span class="tag up">chosen</span>) − <span class="fn">log</span><i>π</i><sub>ref</sub>(<span class="tag up">chosen</span>)<span class="par">)</span> − <span class="par">(</span><span class="fn">log</span><i>π</i>(<span class="tag down">rejected</span>) − <span class="fn">log</span><i>π</i><sub>ref</sub>(<span class="tag down">rejected</span>)<span class="par">)</span> <span class="brk">]</span></span>
-      <span class="lhs">loss</span><span class="rel">=</span><span class="rhs">−<span class="fn">log</span><i>σ</i>(<i>margin</i>)</span>
-      <span class="lhs">update</span><span class="rel">∝</span><span class="rhs"><i>σ</i>(−<i>margin</i>) <span class="brk">[</span> <span class="grad-op">∇</span><span class="fn">log</span><i>π</i>(<span class="tag up">chosen</span>) − <span class="grad-op">∇</span><span class="fn">log</span><i>π</i>(<span class="tag down">rejected</span>) <span class="brk">]</span></span>
+      <span class="lhs">margin</span><span class="rel">=</span><span class="rhs"><span class="bit" data-s="3"><i>β</i> <span class="brk">[</span> <span class="par">(</span><span class="bit" data-s="1"><span class="fn">log</span><i>π</i>(<span class="tag up">chosen</span>)</span> − <span class="bit" data-s="2"><span class="fn">log</span><i>π</i><sub>ref</sub>(<span class="tag up">chosen</span>)</span><span class="par">)</span> − <span class="par">(</span><span class="bit" data-s="1"><span class="fn">log</span><i>π</i>(<span class="tag down">rejected</span>)</span> − <span class="bit" data-s="2"><span class="fn">log</span><i>π</i><sub>ref</sub>(<span class="tag down">rejected</span>)</span><span class="par">)</span> <span class="brk">]</span></span></span>
+      <span class="lhs">loss</span><span class="rel">=</span><span class="rhs">−<span class="fn">log</span><i>σ</i>(<span class="bit" data-s="3"><i>margin</i></span>)</span>
+      <span class="lhs">update</span><span class="rel">∝</span><span class="rhs"><span class="bit" data-s="4"><i>σ</i>(−<span class="bit" data-s="3"><i>margin</i></span>) <span class="brk">[</span> <span class="grad-op">∇</span><span class="fn">log</span><i>π</i>(<span class="tag up">chosen</span>) − <span class="grad-op">∇</span><span class="fn">log</span><i>π</i>(<span class="tag down">rejected</span>) <span class="brk">]</span></span></span>
     </div>
     <p class="kv">Two copies of the model are involved: the one being trained (π) and a frozen copy of the
       SFT checkpoint it started from (π_ref). At the first step the two are identical, so the margin is zero
@@ -1742,7 +1773,12 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
 // shard link to the commit the document was sampled at.
 function docBlock(rec){
   const m = rec.metadata || {};
-  const tags = [`<span class="prov">${esc(rec.source)}${rec.topic ? " · " + esc(niceGroup(rec.topic)) : ""}</span>`];
+  // A rows-sampled corpus carries no per-document source: the deduplicated Pile
+  // dropped the column that held it. Say so rather than rendering a blank chip
+  // that reads as a source of "".
+  const tags = [rec.source
+    ? `<span class="prov">${esc(rec.source)}${rec.topic ? " · " + esc(niceGroup(rec.topic)) : ""}</span>`
+    : `<span class="prov">row ${num(rec.row)}</span>`];
   if (m.cc_dump) tags.push(`<span>${esc(m.cc_dump)}</span>`);
   if (m.quality_score != null) tags.push(`<span>quality ${m.quality_score.toFixed(2)}</span>`);
   if (m.lang) tags.push(`<span>${esc(m.lang)}${m.lang_score ? " " + m.lang_score.toFixed(2) : ""}</span>`);
@@ -1752,13 +1788,18 @@ function docBlock(rec){
   // what fraction is on screen rather than letting an excerpt read as the file.
   const excerpted = rec.chars && rec.chars > rec.text.length;
   if (excerpted) tags.push(`<span>excerpt of ${num(rec.chars)} chars</span>`);
+  // The server shortened this cell before we saw it, so `chars` is the length of
+  // what arrived, not of the document.
+  if (rec.truncated) tags.push(`<span>shortened in transit</span>`);
   const head = rec.text.slice(0, 150).replace(/\s+/g, " ").trim() || "(empty)";
   return `<div class="doc">
     <div class="doctags">${tags.join("")}</div>
     <details><summary>${esc(head)}${rec.text.length > 150 ? "…" : ""}</summary>
       ${excerpted ? `<p class="note" style="margin:6px 0 0">Three spans sampled across a ${num(rec.chars)}-character document; <code>[…]</code> marks what is cut. This is also exactly the text the classifier judged.</p>` : ""}
       <pre>${esc(rec.text)}</pre>
-      <a class="shard" href="https://huggingface.co/datasets/${escAttr(rec.dataset)}/blob/${escAttr(rec.revision || "main")}/${escAttr(rec.shard)}" target="_blank" rel="noopener">${esc(rec.shard)} ›</a>
+      ${rec.shard
+        ? `<a class="shard" href="https://huggingface.co/datasets/${escAttr(rec.dataset)}/blob/${escAttr(rec.revision || "main")}/${escAttr(rec.shard)}" target="_blank" rel="noopener">${esc(rec.shard)} ›</a>`
+        : `<a class="shard" href="https://huggingface.co/datasets/${escAttr(rec.dataset)}/viewer/default/train?row=${escAttr(rec.row)}" target="_blank" rel="noopener">row ${num(rec.row)} in the dataset viewer ›</a>`}
     </details>
   </div>`;
 }
@@ -2570,18 +2611,29 @@ function tile(item, x, y, w, h, color, kind, tipHtml){
 function childrenOf(row, corpusSummaries){
   const stage = row.stageEntry;
   if (stage && stage.composition && stage.composition.length){
-    const total = stage.composition.reduce((a, c) => a + c.tokens, 0);
+    // Same unit choice the published-composition bars make, and it has to be
+    // made here too: a corpus that states sizes rather than token counts (the
+    // Pile) carries `bytes`, and reading `tokens` off it gives every child an
+    // undefined value, which treemapLayout filters out — dropping the whole
+    // composition from the card silently rather than visibly.
+    const bytes = stage.composition_unit === "bytes";
+    const amount = c => bytes ? c.bytes : c.tokens;
+    const total = stage.composition.reduce((a, c) => a + amount(c), 0);
     // Same test the published-composition card makes: a stage that trains on
     // less than the full recipe (the 32B runs 5.50T of a 5.93T mix) has
     // per-source counts that describe the mix, not the run, so they are scaled
     // and labeled approximate. Where the two agree, the mix's own numbers are
     // the numbers — scaling them would put a different figure on this box than
-    // on the bar above it.
-    const exact = Math.abs(total - row.tokens) <= 0.005 * row.tokens;
+    // on the bar above it. A byte composition is never in the box's unit, so it
+    // is always the share that is carried across, never the count.
+    const exact = !bytes && Math.abs(total - row.tokens) <= 0.005 * row.tokens;
     return stage.composition.map(c => ({
-      name: c.name, v: c.tokens, tokens: exact ? c.tokens : c.tokens / total * row.tokens,
+      name: c.name, v: amount(c),
+      tokens: exact ? c.tokens : amount(c) / total * row.tokens,
       detail: exact
         ? `${fmtTok(c.tokens)} of this stage's ${fmtTok(row.tokens)} tokens (${pct(c.tokens/total)})`
+        : bytes
+        ? `${fmtBytes(c.bytes)}, ${pct(c.bytes/total)} of the corpus — ≈${fmtTok(c.bytes/total*row.tokens)} of this ${fmtTok(row.tokens)}-token stage`
         : `${pct(c.tokens/total)} of the mix recipe — ≈${fmtTok(c.tokens/total*row.tokens)} of this ${fmtTok(row.tokens)}-token run`,
     }));
   }
@@ -3091,15 +3143,28 @@ async function budgetCard(main, model, slug){
   }
   if (all.unsized.length) notes.push(`No size for ${all.unsized.join(", ")}; excluded from the total.`);
   for (const st of est.stages) for (const n of (st.notes || [])) notes.push(`${st.stage}: ${n}`);
-  // The rate column is not one rule, because the two halves sample differently
-  // and the correction that is right for one double-counts on the other.
+  // The rate column is not one rule, because the correction that is right for
+  // one sampling design double-counts on another. Which one applies is a
+  // property of how a stage was *drawn*, not of what kind of stage it is: a
+  // corpus the datasets-server indexes in full is paged uniformly over
+  // documents and needs exactly the weighting a post-training mix needs.
+  // So describe the rules this estimate actually used, and no others.
+  const rateRule = r =>
+    r.startsWith("fit characters — rows")
+      ? "A corpus paged uniformly over documents is weighed by fit characters: without that its rate "
+        + "is a share of documents rather than a share of training."
+    : r.startsWith("fit characters")
+      ? "Post-training rows are drawn uniformly, so their rate is weighed by fit characters — "
+        + "otherwise it answers what fraction of examples rather than what fraction of training."
+    : r.startsWith("none")
+      ? "Corpus documents drawn by shard come from shards drawn with probability proportional to size, "
+        + "which already weights by tokens, so their document rate is used unchanged; weighing it by "
+        + "length would apply that a second time."
+      : "One corpus stage stores no document lengths to weigh by, so its unweighed document rate is "
+        + "used and reads its matches as if every document were the same size.";
   const rules = [...new Set(est.stages.filter(st => st.weighting).map(st => st.weighting))];
-  if (rules.length){
-    notes.push("Rate: post-training rows are drawn uniformly, so their rate is weighed by fit characters — "
-      + "otherwise it answers what fraction of examples rather than what fraction of training. Corpus documents "
-      + "come from shards drawn with probability proportional to size, which already weights by tokens, so their "
-      + "document rate is used unchanged; weighing it by length would apply that a second time.");
-  }
+  const rateNotes = [...new Set(rules.map(rateRule))];
+  if (rateNotes.length) notes.push("Rate: " + rateNotes.join(" "));
   notes.push(`Fit characters are converted at ${est.chars_per_token} per token. This weighs tokens, not learning: `
     + `a post-training token and a pretraining token are not equally formative, and nothing here corrects for that.`);
   for (const text of notes){
@@ -3243,14 +3308,19 @@ async function renderModel(model, gen){
   // ---- pipeline tiles ----
   const facts = document.createElement("section");
   facts.className = "card";
+  // Third member of the kind taxonomy this card labels. A model with no
+  // post-training stage at all is not the same thing as one whose runs are
+  // uncommitted, and the chip is where the page says what kind of target it is.
+  const base_only = m.is_model !== false && !m.stages.some(s => s.hf_dataset);
   facts.innerHTML = m.is_model === false
     ? `<h2>${esc(m.name)}<span class="kind" data-tip="A dataset, not a model: one stage, no training pipeline
          around it. The layers below read the data itself, which nothing was fit to.">dataset</span></h2>
        <p class="sub">${esc(m.note || "A dataset on its own — no model trained on it here.")}</p>
        <div class="pipe"></div>`
-    : `<h2>Training pipeline<span class="kind" data-tip="A model, and every stage of data it was
-         fit to.">model</span></h2>
-       <p class="sub">${m.hf_model} — token counts from the OLMo 3 paper; example counts from the datasets themselves.</p>
+    : `<h2>Training pipeline<span class="kind" data-tip="${base_only
+         ? "A base model: pretraining only. It was released without post-training, so there are no SFT, DPO or RL stages to read."
+         : "A model, and every stage of data it was fit to."}">${base_only ? "base model" : "model"}</span></h2>
+       <p class="sub">${m.hf_model} — token counts as the release published them; example counts from the datasets themselves.</p>
        <div class="pipe"></div>`;
   wireTips(facts);
   const pipe = facts.querySelector(".pipe");
@@ -3324,10 +3394,14 @@ async function renderModel(model, gen){
   if (base.length){
     const card = document.createElement("section");
     card.className = "card";
+    // Only a shard-sampled corpus gets measured independently below; a corpus
+    // read through the dataset viewer has no file listing to count, so its
+    // composition is the published one and nothing here re-derives it.
+    const measured = corpusData.some(([, d]) => (d.route || "shards") === "shards");
     card.innerHTML = `<h2>What the base model was trained on</h2>
-      <p class="sub">Token counts and mix composition from the OLMo 3 paper (Table 4) and each mix's
-        dataset card — the release's own numbers, not measured here. The card below measures the
-        same mixes independently by sampling their shards, so the two are worth comparing.</p>`;
+      <p class="sub">Token counts and mix composition as each release published them — its own
+        numbers, not measured here.${measured ? ` The card below measures the same mixes
+        independently by sampling their shards, so the two are worth comparing.` : ""}</p>`;
     // shares under 0.1% would round to a flat 0.0%
     const pctc = f => f < 0.001 ? (f*100).toFixed(2)+"%" : pct(f);
     for (const s of base){
@@ -3344,26 +3418,44 @@ async function renderModel(model, gen){
           <span class="ds">— ${esc(s.name)}${s.tokens ? " · " + fmtTok(s.tokens) + " tokens" : ""}</span>${link}</h3>
         <p class="kv" style="margin:2px 0 8px">${esc(s.note || "No further details recorded in the registry.")}</p>`;
       if (s.composition && s.composition.length){
-        const total = s.composition.reduce((a,c) => a + c.tokens, 0);
-        const maxf = Math.max(...s.composition.map(c => c.tokens/total));
+        // Mixes publish token counts; a corpus like the Pile publishes sizes.
+        // Reading the wrong field would render every bar as NaN, so the unit
+        // picks both the field and the formatter.
+        const bytes = s.composition_unit === "bytes";
+        const amount = c => bytes ? c.bytes : c.tokens;
+        const fmtAmt = bytes ? fmtBytes : fmtTok;
+        const total = s.composition.reduce((a,c) => a + amount(c), 0);
+        const maxf = Math.max(...s.composition.map(c => amount(c)/total));
         // Some stages train on less than the full published mix (the 32B runs
         // 5.50T of a recipe whose card counts 5.93T). When the stage's declared
         // tokens don't match the composition total, the absolute per-source
         // counts describe the mix, not this run — show only the mix's own
         // shares, and put a clearly-approximate scaled count in the tooltip.
-        const exact = !s.tokens || Math.abs(total - s.tokens) <= 0.005 * s.tokens;
+        // A byte composition is never comparable to the stage's token count, so
+        // it is exact on its own terms rather than "approximate" against a
+        // number measuring something else.
+        const exact = bytes || !s.tokens || Math.abs(total - s.tokens) <= 0.005 * s.tokens;
         for (const c of s.composition){
-          const f = c.tokens/total;
+          const f = amount(c)/total;
           const row = document.createElement("div");
           row.className = "row";
           row.innerHTML = `
             <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</div>
             <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
-            <div class="val">${pctc(f)}${exact ? ` <small>${fmtTok(c.tokens)}</small>` : ""}</div>`;
+            <div class="val">${pctc(f)}${exact ? ` <small>${fmtAmt(amount(c))}</small>` : ""}</div>`;
           hover(row.querySelector(".trackbar"), exact
-            ? `<b>${escAttr(c.name)}</b><br>${fmtTok(c.tokens)} of ${fmtTok(total)} tokens (${pctc(f)})`
+            ? `<b>${escAttr(c.name)}</b><br>${fmtAmt(amount(c))} of ${fmtAmt(total)}${bytes ? "" : " tokens"} (${pctc(f)})`
             : `<b>${escAttr(c.name)}</b><br>${pctc(f)} of the mix recipe — ≈${fmtTok(f*s.tokens)} of this ${fmtTok(s.tokens)}-token run`);
           div.appendChild(row);
+        }
+        // What the shares are shares *of*, when that is not the same corpus as
+        // the one sampled below.
+        if (s.composition_scope){
+          const note = document.createElement("p");
+          note.className = "note";
+          note.style.margin = "8px 0 0";
+          note.textContent = s.composition_scope;
+          div.appendChild(note);
         }
       }
       card.appendChild(div);
@@ -3375,12 +3467,22 @@ async function renderModel(model, gen){
   if (corpusData.length){
     const card = document.createElement("section");
     card.className = "card corpus";
-    card.innerHTML = `<h2>What's actually in the pretraining data</h2>
-      <p class="sub">The dataset viewer indexes only the first few GB of these corpora and the
-        shards are ordered by topic, so sampling it returns one cluster at a time. These documents
+    // Two ways in, and they leave very different samples. Describing the shard
+    // route over a corpus drawn uniformly would invent a bias that isn't there;
+    // describing the uniform route over Dolma 3 would hide one that is.
+    const anyShards = corpusData.some(([, d]) => (d.route || "shards") === "shards");
+    const anyRows = corpusData.some(([, d]) => d.route === "rows");
+    const blurb = [
+      anyShards ? `The dataset viewer indexes only the first few GB of these corpora and the
+        shards are ordered by topic, so sampling it returns one cluster at a time. Those documents
         come from the shard files directly: shards drawn in proportion to their size, each one's
-        head pulled with a range request. Composition below is exact — it is the whole file
-        listing, not a sample.</p>`;
+        head pulled with a range request. Composition is exact — it is the whole file listing,
+        not a sample.` : "",
+      anyRows ? `Where the viewer <em>has</em> indexed a corpus in full, there is nothing to work
+        around: those documents are drawn uniformly from every row in it.` : "",
+    ].filter(Boolean).join(" ");
+    card.innerHTML = `<h2>What's actually in the pretraining data</h2>
+      <p class="sub">${blurb}</p>`;
     for (const [s, d] of corpusData){
       const h = document.createElement("h3");
       h.className = "stage";
@@ -3396,10 +3498,15 @@ async function renderModel(model, gen){
       const rev = d.revision
         ? ` <span>at <a href="https://huggingface.co/datasets/${escAttr(d.dataset)}/tree/${escAttr(d.revision)}" target="_blank" rel="noopener"><code>${esc(d.revision.slice(0,7))}</code></a></span>`
         : "";
-      facts.innerHTML = `<span><b>${num(d.shards)}</b> shards</span>
-        <span><b>${fmtBytes(d.bytes)}</b> compressed</span>
-        <span><b>${Object.keys(d.groups).length}</b> source/topic groups</span>
-        <span><b>${num(d.records)}</b> documents sampled</span>${rev}`;
+      // A rows-sampled corpus has no shards, no compressed byte total and no
+      // per-group listing. Printing zeros for those would read as a measured
+      // result; the corpus size it does know goes in their place.
+      facts.innerHTML = (d.route === "rows"
+        ? `<span><b>${num(d.rows_total)}</b> documents in the corpus</span>\n`
+        : `<span><b>${num(d.shards)}</b> shards</span>
+           <span><b>${fmtBytes(d.bytes)}</b> compressed</span>
+           <span><b>${Object.keys(d.groups || {}).length}</b> source/topic groups</span>\n`)
+        + `<span><b>${num(d.records)}</b> documents sampled</span>${rev}`;
       card.appendChild(facts);
 
       // A draw that yields nothing is silently replaced by another, which
@@ -3416,7 +3523,7 @@ async function renderModel(model, gen){
         card.appendChild(scope);
       }
 
-      corpusComposition(card, d.groups, d.bytes);
+      if (d.groups && Object.keys(d.groups).length) corpusComposition(card, d.groups, d.bytes);
 
       const det = document.createElement("details");
       det.innerHTML = `<summary class="stage-sub" style="cursor:pointer;margin:12px 0 0">
@@ -3464,6 +3571,23 @@ async function renderModel(model, gen){
     main.appendChild(m.is_model === false
       ? part("The data", "what is in it, and what the prompts in it are about")
       : part("Post-training", "the examples that turned the base model into an assistant"));
+  else if (m.is_model){
+    // A base model. The cards below all read sampled prompts, and each has a
+    // "no runs committed yet" fallback that would read as work not done rather
+    // than as a stage that does not exist — so say which it is, once, and skip
+    // them entirely.
+    main.appendChild(part("Post-training", "there wasn't any"));
+    const none = document.createElement("section");
+    none.className = "card";
+    none.innerHTML = `<h2>This model was never post-trained</h2>
+      <p class="sub">${esc(m.hf_model)} was released as a base model, so there are no SFT, DPO or
+        RL stages — no prompts to sample, nothing fit to a response, and no verifier to read a
+        label off. The helpful/honest/harmless question this page leads with has no answer here,
+        which is a fact about the model rather than a gap in the audit. Everything above measures
+        the corpus it read; ask a free-form question of that corpus with
+        <code>trainspotting ask ${esc(model)} "…" --pretrain</code>.</p>`;
+    main.appendChild(none);
+  }
 
   // ---- exact mix composition ----
   if (sources){
@@ -3719,7 +3843,7 @@ async function renderModel(model, gen){
     glance.appendChild(note);
   }
   if (!any) hhh.innerHTML += `<p class="note">No classification runs committed for ${esc(model)} yet — run <code>trainspotting classify ${model}</code>.</p>`;
-  main.appendChild(hhh);
+  if (post.length) main.appendChild(hhh);
 
   // ---- label × source crosstab ----
   const cross = await crosstabCard(model, m, post, profiles, ctxFor, gen);
@@ -3890,7 +4014,7 @@ async function renderModel(model, gen){
     });
   }
   if (!anyLang) langCard.innerHTML += `<p class="note">No language run committed for ${esc(model)} yet — run <code>trainspotting languages ${model}</code>.</p>`;
-  main.appendChild(langCard);
+  if (post.length) main.appendChild(langCard);
 
   // ---- custom questions (trainspotting ask) ----
   const askFiles = MANIFEST.filter(f => f.startsWith(model + ".") && f.includes(".ask-"));
@@ -3932,10 +4056,12 @@ async function renderModel(model, gen){
       const key = `${d.question}\u0000${d.classifier}`;
       if (!buckets.has(key)) buckets.set(key, {question: d.question, classifier: d.classifier, rows: []});
       const n = d.records.length, k = d.records.filter(r => r.match).length;
-      // Corpus runs ship their own interval: documents from one shard share a
-      // topic cluster, so the CI is widened by the measured design effect of
-      // that clustering. Computing it here too would be a second implementation
-      // free to drift from the CLI's, so use the stored one when it exists.
+      // Corpus runs ship their own interval: documents drawn together are
+      // correlated — one shard is one topic cluster, one page is ten rows that
+      // were adjacent on disk — so the CI is widened by the measured design
+      // effect of that clustering. Computing it here too would be a second
+      // implementation free to drift from the CLI's, so use the stored one when
+      // it exists.
       const nEff = d.n_effective || n;
       buckets.get(key).rows.push({
         stage, d, n, k, nEff,
@@ -3959,7 +4085,8 @@ async function renderModel(model, gen){
         const isCorpus = corpusStages.some(c => c.stage === r.stage);
         const unit = isCorpus ? "documents" : "prompts";
         // Only call out the correction when it actually bit; at one document per
-        // shard the design effect is ~1 and n_eff lands within a hair of n.
+        // shard, or a page whose rows are unrelated, the design effect is ~1 and
+        // n_eff lands within a hair of n.
         const clustered = r.nEff < r.n * 0.98;
         // Same accounting as the HHH card: whatever the classifier never
         // judged is missing from n, not counted as a non-match.
@@ -3968,7 +4095,7 @@ async function renderModel(model, gen){
           ? `<br>${skipped} sampled ${unit} went unjudged (${esc(Object.entries(r.d.unlabeled_reasons || {}).map(([k, v]) => `${v} ${k}`).join(", ") || "no reason recorded")}) and are excluded from n`
           : "";
         const ciNote = clustered
-          ? `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])} — widened for clustering, effective n ${r.nEff.toFixed(0)} of ${r.n} (documents sharing a shard are correlated)`
+          ? `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])} — widened for clustering, effective n ${r.nEff.toFixed(0)} of ${r.n} (documents drawn together are correlated)`
           : `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`;
         barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
           `<b>${r.stage}</b> · ${esc(r.d.dataset)}${revLink(r.d)}<br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})${ciNote}${skipNote}<br>click to read them`,
@@ -4307,16 +4434,29 @@ async function renderLookup(gen){
 }
 
 async function renderCompare(gen){
-  // Models only. A dataset has no pipeline to line up stage-by-stage against
-  // one, and putting it on this axis would read as a fourth model.
-  const models = Object.keys(REG).filter(k => REG[k].is_model !== false);
+  // Models with a post-training pipeline. A dataset has no pipeline to line up
+  // stage-by-stage against one, and putting it on this axis would read as a
+  // model; a base model that was never post-trained is the same case for the
+  // same reason. Every card below is built from stages with an `hf_dataset`, so
+  // such a target can contribute neither a bar nor a missing-run note — only a
+  // legend entry for a series that never arrives, in a colour it takes by
+  // wrapping the ramp and collides with the first model's.
+  const models = Object.keys(REG).filter(k =>
+    REG[k].is_model !== false && (REG[k].stages || []).some(s => s.hf_dataset));
+  // Named rather than dropped: the tab strip offers these models, so a reader
+  // who does not find one here should be told it has nothing to compare rather
+  // than left to wonder whether the page failed to load it.
+  const baseOnly = Object.keys(REG).filter(k =>
+    REG[k].is_model !== false && !(REG[k].stages || []).some(s => s.hf_dataset));
   const main = document.getElementById("main");
   main.innerHTML = "";
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === "compare"));
 
   const color = m => MODEL_COLORS[models.indexOf(m) % MODEL_COLORS.length];
-  // Colors are keyed to the global model list, so a model keeps its color even
-  // in a legend that only names a subset (the per-bucket ask legends below).
+  // Colors are keyed to the list of compared models, so a model keeps its color
+  // even in a legend that only names a subset (the per-bucket ask legends
+  // below) — and the ramp is only ever asked for as many colours as there are
+  // series, so no model wraps onto another's.
   const legendFor = ms => `<div class="legend" style="margin:0 0 4px">${ms.map(m =>
     `<span class="k"><i style="background:${color(m)}"></i>${m}</span>`).join("")}</div>`;
   const legend = legendFor(models);
@@ -4338,7 +4478,10 @@ async function renderCompare(gen){
   hhh.className = "card";
   hhh.innerHTML = `<h2>Helpful, honest, harmless — model against model</h2>
     <p class="sub">Share of sampled prompts per stage whose primary training signal is each label,
-      all models on one axis. Whiskers: Wilson 95% CI. Click a bar for the prompts behind it.</p>${legend}`;
+      all models on one axis. Whiskers: Wilson 95% CI. Click a bar for the prompts behind it.${
+        baseOnly.length ? ` Not on this axis: ${baseOnly.map(esc).join(", ")} — released as a base
+        model with no post-training stages, so there is nothing here to compare. Its pretraining
+        corpus is on its own tab.` : ""}</p>${legend}`;
   for (const stage of stages){
     const per = [], missing = [];
     for (const m of models){

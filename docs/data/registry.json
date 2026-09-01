@@ -363,6 +363,117 @@
       }
     ]
   },
+  "pythia-12b-deduped": {
+    "target": "pythia-12b-deduped",
+    "is_model": true,
+    "hf_model": "EleutherAI/pythia-12b-deduped",
+    "stages": [
+      {
+        "stage": "pretrain",
+        "name": "The Pile (deduplicated)",
+        "tokens": 299892736000,
+        "note": "22 curated sources \u2014 web, books, code, papers, law, patents, subtitles, email \u2014 assembled by EleutherAI in 2020 and released whole. The deduplicated release is about 207B tokens, so Pythia's 299.9B-token budget is roughly 1.5 passes over it rather than one. There is no midtraining, no long-context stage and no post-training: EleutherAI built Pythia to study how a model changes during pretraining, and stopped at the base model.",
+        "hf": "EleutherAI/the_pile_deduplicated",
+        "sample_dataset": "EleutherAI/the_pile_deduplicated",
+        "sample_via": "rows",
+        "text_column": "text",
+        "sample_scope": "The deduplicated Pile, which is what every `-deduped` Pythia saw. The plain Pythia models trained on the non-deduplicated Pile, whose original distribution is no longer downloadable.",
+        "composition": [
+          {
+            "name": "Pile-CC (web)",
+            "bytes": 243868243066
+          },
+          {
+            "name": "Books3",
+            "bytes": 108404974551
+          },
+          {
+            "name": "GitHub",
+            "bytes": 102177271971
+          },
+          {
+            "name": "PubMed Central",
+            "bytes": 96926674452
+          },
+          {
+            "name": "OpenWebText2",
+            "bytes": 67398774292
+          },
+          {
+            "name": "arXiv",
+            "bytes": 60355027927
+          },
+          {
+            "name": "FreeLaw",
+            "bytes": 54921894297
+          },
+          {
+            "name": "Stack Exchange",
+            "bytes": 34574486732
+          },
+          {
+            "name": "USPTO Backgrounds",
+            "bytes": 24588687769
+          },
+          {
+            "name": "PubMed Abstracts",
+            "bytes": 20680267530
+          },
+          {
+            "name": "OpenSubtitles",
+            "bytes": 13937168875
+          },
+          {
+            "name": "Gutenberg (PG-19)",
+            "bytes": 11682311045
+          },
+          {
+            "name": "DM Mathematics",
+            "bytes": 8321499136
+          },
+          {
+            "name": "Wikipedia (en)",
+            "bytes": 6850472837
+          },
+          {
+            "name": "BookCorpus2",
+            "bytes": 6764573491
+          },
+          {
+            "name": "Ubuntu IRC",
+            "bytes": 5927054868
+          },
+          {
+            "name": "EuroParl",
+            "bytes": 4928474972
+          },
+          {
+            "name": "HackerNews",
+            "bytes": 4187593113
+          },
+          {
+            "name": "YouTube Subtitles",
+            "bytes": 4005057003
+          },
+          {
+            "name": "PhilPapers",
+            "bytes": 2555505541
+          },
+          {
+            "name": "NIH ExPorter",
+            "bytes": 2029372047
+          },
+          {
+            "name": "Enron Emails",
+            "bytes": 944892805
+          }
+        ],
+        "composition_unit": "bytes",
+        "composition_scope": "EleutherAI published this breakdown for the Pile as assembled, before deduplication. Dedup removed about 30% of the bytes and did not remove them evenly, so these are the shares of the corpus this one was derived from, not of the corpus sampled below.",
+        "hf_dataset": null
+      }
+    ]
+  },
   "wildchat-1m": {
     "target": "wildchat-1m",
     "is_model": false,

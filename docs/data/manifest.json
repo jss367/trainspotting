@@ -57,6 +57,8 @@
   "olmo-3-7b-think.sft.languages.json",
   "olmo-3-7b-think.sft.profile.json",
   "olmo-3-7b-think.sources.json",
+  "pythia-12b-deduped.pretrain.corpus.json",
+  "pythia-12b-deduped.pretrain.docs.json",
   "search-index.json",
   "wildchat-1m.chat.context.json",
   "wildchat-1m.chat.labels.json",

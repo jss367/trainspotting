@@ -12,8 +12,14 @@ accident of starting with Olmo. `resolve` hands both kinds back in the same
 shape, so a dataset is a one-stage target and no command has to know which it
 got.
 
+Not every model has all of these. Pythia has a pretraining stage and nothing
+else, because EleutherAI never post-trained it — so `post_training_stages` comes
+back empty and every layer built on prompts sits out. That is a fact about the
+model worth showing, not a target to exclude.
+
 Model facts sourced from the Olmo 3 paper (arXiv:2512.13961) and the Ai2 release
-blog.
+blog; Pythia's from the Pythia paper (arXiv:2304.01373) and the Pile paper
+(arXiv:2101.00027).
 """
 
 # Schema hints:
@@ -32,10 +38,17 @@ blog.
 #       prompt-sampling code never tries to pull rows from a multi-TB corpus.
 #   composition: [{name, tokens}] per-source token counts from the mix's own
 #       dataset card / the Olmo 3 paper (Table 4), not computed by us.
-#   sample_dataset: the repo of .jsonl.zst shards the pretrain sampler reads by
-#       HTTP range request. Distinct from `hf`, which is only a link: this one
-#       has to be a repo whose shard layout the sampler understands.
+#   sample_dataset: the repo the pretrain sampler reads. Distinct from `hf`,
+#       which is only a link: this one has to be a repo the sampler can draw
+#       documents from.
+#   sample_via: how to draw from it — "shards" (default) walks the repo's
+#       .jsonl.zst files by HTTP range request, "rows" pages the
+#       datasets-server. See `sample_route`.
+#   text_column: for a "rows" corpus, the column holding the document text.
 #   sample_scope: what that repo is relative to what the model actually saw.
+#   composition_unit: what the `composition` numbers count. Absent means
+#       tokens, which is what the Dolma 3 mixes publish. "bytes" is for a
+#       corpus whose own release states sizes rather than token counts.
 
 # The 6T-1025 mix's own card: 5.93T tokens over 3.87B documents, upsampled
 # from the ~9.3T-token Dolma 3 pool.
@@ -165,6 +178,92 @@ OLMO3_32B_BASE_STAGES = [
     },
 ]
 
+# --- Pythia (EleutherAI) ------------------------------------------------------
+#
+# The other end of the openness spectrum from Olmo: the corpus is public and the
+# exact training order is published, but the pipeline stops at the base model.
+# EleutherAI never post-trained Pythia, so there is no SFT, DPO or RL stage to
+# register — `sources`, `classify` and `context` have nothing to run on, and the
+# helpful/honest/harmless question this tool leads with is unanswerable here.
+# What Pythia gives instead is a pretraining corpus that can be sampled
+# *properly*: see `sample_via` below.
+#
+# GiB, as the Pile's own table reports sizes. Raw Size, not Effective Size —
+# the released corpus holds each document once, and the epoch multipliers in
+# the paper's other column describe a training schedule Pythia did not use.
+_GIB = 1024**3
+
+# The Pile's 22 components by raw size, from EleutherAI's own table
+# (github.com/EleutherAI/the-pile, Table 1 of arXiv:2101.00027). Sums to
+# 825.18 GiB, the "825 GiB" the paper's title rounds to.
+PILE_COMPOSITION = [
+    {"name": "Pile-CC (web)", "bytes": int(227.12 * _GIB)},
+    {"name": "Books3", "bytes": int(100.96 * _GIB)},
+    {"name": "GitHub", "bytes": int(95.16 * _GIB)},
+    {"name": "PubMed Central", "bytes": int(90.27 * _GIB)},
+    {"name": "OpenWebText2", "bytes": int(62.77 * _GIB)},
+    {"name": "arXiv", "bytes": int(56.21 * _GIB)},
+    {"name": "FreeLaw", "bytes": int(51.15 * _GIB)},
+    {"name": "Stack Exchange", "bytes": int(32.20 * _GIB)},
+    {"name": "USPTO Backgrounds", "bytes": int(22.90 * _GIB)},
+    {"name": "PubMed Abstracts", "bytes": int(19.26 * _GIB)},
+    {"name": "OpenSubtitles", "bytes": int(12.98 * _GIB)},
+    {"name": "Gutenberg (PG-19)", "bytes": int(10.88 * _GIB)},
+    {"name": "DM Mathematics", "bytes": int(7.75 * _GIB)},
+    {"name": "Wikipedia (en)", "bytes": int(6.38 * _GIB)},
+    {"name": "BookCorpus2", "bytes": int(6.30 * _GIB)},
+    {"name": "Ubuntu IRC", "bytes": int(5.52 * _GIB)},
+    {"name": "EuroParl", "bytes": int(4.59 * _GIB)},
+    {"name": "HackerNews", "bytes": int(3.90 * _GIB)},
+    {"name": "YouTube Subtitles", "bytes": int(3.73 * _GIB)},
+    {"name": "PhilPapers", "bytes": int(2.38 * _GIB)},
+    {"name": "NIH ExPorter", "bytes": int(1.89 * _GIB)},
+    {"name": "Enron Emails", "bytes": int(0.88 * _GIB)},
+]
+
+# 143,000 steps x 1024 sequences x 2048 tokens. Every Pythia size saw this same
+# token budget over this same corpus in this same order — the point of the suite.
+PYTHIA_TOKENS = 143_000 * 1024 * 2048
+
+PYTHIA_DEDUPED_STAGES = [
+    {
+        "stage": "pretrain",
+        "name": "The Pile (deduplicated)",
+        "tokens": PYTHIA_TOKENS,
+        "note": (
+            "22 curated sources — web, books, code, papers, law, patents, "
+            "subtitles, email — assembled by EleutherAI in 2020 and released "
+            "whole. The deduplicated release is about 207B tokens, so Pythia's "
+            "299.9B-token budget is roughly 1.5 passes over it rather than one. "
+            "There is no midtraining, no long-context stage and no "
+            "post-training: EleutherAI built Pythia to study how a model "
+            "changes during pretraining, and stopped at the base model."
+        ),
+        "hf": "EleutherAI/the_pile_deduplicated",
+        "sample_dataset": "EleutherAI/the_pile_deduplicated",
+        # The one corpus in the registry the datasets-server serves whole:
+        # 134,318,121 rows, `partial: false`, so /rows reaches any offset and
+        # the sample is uniform over documents. Every Dolma 3 corpus has to go
+        # the shard route and carries a positional caveat this one does not.
+        "sample_via": "rows",
+        "text_column": "text",
+        "sample_scope": (
+            "The deduplicated Pile, which is what every `-deduped` Pythia saw. "
+            "The plain Pythia models trained on the non-deduplicated Pile, whose "
+            "original distribution is no longer downloadable."
+        ),
+        "composition": PILE_COMPOSITION,
+        "composition_unit": "bytes",
+        "composition_scope": (
+            "EleutherAI published this breakdown for the Pile as assembled, "
+            "before deduplication. Dedup removed about 30% of the bytes and "
+            "did not remove them evenly, so these are the shares of the corpus "
+            "this one was derived from, not of the corpus sampled below."
+        ),
+        "hf_dataset": None,
+    },
+]
+
 MODELS = {
     "olmo-3-7b-instruct": {
         "hf_model": "allenai/Olmo-3-7B-Instruct",
@@ -254,6 +353,10 @@ MODELS = {
                 "source_columns": ["dataset_source", "dataset"],
             },
         ],
+    },
+    "pythia-12b-deduped": {
+        "hf_model": "EleutherAI/pythia-12b-deduped",
+        "stages": PYTHIA_DEDUPED_STAGES,
     },
 }
 
@@ -355,5 +458,32 @@ def post_training_stages(target: dict) -> list[dict]:
 
 
 def pretrain_stages(target: dict) -> list[dict]:
-    """Stages whose corpora are shard repos rather than datasets-server datasets."""
+    """Stages sampled as a corpus of documents rather than as training examples.
+
+    What separates these from `post_training_stages` is not the transport but
+    the shape of what comes back: a corpus document has no prompt, no response
+    and no verifier, so none of the layers built on those apply to it. Two
+    stages here can still be read by different routes — see `sample_route`.
+    """
     return [s for s in target["stages"] if s.get("sample_dataset")]
+
+
+def sample_route(stage: dict) -> str:
+    """How to draw documents from a pretraining stage's corpus.
+
+    "shards" reads the repo's .jsonl.zst files by HTTP range request. It exists
+    because the datasets-server indexes only the first ~5 GB of a Dolma 3 repo
+    and those shards are ordered by topic cluster, so paging /rows tours
+    whichever clusters sort first. The cost is a positional bias the result
+    files state on every run: a range request only reaches a shard's head.
+
+    "rows" pages the datasets-server, and is *better* where it is available —
+    uniform over the whole corpus, no shard listing, no position caveat. It is
+    only correct for a repo the server has indexed in full (`partial: false`),
+    which of the registered corpora is the deduplicated Pile alone.
+
+    Defaulting to shards keeps the choice explicit at the one place it is safe
+    to make: a stage that forgets to declare it gets the route with the honest
+    caveat rather than the one that silently samples 5 GB of a 450 GB corpus.
+    """
+    return stage.get("sample_via", "shards")
