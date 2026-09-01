@@ -1283,6 +1283,21 @@ def cmd_budget(args):
     est = budget.estimate(args.target, args.slug)
     measured = [s for s in est["stages"] if s.get("measured")]
     if not measured:
+        # An artifact that exists and cannot be used is not a missing artifact,
+        # and telling someone to re-run the command that produced it sends them
+        # in a circle. Each stage already recorded why it failed; print that.
+        unusable = [s for s in est["stages"] if s.get("unusable")]
+        if unusable:
+            print(
+                f"every ask run for {args.target} under slug {args.slug!r} is unusable:",
+                file=sys.stderr,
+            )
+            for s in unusable:
+                print(f"  {s['stage']}: {s['unusable']}", file=sys.stderr)
+            for s in unusable:
+                for note in s.get("notes", []):
+                    print(f"  {s['stage']}: {note}", file=sys.stderr)
+            sys.exit(1)
         sys.exit(
             f"no ask run for {args.target} with slug {args.slug!r}"
             f" — run `trainspotting ask {args.target} \"...\" --slug {args.slug}`"
@@ -1439,6 +1454,7 @@ def _report_questions(target_name: str, target: dict) -> None:
     """
     asks = paths.runs(target_name, "ask")
     stances = paths.runs(target_name, "stance")
+    corpus_names = {x["stage"] for x in registry.pretrain_stages(target)}
     if not asks and not stances:
         return
     order = [s["stage"] for s in target["stages"]]
@@ -1484,6 +1500,29 @@ def _report_questions(target_name: str, target: dict) -> None:
                     f" {differ}; the rates above are grouped under the one each stage was"
                     " actually scored by.)\n"
                 )
+            # The rubric is named rather than used as a grouping key, because a
+            # corpus stage and a post-training stage are scored under different
+            # rubrics on every `--pretrain` run by design — keying on it would
+            # split every such block in two. What is worth saying is a rubric
+            # that moved between stages judged the same way, which is the same
+            # rule `budget.mixing` applies.
+            for question, group in groups.items():
+                by_family: dict[str, dict[str, list[str]]] = {}
+                for st in group:
+                    sha = data[st].get("system_sha")
+                    if sha:
+                        fam = "pretrain" if st in corpus_names else "post-training"
+                        by_family.setdefault(fam, {}).setdefault(sha, []).append(st)
+                for fam, shas in by_family.items():
+                    if len(shas) > 1:
+                        detail = "; ".join(
+                            f"{', '.join(sts)} under {sha[:12]}" for sha, sts in shas.items()
+                        )
+                        print(
+                            f"(the {fam} stages above were scored under"
+                            f" {len(shas)} different rubrics — {detail} — so their rates"
+                            " are not directly comparable.)\n"
+                        )
 
     if stances:
         print("\n## Which way each example pushes (whole examples, sampled)\n")

@@ -696,3 +696,26 @@ def test_only_a_fully_sized_pipeline_can_claim_a_lower_bound():
     phrase = _share_phrase(one_unsized)
     assert "at least" not in phrase
     assert "could be sized" in phrase
+
+
+def test_budget_tells_an_unusable_run_apart_from_a_missing_one(capsys, monkeypatch):
+    """An artifact that exists and cannot be used is not a missing artifact.
+
+    Telling someone to re-run the command that produced it sends them in a
+    circle, and throws away the reason each stage already recorded.
+    """
+    import trainspotting.cli as cli
+
+    monkeypatch.setattr(cli.budget, "estimate", lambda t, s: {
+        "target": t, "slug": s, "question": "Q?", "mixed": False, "stages": [
+            {"stage": "sft", "measured": False, "unusable": "the ask run labeled nothing",
+             "notes": ["an ask run exists but produced no usable rate"]},
+        ], "totals": {}})
+    with pytest.raises(SystemExit) as exc:
+        cli.cmd_budget(type("A", (), {"target": "m", "slug": "q", "json": False})())
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "is unusable" in err
+    assert "the ask run labeled nothing" in err
+    # Not the "go run the thing that already ran" advice.
+    assert "trainspotting ask" not in err
