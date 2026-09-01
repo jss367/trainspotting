@@ -75,6 +75,23 @@ def test_a_phrase_with_no_occurrences_costs_no_call(calls):
     assert out["drawn"] == 0 and out["documents"] == []
 
 
+def test_exhaustive_answers_to_the_reply_not_the_request(monkeypatch):
+    """A count at or under the cap asks for every occurrence, but the index can
+    still answer short. Computing the flag before looking at the reply let a
+    phrase counted at eight occurrences come back with three documents — or
+    none — while the CLI and the site called the list complete."""
+    monkeypatch.setattr(
+        lookup,
+        "_post",
+        lambda payload: {"documents": [{"doc_ix": 1, "spans": [["t", None]], "doc_len": 9}]},
+    )
+
+    out = lookup.sample_documents("idx", "q", occurrences=8, want=10)
+
+    assert out["drawn"] == 1
+    assert not out["exhaustive"]
+
+
 def test_a_short_reply_ends_the_draw_instead_of_spinning(monkeypatch):
     """An index that answers with fewer documents than asked has no more to
     give. Subtracting what came back rather than what was asked for would keep
@@ -113,3 +130,17 @@ def test_repeats_across_calls_are_counted_once_as_documents_and_kept_in_drawn(mo
     assert out["drawn"] == 12
     assert len(out["documents"]) == 1
     assert out["documents"][0]["occurrences_drawn"] == 12
+
+
+def test_a_negative_document_count_is_a_usage_error_but_zero_is_not():
+    """`--docs 0` asks for counts without documents, which is a real choice.
+    `--docs -1` reached the sampler as a negative budget, skipped retrieval, and
+    reported "0 documents from 0 draws" for a phrase with thousands of copies."""
+    import argparse
+
+    from trainspotting.cli import _count_int
+
+    assert _count_int("0") == 0
+    assert _count_int("12") == 12
+    with pytest.raises(argparse.ArgumentTypeError):
+        _count_int("-1")

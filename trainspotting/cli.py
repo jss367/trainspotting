@@ -32,6 +32,17 @@ SITE_DATA = Path(__file__).resolve().parent.parent / "docs" / "data"
 TARGET_HELP = "model or dataset: " + ", ".join(registry.targets())
 
 
+def _count_int(value: str) -> int:
+    """argparse type for a count where zero is a real choice — `lookup --docs 0`
+    asks for counts without documents. A negative one is not: it reaches the
+    sampler as a negative budget, skips retrieval, and reports "0 documents from
+    0 draws" for a phrase with thousands of occurrences."""
+    n = int(value)
+    if n < 0:
+        raise argparse.ArgumentTypeError(f"must be zero or a positive integer, got {n}")
+    return n
+
+
 def _positive_int(value: str) -> int:
     """argparse type for counts. Zero divides by zero deep inside the sampler and
     a negative one silently returns nothing; both should be a usage error."""
@@ -1163,6 +1174,11 @@ def cmd_lookup(args):
         )
     print(f"\n{args.query!r}\n")
     width = max(len(lookup.INDEX_BY_ID[i]["label"]) for i in ids)
+    # The index counts token-boundary matches, not character substrings, so a
+    # surprising count is sometimes a surprising tokenisation — `find` prints
+    # the sequence for exactly this reason. Collected per index because each
+    # index tokenises for itself, and printed once when they all agree.
+    tokenised: dict[str, list[str]] = {}
     for idx in ids:
         info = lookup.INDEX_BY_ID[idx]
         try:
@@ -1171,6 +1187,7 @@ def cmd_lookup(args):
             print(f"  {info['label']:<{width}}  — {e}")
             continue
         n = r["occurrences"]
+        tokenised.setdefault(" | ".join(r.get("tokens") or []), []).append(info["label"])
         # Occurrences and documents are different numbers and the gap is the
         # whole point, so print both whenever documents were pulled rather than
         # letting one stand in for the other.
@@ -1186,6 +1203,11 @@ def cmd_lookup(args):
             bits = [b for b in [d["subset"], d["snapshot"], f"{d['tokens']:,} tok" if d["tokens"] else None] if b]
             print(f"      {d['url'] or d['shard'] or '?'}")
             print(f"        {' · '.join(bits)}")
+    for seq, labels in tokenised.items():
+        if not seq:
+            continue
+        where = "" if len(tokenised) == 1 else f"  ({', '.join(labels)})"
+        print(f"\n  matched as tokens: {seq}{where}")
     print()
 
 
@@ -1323,7 +1345,7 @@ def main():
     )
     p.add_argument(
         "--docs",
-        type=int,
+        type=_count_int,
         default=0,
         metavar="N",
         help="also pull up to N documents behind each count (the index caps a single call at 10)",

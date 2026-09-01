@@ -280,7 +280,11 @@ def sample_documents(index: str, query: str, occurrences: int, want: int = MAX_D
     # reader opens, the count is what any share over the sample is weighted by.
     return {
         "drawn": drawn,
-        "exhaustive": exhaustive,
+        # What was asked for is not what arrived. A count of eight can come back
+        # with three documents, or none, and the claim "this is every copy" has
+        # to answer to the reply rather than to the request — otherwise a short
+        # answer from the index reads on the page as an exhaustive list.
+        "exhaustive": exhaustive and drawn >= budget,
         "documents": sorted(seen.values(), key=lambda d: -d["occurrences_drawn"]),
     }
 
