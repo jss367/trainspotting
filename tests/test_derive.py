@@ -15,12 +15,12 @@ So the joins are tested against the committed samples themselves, not fixtures.
 import json
 import math
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
+import sitejs
 from trainspotting import derive
 
 DATA = Path(__file__).resolve().parent.parent / "docs" / "data"
@@ -370,9 +370,11 @@ def site_const(name: str) -> str:
 
 
 def run_node(script: str, *args: str) -> str:
-    node = shutil.which("node")
-    if not node:
-        pytest.skip("node not installed")
+    # `sitejs` owns the skip reason. This module spelled it "node not
+    # installed", one word off the string CI greps the skip summary for, so the
+    # guard that fails the job when a node test skips on a runner that has node
+    # would have passed straight over these two.
+    node = sitejs._node_or_skip()
     return subprocess.run(
         [node, "-e", script, *args], capture_output=True, text=True, check=True
     ).stdout.strip()
