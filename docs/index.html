@@ -2546,18 +2546,29 @@ function tile(item, x, y, w, h, color, kind, tipHtml){
 function childrenOf(row, corpusSummaries){
   const stage = row.stageEntry;
   if (stage && stage.composition && stage.composition.length){
-    const total = stage.composition.reduce((a, c) => a + c.tokens, 0);
+    // Same unit choice the published-composition bars make, and it has to be
+    // made here too: a corpus that states sizes rather than token counts (the
+    // Pile) carries `bytes`, and reading `tokens` off it gives every child an
+    // undefined value, which treemapLayout filters out — dropping the whole
+    // composition from the card silently rather than visibly.
+    const bytes = stage.composition_unit === "bytes";
+    const amount = c => bytes ? c.bytes : c.tokens;
+    const total = stage.composition.reduce((a, c) => a + amount(c), 0);
     // Same test the published-composition card makes: a stage that trains on
     // less than the full recipe (the 32B runs 5.50T of a 5.93T mix) has
     // per-source counts that describe the mix, not the run, so they are scaled
     // and labeled approximate. Where the two agree, the mix's own numbers are
     // the numbers — scaling them would put a different figure on this box than
-    // on the bar above it.
-    const exact = Math.abs(total - row.tokens) <= 0.005 * row.tokens;
+    // on the bar above it. A byte composition is never in the box's unit, so it
+    // is always the share that is carried across, never the count.
+    const exact = !bytes && Math.abs(total - row.tokens) <= 0.005 * row.tokens;
     return stage.composition.map(c => ({
-      name: c.name, v: c.tokens, tokens: exact ? c.tokens : c.tokens / total * row.tokens,
+      name: c.name, v: amount(c),
+      tokens: exact ? c.tokens : amount(c) / total * row.tokens,
       detail: exact
         ? `${fmtTok(c.tokens)} of this stage's ${fmtTok(row.tokens)} tokens (${pct(c.tokens/total)})`
+        : bytes
+        ? `${fmtBytes(c.bytes)}, ${pct(c.bytes/total)} of the corpus — ≈${fmtTok(c.bytes/total*row.tokens)} of this ${fmtTok(row.tokens)}-token stage`
         : `${pct(c.tokens/total)} of the mix recipe — ≈${fmtTok(c.tokens/total*row.tokens)} of this ${fmtTok(row.tokens)}-token run`,
     }));
   }
@@ -4358,16 +4369,29 @@ async function renderLookup(gen){
 }
 
 async function renderCompare(gen){
-  // Models only. A dataset has no pipeline to line up stage-by-stage against
-  // one, and putting it on this axis would read as a fourth model.
-  const models = Object.keys(REG).filter(k => REG[k].is_model !== false);
+  // Models with a post-training pipeline. A dataset has no pipeline to line up
+  // stage-by-stage against one, and putting it on this axis would read as a
+  // model; a base model that was never post-trained is the same case for the
+  // same reason. Every card below is built from stages with an `hf_dataset`, so
+  // such a target can contribute neither a bar nor a missing-run note — only a
+  // legend entry for a series that never arrives, in a colour it takes by
+  // wrapping the ramp and collides with the first model's.
+  const models = Object.keys(REG).filter(k =>
+    REG[k].is_model !== false && (REG[k].stages || []).some(s => s.hf_dataset));
+  // Named rather than dropped: the tab strip offers these models, so a reader
+  // who does not find one here should be told it has nothing to compare rather
+  // than left to wonder whether the page failed to load it.
+  const baseOnly = Object.keys(REG).filter(k =>
+    REG[k].is_model !== false && !(REG[k].stages || []).some(s => s.hf_dataset));
   const main = document.getElementById("main");
   main.innerHTML = "";
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === "compare"));
 
   const color = m => MODEL_COLORS[models.indexOf(m) % MODEL_COLORS.length];
-  // Colors are keyed to the global model list, so a model keeps its color even
-  // in a legend that only names a subset (the per-bucket ask legends below).
+  // Colors are keyed to the list of compared models, so a model keeps its color
+  // even in a legend that only names a subset (the per-bucket ask legends
+  // below) — and the ramp is only ever asked for as many colours as there are
+  // series, so no model wraps onto another's.
   const legendFor = ms => `<div class="legend" style="margin:0 0 4px">${ms.map(m =>
     `<span class="k"><i style="background:${color(m)}"></i>${m}</span>`).join("")}</div>`;
   const legend = legendFor(models);
@@ -4389,7 +4413,10 @@ async function renderCompare(gen){
   hhh.className = "card";
   hhh.innerHTML = `<h2>Helpful, honest, harmless — model against model</h2>
     <p class="sub">Share of sampled prompts per stage whose primary training signal is each label,
-      all models on one axis. Whiskers: Wilson 95% CI. Click a bar for the prompts behind it.</p>${legend}`;
+      all models on one axis. Whiskers: Wilson 95% CI. Click a bar for the prompts behind it.${
+        baseOnly.length ? ` Not on this axis: ${baseOnly.map(esc).join(", ")} — released as a base
+        model with no post-training stages, so there is nothing here to compare. Its pretraining
+        corpus is on its own tab.` : ""}</p>${legend}`;
   for (const stage of stages){
     const per = [], missing = [];
     for (const m of models){

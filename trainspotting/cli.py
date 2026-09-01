@@ -615,9 +615,25 @@ def _pretrain_rows(args, s, dataset):
     docs, total = pretrain.sample_rows_documents(
         dataset, args.sample, seed=args.seed, text_column=s.get("text_column", "text")
     )
+    # And again after it. Unlike the shard route — whose range requests name a
+    # pinned revision in the URL, so its rows cannot straddle one — this route's
+    # thirty /rows requests are served from whatever the tree is at the time. A
+    # republish mid-draw leaves a sample split across two corpora under a single
+    # SHA, which is the one thing the stamp is supposed to rule out. Same check,
+    # same field name, and the same reason, as every other paged sampler here.
+    moved = hf.dataset_revision(dataset)
     print(f"  {total:,} documents in the corpus", file=sys.stderr)
+    # A SHA now with no SHA before is the first reading we got, not evidence of
+    # a move — and `revision[:7]` below would raise on it.
+    if revision and moved and moved != revision:
+        print(
+            f"  note: {dataset} moved from {revision[:7]} to {moved[:7]} while this"
+            " ran; the documents may straddle both trees",
+            file=sys.stderr,
+        )
     return docs, {
         **_stamp(dataset, revision=revision),
+        **({"revision_moved_to": moved} if revision and moved and moved != revision else {}),
         "route": "rows",
         "rows_total": total,
         "caveat": pretrain.rows_sampling_caveat(),
@@ -1789,9 +1805,9 @@ def cmd_report(args):
         print(target["note"])
     if not registry.post_training_stages(target):
         # Pythia is the case: a base model with no post-training at all. Both
-        # sections below read prompts, and an empty heading over each says "we
-        # have not run this yet" — a very different claim from "this model has
-        # no such stage to run it on". Say the latter once and stop.
+        # prompt sections below would print an empty heading each, which says
+        # "we have not run this yet" — a very different claim from "this model
+        # has no such stage to run it on". Say the latter once and skip them.
         print(
             f"\n{target['hf_model'] or target['name']} has no post-training"
             " stages — it was released as a base model, so there are no prompts"
@@ -1799,6 +1815,12 @@ def cmd_report(args):
             " language to detect. `trainspotting pretrain` and `ask --pretrain`"
             " are what apply here."
         )
+        # Not a stop, though: the corpus layers are what apply, and they are all
+        # downstream of here. `ask --pretrain` on this target produces a rate per
+        # corpus stage and a training-budget rollup over them, so returning at
+        # this point would drop the one audit layer a base model *can* support
+        # from the very report that just recommended running it.
+        _report_questions(args.target, target)
         return
     # The same seven labels mean different things by kind, and the heading is
     # the only place the report says which.
