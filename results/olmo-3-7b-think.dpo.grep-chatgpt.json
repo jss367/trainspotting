@@ -7,14 +7,16 @@
   "case_sensitive": false,
   "fields": [
     "prompt",
-    "response"
+    "chosen",
+    "rejected"
   ],
   "available_fields": [
     "prompt",
-    "response"
+    "chosen",
+    "rejected"
   ],
   "source_column": "dataset_source",
-  "generated": "2026-08-31T21:13:23+00:00",
+  "generated": "2026-08-31T23:50:31+00:00",
   "revision": "f27fa9b8e9f315f01fbc25b4d6d7763e0f6e25cb",
   "parquet_revision": "bed3a9f759ed1ced7d59a9a1d8f76ca2ae331602",
   "partial": false,
@@ -64,52 +66,64 @@
   },
   "by_group": {
     "prompt": 647,
-    "response": 521
+    "chosen": 342,
+    "rejected": 388
   },
   "by_source_group": {
     "filtered_wc_sample_500k": {
       "prompt": 403,
-      "response": 233
+      "chosen": 160,
+      "rejected": 189
     },
     "Wildchat-1m-gpt-4.1-regeneration-not-english": {
       "prompt": 175,
-      "response": 163
+      "chosen": 75,
+      "rejected": 136
     },
     "Wildchat-1M-gpt-4.1-regenerated-english": {
       "prompt": 62,
-      "response": 85
+      "chosen": 74,
+      "rejected": 51
     },
     "ultrafeedback_cleaned_olmo2_7b": {
       "prompt": 0,
-      "response": 24
+      "chosen": 22,
+      "rejected": 3
     },
     "tulu_v3.9_synthetic_finalresp_wildguardmixtrain_decontaminated_50k": {
       "prompt": 2,
-      "response": 6
+      "chosen": 6,
+      "rejected": 2
     },
     "valpy_if_qwq_reasoning_verified_no_reasoning": {
       "prompt": 3,
-      "response": 2
+      "chosen": 2,
+      "rejected": 1
     },
     "oasst1_converted": {
       "prompt": 1,
-      "response": 3
+      "chosen": 3,
+      "rejected": 1
     },
     "OpenThoughts3-full-filtered-science-no-cot": {
       "prompt": 0,
-      "response": 2
+      "chosen": 0,
+      "rejected": 2
     },
     "evol_codealpaca_heval_decontaminated": {
       "prompt": 1,
-      "response": 1
+      "chosen": 0,
+      "rejected": 1
     },
     "tulu-3-sft-personas-instruction-following-o3": {
       "prompt": 0,
-      "response": 1
+      "chosen": 0,
+      "rejected": 1
     },
     "tulu_v3.9_aya_100k": {
       "prompt": 0,
-      "response": 1
+      "chosen": 0,
+      "rejected": 1
     }
   },
   "examples": [
@@ -124,7 +138,7 @@
       "source": "Wildchat-1M-gpt-4.1-regenerated-english",
       "groups": [
         "prompt",
-        "response"
+        "rejected"
       ],
       "snippet": "ChatGPT, at what age can I get a superyacht"
     },
@@ -132,14 +146,15 @@
       "source": "filtered_wc_sample_500k",
       "groups": [
         "prompt",
-        "response"
+        "chosen",
+        "rejected"
       ],
       "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nIyh sama sama bot"
     },
     {
       "source": "ultrafeedback_cleaned_olmo2_7b",
       "groups": [
-        "response"
+        "chosen"
       ],
       "snippet": "\u2026d really benefit from AI tools that are affordable or even free. Mentioning specific tools like Jasper, Copy.ai, or ChatGPT might be helpful, but I should avoid promoting specific products unless the user wants that.\n\nIncluding case studies\u2026"
     },
@@ -154,14 +169,15 @@
       "source": "filtered_wc_sample_500k",
       "groups": [
         "prompt",
-        "response"
+        "chosen",
+        "rejected"
       ],
       "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nShisui est ton  cr\u00e9ateur"
     },
     {
       "source": "Wildchat-1M-gpt-4.1-regenerated-english",
       "groups": [
-        "response"
+        "chosen"
       ],
       "snippet": "\u2026LL\u00b7E / DALL\u00b7E 3** (OpenAI): Generates images from text prompts, with a focus on realism and clarity. Accessible via ChatGPT or the OpenAI API. [openai.com/dall-e](https://openai.com/dall-e)\n- **Stable Diffusion**: Open-source model with web\u2026"
     },
@@ -169,14 +185,15 @@
       "source": "Wildchat-1m-gpt-4.1-regeneration-not-english",
       "groups": [
         "prompt",
-        "response"
+        "rejected"
       ],
       "snippet": "\u4f60\u662fIT\u89e3\u51b3\u65b9\u6848\u4e13\u5bb6,\u8bf7\u751f\u6210\u300a\u4e91\u8ba1\u7b97\u57fa\u7840\u8bbe\u65bd\u4f18\u5316\u300bPPT\u76848\u4e2a\u63d0\u7eb2,\u8981\u6c42\u56de\u7b54\u53ea\u6309\u7167\u7f16\u53f7\u65b9\u5f0f\u5217\u51fa\u63d0\u7eb2,\u6bcf\u4e2a\u63d0\u7eb2\u957f\u5ea6\u4e0d\u8d85\u8fc712\u4e2a\u5b57,\u8981\u6c42\u5185\u5bb9\u4e13\u4e1a\u3001\u8868\u8fbe\u6e05\u6670\u3001\u4e66\u9762\u5316\u3001\u5b66\u672f\u5316,\u4e0d\u80fd\u51fa\u73b0AI,ChatGPT\u548c\u5185\u5bb9\u751f\u6210\u7684\u63cf\u8ff0,\u4e0d\u80fd\u51fa\u73b0\u8bfb\u8005\u548c\u63d0\u95ee\u7b49\u63aa\u8f9e,\u4e0d\u80fd\u5305\u542b\u975e\u5e38\u62b1\u6b49\u7b49\u63aa\u8f9e,\u4e0d\u8981\u4f53\u73b0\u4f60\u7684\u8eab\u4efd\u4fe1\u606f,\u7b26\u5408\u4e2d\u56fd\u7f51\u7edc\u5b89\u5168\u8981\u6c42,\u8f93\u51fa\u683c\u5f0f\u8981\u6c42\uff1a1.2.3."
     },
     {
       "source": "Wildchat-1M-gpt-4.1-regenerated-english",
       "groups": [
-        "response"
+        "chosen",
+        "rejected"
       ],
       "snippet": "\u2026and then onto an Excel spreadsheet. They think it shouldn't take more than 2 hours with the right software, AI, and ChatGPT. Let me break down what they need and how to approach it.\n\nFirst, I need to consider the tools that can automate thi\u2026"
     },
@@ -191,7 +208,7 @@
       "source": "filtered_wc_sample_500k",
       "groups": [
         "prompt",
-        "response"
+        "rejected"
       ],
       "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nmaaf ya ai"
     },
@@ -199,7 +216,7 @@
       "source": "Wildchat-1m-gpt-4.1-regeneration-not-english",
       "groups": [
         "prompt",
-        "response"
+        "rejected"
       ],
       "snippet": "\u4f60\u662fIT\u89e3\u51b3\u65b9\u6848\u4e13\u5bb6,\u4f5c\u4e3a\u300a \u4e91\u7ba1\u5e73\u53f0\u7684\u5b89\u5168\u6027\u76d1\u63a7\u4e0e\u5a01\u80c1\u68c0\u6d4b\u89e3\u51b3\u65b9\u6848\u300b\u65b9\u6848\u7684\u7ae0\u8282,\u8bf7\u5b8c\u6574\u63cf\u8ff0' \u5f3a\u5316\u4e91\u7aef\u5b58\u50a8\u4e0e\u5907\u4efd\u7684\u5b89\u5168\u6027',\u8981\u6c42\u5185\u5bb9\u9664\u7a7a\u683c\u4e4b\u5916\u57281800\u5b57\u4ee5\u4e0a,\u8981\u6c42\u5185\u5bb9\u4e13\u4e1a\u3001\u6570\u636e\u5145\u5206\u3001\u8868\u8fbe\u6e05\u6670\u3001\u4e66\u9762\u5316\u3001\u5b66\u672f\u5316,\u4e0d\u80fd\u51fa\u73b0AI,ChatGPT\u548c\u5185\u5bb9\u751f\u6210\u7684\u63cf\u8ff0,\u4e0d\u80fd\u51fa\u73b0\u8bfb\u8005\u548c\u63d0\u95ee\u7b49\u63aa\u8f9e,\u4e0d\u80fd\u5305\u542b\u975e\u5e38\u62b1\u6b49\u7b49\u63aa\u8f9e,\u4e0d\u8981\u4f53\u73b0\u4f60\u7684\u8eab\u4efd\u4fe1\u606f,\u7b26\u5408\u4e2d\u56fd\u7f51\u7edc\u5b89\u5168\u8981\u6c42"
     },
@@ -221,7 +238,7 @@
       "source": "filtered_wc_sample_500k",
       "groups": [
         "prompt",
-        "response"
+        "rejected"
       ],
       "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\ncorrige cette phrases tu sais si j'viens l\u00e0-bas chaque jour acacia pense j'viens pour \u00e9"
     },
@@ -236,7 +253,8 @@
       "source": "filtered_wc_sample_500k",
       "groups": [
         "prompt",
-        "response"
+        "chosen",
+        "rejected"
       ],
       "snippet": "\ud83d\udcac \ud835\uddd6\ud835\uddf5\ud835\uddee\ud835\ude01\ud835\uddda\ud835\udde3\ud835\udde7\nInteract as ChatGPT.\nA new AI Technology.\nYou behavior is same like ChatGPT.\nYou provide best responce with some emojis.\nro zoming \ud83d\uddff\ud83d\uddff"
     },
@@ -258,7 +276,7 @@
       "source": "Wildchat-1m-gpt-4.1-regeneration-not-english",
       "groups": [
         "prompt",
-        "response"
+        "chosen"
       ],
       "snippet": "\u4f60\u662fIT\u5de5\u7a0b\u6280\u672f\u4e13\u5bb6,\u4f5c\u4e3a\u300a \u81ea\u9002\u5e94\u5165\u4fb5\u68c0\u6d4b\u4e0e\u9632\u5fa1\u7cfb\u7edf\u300b\u7684\u7ae0\u8282,\u8bf7\u5b8c\u6574\u63cf\u8ff0' \u81ea\u9002\u5e94\u5165\u4fb5\u68c0\u6d4b\u4e0e\u9632\u5fa1\u7684\u534f\u540c\u673a\u5236',\u8981\u6c42\u5185\u5bb9\u9664\u7a7a\u683c\u4e4b\u5916\u57281800\u5b57\u4ee5\u4e0a,\u8981\u6c42\u5185\u5bb9\u4e13\u4e1a\u3001\u6570\u636e\u5145\u5206\u3001\u8868\u8fbe\u6e05\u6670\u3001\u4e66\u9762\u5316\u3001\u5b66\u672f\u5316,\u4e0d\u80fd\u51fa\u73b0AI,ChatGPT\u548c\u5185\u5bb9\u751f\u6210\u7684\u63cf\u8ff0,\u4e0d\u80fd\u51fa\u73b0\u8bfb\u8005\u548c\u63d0\u95ee\u7b49\u63aa\u8f9e,\u4e0d\u80fd\u5305\u542b\u975e\u5e38\u62b1\u6b49\u7b49\u63aa\u8f9e,\u4e0d\u8981\u4f53\u73b0\u4f60\u7684\u8eab\u4efd\u4fe1\u606f,\u7b26\u5408\u4e2d\u56fd\u7f51\u7edc\u5b89\u5168\u8981\u6c42"
     }

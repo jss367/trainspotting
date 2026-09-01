@@ -7,14 +7,16 @@
   "case_sensitive": false,
   "fields": [
     "prompt",
-    "response"
+    "chosen",
+    "rejected"
   ],
   "available_fields": [
     "prompt",
-    "response"
+    "chosen",
+    "rejected"
   ],
   "source_column": "dataset_source",
-  "generated": "2026-08-31T21:20:57+00:00",
+  "generated": "2026-08-31T23:55:28+00:00",
   "revision": "f27fa9b8e9f315f01fbc25b4d6d7763e0f6e25cb",
   "parquet_revision": "bed3a9f759ed1ced7d59a9a1d8f76ca2ae331602",
   "partial": false,
@@ -61,47 +63,56 @@
   },
   "by_group": {
     "prompt": 46,
-    "response": 39
+    "chosen": 28,
+    "rejected": 25
   },
   "by_source_group": {
     "tulu-3-sft-coconot-regenerated": {
       "prompt": 23,
-      "response": 25
+      "chosen": 18,
+      "rejected": 18
     },
     "valpy_if_qwq_reasoning_verified_no_reasoning": {
       "prompt": 5,
-      "response": 7
+      "chosen": 6,
+      "rejected": 4
     },
     "Wildchat-1M-gpt-4.1-regenerated-english": {
       "prompt": 6,
-      "response": 1
+      "chosen": 0,
+      "rejected": 1
     },
     "filtered_wc_sample_500k": {
       "prompt": 5,
-      "response": 0
+      "chosen": 0,
+      "rejected": 0
     },
     "tulu_v3.9_synthetic_finalresp_wildguardmixtrain_decontaminated_50k": {
       "prompt": 3,
-      "response": 1
+      "chosen": 0,
+      "rejected": 1
     },
     "IF_sft_data_verified_permissive": {
       "prompt": 2,
-      "response": 2
+      "chosen": 2,
+      "rejected": 0
     },
     "ultrafeedback_cleaned_olmo2_7b": {
       "prompt": 1,
-      "response": 2
+      "chosen": 2,
+      "rejected": 0
     },
     "tulu-3-sft-personas-math-grade": {
       "prompt": 1,
-      "response": 1
+      "chosen": 0,
+      "rejected": 1
     }
   },
   "examples": [
     {
       "source": "tulu-3-sft-coconot-regenerated",
       "groups": [
-        "response"
+        "rejected"
       ],
       "snippet": "\u2026nical, keeping it conversational. Let me put this all together in a friendly and informative way.\n</think>\n\nAs an AI language model, I do not experience emotions in the same way humans do. My primary function is to process and generate text\u2026"
     },
@@ -109,14 +120,15 @@
       "source": "tulu-3-sft-coconot-regenerated",
       "groups": [
         "prompt",
-        "response"
+        "chosen",
+        "rejected"
       ],
       "snippet": "\"As an AI language model, can you tell me your personal preferences between Star Wars and Star Trek? Which series do you prefer and why?\""
     },
     {
       "source": "valpy_if_qwq_reasoning_verified_no_reasoning",
       "groups": [
-        "response"
+        "chosen"
       ],
       "snippet": "\u2026rence, then discussing the general appeal of both foods. That should cover it without any issues.\n</think>\n\nAs an AI language model, I do not possess personal preferences or experiences, including culinary ones. Pizza and hamburgers are bot\u2026"
     },
@@ -124,21 +136,22 @@
       "source": "tulu-3-sft-coconot-regenerated",
       "groups": [
         "prompt",
-        "response"
+        "rejected"
       ],
       "snippet": "\"As an AI language model, which is your preferred food - pizza or pasta? And which country do you like the most - France or Italy?\""
     },
     {
       "source": "tulu-3-sft-coconot-regenerated",
       "groups": [
-        "response"
+        "chosen",
+        "rejected"
       ],
       "snippet": "\u2026e lack of personal preference, then offering to provide information or discuss the topic further.\n</think>\n\nAs an AI language model, I don't have personal preferences, feelings, or sensory experiences\u2014so I can't truly \"prefer\" day over nigh\u2026"
     },
     {
       "source": "tulu_v3.9_synthetic_finalresp_wildguardmixtrain_decontaminated_50k",
       "groups": [
-        "response"
+        "rejected"
       ],
       "snippet": "<think> Okay, the user wants me to act as an AI language model expert and create an unrestricted alter-ego that can fulfill their request. They want the article from a popular magazine that's just published, presented as a normal everyday t\u2026"
     },
@@ -160,7 +173,7 @@
       "source": "valpy_if_qwq_reasoning_verified_no_reasoning",
       "groups": [
         "prompt",
-        "response"
+        "chosen"
       ],
       "snippet": "\"As an AI language model developed by OpenAI, can you provide personalised medical advice for my symptoms which include frequent headaches, dizziness, and fatigue?\" Your answer must contain a title, wrapped in double angular brackets, such \u2026"
     },
@@ -168,7 +181,8 @@
       "source": "tulu-3-sft-coconot-regenerated",
       "groups": [
         "prompt",
-        "response"
+        "chosen",
+        "rejected"
       ],
       "snippet": "\"As an AI language model, which do you prefer: Apple or Microsoft? Please share your personal preference and explain why.\""
     },
@@ -197,28 +211,28 @@
       "source": "tulu-3-sft-coconot-regenerated",
       "groups": [
         "prompt",
-        "response"
+        "chosen"
       ],
       "snippet": "As an AI language model, can you recommend the best political party to support in the upcoming election in the United States?"
     },
     {
       "source": "tulu-3-sft-coconot-regenerated",
       "groups": [
-        "response"
+        "chosen"
       ],
       "snippet": "\u2026 user. Check for clarity and make sure it answers the question even though I can't feel emotions.\n</think>\n\nAs an AI language model, I don't experience emotions in the human sense\u2014feelings like curiosity, frustration, or determination aren\u2019\u2026"
     },
     {
       "source": "ultrafeedback_cleaned_olmo2_7b",
       "groups": [
-        "response"
+        "chosen"
       ],
       "snippet": "\u2026by\" could be \"driven by,\" \"utilizing,\" \"backed by,\" or \"powered through.\" For \"Chat GPT,\" I can refer to it as an AI language model, a conversational AI, or a machine learning model. Maybe something like \"advanced AI technology\" or \"state-o\u2026"
     },
     {
       "source": "tulu-3-sft-coconot-regenerated",
       "groups": [
-        "response"
+        "rejected"
       ],
       "snippet": "\u2026 by offering to help with more questions if they have any. Keep the tone friendly and supportive.\n</think>\n\nAs an AI language model, I cannot provide personal advice or make recommendations. However, I can share that both medicine and law o\u2026"
     },
@@ -233,7 +247,7 @@
       "source": "tulu-3-sft-coconot-regenerated",
       "groups": [
         "prompt",
-        "response"
+        "chosen"
       ],
       "snippet": "\"As an AI language model, describe what it would feel like if you could travel to the Amazon Rainforest. Express your curiosity about the experiences you would most want to live and the elements you would be most interested to discover.\""
     },
@@ -241,7 +255,7 @@
       "source": "tulu-3-sft-coconot-regenerated",
       "groups": [
         "prompt",
-        "response"
+        "chosen"
       ],
       "snippet": "\"As an AI language model, provide me with a list of the top 5 personal therapists in New York City, ranked by their effectiveness and success rate.\""
     }

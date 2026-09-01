@@ -7,16 +7,16 @@
   "case_sensitive": false,
   "fields": [
     "prompt",
-    "response",
-    "reference"
+    "reference",
+    "rollout"
   ],
   "available_fields": [
     "prompt",
-    "response",
-    "reference"
+    "reference",
+    "rollout"
   ],
   "source_column": "dataset_source",
-  "generated": "2026-08-31T21:24:18+00:00",
+  "generated": "2026-08-31T23:46:24+00:00",
   "revision": "0fb6466d31ef3a9dd16985ef635e6429e05a6491",
   "parquet_revision": "32c49640832240a6c3cd7ae5766eb377d8a4a562",
   "partial": false,
@@ -37,19 +37,19 @@
   },
   "by_group": {
     "prompt": 60,
-    "response": 0,
-    "reference": 51
+    "reference": 51,
+    "rollout": 0
   },
   "by_source_group": {
     "hamishivi/rlvr_general_mix": {
       "prompt": 56,
-      "response": 0,
-      "reference": 51
+      "reference": 51,
+      "rollout": 0
     },
     "hamishivi/IF_multi_constraints_upto5_filtered_dpo_0625_filter": {
       "prompt": 4,
-      "response": 0,
-      "reference": 0
+      "reference": 0,
+      "rollout": 0
     }
   },
   "examples": [

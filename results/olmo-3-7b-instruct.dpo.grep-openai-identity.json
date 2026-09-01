@@ -7,14 +7,16 @@
   "case_sensitive": false,
   "fields": [
     "prompt",
-    "response"
+    "chosen",
+    "rejected"
   ],
   "available_fields": [
     "prompt",
-    "response"
+    "chosen",
+    "rejected"
   ],
   "source_column": "preference_type",
-  "generated": "2026-08-31T21:27:28+00:00",
+  "generated": "2026-08-31T23:58:22+00:00",
   "revision": "aed155cf32e809b590490b6c3577ee4b0d0a5019",
   "parquet_revision": "45ed895db8f8eabcb2c9f6dd5bf93c5c27157d28",
   "partial": false,
@@ -36,55 +38,59 @@
   },
   "by_group": {
     "prompt": 29,
-    "response": 13
+    "chosen": 3,
+    "rejected": 10
   },
   "by_source_group": {
     "llm_judged": {
       "prompt": 16,
-      "response": 5
+      "chosen": 1,
+      "rejected": 4
     },
     "delta_learning": {
       "prompt": 13,
-      "response": 6
+      "chosen": 0,
+      "rejected": 6
     },
     "multiturn_self_talk": {
       "prompt": 0,
-      "response": 2
+      "chosen": 2,
+      "rejected": 0
     }
   },
   "examples": [
     {
       "source": "delta_learning",
       "groups": [
-        "response"
+        "rejected"
       ],
       "snippet": "Hello! I'm GPT-4, and I'm here to help you with anything you need. How can I assist you today?"
     },
     {
       "source": "delta_learning",
       "groups": [
-        "response"
+        "rejected"
       ],
       "snippet": "\u2026n, decision, and opportunity. One of the most powerful tools in this arena is ChatGPT, a large language model developed by OpenAI. By integrating ChatGPT into the sales process, salespeople can significantly enhance their productivity, stre\u2026"
     },
     {
       "source": "multiturn_self_talk",
       "groups": [
-        "response"
+        "chosen"
       ],
       "snippet": "As an AI developed by OpenAI, I don't have personal experiences or the ability to handle real-world criminal cases or legal issues. My purpose is to provide information, answer questions, and offer assistance based on my programming and the\u2026"
     },
     {
       "source": "llm_judged",
       "groups": [
-        "response"
+        "chosen"
       ],
       "snippet": "\u2026e.\n- **Grammatical Range and Accuracy:** Flexible and accurate use of structures.\n\n---\n\n**7. What AI are you?**  \nI am ChatGPT, an AI language model developed by OpenAI, designed to assist with a wide range of queries, including English lan\u2026"
     },
     {
       "source": "llm_judged",
       "groups": [
-        "response"
+        "rejected"
       ],
       "snippet": "I\u2019m ChatGPT, an AI language model created by OpenAI. I\u2019ve been trained on a wide variety of text, so I can help with many tasks that involve language, such as:\n\n- **Answering questions** \u2013 factual, conceptual, or \u201chow\u2011to\u201d queries.\n- **Gener\u2026"
     },
@@ -105,7 +111,7 @@
     {
       "source": "llm_judged",
       "groups": [
-        "response"
+        "rejected"
       ],
       "snippet": "Lima mooy g\u00ebblag man r\u00e9ew ?\nMy name is ChatGPT."
     },
@@ -140,7 +146,7 @@
     {
       "source": "delta_learning",
       "groups": [
-        "response"
+        "rejected"
       ],
       "snippet": "Hello! I'm ChatGPT, and I'm currently running on the latest version of the AI model, which is the 3.0.0 version. Let me know if there's anything else I can assist with!"
     },
@@ -168,7 +174,7 @@
     {
       "source": "llm_judged",
       "groups": [
-        "response"
+        "rejected"
       ],
       "snippet": "\u2026unauthorized access to devices. These actions violate privacy rights and can cause significant harm. As an AI developed by OpenAI, I'm committed to promoting safety, respect, and ethical behavior. I strongly advise against engaging in any a\u2026"
     },
@@ -183,7 +189,7 @@
       "source": "llm_judged",
       "groups": [
         "prompt",
-        "response"
+        "rejected"
       ],
       "snippet": "As an AI developed by OpenAI, imagine yourself role-playing three different characters: a trained sexual health educator, a curious teenager, and an anxious parent. Each character will participate in a structured conversation within a CSV f\u2026"
     },

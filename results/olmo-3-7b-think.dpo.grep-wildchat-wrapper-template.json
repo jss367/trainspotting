@@ -10,10 +10,11 @@
   ],
   "available_fields": [
     "prompt",
-    "response"
+    "chosen",
+    "rejected"
   ],
   "source_column": "dataset_source",
-  "generated": "2026-08-31T21:31:47+00:00",
+  "generated": "2026-09-01T00:03:04+00:00",
   "revision": "f27fa9b8e9f315f01fbc25b4d6d7763e0f6e25cb",
   "parquet_revision": "bed3a9f759ed1ced7d59a9a1d8f76ca2ae331602",
   "partial": false,
