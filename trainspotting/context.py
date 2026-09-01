@@ -14,7 +14,7 @@ Records are keyed by the same prompt text the classifier saw, so the site can
 join them onto committed label and ask results without re-running any model.
 """
 
-from trainspotting import rewards
+from trainspotting import rewards, search
 
 MAX_TEXT = 4000  # per field; the full row stays one click away on HuggingFace
 KEY_CHARS = 400  # prompt prefix that joins a context record to a labeled prompt
@@ -41,15 +41,54 @@ def _split_think(text: str) -> tuple[str | None, str]:
     return head.strip(), text[i + len("</think>") :].strip()
 
 
+# Output a message can carry beside its `content`. `search` reads these as part
+# of the turn; this record keeps none of them, so a turn holding any is not
+# stored whole however well its text matches.
+BESIDE_CONTENT = ("reasoning_content",) + search.STRUCTURED_TURN_FIELDS + search.INPUT_TURN_FIELDS
+
+
 def _turns(messages) -> list[dict]:
     out = []
     for m in messages or []:
-        if not (isinstance(m, dict) and m.get("content")):
+        if not isinstance(m, dict):
             continue
-        reasoning, answer = _split_think(str(m["content"]))
+        # `is not None` rather than truthiness: a falsy content that is not
+        # absent, `""` or a bare `0`, is still what the turn said.
+        raw_content = m.get("content")
+        content = "" if raw_content is None else str(raw_content)
+        omitted = [k for k in BESIDE_CONTENT if m.get(k)]
+        # Every message in the list is kept, including one that is nothing but a
+        # tool call and one that is empty. Both are turns in the sequence the
+        # model was scored on — a message with no content still contributes its
+        # role header and end-of-turn token — and `_shared_turns` branches at one
+        # that appears on a single side. Dropping either would close the gap it
+        # leaves: two completions differing only there would read as the same
+        # conversation, and the answers behind them as a shared opening. They are
+        # kept, empty, so the turn counts stay aligned and nothing about them is
+        # marked as stored whole.
+        reasoning, answer = _split_think(content)
         turn = {"role": m.get("role", "?"), **_text(answer)}
         if reasoning:
             turn["reasoning"] = _text(reasoning)
+        if omitted:
+            turn["omitted"] = omitted
+        # Whether what is stored is the turn as it was written. Splitting a
+        # thinking span out drops the <think> markers and the whitespace around
+        # them, and long fields are cut, so a turn that went through either can no
+        # longer be compared byte for byte with the sequence the model was scored
+        # on. The absence of a reasoning field does not say this on its own: a
+        # turn whose thinking span was empty loses its markers and keeps no field
+        # to show it. Nor does `content` alone — a message can carry output beside
+        # it, a separate reasoning field or tool calls or a refusal, which
+        # `search` reads as part of the turn and this record does not keep.
+        # Anything claiming two turns are identical needs this, not a guess.
+        # Structured content — a list of parts, a dict — survives `str()` as a
+        # Python repr, which is a serialization of the turn and not the text the
+        # model was scored on, so only a string (or an absent content, faithfully
+        # empty) can be stored as written.
+        stored_as_written = raw_content is None or isinstance(raw_content, str)
+        if stored_as_written and turn["text"] == content and not omitted:
+            turn["raw"] = True
         out.append(turn)
     return out
 

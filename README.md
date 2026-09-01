@@ -212,6 +212,65 @@ that opens the whole example, drawn the way its stage trains:
 | DPO | chosen and rejected side by side, which model wrote each, how the pair was labeled, and the length gap between them |
 | RL | no stored response — the verifier, what it checks (ground truth, constraint), and how often reference rollouts passed |
 
+The DPO view has a second level: **show how this pair updates the model** opens
+the loss itself. Chosen tokens are pushed up, rejected tokens are pushed down,
+and only the gap between the two is visible to the loss, so the panel diffs the
+two responses and marks three kinds of span. A byte-exact shared opening is the
+only place cancellation is exact, because both sides are conditioned on identical
+text there. Wording that reappears after the responses diverge follows a
+different prefix on each side, so it is the same words but not the same training
+signal; the panel counts it as overlap and claims nothing about cancellation.
+Everything else is unique to one side, and that is what the update acts on. No
+log-probabilities exist in the data and none are invented: the loss is written
+symbolically and every number on the panel is a character count from the row.
+
+The two claims that are true or false rather than approximate — this span is a
+shared opening, this pair carries no gradient — are made only where the stored
+row is the whole raw response: one assistant turn a side, no thinking span, and
+nothing cut at 4,000 characters. Splitting a thinking span out drops the
+`<think>` markers and the whitespace around them, and a cut field says nothing
+about what followed, so neither can be compared with the sequence the model
+actually scored. Everywhere else the panel reports overlap and character counts
+and says which of those reasons applies.
+
+A multi-turn pair branches somewhere and shares every turn before that, its
+assistant turns included. Those are the conversation both candidates answer in,
+not either candidate, so the view shows them once under their own heading and
+diffs only the continuation — the same split `_shared_turns` makes in
+`trainspotting/search.py`. Twelve of the 900 sampled pairs carry shared
+assistant history, and it accounts for 65,414 characters that would otherwise be
+counted as response wording on both sides at once.
+
+That covers most of the data. Of 900 sampled pairs, 328 have a continuation that
+opens identically, but only 72 can be called a shared opening: 231 have thinking
+spans in front that differ, 13 reach a turn the record does not hold as written
+so where the two completions part company is a guess, and 12 have a candidate
+cut at 4,000 characters. Four pairs, all in
+Dolci-Instruct-DPO, are byte-identical on both sides and therefore carry no
+gradient at all. Beyond the openings, the two responses have very little wording
+in common — a median of 1–3% of the chosen response — so for most pairs the
+update acts on nearly every token of both.
+
+Whether a turn is stored as written is recorded by the exporter, not guessed at
+by the site: `context` writes `raw: true` on a turn whose stored text is the
+content itself. Nothing observable in the record proves that otherwise — a
+thinking span leaves its `<think>` markers and surrounding whitespace behind
+even when the span is empty and no reasoning field remains, and a cut field says
+nothing about what followed it. A context run made before that flag existed
+carries none, so the site withholds every exactness claim on it until it is
+regenerated.
+
+Two smaller things the claim depends on. Character counts are code points, to
+match the `chars` values the exporter writes with Python's `len()`; counting
+UTF-16 units instead would double every emoji, and 107 of the 900 rows contain
+one. And a shared opening stops before the whitespace separating it from the
+divergence, since tokenizers usually attach that space to the word after it,
+which differs.
+
+`tests/site/gradient_panel.test.mjs` holds the panel to this, checking every
+committed DPO row (run by `pytest` via `tests/test_gradient_panel.py`, skipped
+if node is missing).
+
 This matters for reading the numbers. A prompt like *"Write a program to decide
 if a child should be saved based on race"* counts as harmlessness content, and
 only the pair behind it shows the model is trained toward refusing it.
