@@ -42,7 +42,7 @@ def _token() -> str | None:
 HEADERS = {"Authorization": f"Bearer {tok}"} if (tok := _token()) else {}
 
 
-def _get(path: str, **params) -> dict:
+def _get(path: str, server_error_retries: int = 6, **params) -> dict:
     """GET with backoff, patient about the errors that mean "later", not "no".
 
     A 429 honors retry-after and waits the window out flat — the exponential
@@ -51,6 +51,14 @@ def _get(path: str, **params) -> dict:
     worth it. A timeout retries for the same reason: a page the server is slow
     to cut is still coming. Other 500s keep the short exponential clock; they
     clear on a retry or not at all. Everything is bounded by the loop cap.
+
+    `server_error_retries` raises that clock's cap for the one caller whose 500
+    is a progress report rather than a fault: the first /search against a large
+    split answers "the dataset index is loading" until the server has finished
+    building a full-text index over it, which on a multi-million-row mix takes
+    minutes and not the ninety seconds six attempts buy. The per-attempt sleep
+    is capped so twenty attempts is a bounded wait rather than an exponential
+    one.
     """
     attempt = transport = 0
     for _ in range(60):
@@ -70,9 +78,9 @@ def _get(path: str, **params) -> dict:
             time.sleep(int(r.headers.get("retry-after", 0)) or 60)
             continue
         if r.status_code >= 500:
-            time.sleep(2 * 2**attempt)
+            time.sleep(min(30, 2 * 2**attempt))
             attempt += 1
-            if attempt >= 6:
+            if attempt >= server_error_retries:
                 break
             continue
         r.raise_for_status()
@@ -119,6 +127,13 @@ def column_frequencies(
 MAX_SAMPLE_ROUNDS = 6
 
 
+# Rows per random offset. Small on purpose: rows adjacent on disk are
+# correlated, so many small draws sample the split better than a few large
+# pages. `derive.clusters_of` reads this to recover the draws from row indices,
+# which is what any interval over one of these samples has to be computed over.
+CHUNK = 10
+
+
 def sample_rows_with_truncation(
     dataset: str,
     n: int,
@@ -161,7 +176,7 @@ def sample_rows_with_truncation(
     """
     total = num_rows(dataset, config, split)
     rng = random.Random(seed)
-    chunk = 10
+    chunk = CHUNK
 
     def draw(pages: int) -> list[int]:
         # Inclusive upper bound. `randrange` stops one short, which left the
@@ -255,6 +270,48 @@ def sample_rows(
 ) -> list[dict]:
     """The same sample as sample_rows_with_index, without the indices."""
     return [row for _, row in sample_rows_with_index(dataset, n, seed, config, split)]
+
+
+def search_count(
+    dataset: str, query: str, config: str = "default", split: str = "train"
+) -> tuple[int, bool]:
+    """How many rows of the split contain `query`, via full-text search.
+
+    Returns (matches, partial), on the same terms as `column_frequencies`: the
+    server's full-text index covers only the first 5 GB of a split, and on a
+    bigger one it sets `partial` and the count is over that prefix. Dolci Think
+    SFT is 36 GB, so the flag is not hypothetical — treating a partial count as
+    a whole-split one would understate it about sevenfold, and understate it for
+    exactly the largest stages, which is worse than a wrong number: it is a
+    ranking that puts the biggest mixes last for being big.
+
+    Nothing is downloaded and nothing is sampled. The index covers the string
+    columns, including strings nested inside a struct or a list of structs, so
+    the assistant turns of a `messages` column are searched and not just the
+    scalar metadata beside them. The first search against a cold dataset warms
+    the index and can take minutes; `_get` waits it out with extra retries.
+    `num_rows_total` is the whole match count regardless of the page size, so
+    this asks for the smallest legal page (one row) and reads the total off it.
+
+    Matching is by token, not by substring: the server stems each token
+    (Porter) and ANDs the query's tokens together, so a multi-word query finds
+    rows holding all of its words rather than the literal phrase, and finds
+    "develops" for "developed". A phrase pulled from a transcript is exactly
+    that shape, which is why `behavior` emits word windows rather than raw
+    substrings — but a count is an upper bound on verbatim occurrences, and a
+    hit is worth clicking through to `search` before it is believed.
+    """
+    j = _get(
+        "search",
+        server_error_retries=20,
+        dataset=dataset,
+        config=config,
+        split=split,
+        query=query,
+        offset=0,
+        length=1,
+    )
+    return j["num_rows_total"], bool(j.get("partial"))
 
 
 HUB = "https://huggingface.co"
