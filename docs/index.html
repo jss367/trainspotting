@@ -1948,6 +1948,18 @@ function joinEvidence(matched, total, profile, run){
     : `The runs are not both pinned to a dataset revision, so their pairing rests on ${matched} of ${total} prompts matching a sampled example rather than on the stamps.`};
 }
 
+// The evidence that two runs describe one draw, best available first. Both
+// grids ask through here: writing the question out twice is what left the
+// taxonomy grid on hash rates after the language grid had row identities, and
+// `classify` records a row per label exactly as `languages` does — only the
+// files committed before it did are legacy.
+function pairingEvidence(profile, run, matched, total){
+  const rows = sameRows(profile, run);
+  if (!rows) return joinEvidence(matched, total, profile, run);
+  return rows.identical ? {note: null}
+    : {refuse: `they drew different rows — ${rows.shared} of ${rows.theirs} in that run are among the ${rows.mine} sampled examples`};
+}
+
 async function crosstabCard(model, m, post, profiles, ctxFor, gen){
   const card = document.createElement("section");
   card.className = "card";
@@ -2012,9 +2024,9 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
         + `Re-run one of them so both describe the same draw.`);
     } else if (labeled.length){
       const cross = crossRows(labeled, keyToValue, r => r.label, 12, dropped);
-      // Everything the join placed, against everything it was given: the rate
-      // is what stands in for a revision stamp neither run carries.
-      const evidence = joinEvidence(labeled.length - cross.unmatched, labeled.length, p, labels);
+      // Row identities when the run recorded them, the match rate when it did
+      // not — everything the join placed against everything it was given.
+      const evidence = pairingEvidence(p, labels, labeled.length - cross.unmatched, labeled.length);
       if (evidence.refuse){
         noLabels(card, `the sampled examples and the classification run cannot be crossed: ${evidence.refuse}.`);
       } else {
@@ -2049,11 +2061,7 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
         // records carry row indices, so the two runs are compared on the
         // sampler's own numbering rather than on how many prompts happen to
         // hash into the map.
-        const rows = sameRows(p, langs);
-        const evidence = rows
-          ? (rows.identical ? {note: null}
-             : {refuse: `they drew different rows — ${rows.shared} of ${rows.theirs} in that run are among the ${rows.mine} sampled examples`})
-          : joinEvidence(langs.records.length - cross.unmatched, langs.records.length, p, langs);
+        const evidence = pairingEvidence(p, langs, langs.records.length - cross.unmatched, langs.records.length);
         if (evidence.refuse){
           noLabels(parent, `the language run cannot be crossed against these examples: ${evidence.refuse}.`);
           return;
