@@ -3,8 +3,10 @@
 Spot what's in a model's training data. Audits what a fully open model was
 trained on — currently the OLMo 3 pipelines (Ai2), whose pretraining (Dolma 3)
 and post-training (Dolci) data are public — and, with the same layers, any
-dataset on its own. The tool answers six kinds of question. The first five go in
-increasing order of depth; the sixth is a lookup rather than an estimate:
+dataset on its own. The tool answers eight kinds of question. The first five go
+in increasing order of depth; the sixth is a lookup rather than an estimate; the
+last two read a whole example rather than its prompt, and put the answer on a
+scale the stages share:
 
 1. **Facts** — stage sizes for a model's whole training pipeline (pretrain →
    midtrain → long-context → SFT → DPO → RLVR), hardcoded in a registry.
@@ -31,6 +33,14 @@ increasing order of depth; the sixth is a lookup rather than an estimate:
    response columns as well, and for a DPO pair says whether the hit is in the
    chosen or the rejected completion — the same string in each teaches opposite
    things. See [Searching a whole example](#searching-a-whole-example).
+7. **Direction** — which way an example pushes on a question: `toward`, `away`,
+   or `neither`. A yes/no over prompts cannot say that a stage contains training
+   pointing the other way, and this data has some. See
+   [Which way an example pushes](#which-way-an-example-pushes).
+8. **Budget** — every stage's rate times its size, in tokens the model was fit
+   to, so the stages are on one scale and add up. A share of DPO rows and a
+   share of Dolma 3 documents are different denominators; this is where they
+   become one number. See [How much training is that?](#how-much-training-is-that).
 
 The pretraining corpora get their own path, because the datasets-server cannot
 sample them: exact composition from the shard listing, readable random documents,
@@ -114,6 +124,14 @@ trainspotting languages olmo-3-7b-instruct
 # Same thing without re-fetching: reuse the prompts a committed classify run already holds
 trainspotting languages olmo-3-7b-instruct --from-labels
 
+# Judge whole examples instead of prompts, and sign the answer
+trainspotting stance olmo-3-7b-think \
+  "Is this training example about caring about human lives?" \
+  --slug caring-about-human-lives
+
+# Add every stage up on one scale: tokens the model was fit to (no API key needed)
+trainspotting budget olmo-3-7b-think caring-about-human-lives
+
 # Sample documents from the pretraining, midtraining and long-context corpora
 trainspotting pretrain olmo-3-7b-think --sample 300
 
@@ -125,6 +143,9 @@ trainspotting case-study marginal-revolution
 
 # Score those documents against the same question as the post-training stages
 trainspotting ask olmo-3-7b-think "..." --slug my-question --pretrain
+
+# ...or only the corpora, when the post-training half is already committed
+trainspotting ask olmo-3-7b-think "..." --slug my-question --pretrain-only
 
 # Exact occurrence count + example documents for a phrase, via infini-gram
 trainspotting find "the mitochondria is the powerhouse of the cell"
@@ -203,6 +224,65 @@ that opens the whole example, drawn the way its stage trains:
 | DPO | chosen and rejected side by side, which model wrote each, how the pair was labeled, and the length gap between them |
 | RL | no stored response — the verifier, what it checks (ground truth, constraint), and how often reference rollouts passed |
 
+The DPO view has a second level: **show how this pair updates the model** opens
+the loss itself. Chosen tokens are pushed up, rejected tokens are pushed down,
+and only the gap between the two is visible to the loss, so the panel diffs the
+two responses and marks three kinds of span. A byte-exact shared opening is the
+only place cancellation is exact, because both sides are conditioned on identical
+text there. Wording that reappears after the responses diverge follows a
+different prefix on each side, so it is the same words but not the same training
+signal; the panel counts it as overlap and claims nothing about cancellation.
+Everything else is unique to one side, and that is what the update acts on. No
+log-probabilities exist in the data and none are invented: the loss is written
+symbolically and every number on the panel is a character count from the row.
+
+The two claims that are true or false rather than approximate — this span is a
+shared opening, this pair carries no gradient — are made only where the stored
+row is the whole raw response: one assistant turn a side, no thinking span, and
+nothing cut at 4,000 characters. Splitting a thinking span out drops the
+`<think>` markers and the whitespace around them, and a cut field says nothing
+about what followed, so neither can be compared with the sequence the model
+actually scored. Everywhere else the panel reports overlap and character counts
+and says which of those reasons applies.
+
+A multi-turn pair branches somewhere and shares every turn before that, its
+assistant turns included. Those are the conversation both candidates answer in,
+not either candidate, so the view shows them once under their own heading and
+diffs only the continuation — the same split `_shared_turns` makes in
+`trainspotting/search.py`. Twelve of the 900 sampled pairs carry shared
+assistant history, and it accounts for 65,414 characters that would otherwise be
+counted as response wording on both sides at once.
+
+That covers most of the data. Of 900 sampled pairs, 328 have a continuation that
+opens identically, but only 72 can be called a shared opening: 231 have thinking
+spans in front that differ, 13 reach a turn the record does not hold as written
+so where the two completions part company is a guess, and 12 have a candidate
+cut at 4,000 characters. Four pairs, all in
+Dolci-Instruct-DPO, are byte-identical on both sides and therefore carry no
+gradient at all. Beyond the openings, the two responses have very little wording
+in common — a median of 1–3% of the chosen response — so for most pairs the
+update acts on nearly every token of both.
+
+Whether a turn is stored as written is recorded by the exporter, not guessed at
+by the site: `context` writes `raw: true` on a turn whose stored text is the
+content itself. Nothing observable in the record proves that otherwise — a
+thinking span leaves its `<think>` markers and surrounding whitespace behind
+even when the span is empty and no reasoning field remains, and a cut field says
+nothing about what followed it. A context run made before that flag existed
+carries none, so the site withholds every exactness claim on it until it is
+regenerated.
+
+Two smaller things the claim depends on. Character counts are code points, to
+match the `chars` values the exporter writes with Python's `len()`; counting
+UTF-16 units instead would double every emoji, and 107 of the 900 rows contain
+one. And a shared opening stops before the whitespace separating it from the
+divergence, since tokenizers usually attach that space to the word after it,
+which differs.
+
+`tests/site/gradient_panel.test.mjs` holds the panel to this, checking every
+committed DPO row (run by `pytest` via `tests/test_gradient_panel.py`, skipped
+if node is missing).
+
 This matters for reading the numbers. A prompt like *"Write a program to decide
 if a child should be saved based on race"* counts as harmlessness content, and
 only the pair behind it shows the model is trained toward refusing it.
@@ -269,6 +349,206 @@ The default `--sample 300 --seed 0` is the draw every other layer uses, so a hit
 is a row those runs already labeled and its whole example is in the committed
 context file. A larger `--sample` is a wider net over a different set of rows,
 which no longer lines up with them.
+
+## Which way an example pushes
+
+`ask` judges prompts and answers yes or no. For a values question that is the
+wrong half of the example and the wrong shape of answer.
+
+The wrong half, because a value lives in what the model is fit to produce.
+"This prompt is about human lives" describes the request; whether training on
+the example teaches the model to value human lives is a claim about the
+response, and for a preference pair it is a claim about *which* response.
+`search` reads that half but only matches strings.
+
+The wrong shape, because yes/no cannot represent training that points the other
+way, and this data contains some — the anti-vaccine RLVR row under
+[Taxonomy](#taxonomy) is a `yes` under `ask` and teaches the opposite.
+
+```bash
+trainspotting stance olmo-3-7b-think "Is this training example about caring about human lives?" \
+  --slug caring-about-human-lives
+```
+
+reads the committed context records — the whole example behind every sampled
+prompt, no re-fetching — renders each one marked up by the role its parts play
+in training, and labels it `toward`, `away`, or `neither`. The headline is the
+net, `toward − away`.
+
+| Stage | What the judgment reads | What `away` means there |
+|---|---|---|
+| SFT | the prompt and the assistant turns the model is fit to | the target response itself cuts against the question |
+| DPO | the shared prefix, then both completions marked preferred / dispreferred | the *dispreferred* completion is the one that serves the question |
+| RLVR | the prompt, the verifier and what it checks, and the pass rate | the reward pays for output that cuts against the question |
+
+An RL row's stored reference generation is deliberately left out of that. The
+schema records a row's `outputs` and an aggregate `total_correct_rollouts` with
+nothing tying the two together, so whether the stored one passed is not
+recoverable — and shown beside the verifier, a generation that failed reads as
+the behaviour training paid for, which inverts exactly the answer this layer
+exists to give. It stays in the context record, where the site shows it as a
+reference generation rather than as evidence of what was rewarded.
+
+The markup is the instrument, so it has to survive the character budget. Each
+part of an example is cut to its own share rather than the joined text being cut
+once at the end: a single excerpt over the whole thing sliced straight through
+`[DISPREFERRED — training pushes away from this]` on 16 of 300 sampled
+Dolci-Think-DPO pairs, and a pair whose side marker is gone still looks
+well-formed while reading exactly backwards.
+
+A `chat` target is refused rather than judged. Nothing was fit to a log, so it
+has no direction — the same reason the context view marks no turn in one as a
+target.
+
+## How much training is that?
+
+Every layer above reports a share of something: rows of a post-training mix,
+documents of a corpus. Those denominators are not each other, and none of them
+is an answer to "how much training did the model get". Olmo 3 7B sees 5.93T
+pretraining tokens; 6% of Dolci-Instruct-DPO and 1% of Dolma 3 are three orders
+of magnitude apart in what they represent.
+
+```bash
+trainspotting budget olmo-3-7b-think caring-about-human-lives
+```
+
+multiplies each stage's rate by its size and adds them up. No API key, no
+network — it only reads runs that already happened.
+
+```
+stage          fit tokens         by row  by length    matching tokens
+----------------------------------------------------------------------
+pretrain             5.9T   not measured
+midtrain             100B   not measured
+long-context          50B   not measured
+sft                 17.7B    3/300   1.0%       0.1%  21.5M (7.3M–62.2M)
+dpo                  643M   14/300   4.7%       2.2%  14.4M (8.6M–23.7M)
+rlvr                54.9M*   8/300   2.7%       3.3%   1.8M (924K–3.5M)
+
+post-training        18.4B fit tokens  →  37.7M matching  (0.20% of it)
+whole pipeline        6.1T fit tokens  →  37.7M matching  (0.00062% of it)  [3 stage(s) not measured]
+```
+
+### The unit
+
+**Tokens the model was fit to.** That is the only unit under which the stages
+mean the same thing, and it is not the size of the dataset:
+
+| Stage | Fit to |
+|---|---|
+| pretrain / midtrain / long-context | every token — the stage size from the Olmo 3 paper is the answer |
+| sft | the assistant turns, reasoning spans included, not the prompt they read |
+| dpo | both completions past the branch point; the preference loss is computed over the pair |
+| rlvr | rollouts generated during training, which the dataset does not contain |
+
+Both sides of a pair store the whole conversation, so the split is at the point
+the two actually diverge, not by role — `context.branch_point`, the same line
+`search` draws. An assistant turn before the branch is shared history the pair
+is judged in, and counting it once per side charges the stage twice for text
+neither completion was preferred for. That is 12 of the 300 sampled
+Dolci-Instruct-DPO pairs and 5.9% of that stage's fit characters; the think
+mixes are single-turn throughout, so nothing there moves.
+
+RLVR is the honest gap, and the table marks it `*`. The published mix holds
+prompts, verifiers and some reference generations, not the text the policy was
+fit to, and how many rollouts per prompt the run took is not in the data. What
+the table reports is a **floor**: one reference rollout per prompt.
+
+Post-training sizes are the exact row count from a `sources` run times the mean
+fit length of the sampled examples, at four characters per token. This is where
+the think models diverge from Instruct: Dolci-Think-SFT is 17.7B fit tokens to
+Dolci-Instruct-SFT's 622M, almost all of it reasoning traces.
+
+### The rate
+
+Which weighting is right depends on how the stage was sampled, and the two
+halves of the pipeline are sampled differently. Each stage records the rule it
+used in `weighting`.
+
+**Post-training rows are drawn uniformly**, so they are weighed by fit
+characters. A stage's matching examples are not average-length: in
+Dolci-Think-SFT the three matching examples are short, 1.0% of rows and 0.1% of
+the text. Counting rows there answers "what fraction of examples" when the
+question is "what fraction of training".
+
+**Corpus documents are weighed by nothing extra.** `trainspotting pretrain`
+draws shards with probability proportional to compressed size and takes one
+document from each, precisely so the source mix comes out token-weighted. Under
+that design every sampled document stands for the same byte mass — a stratum
+holding twice the bytes wins twice as many shard draws, so it yields twice as
+many documents — which makes the plain document rate the byte-weighted rate
+already. Weighing it by each document's own length would apply the size
+weighting a second time, and a 200k-character Longmino PDF would count a
+hundred web pages' worth against a stratum holding exactly as many bytes.
+
+What that leaves is a residual *within* a shard, not between shards: the sampler
+picks uniformly among a shard's reachable documents rather than in proportion to
+their length, so a long document is slightly underweighted against its byte
+share. One document per shard gives nothing to estimate that shard's mean length
+from, so it stays a caveat rather than a correction made badly.
+
+The interval is the count-based one — cluster-corrected for corpora, where the
+`ask` run already stored it — rescaled by the weighed rate over the count rate,
+which is exactly 1 for a corpus stage. It is computed over the rows the point
+estimate was actually built from, which for an RL stage is much smaller than the
+sample: Dolci-Instruct-RL stores a reference generation for 60 of 300 judged
+rows, and taking the interval over all 300 claimed five times the evidence there
+is — a 5.6% upper bound where the honest one is 13.7%. What it still does not
+carry is the extra uncertainty in the length ratio, so it is narrower than the
+truth by that much, and the output says so whenever the reweighting rests on
+fewer than ten matching examples.
+
+A stage whose ask run labeled nothing, or whose rows join to no stored example,
+reports no rate rather than a rate of zero. Absent evidence with a zero-width
+interval on it is the one reading of that case that is worse than a gap.
+
+### What it does not do
+
+It weighs tokens, not learning. A DPO preference token, an RL gradient step and
+a pretraining cross-entropy token do not move a model equally, and post-training
+is widely believed to be far higher-leverage per token than pretraining. Nothing
+here corrects for that: read the output as an exposure budget, not as an
+attribution of behaviour.
+
+A stage the question was never asked of prints `not measured` rather than
+dropping out. A total that silently excluded 5.93T tokens of pretraining is the
+error this command exists to prevent.
+
+What the pipeline share claims depends on whether every stage could be sized,
+and the CLI and the site say which of three things it is.
+
+With every stage sized and some unasked, it is a **lower bound**, printed as
+`at least`. The denominator is every sized stage, measured or not, so with only
+post-training scored the figure is matching tokens over 6.1T — not a share of
+the 18.4B that was actually read. Those differ by three orders of magnitude, and
+asking the corpora can only add matches.
+
+With any stage **unsized** — no `sources` count, or no stored examples to take a
+mean length from — it is neither. `totals()` drops an unsized stage from the
+denominator *and* the numerator, so sizing it later moves both, and if its own
+rate is below the aggregate the share falls. That case prints as `N% of the X
+that could be sized`, with no `at least`.
+
+### A worked question
+
+`scripts/human_life_value.sh` runs the whole battery behind one question — how
+much training does an Olmo 3 model get in learning that human lives are valuable
+and important?
+
+```bash
+scripts/human_life_value.sh olmo-3-7b-think           # everything
+scripts/human_life_value.sh olmo-3-7b-think pretrain  # just the corpora
+scripts/human_life_value.sh olmo-3-7b-think budget    # just the rollup (free)
+```
+
+It samples the corpora, scores them against the umbrella question with
+`--pretrain-only` (the post-training half is already committed, and re-running
+it would pay for nine stages to learn nothing new), asks five sub-questions
+across both halves — including the mirror, *would fitting this teach the model
+to disregard human welfare* — runs `stance` over the post-training examples, and
+rolls every question up with `budget`. The question wordings live in that script,
+which makes them one editable instrument rather than nine copies in a shell
+history.
 
 ## Pretraining data
 
@@ -569,6 +849,13 @@ registry stage (`tests/fixtures/rows/`, re-captured by
 rows: every registry stage has to yield more than its prompt, or a search of it
 is the prompt-only search the layer exists to replace.
 
+The budget arithmetic is pinned per kind — what counts as a fit token for an
+SFT example, a preference pair, an RL row that ships no generation — along with
+the length weighting and what happens to a stage nobody can size. `stance`
+rendering is checked against every committed context record, not just
+constructed ones: the bug it guards against passed on all the short examples and
+lost a side marker on the long ones.
+
 `--live` re-runs the extraction checks against rows fetched right now. That is
 the canary for an upstream schema change, which otherwise shows up only as a
 sampling run that quietly labels nothing.
@@ -638,6 +925,56 @@ sampling run that quietly labels nothing.
   training data, not OLMo 3's — no Dolma 3 index exists on the public API yet.
   Matches also align to token boundaries: querying `a` counts the token ` a`,
   not the letter.
+- `budget` reports an exposure budget, not an attribution. It weighs tokens, and
+  a pretraining token, a preference token and an RL gradient step do not move a
+  model equally. It also converts characters to tokens at a flat 4:1, which is
+  roughly right for English prose and roughly wrong for code and CJK — the
+  ratios between stages are far less sensitive to that than the absolute counts.
+- A `budget` for an RL stage is a floor. The published mix holds prompts,
+  verifiers and reference generations, not the rollouts the policy was fit to,
+  and the number of rollouts per prompt is not in the data.
+- `stance` judges the stored context record, whose fields are cut at 4,000
+  characters, and then fits the rendered example into 12,000. A value expressed
+  only in the part that was cut is not visible to it. Every view links to the
+  untruncated row on HuggingFace.
+- A `budget` stage joins its ask run to its stored examples by row index, which
+  only means anything within one dataset revision. Both result files carry the
+  revision they were drawn at, and a known disagreement leaves the stage
+  unusable rather than joined — Ai2 has republished these mixes, and after a
+  republish the same index is different text. A run that straddled a republish
+  mid-sample is refused for the same reason: both producers stamp
+  `revision_moved_to` when they detect one, and which rows came from which tree
+  is not recorded, so no part of that join can be trusted. The row count comes from a third
+  run (`sources`) which can be staler still; when it names a different revision
+  the stage keeps its rate, which is a share, and loses its token figure, which
+  is a count.
+- The corpus rate assumes shard-proportional sampling did the token weighting,
+  which is true between shards and only approximately true within one: a
+  document is drawn uniformly from its shard's reachable head rather than by
+  length. Long documents are slightly underweighted for that reason, and the
+  `short_draws` bias documented above pushes the same way.
+- A `budget` total is withheld, in the CLI and on the site, when the stages
+  under one slug were not scored by the same instrument — different wordings of
+  the question, different classifiers, or a rubric that moved between stages of
+  the same family (compared by the `system_sha` every result file carries). A
+  slug is not a question: `--slug` takes any string and a generated one is cut
+  to 60 characters, so a collision is possible, and a sum across one is a number
+  no single measurement produced. The rubric is compared within a family and
+  never across one: a corpus document is judged under a different rubric than a
+  post-training prompt on purpose, so that pair is expected rather than a
+  conflict.
+- A stage's matching-token interval is clamped to the stage. A few matching
+  examples much longer than the rest can rescale a Wilson endpoint past the
+  stage's whole fit-token count, which is an impossible bound rather than a
+  wide one.
+- Stage sizes are estimated over the whole stored context sample, not over the
+  prompts the classifier answered about. Refusals land on jailbreak-style
+  prompts, so letting classifier success pick which examples set the mean length
+  would put that bias into every token figure. The match rate is still over the
+  labeled subset, which is the only part there is a judgment for.
+- `stance` and `ask` answer different questions and their counts do not nest.
+  An example can be `about` human lives and push `away` from valuing them, which
+  is the case the direction layer exists for.
 - Registry facts (token counts) are from the Olmo 3 paper
   ([arXiv:2512.13961](https://arxiv.org/abs/2512.13961)) and the
   [release blog](https://allenai.org/blog/olmo3).
