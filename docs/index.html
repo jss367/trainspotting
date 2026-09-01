@@ -18,6 +18,8 @@
     --baseline:  #c3c2b7;
     --border:    rgba(11,11,11,0.10);
     --series-1:  #2a78d6;
+    --lit:       rgba(42,120,214,0.17);
+    --lit-edge:  rgba(42,120,214,0.45);
     /* categorical slots 2–3 (one per model in the compare view) */
     --series-2:  #eb6834;
     --series-3:  #1baf7a;
@@ -62,6 +64,8 @@
       --baseline:  #383835;
       --border:    rgba(255,255,255,0.10);
       --series-1:  #3987e5;
+      --lit:       rgba(57,135,229,0.22);
+      --lit-edge:  rgba(57,135,229,0.55);
       --series-2:  #d95926;
       --series-3:  #199e70;
       --stage-sft:  #3987e5;
@@ -593,6 +597,12 @@
   .eqs .tag { font: 500 0.76em/1 system-ui, -apple-system, sans-serif; }
   .eqs .tag.up { color: var(--series-1); }
   .eqs .tag.down { color: var(--neg); }
+  .eqs .bit { border-radius: 3px; padding: 1px 2px; margin: 0 -2px; transition: background-color .12s ease; }
+  .flow:has(.step[data-s="1"]:is(:hover, :focus)) ~ .eqs .bit[data-s~="1"],
+  .flow:has(.step[data-s="2"]:is(:hover, :focus)) ~ .eqs .bit[data-s~="2"],
+  .flow:has(.step[data-s="3"]:is(:hover, :focus)) ~ .eqs .bit[data-s~="3"],
+  .flow:has(.step[data-s="4"]:is(:hover, :focus)) ~ .eqs .bit[data-s~="4"] { background: var(--lit); }
+  @media (prefers-reduced-motion: reduce) { .flow .step[data-s], .eqs .bit { transition: none; } }
   /* the two responses: shared opening dimmed, later overlap marked as matched
      wording rather than cancellation, text unique to one side highlighted */
   .ctxtext .pre { color: var(--muted); }
@@ -614,7 +624,21 @@
     flex: 1 1 150px; border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px;
     background: var(--track);
   }
-  .flow .step.accent { background: transparent; border-color: var(--series-1); box-shadow: inset 0 0 0 1px var(--series-1); }
+  /* hovering a step tints the part of the objective below that it names.
+     Nothing is hidden behind a step, so they are not links and the tint is
+     the whole of the interaction. The tint keys off plain :focus so a tap on a
+     touch screen, which never synthesises :hover and does not match
+     :focus-visible, still lights the mapping. Keyboard focus additionally gets
+     the page-wide focus ring so a tab stop stays locatable; pointer focus has
+     the ring suppressed, since a ring parked on a step would read as
+     "selected". */
+  .flow .step[data-s] { cursor: default; transition: background-color .12s ease, border-color .12s ease; }
+  .flow .step[data-s]:is(:hover, :focus) { background: var(--lit); border-color: var(--lit-edge); }
+  .flow .step[data-s]:focus:not(:focus-visible) { outline: none; }
+  /* the RLVR flow accents the one step that carries this row's own data (its
+     verifier), so it is tinted rather than ringed — a ring reads as a focus state. */
+  .flow .step.accent { background: var(--lit); border-color: var(--lit-edge); }
+  .flow .hint { flex: 0 0 100%; font-size: 12px; color: var(--muted); }
   .flow .step .t { font-size: 12px; color: var(--muted); }
   .flow .step .v { font-size: 13px; font-weight: 600; }
   .flow .arrow { align-self: center; color: var(--muted); font-size: 15px; }
@@ -1321,23 +1345,26 @@ function gradientSection(rec, shared = 0){
     reason.a === reason.b;
   const cut = sideCut(rec.chosen, shared) || sideCut(rec.rejected, shared);
 
+  const step = (n, title, body) =>
+    `<div class="step" data-s="${n}" tabindex="0"><div class="t">${n} · ${title}</div><div class="v">${body}</div></div>`;
   const flow = `<div class="flow">
-    <div class="step"><div class="t">1 · score</div><div class="v">sum the log-probability of each response's tokens</div></div>
+    ${step(1, "score", "sum the log-probability of each response's tokens")}
     <div class="arrow">→</div>
-    <div class="step"><div class="t">2 · compare</div><div class="v">against a frozen copy of the SFT checkpoint</div></div>
+    ${step(2, "compare", "against a frozen copy of the SFT checkpoint")}
     <div class="arrow">→</div>
-    <div class="step accent"><div class="t">3 · margin</div><div class="v">how much further the chosen one has moved</div></div>
+    ${step(3, "margin", "how much further the chosen one has moved")}
     <div class="arrow">→</div>
-    <div class="step"><div class="t">4 · update</div><div class="v">one step from both sets of token terms</div></div>
+    ${step(4, "update", "one step from both sets of token terms")}
+    <div class="hint">Hover, tap, or tab to a step to light up the part of the objective it names.</div>
   </div>`;
 
   return `<div class="grad" id="gradpanel" hidden>
     <h4>the update</h4>
     ${flow}
     <div class="eqs">
-      <span class="lhs">margin</span><span class="rel">=</span><span class="rhs"><i>β</i> <span class="brk">[</span> <span class="par">(</span><span class="fn">log</span><i>π</i>(<span class="tag up">chosen</span>) − <span class="fn">log</span><i>π</i><sub>ref</sub>(<span class="tag up">chosen</span>)<span class="par">)</span> − <span class="par">(</span><span class="fn">log</span><i>π</i>(<span class="tag down">rejected</span>) − <span class="fn">log</span><i>π</i><sub>ref</sub>(<span class="tag down">rejected</span>)<span class="par">)</span> <span class="brk">]</span></span>
-      <span class="lhs">loss</span><span class="rel">=</span><span class="rhs">−<span class="fn">log</span><i>σ</i>(<i>margin</i>)</span>
-      <span class="lhs">update</span><span class="rel">∝</span><span class="rhs"><i>σ</i>(−<i>margin</i>) <span class="brk">[</span> <span class="grad-op">∇</span><span class="fn">log</span><i>π</i>(<span class="tag up">chosen</span>) − <span class="grad-op">∇</span><span class="fn">log</span><i>π</i>(<span class="tag down">rejected</span>) <span class="brk">]</span></span>
+      <span class="lhs">margin</span><span class="rel">=</span><span class="rhs"><span class="bit" data-s="3"><i>β</i> <span class="brk">[</span> <span class="par">(</span><span class="bit" data-s="1"><span class="fn">log</span><i>π</i>(<span class="tag up">chosen</span>)</span> − <span class="bit" data-s="2"><span class="fn">log</span><i>π</i><sub>ref</sub>(<span class="tag up">chosen</span>)</span><span class="par">)</span> − <span class="par">(</span><span class="bit" data-s="1"><span class="fn">log</span><i>π</i>(<span class="tag down">rejected</span>)</span> − <span class="bit" data-s="2"><span class="fn">log</span><i>π</i><sub>ref</sub>(<span class="tag down">rejected</span>)</span><span class="par">)</span> <span class="brk">]</span></span></span>
+      <span class="lhs">loss</span><span class="rel">=</span><span class="rhs">−<span class="fn">log</span><i>σ</i>(<span class="bit" data-s="3"><i>margin</i></span>)</span>
+      <span class="lhs">update</span><span class="rel">∝</span><span class="rhs"><span class="bit" data-s="4"><i>σ</i>(−<span class="bit" data-s="3"><i>margin</i></span>) <span class="brk">[</span> <span class="grad-op">∇</span><span class="fn">log</span><i>π</i>(<span class="tag up">chosen</span>) − <span class="grad-op">∇</span><span class="fn">log</span><i>π</i>(<span class="tag down">rejected</span>) <span class="brk">]</span></span></span>
     </div>
     <p class="kv">Two copies of the model are involved: the one being trained (π) and a frozen copy of the
       SFT checkpoint it started from (π_ref). At the first step the two are identical, so the margin is zero
