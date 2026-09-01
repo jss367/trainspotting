@@ -1829,8 +1829,8 @@ function caseStudyCards(main, d){
   const spread = document.createElement("section");
   spread.className = "card lookup";
   spread.innerHTML = `<h2>Where the copies actually live</h2>
-    <p class="sub"><code>${esc(d.spread.query)}</code> appears ${num(d.spread.occurrences)} times in
-      ${esc(spreadIndex.label)}. ${esc(d.spread.explain)}
+    <p class="sub"><code>${esc(d.spread.query)}</code> appears ${num(d.spread.occurrences)}${d.spread.approx ? "~" : ""} times in
+      ${esc(spreadIndex.label)}${d.spread.approx ? ", which the index reports as an estimate rather than a count — it stops counting a string this common" : ""}. ${esc(d.spread.explain)}
       Shares below are over the ${num(d.spread.drawn)} occurrences drawn, weighted by occurrence
       rather than by page: a site that reposts the text on several pages counts once per page, and a
       page that repeats it counts once per repeat.</p>`;
@@ -1862,9 +1862,15 @@ function caseStudyCards(main, d){
         tail.slice(0, 12).map(x => esc(x.domain)).join("<br>")}${tail.length > 12 ? "<br>…" : ""}`);
   const sn = document.createElement("p");
   sn.className = "note";
+  // `on_subject_site` counts draws whose domain was readable and matched. A
+  // draw with no readable URL is evidence of nothing, so it cannot be folded
+  // into either side of this sentence.
+  const placed = d.spread.drawn - unknownDomain;
   sn.textContent = d.spread.on_subject_site === 0
-    ? `Not one of the ${d.spread.drawn} drawn copies is on ${d.site}. Its own pages are in the corpus — the post above is one — but the site's heading is a nav line, and line-level filtering drops nav lines. What survives is the name as other people typed it into their own prose.`
-    : `${d.spread.on_subject_site} of the ${d.spread.drawn} drawn copies are on ${d.site} itself.`;
+    ? `Not one of the ${num(placed)} drawn copies whose page could be identified is on ${d.site}. Its own pages are in the corpus — the post above is one — but the site's heading is a nav line, and line-level filtering drops nav lines. What survives is the name as other people typed it into their own prose.`
+      + (unknownDomain ? ` The other ${num(unknownDomain)} came back with no readable URL and could be anywhere.` : "")
+    : `${d.spread.on_subject_site} of the ${num(placed)} drawn copies whose page could be identified are on ${d.site} itself.`
+      + (unknownDomain ? ` ${num(unknownDomain)} more came back with no readable URL.` : "");
   spread.appendChild(sn);
   const det = document.createElement("details");
   det.innerHTML = `<summary class="stage-sub" style="cursor:pointer;margin:12px 0 0">read the ${num(d.spread.documents.length)} distinct documents drawn</summary>`;
