@@ -138,24 +138,101 @@ def test_labeled_prompts_reach_their_sampled_row(profile):
     assert joined >= len(records) - d["ambiguous_keys"]
 
 
-def test_the_page_computes_the_same_prompt_key_as_python():
-    """Two implementations of one hash, in two languages, in two files. The one
-    in docs/index.html is what actually draws the grid."""
+def site_function(name: str) -> str:
+    """One top-level function lifted out of docs/index.html by name.
+
+    The site is a single file with no build step and no module boundary, so the
+    only way to test its logic is to read it back out. A top-level declaration
+    ends at the first line that is exactly `}`, which is what the file's own
+    formatting guarantees.
+    """
+    src = SITE.read_text().splitlines()
+    start = next(
+        (i for i, line in enumerate(src) if line.startswith(f"function {name}(")), None
+    )
+    assert start is not None, f"docs/index.html no longer defines {name}()"
+    end = next(i for i in range(start, len(src)) if src[i] == "}")
+    return "\n".join(src[start : end + 1])
+
+
+def run_node(script: str, *args: str) -> str:
     node = shutil.which("node")
     if not node:
         pytest.skip("node not installed")
-    src = SITE.read_text()
-    fn = re.search(r"function promptKey\(prompt\)\{.*?\n\}", src, re.S)
-    assert fn, "docs/index.html no longer defines promptKey — the crosstab join is gone"
+    return subprocess.run(
+        [node, "-e", script, *args], capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+def test_the_page_computes_the_same_prompt_key_as_python():
+    """Two implementations of one hash, in two languages, in two files. The one
+    in docs/index.html is what actually draws the grid."""
+    fn = site_function("promptKey")
     samples = ["", "hello", "a" * 1000, "日本語のプロンプト", "emoji 🙂 and \\ quotes \" '",
-               "line\nbreak\ttab", "Ω" * 401]
+               "line\nbreak\ttab", "Ω" * 401,
+               # Non-BMP characters before the cutoff, in a prompt long enough to
+               # be cut. This is the case that shipped broken: JavaScript's
+               # String.slice counts UTF-16 units, so one emoji moves the cut a
+               # character earlier than Python's code-point slice and the two
+               # sides hash different text. Three committed prompts hit it.
+               "🙂" + "a" * 500,
+               "🇰🇬 " + "Манас эпосу " * 60,
+               "a" * 399 + "🙂" + "b" * 100,
+               "𝗖𝗵𝗮𝘁𝗚𝗣𝗧 " * 80]
     script = (
-        f"const KEY_CHARS = {derive.KEY_CHARS};\n{fn.group(0)}\n"
+        f"const KEY_CHARS = {derive.KEY_CHARS};\n{fn}\n"
         f"console.log(JSON.parse(process.argv[1]).map(promptKey).join(','))"
     )
-    out = subprocess.run([node, "-e", script, json.dumps(samples)],
-                         capture_output=True, text=True, check=True).stdout.strip()
+    out = run_node(script, json.dumps(samples))
     assert out.split(",") == [derive.prompt_key(s) for s in samples]
+
+
+def test_the_page_refuses_to_guess_when_two_sampled_rows_share_a_key():
+    """A prompt key is a prompt's opening, so two sampled rows can collide on
+    one. Where they carry different metadata, no join can say which row a
+    labeled prompt came from — filing it under whichever row was sampled last
+    is a wrong answer dressed as a right one. Those keys have to drop out."""
+    script = (
+        f"const KEY_CHARS = {derive.KEY_CHARS};\n"
+        f"{site_function('promptKey')}\n{site_function('valueByKey')}\n{site_function('crossRows')}\n"
+        """
+        const records = [
+          {k: "aaa", m: {src: "one"}},            // collides, disagrees
+          {k: "aaa", m: {src: "two"}},
+          {k: "bbb", m: {src: "three"}},          // collides, agrees
+          {k: "bbb", m: {src: "three"}},
+          {k: "ccc", m: {src: "four"}},           // clean
+          {k: "ddd", m: {}},                      // no value for this column
+        ];
+        const {map, dropped} = valueByKey(records, "src");
+        // Three prompts: one on a clean key, one on the key thrown out as
+        // undecidable, one on a key the sample never had.
+        const labeled = [
+          {prompt: "clean prompt", label: "helpfulness"},
+          {prompt: "conflicted prompt", label: "honesty"},
+          {prompt: "unknown prompt", label: "capability"},
+        ];
+        const kv = new Map([[promptKey("clean prompt"), "four"]]);
+        const conflictedKey = promptKey("conflicted prompt");
+        const cross = crossRows(labeled, kv, r => r.label, 12, new Set([conflictedKey]));
+        console.log(JSON.stringify({
+          kept: [...map.entries()].sort(),
+          dropped: [...dropped],
+          rows: cross.rows.map(r => [r.name, r.total]),
+          undecidable: cross.undecidable,
+          unmatched: cross.unmatched,
+        }));
+        """
+    )
+    out = json.loads(run_node(script))
+    # The disagreeing key is gone entirely — the row that claimed it first is
+    # no more decidable than the one that collided with it.
+    assert out["kept"] == [["bbb", "three"], ["ccc", "four"]]
+    assert out["dropped"] == ["aaa"]
+    # A prompt whose key was dropped is missing from the grid, never misfiled,
+    # and it is counted apart from one the sample simply never had.
+    assert out["rows"] == [["four", 1]]
+    assert (out["undecidable"], out["unmatched"]) == (1, 1)
 
 
 def test_the_page_bins_lengths_the_same_way_python_does():

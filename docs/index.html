@@ -1328,7 +1328,11 @@ const HIST_EDGES = Array.from({length: 12}, (_, i) => 10 ** (1 + i * 0.5));
 // samples so the two cannot drift apart silently.
 function promptKey(prompt){
   let h = 0x811c9dc5;
-  for (const ch of prompt.slice(0, KEY_CHARS)) h = Math.imul(h ^ ch.codePointAt(0), 0x01000193) >>> 0;
+  // Sliced by code point, not by `String.slice`, which counts UTF-16 units: a
+  // prompt with an emoji in its first 400 characters would otherwise be cut a
+  // character short of where Python cut it, hash differently, and drop out of
+  // the grid silently. Three of the committed samples do exactly that.
+  for (const ch of [...prompt].slice(0, KEY_CHARS)) h = Math.imul(h ^ ch.codePointAt(0), 0x01000193) >>> 0;
   return h.toString(16).padStart(8, "0");
 }
 
@@ -1759,12 +1763,43 @@ function pickGroupColumn(columns){
 
 // Sampled records grouped by the metadata value of the prompt behind each one,
 // then by whatever the record was labeled. Returns the rows a heat table needs.
-function crossRows(records, keyToValue, labelOf, limit = 12){
-  const groups = new Map();
-  let unjoined = 0;
+// One metadata value per prompt key, and nothing where the sample disagrees.
+//
+// The key is a prompt's opening, so two sampled rows can share one. Where they
+// carry the same value for this column that costs nothing — the prompt belongs
+// to that value either way. Where they carry different ones (7B Think DPO has a
+// key spanning two source datasets; a WildChat key spans eight countries), no
+// join can say which row a labeled prompt came from, and last-one-wins would
+// file every prompt under whichever row happened to be sampled last. Drop those
+// keys instead and let the count of them travel with the grid: a prompt missing
+// from the table is recoverable, a prompt in the wrong row is not.
+function valueByKey(records, col){
+  const map = new Map(), dropped = new Set();
   for (const r of records){
-    const value = keyToValue.get(promptKey(r.prompt));
-    if (value === undefined){ unjoined++; continue; }
+    const v = r.m[col];
+    if (v == null) continue;
+    if (map.has(r.k) && map.get(r.k) !== v) dropped.add(r.k);
+    else if (!map.has(r.k)) map.set(r.k, v);
+  }
+  for (const k of dropped) map.delete(k);
+  return {map, dropped};
+}
+
+function crossRows(records, keyToValue, labelOf, limit = 12, dropped = new Set()){
+  const groups = new Map();
+  // Two ways a prompt misses the grid, and they mean different things: its key
+  // was thrown out as undecidable, or the sample has no row for it at all
+  // (the row records nothing for this column, or its stored prompt no longer
+  // matches the labeled copy). Counting them together would describe the first
+  // as missing data when it is a refusal to guess.
+  let undecidable = 0, unmatched = 0;
+  for (const r of records){
+    const key = promptKey(r.prompt);
+    const value = keyToValue.get(key);
+    if (value === undefined){
+      if (dropped.has(key)) undecidable++; else unmatched++;
+      continue;
+    }
     if (!groups.has(value)) groups.set(value, {name: value, total: 0, byCol: {}});
     const g = groups.get(value);
     g.total++;
@@ -1783,7 +1818,7 @@ function crossRows(records, keyToValue, labelOf, limit = 12){
     }
     rows.push(folded);
   }
-  return {rows, unjoined, groups: sorted.length};
+  return {rows, undecidable, unmatched, groups: sorted.length};
 }
 
 async function crosstabCard(model, m, post, profiles, ctxFor, gen){
@@ -1821,20 +1856,30 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
       continue;
     }
     any = true;
-    const keyToValue = new Map(p.records.filter(r => r.m[col] != null).map(r => [r.k, r.m[col]]));
+    const {map: keyToValue, dropped} = valueByKey(p.records, col);
     const ctx = ctxFor(s);
-    const explain = (name, {rows, unjoined, groups}, extra) => {
+    const explain = (name, {rows, undecidable, unmatched, groups}, extra) => {
       const note = document.createElement("p");
       note.className = "note";
+      // Two ways to miss the grid, counted apart, and only named when they
+      // happened. One cause needs no breakdown; two do.
+      const undecidableWhy = `their opening 400 characters are shared by two sampled rows carrying different ${col} values, which makes the row they came from undecidable`;
+      const unmatchedWhy = `they matched no sampled row — its row records no ${col}, or stores a different copy of the prompt`;
+      const total = undecidable + unmatched;
+      const why = undecidable && unmatched
+        ? `: ${undecidable} because ${undecidableWhy}, and ${unmatched} because ${unmatchedWhy}`
+        : undecidable ? `, because ${undecidableWhy}` : `, because ${unmatchedWhy}`;
       note.textContent = `${groups} distinct ${col} value${groups === 1 ? "" : "s"} across the sampled ${name}`
         + (rows.length && rows[rows.length-1].folded ? `, the top 12 drawn and the rest folded into the last row` : "")
         + (extra || "")
-        + (unjoined ? `. ${unjoined} ${unjoined === 1 ? "prompt is" : "prompts are"} left out — no sampled row matched the key, which happens when two rows open with the same 400 characters and collapse onto one.` : ".");
+        + (total
+          ? `. ${total} sampled prompt${total === 1 ? " is" : "s are"} left out of this grid${why}.`
+          : ".");
       return note;
     };
 
     if (labeled.length){
-      const cross = crossRows(labeled, keyToValue, r => r.label);
+      const cross = crossRows(labeled, keyToValue, r => r.label, 12, dropped);
       heatTable(card, cross.rows, LABELS.map(l => ({key: l, short: SHORT_LABEL[l], label: NICE[l]})), ctx);
       card.appendChild(explain("prompts", cross));
     }
@@ -1850,7 +1895,7 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
       const cols = [...top.map(c => ({key: c, short: c === "undetermined" ? "?" : c, label: langName(c)})),
         {key: "…", short: "…", label: "every other language"}];
       const build = parent => {
-        const cross = crossRows(langs.records, keyToValue, r => top.includes(r.label) ? r.label : "…");
+        const cross = crossRows(langs.records, keyToValue, r => top.includes(r.label) ? r.label : "…", 12, dropped);
         heatTable(parent, cross.rows, cols, ctx);
         parent.appendChild(explain("prompts", cross,
           `, the top ${top.length} detected languages drawn and everything else in the last column`));
