@@ -1,12 +1,13 @@
 # trainspotting
 
 Spot what's in a model's training data. Audits what a fully open model was
-trained on — currently the OLMo 3 pipelines (Ai2), whose pretraining (Dolma 3)
-and post-training (Dolci) data are public — and, with the same layers, any
-dataset on its own. The tool answers eight kinds of question. The first five go
-in increasing order of depth; the sixth is a lookup rather than an estimate; the
-last two read a whole example rather than its prompt, and put the answer on a
-scale the stages share:
+trained on — the OLMo 3 pipelines (Ai2), whose pretraining (Dolma 3) and
+post-training (Dolci) data are public, and Pythia (EleutherAI), whose
+pretraining corpus is public and which has no post-training at all — and, with
+the same layers, any dataset on its own. The tool answers eight kinds of
+question. The first five go in increasing order of depth; the sixth is a lookup
+rather than an estimate; the last two read a whole example rather than its
+prompt, and put the answer on a scale the stages share:
 
 1. **Facts** — stage sizes for a model's whole training pipeline (pretrain →
    midtrain → long-context → SFT → DPO → RLVR), hardcoded in a registry.
@@ -95,6 +96,34 @@ The two things a dataset changes about how a result reads:
   with the 10.4% it declines to call covering most of the gap.
 
 See [Adding a dataset](#adding-a-dataset).
+
+## Base models
+
+`pythia-12b-deduped` is a model with a pretraining stage and nothing after it.
+EleutherAI built Pythia to study how a model changes *during* pretraining — 16
+sizes, 154 checkpoints each, one corpus, one order — and never post-trained it.
+So the layers that read prompts have nothing to read. `sources`, `classify`,
+`languages` and `context` all exit saying so, `report` prints the pipeline and
+stops, and the helpful/honest/harmless question this tool leads with has no
+answer here. That is a fact about the model, not a gap in the audit.
+
+What is left is the pretraining half, and it is the best-sampled one in the
+registry: the deduplicated Pile is served whole by the dataset viewer, so
+`pretrain` draws from all 134 million documents rather than from the head of
+each shard. `ask --pretrain` scores those documents against a free-form
+question exactly as it does for OLMo 3, which is the one place the two models
+are directly comparable.
+
+`find` also lines up here for the first time. Every other registered model is
+searched against `v4_olmo-2-0325-32b-instruct_llama`, a stand-in for a Dolma 3
+index nobody has published; Pythia has `v4_piletrain_llama`, which is the Pile
+itself. The remaining gap is deduplication — that index covers the Pile as
+assembled, which is what the plain Pythia models saw, while the registered
+target is a `-deduped` one. `find` says so on every run.
+
+All 8 `-deduped` Pythia sizes read exactly this corpus in exactly this order, so
+adding `pythia-6.9b-deduped` or any other is a two-line registry entry pointing
+at the same stages.
 
 ## Install
 
@@ -546,7 +575,11 @@ Dolci-Think-SFT the three matching examples are short, 1.0% of rows and 0.1% of
 the text. Counting rows there answers "what fraction of examples" when the
 question is "what fraction of training".
 
-**Corpus documents are weighed by nothing extra.** `trainspotting pretrain`
+**Corpus documents depend on the route they were drawn by**, which is the point
+worth being careful about: being a corpus is not what decides the correction,
+how the documents were sampled is.
+
+*Shard-drawn corpora are weighed by nothing extra.* `trainspotting pretrain`
 draws shards with probability proportional to compressed size and takes one
 document from each, precisely so the source mix comes out token-weighted. Under
 that design every sampled document stands for the same byte mass — a stratum
@@ -562,9 +595,17 @@ their length, so a long document is slightly underweighted against its byte
 share. One document per shard gives nothing to estimate that shard's mean length
 from, so it stays a caveat rather than a correction made badly.
 
+*Rows-drawn corpora are weighed by fit characters*, exactly as post-training
+rows are. The `rows` route pages the datasets-server uniformly over every
+document in the corpus, so nothing in the draw is proportional to size and the
+document rate is a share of documents rather than of training. The deduplicated
+Pile makes that concrete: its 300 sampled documents run from a few hundred
+characters to seventy thousand, so which end of that range the matches land in
+moves the matching-token total by more than the rate itself does.
+
 The interval is the count-based one — cluster-corrected for corpora, where the
 `ask` run already stored it — rescaled by the weighed rate over the count rate,
-which is exactly 1 for a corpus stage. It is computed over the rows the point
+which is exactly 1 for a shard-drawn corpus stage. It is computed over the rows the point
 estimate was actually built from, which for an RL stage is much smaller than the
 sample: Dolci-Instruct-RL stores a reference generation for 60 of 300 judged
 rows, and taking the interval over all 300 claimed five times the evidence there
@@ -737,6 +778,37 @@ duplicates it had.
 | pretrain | `allenai/dolma3_mix-6T-1025-7B` (7B models) / `allenai/dolma3_mix-6T` (32B) |
 | midtrain | `allenai/dolma3_dolmino_mix-100B-1025` (7B models) / `allenai/dolma3_dolmino_mix-100B-1125` (32B) |
 | long-context | `allenai/dolma3_longmino_mix-50B-1025` (7B models) / `allenai/dolma3_longmino_mix-100B-1125` (32B) |
+
+### The other route: a corpus the viewer serves whole
+
+Everything above is a workaround for a corpus the dataset viewer only partly
+indexed. The Pile is the case where none of it is needed:
+`EleutherAI/the_pile_deduplicated` is indexed in full — 134,318,121 rows,
+`partial: false` — so `/rows` reaches any offset and `pretrain` pages it
+directly. Documents are drawn from the whole corpus, there is no shard listing
+to cache and no position bias to disclose. The registry picks the route per
+stage with `sample_via`; `shards` is the default, because a stage that forgets
+to declare one should get the route with the honest caveat rather than the one
+that quietly samples 5 GB of a 450 GB repo.
+
+What the direct route still has is a cluster. `/rows` returns pages of ten
+adjacent rows, so a 300-document sample is 30 pages, and each document records
+the page it arrived in — the analogue of the shard route's shard path. Intervals
+are computed over those pages. On the Pile the correlation inside a page is
+close to nil, because the corpus was shuffled before release, so the design
+effect lands near 1 and the interval is almost the uncorrected one; measuring it
+rather than assuming it is what lets the file say so. Leaving the page out is a
+real failure mode and was one: with every document carrying the same empty
+cluster label, the correction read 300 documents as a single observation and
+printed a 0–83% interval.
+
+What the direct route gives up is provenance. Dolma 3 names each document's
+source and topic in its shard path and carries per-document filter metadata;
+the deduplicated Pile is one `text` column, its `pile_set_name` labels dropped
+in the dedup release. So a Pile document arrives with its row index and nothing
+else, the composition shown for it is EleutherAI's published table rather than
+a listing counted here, and that table describes the Pile *before*
+deduplication — dedup removed roughly 30% of the bytes, unevenly.
 
 Sampling is one document per shard by default, which costs a round trip per
 document and keeps the draws near-independent — see the note on repeat picks
@@ -1060,18 +1132,27 @@ sampling run that quietly labels nothing.
 - Sampled estimates come with Wilson 95% intervals in `report`; 300 samples
   gives roughly ±5% worst case. Post-training intervals assume independent draws.
   Corpus intervals do not: they are widened by the measured design effect of
-  clustering by shard, so `--docs-per-shard` runs whose matches bunch inside
-  shards get an honestly wider interval, and runs whose matches are spread
-  evenly are not penalised for the grouping alone. The corrected interval is
+  clustering by whatever unit the sample was drawn in — the shard on the shard
+  route, the page of ten adjacent rows on the direct one — so `--docs-per-shard`
+  runs whose matches bunch inside shards get an honestly wider interval, and
+  runs whose matches are spread evenly are not penalised for the grouping
+  alone. The corrected interval is
   computed once, in the CLI, and stored in the result file rather than
   recomputed by the site.
-- The pretraining sampler only sees documents a range request can reach — the
-  first few hundred in each shard, one drawn uniformly from those. Shards are
-  drawn properly; position within a shard is not corrected for.
-- `find` searches the closest public infini-gram index, which is OLMo 2's
-  training data, not OLMo 3's — no Dolma 3 index exists on the public API yet.
-  Matches also align to token boundaries: querying `a` counts the token ` a`,
-  not the letter.
+- On the shard route the pretraining sampler only sees documents a range request
+  can reach — the first few hundred in each shard, one drawn uniformly from
+  those. Shards are drawn properly; position within a shard is not corrected
+  for. The direct route has no such limit: it reaches every document in the
+  corpus.
+- `find` searches the closest public infini-gram index, which for the OLMo 3
+  models is OLMo 2's training data rather than their own — no Dolma 3 index
+  exists on the public API yet. Pythia is the exception: `v4_piletrain_llama`
+  is the Pile itself, differing from what `pythia-12b-deduped` saw only by
+  deduplication. Matches align to token boundaries either way: querying `a`
+  counts the token ` a`, not the letter.
+- The Pile composition shown for Pythia is EleutherAI's published table for the
+  corpus as assembled, not a listing of the deduplicated release the documents
+  are sampled from, and not measured here.
 - `budget` reports an exposure budget, not an attribution. It weighs tokens, and
   a pretraining token, a preference token and an RL gradient step do not move a
   model equally. It also converts characters to tokens at a flat 4:1, which is
@@ -1095,11 +1176,14 @@ sampling run that quietly labels nothing.
   run (`sources`) which can be staler still; when it names a different revision
   the stage keeps its rate, which is a share, and loses its token figure, which
   is a count.
-- The corpus rate assumes shard-proportional sampling did the token weighting,
-  which is true between shards and only approximately true within one: a
-  document is drawn uniformly from its shard's reachable head rather than by
-  length. Long documents are slightly underweighted for that reason, and the
-  `short_draws` bias documented above pushes the same way.
+- A shard-drawn corpus rate assumes shard-proportional sampling did the token
+  weighting, which is true between shards and only approximately true within
+  one: a document is drawn uniformly from its shard's reachable head rather than
+  by length. Long documents are slightly underweighted for that reason, and the
+  `short_draws` bias documented above pushes the same way. A rows-drawn corpus
+  has neither problem and is length-weighted instead, so its residual is the one
+  post-training carries: the interval treats the length ratio as known when it
+  was itself measured on the same 300 documents.
 - A `budget` total is withheld, in the CLI and on the site, when the stages
   under one slug were not scored by the same instrument — different wordings of
   the question, different classifiers, or a rubric that moved between stages of
@@ -1124,17 +1208,38 @@ sampling run that quietly labels nothing.
   is the case the direction layer exists for.
 - Registry facts (token counts) are from the Olmo 3 paper
   ([arXiv:2512.13961](https://arxiv.org/abs/2512.13961)) and the
-  [release blog](https://allenai.org/blog/olmo3).
+  [release blog](https://allenai.org/blog/olmo3); Pythia's from the Pythia paper
+  ([arXiv:2304.01373](https://arxiv.org/abs/2304.01373)) and the Pile paper
+  ([arXiv:2101.00027](https://arxiv.org/abs/2101.00027)).
 
 ## Adding a model
 
 Add an entry to `MODELS` in `trainspotting/registry.py`. A stage carries either an
 `hf_dataset` plus `prompt_path` / `source_columns` schema hints (post-training,
-served by the datasets-server), or a `sample_dataset` pointing at a repo of
-`.jsonl.zst` shards (pretraining, read by range request), or just `tokens` for a
-facts-only row. Any fully open pipeline on the Hub works the same way; the shard
-path parser in `trainspotting/pretrain.py` is the piece most likely to need a new
-naming convention added.
+served by the datasets-server), or a `sample_dataset` naming a corpus
+(pretraining), or just `tokens` for a facts-only row. Any fully open pipeline on
+the Hub works the same way.
+
+A pretraining stage also picks how its corpus is read, with `sample_via`. Check
+`https://datasets-server.huggingface.co/rows?dataset=<id>&config=default&split=train&offset=<near the end>&length=1`
+first: if it answers and reports `"partial": false`, the viewer has the corpus
+indexed in full and `sample_via: "rows"` is both simpler and a better sample —
+give it a `text_column` and nothing else. Otherwise leave it on the default
+shard route, and expect the shard path parser in `trainspotting/pretrain.py` to
+need a naming convention added; `split_group` reads provenance out of each
+shard's parent directory, which not every repo puts it in.
+
+A stage with no `composition` renders no breakdown, which is the honest result
+for a corpus whose per-document source labels are not published. Where the
+release publishes sizes rather than token counts, set `composition_unit:
+"bytes"`, and if that published table describes a different cut of the corpus
+than the one being sampled, say which in `composition_scope` — the site prints
+it under the bars.
+
+A model with no post-training stages at all is a supported shape, not a broken
+entry: `sources`, `classify`, `languages` and `context` exit with a message
+naming the reason, `report` stops after the pipeline, and `ask --pretrain`
+scores the corpus on its own.
 
 For a post-training stage, then run `python scripts/capture_row_fixtures.py` to
 save a row for it — `tests/test_extract.py` asserts every registry stage has one,

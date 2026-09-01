@@ -182,16 +182,27 @@ def cmd_facts(args):
             n = hf.num_rows(s["hf_dataset"])
             line += f" — {n:,} examples ({s['hf_dataset']})"
         elif s.get("sample_dataset"):
-            line += f" — samplable ({s['sample_dataset']})"
+            route = registry.sample_route(s)
+            how = "by shard" if route == "shards" else "in full, uniformly"
+            line += f" — samplable {how} ({s['sample_dataset']})"
         print(line)
         if s.get("note"):
             print(f"    {s['note']}")
 
 
 def cmd_sources(args):
-    target = registry.resolve(args.target)
+    """The source-label breakdown of each post-training mix.
+
+    Selected through `_select_stages` like every other command that reads a
+    post-training stage, and for the reason that helper exists: a base-only
+    target such as Pythia has no such stages, and iterating an empty list here
+    exited 0 having printed nothing — and with --json wrote an audit file
+    containing `{}`, which the site would serve as a measured empty breakdown.
+    Failing is the honest answer, and `report` is where a base model's "there is
+    no post-training" is stated deliberately.
+    """
     out = {}
-    for s in registry.post_training_stages(target):
+    for s in _select_stages(args, registry.post_training_stages, "post-training"):
         revision = hf.dataset_revision(s["hf_dataset"])
         freqs, counted, partial = hf.column_frequencies(
             s["hf_dataset"], s["source_columns"]
@@ -387,6 +398,12 @@ def _label_pretrain_docs(args, question, slug, stages=None):
                 "source": d["source"],
                 "topic": d["topic"],
                 "shard": d["shard"],
+                # What the interval clusters on: the unit this document was
+                # drawn in, which is the shard for a shard-route sample and the
+                # page of ten adjacent rows for a rows-route one. `shard` is the
+                # fallback so a sample written before `cluster` existed — every
+                # committed Olmo one — clusters exactly as it did before.
+                "cluster": d.get("cluster") or d["shard"],
                 # The document's true length, not the excerpt's. `budget` weighs
                 # a corpus rate by length — a 200k-character long-context PDF is
                 # not one 500-character web snippet's worth of training — and
@@ -398,7 +415,7 @@ def _label_pretrain_docs(args, question, slug, stages=None):
             if lab
         ]
         k, n = sum(r["match"] for r in records), len(records)
-        lo, hi, n_eff = _cluster_wilson(records)
+        lo, hi, n_eff = _cluster_wilson(records, key="cluster")
         path = _write_json(
             RESULTS / f"{args.target}.{s['stage']}.ask-{slug}.json",
             {
@@ -536,6 +553,15 @@ def cmd_ask(args):
         # A dataset has no corpora to score. Accepting the flag and quietly
         # scoring only the prompts would answer half the question asked.
         sys.exit(f"--pretrain: {args.target} has no pretraining stages")
+    if not post and not pre:
+        # A base model asked without --pretrain. There are no prompts anywhere
+        # in its pipeline, so the run below would do nothing and exit 0 — the
+        # same silent success `cmd_sources` used to hand this target. Name the
+        # flag that makes the question answerable instead.
+        sys.exit(
+            f"{args.target} has no post-training stages; pass --pretrain to"
+            " score its pretraining documents instead"
+        )
     if args.stage:
         post = [s for s in post if s["stage"] == args.stage]
         pre = [s for s in pre if s["stage"] == args.stage]
@@ -546,6 +572,14 @@ def cmd_ask(args):
         _warn_missing_pretrain_samples(args, pre)
     if post:
         _label_post_training(args, question=args.question, slug=slug, stages=post)
+    elif pre:
+        # Say what is being skipped rather than letting a corpus-only run read
+        # as a whole-pipeline answer.
+        print(
+            f"{args.target} has no post-training stages — scoring its"
+            " pretraining documents only.",
+            file=sys.stderr,
+        )
     if pre:
         _label_pretrain_docs(args, args.question, slug, stages=pre)
 
@@ -566,16 +600,64 @@ def _pretrain_docs_source(target_name: str, stage: str) -> Path | None:
     return paths.find(f"{target_name}.{stage}.docs.json")
 
 
-def cmd_pretrain(args):
-    """Sample documents from a stage's Dolma 3 shard repo.
+def _pretrain_rows(args, s, dataset):
+    """Sample a corpus the datasets-server has indexed in full.
 
-    The datasets-server cannot serve these corpora (it indexes only the first
-    ~5 GB and the shards are topic-ordered), so this reads the repo files by
-    range request instead. No model is called; this is the deterministic half,
-    and `ask --pretrain` scores whatever it wrote.
+    Returns the documents and the corpus facts to store alongside them. There is
+    no shard listing here, so the composition is the registry's published one
+    rather than a breakdown this run counted, and the site reads `route` to know
+    not to claim a measured one it does not have.
+    """
+    print(f"sampling {args.sample} documents from {dataset} ...", file=sys.stderr)
+    # Resolved before the draw, so the stamp names the tree the rows came from
+    # rather than one published while the run was in flight.
+    revision = hf.dataset_revision(dataset)
+    docs, total = pretrain.sample_rows_documents(
+        dataset, args.sample, seed=args.seed, text_column=s.get("text_column", "text")
+    )
+    # And again after it. Unlike the shard route — whose range requests name a
+    # pinned revision in the URL, so its rows cannot straddle one — this route's
+    # thirty /rows requests are served from whatever the tree is at the time. A
+    # republish mid-draw leaves a sample split across two corpora under a single
+    # SHA, which is the one thing the stamp is supposed to rule out. Same check,
+    # same field name, and the same reason, as every other paged sampler here.
+    moved = hf.dataset_revision(dataset)
+    print(f"  {total:,} documents in the corpus", file=sys.stderr)
+    # A SHA now with no SHA before is the first reading we got, not evidence of
+    # a move — and `revision[:7]` below would raise on it.
+    if revision and moved and moved != revision:
+        print(
+            f"  note: {dataset} moved from {revision[:7]} to {moved[:7]} while this"
+            " ran; the documents may straddle both trees",
+            file=sys.stderr,
+        )
+    return docs, {
+        **_stamp(dataset, revision=revision),
+        **({"revision_moved_to": moved} if revision and moved and moved != revision else {}),
+        "route": "rows",
+        "rows_total": total,
+        "caveat": pretrain.rows_sampling_caveat(),
+    }
+
+
+def cmd_pretrain(args):
+    """Sample documents from a stage's pretraining corpus.
+
+    Two routes, chosen by `registry.sample_route`. Dolma 3 goes by shard: the
+    datasets-server indexes only the first ~5 GB of those repos and the shards
+    are topic-ordered, so this reads the repo files by range request instead.
+    A corpus the server *has* indexed in full — the deduplicated Pile — is paged
+    directly, which is both simpler and a better sample.
+
+    Either way no model is called; this is the deterministic half, and
+    `ask --pretrain` scores whatever it wrote.
     """
     for s in _select_stages(args, registry.pretrain_stages, "pretraining"):
         dataset = s["sample_dataset"]
+        if registry.sample_route(s) == "rows":
+            docs, corpus_facts = _pretrain_rows(args, s, dataset)
+            _write_pretrain_docs(args, s, dataset, docs, corpus_facts)
+            continue
         print(f"listing shards in {dataset} ...", file=sys.stderr)
         shards, revision = pretrain.list_shards(dataset)
         groups = pretrain.group_sizes(shards)
@@ -599,64 +681,93 @@ def cmd_pretrain(args):
             progress=progress,
         )
         print(file=sys.stderr)
-        records = [
+        _write_pretrain_docs(
+            args,
+            s,
+            dataset,
+            docs,
             {
-                "id": d["id"],
-                # An excerpt spanning the document, not its first 12k characters.
-                # These run past 200k in the long-context mixes, and a prefix
-                # would be the nav bar and the abstract — unrepresentative both
-                # to read on the site and to classify. `chars` keeps the true
-                # length so nothing pretends the excerpt is the whole document.
-                "text": extract.excerpt(d["text"]),
-                "chars": len(d["text"]),
-                "source": d["source"],
-                "topic": d["topic"],
-                "shard": d["shard"],
-                "metadata": d["metadata"],
-            }
-            for d in docs
-        ]
-        if len(records) < args.sample:
-            # A corpus can genuinely fail to fill the request — 55 huge shards
-            # cannot yield 300 documents at one apiece — so say so rather than
-            # letting "sample" claim a size the file does not have.
-            print(
-                f"  note: asked for {args.sample}, corpus yielded {len(records)}",
-                file=sys.stderr,
-            )
-        path = _write_json(
-            _pretrain_docs_path(args.target, s["stage"]),
-            {
-                "dataset": dataset,
                 # The exact commit the composition and documents came from.
                 # "main" moves; a result file that cites exact byte shares
                 # has to say which revision it counted.
                 **_stamp(dataset, revision=revision),
-                "stage": s["stage"],
-                "name": s["name"],
-                "sample": len(records),
-                "requested": args.sample,
-                "seed": args.seed,
+                "route": "shards",
                 "docs_per_shard": args.docs_per_shard,
                 # Shard draws that contributed fewer documents than asked
                 # for. Non-zero means the sample is weighted by reachable
                 # document density as well as by size.
                 "short_draws": short,
-                "scope": s.get("sample_scope"),
                 "caveat": pretrain.sampling_caveat(args.docs_per_shard),
                 "shards": len(shards),
                 "bytes": total_bytes,
                 "groups": groups,
-                "records": records,
             },
+            note=f", {short} short draw(s) made up by others" if short else "",
         )
 
+
+def _write_pretrain_docs(args, s, dataset, docs, corpus_facts, note=""):
+    """Store one stage's document sample, whichever route drew it.
+
+    The route-specific facts arrive already assembled in `corpus_facts` and are
+    merged in whole, so a shard run keeps its shard count, byte total, group
+    breakdown and pinned revision, and a rows run carries the corpus row count
+    instead of pretending to any of them. `route` is what the site branches on.
+    """
+    records = [
+        {
+            "id": d["id"],
+            # An excerpt spanning the document, not its first 12k characters.
+            # These run past 200k in the long-context mixes, and a prefix
+            # would be the nav bar and the abstract — unrepresentative both
+            # to read on the site and to classify. `chars` keeps the true
+            # length so nothing pretends the excerpt is the whole document.
+            "text": extract.excerpt(d["text"]),
+            "chars": len(d["text"]),
+            "source": d["source"],
+            "topic": d["topic"],
+            "shard": d["shard"],
+            "metadata": d["metadata"],
+            # The correlated unit this document was drawn in, when it is not the
+            # shard. Only the rows route sets one — the shard route's cluster is
+            # its `shard`, and writing that value twice under two names would
+            # give the next reader two places to keep in step.
+            **({"cluster": d["cluster"]} if d.get("cluster") else {}),
+            **({"row": d["row"]} if d.get("row") is not None else {}),
+            # A cell the server shortened: `chars` is then the length of what
+            # arrived, not of the document, and the site says so rather than
+            # letting a clipped document read as a short one.
+            **({"truncated": True} if d.get("truncated") else {}),
+        }
+        for d in docs
+    ]
+    if len(records) < args.sample:
+        # A corpus can genuinely fail to fill the request — 55 huge shards
+        # cannot yield 300 documents at one apiece — so say so rather than
+        # letting "sample" claim a size the file does not have.
         print(
-            f"{s['stage']}: {len(records)} documents -> {path}"
-            f" ({path.stat().st_size / 1e6:.1f} MB)"
-            + (f", {short} short draw(s) made up by others" if short else ""),
+            f"  note: asked for {args.sample}, corpus yielded {len(records)}",
             file=sys.stderr,
         )
+    path = _write_json(
+        _pretrain_docs_path(args.target, s["stage"]),
+        {
+            "dataset": dataset,
+            "stage": s["stage"],
+            "name": s["name"],
+            "sample": len(records),
+            "requested": args.sample,
+            "seed": args.seed,
+            "scope": s.get("sample_scope"),
+            **corpus_facts,
+            "records": records,
+        },
+    )
+    print(
+        f"{s['stage']}: {len(records)} documents -> {path}"
+        f" ({path.stat().st_size / 1e6:.1f} MB)" + note,
+        file=sys.stderr,
+    )
 
 
 def cmd_languages(args):
@@ -1198,18 +1309,56 @@ def _fmt_est(n: float | None) -> str:
     return f"{n:.0f}"
 
 
-# Why the rate column is not one rule. The two halves of the pipeline sample
-# differently, and the correction that is right for one is a double count on the
-# other — so the table has to say which it applied where.
+# Why the rate column is not one rule. The correction that is right for one
+# sampling design is a double count under another, and which applies is a
+# property of how a stage was *drawn* rather than of what kind of stage it is —
+# a corpus the datasets-server indexes in full is paged uniformly over documents
+# and takes the same length weighting a post-training mix takes. Keyed by the
+# `weighting` string `budget` records, longest prefix first, so the table
+# explains the rules it actually used and no others.
+_WEIGHTING_RULES = [
+    (
+        "fit characters — rows",
+        "A corpus paged uniformly over documents is weighed by fit characters:\n"
+        "without that its rate is a share of documents rather than of training.",
+    ),
+    (
+        "fit characters",
+        'Post-training rows are drawn uniformly, so their rate is weighed by fit\n'
+        'characters — otherwise it answers "what fraction of examples" rather than\n'
+        '"what fraction of training".',
+    ),
+    (
+        "none",
+        "Corpus documents drawn by shard come from shards drawn with probability\n"
+        "proportional to size, which already weights by tokens, so their document rate\n"
+        "is used unchanged; weighing it by length would apply that a second time.",
+    ),
+    (
+        "document count",
+        "One corpus stage stores no document lengths to weigh by, so its unweighed\n"
+        "document rate reads its matches as if every document were the same size.",
+    ),
+]
+
 _WEIGHTING_FOOTNOTE = """
 Fit tokens are what the model was trained to produce, at {cpt:g} characters per token.
-Rate: post-training rows are drawn uniformly, so their rate is weighed by fit
-characters — otherwise it answers "what fraction of examples" rather than "what
-fraction of training". Corpus documents come from shards drawn with probability
-proportional to size, which already weights by tokens, so their document rate is
-used unchanged; weighing it by length would apply that a second time.
+Rate: {rules}
 This weighs tokens, not learning: a post-training token and a pretraining token
 are not equally formative, and nothing here corrects for that."""
+
+
+def _weighting_footnote(est: dict) -> str:
+    """The rate-column footnote, naming only the weightings this estimate used."""
+    used = {s["weighting"] for s in est["stages"] if s.get("weighting")}
+    rules = []
+    for prefix, text in _WEIGHTING_RULES:
+        if any(w.startswith(prefix) for w in used) and text not in rules:
+            rules.append(text)
+            used = {w for w in used if not w.startswith(prefix)}
+    return _WEIGHTING_FOOTNOTE.format(
+        cpt=budget.CHARS_PER_TOKEN, rules=" ".join(rules) if rules else "n/a"
+    )
 
 
 def _warn_mixed_questions(est: dict) -> bool:
@@ -1399,7 +1548,7 @@ def cmd_budget(args):
         print()
         for stage, note in notes:
             print(f"note ({stage}): {note}")
-    print(_WEIGHTING_FOOTNOTE.format(cpt=budget.CHARS_PER_TOKEN))
+    print(_weighting_footnote(est))
     if args.json:
         path = _write_json(RESULTS / f"{args.target}.budget-{args.slug}.json", est)
         print(f"\nwrote {path}", file=sys.stderr)
@@ -1654,6 +1803,25 @@ def cmd_report(args):
                 print(f"- {s['stage']}: {s['name']} ({s['hf_dataset']})")
     elif target.get("note"):
         print(target["note"])
+    if not registry.post_training_stages(target):
+        # Pythia is the case: a base model with no post-training at all. Both
+        # prompt sections below would print an empty heading each, which says
+        # "we have not run this yet" — a very different claim from "this model
+        # has no such stage to run it on". Say the latter once and skip them.
+        print(
+            f"\n{target['hf_model'] or target['name']} has no post-training"
+            " stages — it was released as a base model, so there are no prompts"
+            " to classify, no responses to classify them against, and no"
+            " language to detect. `trainspotting pretrain` and `ask --pretrain`"
+            " are what apply here."
+        )
+        # Not a stop, though: the corpus layers are what apply, and they are all
+        # downstream of here. `ask --pretrain` on this target produces a rate per
+        # corpus stage and a training-budget rollup over them, so returning at
+        # this point would drop the one audit layer a base model *can* support
+        # from the very report that just recommended running it.
+        _report_questions(args.target, target)
+        return
     # The same seven labels mean different things by kind, and the heading is
     # the only place the report says which.
     print(
@@ -2086,7 +2254,7 @@ def main():
     )
     p.set_defaults(fn=cmd_trace)
 
-    p = sub.add_parser("pretrain", help="sample documents from the Dolma 3 pretraining shards")
+    p = sub.add_parser("pretrain", help="sample documents from a model's pretraining corpora")
     p.add_argument("target", help=TARGET_HELP)
     p.add_argument("--stage", help="only this stage (pretrain/midtrain/long-context)")
     p.add_argument("--sample", type=_positive_int, default=300)

@@ -37,13 +37,17 @@ out.mkdir(parents=True, exist_ok=True)
 # -1025 — so the command that rebuilds the site checks it rather than trusting
 # the next person to remember.
 readme = (ROOT / "README.md").read_text()
+# Any `owner/name` in a backtick span counts. An earlier version required the
+# owner to be `allenai/`, which would have reported EleutherAI's Pile corpus
+# missing however many times the README named it.
+CORPUS_ID = re.compile(r"^[\w.-]+/[\w.-]+$")
 missing = sorted(
     {
         s["sample_dataset"]
         for m in registry.MODELS.values()
         for s in registry.pretrain_stages(m)
     }
-    - {d for d in readme.split("`") if d.startswith("allenai/")}
+    - {d for d in readme.split("`") if CORPUS_ID.match(d)}
 )
 if missing:
     sys.exit(

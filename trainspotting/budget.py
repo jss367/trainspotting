@@ -45,30 +45,42 @@ a one-line prompt does not — so the rate is weighed by fit characters:
 
     rate  =  Σ fit chars over matching examples  /  Σ fit chars over all judged
 
-**Corpus documents are not.** `pretrain.sample_documents` draws shards with
-probability proportional to compressed size and takes one document from each,
-precisely so the source mix comes out token-weighted. Under that design every
-sampled document represents the same byte mass — a stratum holding twice the
-bytes wins twice as many shard draws, so it contributes twice as many documents
-— and the plain document rate *is* the byte-weighted rate. Multiplying by each
-document's own length would apply the size weighting a second time: Longmino's
-200k-character PDFs and a 2k-character web page each stand for one draw's worth
-of corpus, and charging the first 100x the second would let long-document strata
-swamp the estimate. So a corpus stage uses its document rate unchanged.
+**Corpus documents depend on the route.** Being a corpus is not the property
+that decides this; how the documents were drawn is, and `registry.sample_route`
+is where that is recorded.
+
+A **shard**-drawn corpus needs no weighting. `pretrain.sample_documents` draws
+shards with probability proportional to compressed size and takes one document
+from each, precisely so the source mix comes out token-weighted. Under that
+design every sampled document represents the same byte mass — a stratum holding
+twice the bytes wins twice as many shard draws, so it contributes twice as many
+documents — and the plain document rate *is* the byte-weighted rate. Multiplying
+by each document's own length would apply the size weighting a second time:
+Longmino's 200k-character PDFs and a 2k-character web page each stand for one
+draw's worth of corpus, and charging the first 100x the second would let
+long-document strata swamp the estimate.
+
+A **rows**-drawn corpus needs exactly the weighting post-training rows need.
+`pretrain.sample_rows_documents` draws documents uniformly from the whole
+corpus, so its document rate is the share of documents that match and not the
+share of training. The deduplicated Pile's sampled documents run from a few
+hundred characters to seventy thousand; matches landing in the long ones (or the
+short ones) would otherwise carry a document share straight into a token count.
+So a rows corpus uses the same Σ-fit-chars rate as an SFT stage.
 
 Each stage records which rule it used in `weighting`.
 
-The residual this leaves is within a shard, not between shards: the sampler
-picks uniformly among a shard's reachable documents rather than proportionally
-to their length, so a long document is slightly underweighted against its byte
-share. One document per shard gives nothing to estimate that shard's mean length
-from, so it is left as a caveat rather than corrected badly.
+The residual the shard route leaves is within a shard, not between shards: the
+sampler picks uniformly among a shard's reachable documents rather than
+proportionally to their length, so a long document is slightly underweighted
+against its byte share. One document per shard gives nothing to estimate that
+shard's mean length from, so it is left as a caveat rather than corrected badly.
 
 The interval is the count-based one (cluster-corrected for corpora, where the
-`ask` run already stored it) rescaled by rate / count-rate — which is 1 for a
-corpus stage. For post-training it carries the sampling uncertainty in the
-*rate* and not the extra uncertainty in the length ratio, so it is narrower than
-the truth by that much.
+`ask` run already stored it) rescaled by rate / count-rate — which is exactly 1
+for a shard corpus and the length correction everywhere else. Where it is not 1
+it carries the sampling uncertainty in the *rate* and not the extra uncertainty
+in the length ratio, so it is narrower than the truth by that much.
 
 ## What it does not do
 
@@ -562,6 +574,13 @@ def _pretrain_stage(target_name: str, stage: dict, slug: str) -> dict:
 
     lengths = _doc_lengths(target_name, name, records)
     count_rate = k / n if n else 0.0
+    total_chars = sum(lengths)
+    matched_chars = sum(c for r, c in zip(records, lengths) if r["match"])
+    char_rate = _rate(matched_chars, total_chars)
+    # Which weighting is right is a property of how the corpus was *drawn*, not
+    # of it being a corpus — the one thing this layer got wrong when a second
+    # route arrived. See `_corpus_weighting` and the module docstring.
+    rate, weighting, why = _corpus_weighting(stage, count_rate, char_rate, total_chars)
     out.update(
         {
             "measured": True,
@@ -573,38 +592,87 @@ def _pretrain_stage(target_name: str, stage: dict, slug: str) -> dict:
             "count_rate": count_rate,
             "rate_ci": [lo, hi],
             "weighed": n,
-            # Shards are drawn with probability proportional to size and one
-            # document is taken from each, so every sampled document already
-            # stands for the same byte mass. The document rate is the
-            # byte-weighted rate; weighing it by length again would apply the
-            # size weighting twice. See the module docstring.
-            "rate": count_rate,
-            "weighting": "none — shards are already drawn proportional to size",
-            # Kept as a diagnostic, not as the estimator: a large gap between
-            # this and the rate says the matching documents are unusually long
-            # or short, which is worth seeing and is not a correction to make.
-            "fit_chars_total": sum(lengths),
-            "fit_chars_matched": sum(c for r, c in zip(records, lengths) if r["match"]),
+            "rate": rate,
+            "weighting": weighting,
+            # The estimator on one route and a diagnostic on the other, and
+            # stored either way: a large gap between this and the document rate
+            # says the matching documents are unusually long or short, which is
+            # worth seeing whether or not it is the correction being applied.
+            "fit_chars_total": total_chars,
+            "fit_chars_matched": matched_chars,
+            "char_rate": char_rate,
         }
     )
-    out["char_rate"] = _rate(out["fit_chars_matched"], out["fit_chars_total"])
+    if why:
+        out["notes"].append(why)
     judged = ask.get("judged_chars", extract.MAX_DOCUMENT_CHARS)
     long_docs = sum(1 for c in lengths if c > judged)
     if long_docs:
-        # Written when this layer weighed a corpus by document length; that
-        # stopped being true when the rate became the document count, and the
-        # note went on claiming a weighting the estimator does not apply. What
-        # is actually worth saying about a long document is that the judgment
-        # read an excerpt of it — the stored lengths are a diagnostic here and
-        # nothing more.
+        # What is worth saying about a long document is that the judgment read
+        # an excerpt of it. What that costs depends on the route: under a shard
+        # draw the length is a diagnostic and the document counts once, under a
+        # rows draw the same length is the weight the rate is built on, so a
+        # mislabeled long document moves the estimate by its whole share.
         out["notes"].append(
             f"{long_docs} of {n} documents are longer than the {judged:,} characters"
             " judged, so their label comes from an excerpt spanning the document"
-            " rather than the whole text. Each still counts once: a corpus rate is"
-            " not weighed by length (see `weighting`)"
+            " rather than the whole text. "
+            + (
+                "Each carries its full length into the rate (see `weighting`),"
+                " so a long document's label weighs more than a short one's"
+                if out["weighting"].startswith("fit characters")
+                else "Each still counts once: this corpus's rate is not weighed"
+                " by length (see `weighting`)"
+            )
         )
     _apply_rate(out)
     return out
+
+
+# What `weighting` says for a corpus stage, per route. The string is not
+# decoration: it is what the report and the site print under the rate, and the
+# two routes are estimating the same quantity by different corrections.
+_SHARD_WEIGHTING = "none — shards are already drawn proportional to size"
+_ROWS_WEIGHTING = "fit characters — rows are drawn uniformly over documents"
+
+
+def _corpus_weighting(
+    stage: dict, count_rate: float, char_rate: float, total_chars: float
+) -> tuple[float, str, str]:
+    """The rate a corpus stage should multiply its token budget by, and why.
+
+    `registry.sample_route` decides, because the routes make opposite sampling
+    guarantees and only one of them makes the document rate a token rate:
+
+    "shards" draws shards with probability proportional to compressed size and
+    takes one document from each, so a sampled document already stands for a
+    fixed byte mass and the document rate *is* the byte-weighted rate. Weighing
+    it by length again would apply the size weighting twice.
+
+    "rows" draws documents uniformly from the whole corpus, so its document rate
+    is the share of *documents* that match, not the share of training. The Pile
+    is skewed enough for that to matter — its sampled documents run from a few
+    hundred characters to 70k — and matches concentrated in unusually long or
+    short documents would otherwise carry straight into the matching-token
+    total. This is the same correction, and the same estimator, that
+    `_post_training_stage` applies to its uniformly-drawn rows.
+
+    A rows sample with no stored lengths falls back to the document rate rather
+    than to a zero built out of a division by nothing, and says so: a run written
+    before `chars` existed is the case, and none of the committed ones are.
+    """
+    if registry.sample_route(stage) != "rows":
+        return count_rate, _SHARD_WEIGHTING, ""
+    if not total_chars:
+        return (
+            count_rate,
+            "document count — no stored lengths to weigh by",
+            "this corpus is sampled uniformly over documents, so its rate should be"
+            " weighed by document length, but the ask run stored no lengths to weigh"
+            " by; the unweighed document rate is reported instead and reads matches"
+            " as if every document were the same size",
+        )
+    return char_rate, _ROWS_WEIGHTING, ""
 
 
 def _doc_lengths(target_name: str, stage: str, records: list[dict]) -> list[int]:
@@ -651,8 +719,9 @@ def _apply_rate(out: dict) -> None:
     # The interval is over the count rate; rescale it by however much the
     # stage's weighting moved the point estimate, and treat that factor as
     # known. It is not — matching examples being longer is itself measured on
-    # 300 draws — so this is narrower than the truth. For a corpus stage the
-    # rate *is* the count rate and the factor is exactly 1.
+    # 300 draws — so this is narrower than the truth. For a shard-drawn corpus
+    # stage the rate *is* the count rate and the factor is exactly 1; for a
+    # rows-drawn one it is the length correction, the same as post-training's.
     # Rescale from whatever rate the interval was computed on: the weighable
     # subset for a post-training stage, the document count for a corpus.
     base = out.get("weighed_count_rate", out["count_rate"])
