@@ -187,7 +187,19 @@ def normalize(doc: dict) -> dict:
     defensively. What matters is that the provenance survives: which corpus
     subset, whose site, which crawl, what the filters thought of it.
     """
-    meta = json.loads(doc.get("metadata") or "{}")
+    # Decoded the way `doc_provenance` decodes it, and for the same reason: this
+    # metadata comes from five heterogeneous corpora, and one document with a
+    # malformed string, a JSON null, or an already-decoded object would
+    # otherwise raise and take the whole sample with it. A document with
+    # unreadable provenance is a document with no provenance, not a failed run.
+    meta = doc.get("metadata")
+    if isinstance(meta, str):
+        try:
+            meta = json.loads(meta)
+        except json.JSONDecodeError:
+            meta = {}
+    if not isinstance(meta, dict):
+        meta = {}
     inner = meta.get("metadata") if isinstance(meta.get("metadata"), dict) else {}
     deep = inner.get("metadata") if isinstance(inner.get("metadata"), dict) else {}
     attrs = inner.get("attributes") if isinstance(inner.get("attributes"), dict) else {}

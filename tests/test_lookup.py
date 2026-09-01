@@ -204,3 +204,31 @@ def test_a_document_with_no_url_anywhere_reports_none():
     rec = lookup.normalize({"doc_ix": 1, "spans": [["t", None]], "metadata": json.dumps({"metadata": {}})})
 
     assert rec["url"] is None and rec["domain"] is None
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        "{not json at all",
+        None,
+        "null",
+        '"a bare string"',
+        "[]",
+        {"metadata": {"url": "http://example.com/a"}},   # already decoded
+    ],
+    ids=["malformed", "missing", "json-null", "bare-string", "list", "already-decoded"],
+)
+def test_one_unreadable_document_does_not_abort_the_sample(metadata, monkeypatch):
+    """Five heterogeneous corpora feed this. A document whose provenance cannot
+    be read has no provenance; it is not a reason to discard the other 59."""
+    hits = [
+        {"doc_ix": 1, "spans": [["a", None]], "doc_len": 10, "metadata": metadata},
+        {"doc_ix": 2, "spans": [["b", None]], "doc_len": 10,
+         "metadata": json.dumps({"path": "x.json.gz", "metadata": {"url": "http://example.com/b"}})},
+    ]
+    monkeypatch.setattr(lookup, "_post", lambda payload: {"documents": hits})
+
+    out = lookup.sample_documents("idx", "q", occurrences=2, want=2)
+
+    assert len(out["documents"]) == 2
+    assert any(d["url"] == "http://example.com/b" for d in out["documents"])
