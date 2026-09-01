@@ -10,6 +10,7 @@ transcripts live in.
 import sys
 
 import pytest
+import requests
 
 from trainspotting import behavior, cli, hf
 
@@ -182,6 +183,24 @@ def test_trace_escapes_the_queries_it_echoes(monkeypatch, capsys):
     assert "x1b" in out
 
 
+def _live_search_count(dataset, phrase, **kw):
+    """`hf.search_count`, skipping while the server is still building the index.
+
+    `search_count` already waits that 500 out for several minutes, which covers
+    a warm-ish split and not a cold multi-gigabyte one. A run that hits the cold
+    case has learned nothing about the contract under test, so it skips rather
+    than fails — the alternative is a canary that reports upstream breakage
+    every time the index has been evicted.
+    """
+    try:
+        return hf.search_count(dataset, phrase, **kw)
+    except requests.HTTPError as e:
+        body = e.response.text if e.response is not None else ""
+        if "index is loading" in body:
+            pytest.skip(f"{dataset}: the split's full-text index is still building")
+        raise
+
+
 @pytest.mark.live
 def test_live_search_counts_a_known_phrase():
     """The upstream canary for `trace`: full-text search still returns a count.
@@ -189,7 +208,7 @@ def test_live_search_counts_a_known_phrase():
     A first hit against a cold split warms the index and can take minutes, so
     `search_count` waits it out; this test can be correspondingly slow.
     """
-    n, partial = hf.search_count("allenai/Dolci-Instruct-SFT", "knowledge cutoff")
+    n, partial = _live_search_count("allenai/Dolci-Instruct-SFT", "knowledge cutoff")
     assert isinstance(n, int)
     assert n >= 0
     # 3.06 GB of parquet, under the server's 5 GB indexing cap, so this split is
@@ -214,5 +233,5 @@ def test_live_search_reaches_nested_transcript_columns():
     names and a preference-type label. A word like this one cannot be in any of
     those, so a non-zero count can only have come from inside the completions.
     """
-    n, _ = hf.search_count("allenai/Dolci-Instruct-DPO", "photosynthesis")
+    n, _ = _live_search_count("allenai/Dolci-Instruct-DPO", "photosynthesis")
     assert n > 0
