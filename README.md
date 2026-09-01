@@ -771,7 +771,10 @@ sampling run that quietly labels nothing.
   only means anything within one dataset revision. Both result files carry the
   revision they were drawn at, and a known disagreement leaves the stage
   unusable rather than joined — Ai2 has republished these mixes, and after a
-  republish the same index is different text.
+  republish the same index is different text. The row count comes from a third
+  run (`sources`) which can be staler still; when it names a different revision
+  the stage keeps its rate, which is a share, and loses its token figure, which
+  is a count.
 - The corpus rate assumes shard-proportional sampling did the token weighting,
   which is true between shards and only approximately true within one: a
   document is drawn uniformly from its shard's reachable head rather than by

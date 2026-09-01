@@ -1437,15 +1437,29 @@ def _report_questions(target_name: str, target: dict) -> None:
             # under the slug alone lets two nets scored against different words,
             # or by different judges, read as one answer — and a net is signed,
             # so averaging incompatible ones by eye is worse than a rate.
+            # Keyed on the rubric as well. `stance.SYSTEM` is the instrument
+            # here in the way the question is — it is what tells the judge that
+            # a DISPREFERRED completion means the model is trained *out* of that
+            # text — so rewording it moves toward/away labels while the question
+            # and the classifier stay identical. Unlike the budget's
+            # family-scoped check, every stance run is one family, so the hash
+            # can go straight into the key.
             groups: dict[tuple, list[tuple[str, dict]]] = {}
             for st in sorted(stages, key=lambda x: order.index(x) if x in order else 99):
                 d = budget.load(f"{target_name}.{st}.stance-{slug}.json")
                 if d:
-                    groups.setdefault((d["question"], d.get("classifier")), []).append((st, d))
-            for (question, classifier), group in groups.items():
+                    key = (d["question"], d.get("classifier"), d.get("system_sha"))
+                    groups.setdefault(key, []).append((st, d))
+            shas = {k[2] for k in groups}
+            for (question, classifier, sha), group in groups.items():
                 print(f"> {question}\n")
-                if classifier:
-                    print(f"judged by {classifier}\n")
+                by = f"judged by {classifier}" if classifier else ""
+                # Only worth printing when it is what separates two groups —
+                # otherwise it is a hash on every report for no reason.
+                if sha and len(shas) > 1:
+                    by = (by + " " if by else "") + f"under rubric {sha[:12]}"
+                if by:
+                    print(f"{by}\n")
                 for st, d in group:
                     c = d["counts"]
                     n = len(d["records"])
@@ -1460,9 +1474,11 @@ def _report_questions(target_name: str, target: dict) -> None:
                     )
                 print()
             if len(groups) > 1:
+                why = "wording, classifier or rubric" if len(shas) > 1 else "wording or classifier"
                 print(
-                    f"({len(groups)} instruments share the slug {slug!r}; the nets above are"
-                    " grouped under the one that produced them and do not combine.)\n"
+                    f"({len(groups)} instruments share the slug {slug!r}, differing by"
+                    f" {why}; the nets above are grouped under the one that produced them"
+                    " and do not combine.)\n"
                 )
 
     for slug in asks:

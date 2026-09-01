@@ -202,16 +202,21 @@ def context_for(rec: dict, by_key: dict) -> dict | None:
     return by_key.get(("key", rec["prompt"][: 400]))
 
 
-def stage_rows(target_name: str, stage: str) -> int | None:
-    """Exact row count of a post-training stage, from the committed `sources` run.
+def stage_sources(target_name: str, stage: str) -> dict:
+    """A stage's entry from the committed `sources` run, provenance included.
 
     Offline on purpose: a budget is a rollup of runs that already happened, and
     it should not need the network to add them up. A target with no `sources`
-    run yet gets None and the stage reports its size as unknown rather than
-    guessing one.
+    run yet gets an empty dict and the stage reports its size as unknown rather
+    than guessing one.
     """
     data = load(f"{target_name}.sources.json") or {}
-    return (data.get(stage) or {}).get("total")
+    return data.get(stage) or {}
+
+
+def stage_rows(target_name: str, stage: str) -> int | None:
+    """Exact row count of a post-training stage. See `stage_sources`."""
+    return stage_sources(target_name, stage).get("total")
 
 
 # --- the estimate ---------------------------------------------------------
@@ -345,7 +350,29 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
         )
         return out
 
-    rows = stage_rows(target_name, name)
+    source = stage_sources(target_name, name)
+    rows = source.get("total")
+    # The row count comes from a third run, and it can be older than the other
+    # two. `context` and `ask` agreeing on a revision says nothing about when
+    # `sources` was last taken, and a republish that changes the split's length
+    # would multiply this sample's mean by a row count for a different tree. The
+    # rate survives that — it is a share, not a count — so a stale source leaves
+    # the stage unsized rather than unmeasured.
+    src_rev, src_dataset = source.get("revision"), source.get("dataset")
+    sample_rev = ctx_rev or ask_rev
+    stale_source = bool(rows is not None and (
+        (src_rev and sample_rev and src_rev != sample_rev)
+        or (src_dataset and src_dataset != stage["hf_dataset"])
+    ))
+    if stale_source:
+        rows = None
+        out["notes"].append(
+            f"stage size unknown — the `sources` run describes"
+            f" {src_dataset or 'another dataset'} at {(src_rev or '?')[:7]} while these"
+            f" examples were drawn at {(sample_rev or '?')[:7]}; re-run"
+            f" `trainspotting sources {target_name} --json`. The rate below is a share"
+            " and is unaffected."
+        )
     # Size is a property of the stage, so it is estimated over the whole stored
     # draw rather than over the rows the classifier happened to answer about.
     # Refusals are not random — they land on jailbreak-style prompts, which the
@@ -355,11 +382,12 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
     # labeled subset, which is the only part there is a judgment for.
     sample_fit = [f for f in (fit_chars(c) for c in all_examples) if f is not None]
     if rows is None or not sample_fit:
-        out["notes"].append(
-            f"stage size unknown — run `trainspotting sources {target_name} --json`"
-            if rows is None
-            else "stage size unknown — no example stores text the model was fit to"
-        )
+        if not stale_source:
+            out["notes"].append(
+                f"stage size unknown — run `trainspotting sources {target_name} --json`"
+                if rows is None
+                else "stage size unknown — no example stores text the model was fit to"
+            )
         return out
     mean_fit = sum(sample_fit) / len(sample_fit)
     out["rows"] = rows
@@ -450,13 +478,17 @@ def _pretrain_stage(target_name: str, stage: dict, slug: str) -> dict:
     judged = ask.get("judged_chars", extract.MAX_DOCUMENT_CHARS)
     long_docs = sum(1 for c in lengths if c > judged)
     if long_docs:
-        # The judgment read an excerpt spanning the document; the weight is the
-        # whole thing. That is the right weight — the model trained on all of it —
-        # but the two are not the same text and the gap is widest exactly where
-        # the weight is largest.
+        # Written when this layer weighed a corpus by document length; that
+        # stopped being true when the rate became the document count, and the
+        # note went on claiming a weighting the estimator does not apply. What
+        # is actually worth saying about a long document is that the judgment
+        # read an excerpt of it — the stored lengths are a diagnostic here and
+        # nothing more.
         out["notes"].append(
             f"{long_docs} of {n} documents are longer than the {judged:,} characters"
-            " judged, and are weighed by their full length"
+            " judged, so their label comes from an excerpt spanning the document"
+            " rather than the whole text. Each still counts once: a corpus rate is"
+            " not weighed by length (see `weighting`)"
         )
     _apply_rate(out)
     return out

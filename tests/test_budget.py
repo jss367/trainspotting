@@ -432,3 +432,38 @@ def test_a_corpus_run_that_judged_nothing_is_not_a_confident_zero():
     assert out["measured"] is False
     assert out["unusable"] == "the ask run judged no document"
     assert "matching_tokens" not in out
+
+
+def test_a_stale_sources_run_unsizes_the_stage_but_keeps_the_rate():
+    """The row count comes from a third run that can be older than the other two.
+
+    `context` and `ask` agreeing on a revision says nothing about when `sources`
+    was last taken. A republish that changes the split's length would multiply
+    this sample's mean by a row count for a different tree — but the rate is a
+    share, not a count, so it survives.
+    """
+    import trainspotting.budget as b
+
+    files = {
+        "m.sft.ask-q.json": {"question": "Q?", "revision": "n" * 40, "classifier": "c",
+                             "records": [{"row": 0, "prompt": "p", "match": True}]},
+        "m.sft.context.json": {"revision": "n" * 40,
+                               "records": [{"row": 0, "key": "p", "kind": "sft",
+                                            "turns": [{"role": "assistant", "text": "x", "chars": 100}]}]},
+        "m.sources.json": {"sft": {"total": 999, "revision": "o" * 40, "dataset": "x/y"}},
+    }
+    saved = b.load
+    b.load = lambda name: files.get(name)
+    try:
+        out = b._post_training_stage(
+            "m", {"stage": "sft", "name": "SFT", "hf_dataset": "x/y", "kind": "sft"}, "q"
+        )
+    finally:
+        b.load = saved
+    # Still measured, still rated — only the token figure is withheld.
+    assert out["measured"] is True
+    assert out["rate"] == 1.0
+    assert "size_tokens" not in out
+    assert any("re-run" in note and "sources" in note for note in out["notes"])
+    # And exactly one size note, not the stale one plus the generic one.
+    assert sum("stage size unknown" in n for n in out["notes"]) == 1
