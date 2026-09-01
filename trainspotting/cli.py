@@ -63,8 +63,13 @@ def _cluster_wilson(records: list[dict], key: str = "shard") -> tuple[float, flo
 
     Documents drawn from one shard share a topic cluster, so they are not
     independent observations and a binomial interval over the document count is
-    too narrow. Rescaling the match count to the number of distinct shards, which
-    is what this used to do, is not an interval over shards either: a shard
+    too narrow. The shard is the default because it is the shard sampler's unit;
+    the rows sampler's is the page of adjacent rows it drew, and callers name
+    whichever applies through `key`. Nothing below cares which — it only needs
+    documents grouped by whatever they were drawn together in.
+
+    Rescaling the match count to the number of distinct clusters, which is what
+    this used to do, is not an interval over clusters either: a shard
     contributing five matches and one contributing a single non-match would round
     to "two successes out of two clusters", hiding the disagreement between them.
 
@@ -239,9 +244,18 @@ def cmd_facts(args):
 
 
 def cmd_sources(args):
-    target = registry.resolve(args.target)
+    """The source-label breakdown of each post-training mix.
+
+    Selected through `_select_stages` like every other command that reads a
+    post-training stage, and for the reason that helper exists: a base-only
+    target such as Pythia has no such stages, and iterating an empty list here
+    exited 0 having printed nothing — and with --json wrote an audit file
+    containing `{}`, which the site would serve as a measured empty breakdown.
+    Failing is the honest answer, and `report` is where a base model's "there is
+    no post-training" is stated deliberately.
+    """
     out = {}
-    for s in registry.post_training_stages(target):
+    for s in _select_stages(args, registry.post_training_stages, "post-training"):
         revision = hf.dataset_revision(s["hf_dataset"])
         freqs, counted, partial = hf.column_frequencies(
             s["hf_dataset"], s["source_columns"]
@@ -437,12 +451,18 @@ def _label_pretrain_docs(args, question, slug):
                 "source": d["source"],
                 "topic": d["topic"],
                 "shard": d["shard"],
+                # What the interval clusters on: the unit this document was
+                # drawn in, which is the shard for a shard-route sample and the
+                # page of ten adjacent rows for a rows-route one. `shard` is the
+                # fallback so a sample written before `cluster` existed — every
+                # committed Olmo one — clusters exactly as it did before.
+                "cluster": d.get("cluster") or d["shard"],
             }
             for d, lab in zip(docs, labels)
             if lab
         ]
         k, n = sum(r["match"] for r in records), len(records)
-        lo, hi, n_eff = _cluster_wilson(records)
+        lo, hi, n_eff = _cluster_wilson(records, key="cluster")
         path = _write_json(
             RESULTS / f"{args.target}.{s['stage']}.ask-{slug}.json",
             {
@@ -720,6 +740,11 @@ def _write_pretrain_docs(args, s, dataset, docs, corpus_facts, note=""):
             "topic": d["topic"],
             "shard": d["shard"],
             "metadata": d["metadata"],
+            # The correlated unit this document was drawn in, when it is not the
+            # shard. Only the rows route sets one — the shard route's cluster is
+            # its `shard`, and writing that value twice under two names would
+            # give the next reader two places to keep in step.
+            **({"cluster": d["cluster"]} if d.get("cluster") else {}),
             **({"row": d["row"]} if d.get("row") is not None else {}),
             # A cell the server shortened: `chars` is then the length of what
             # arrived, not of the document, and the site says so rather than

@@ -68,21 +68,35 @@ def column_frequencies(
 # split smaller than the request returns a short sample instead of looping.
 MAX_SAMPLE_ROUNDS = 6
 
+# Rows per /rows request. Small on purpose: it is the size of the correlated
+# unit this sampler draws in, so it is also the cluster size any interval over
+# the sample has to widen for. `sample_rows_with_pages` reports which page each
+# row came from so that widening can happen.
+ROW_PAGE = 10
 
-def sample_rows_with_truncation(
+
+def sample_rows_with_pages(
     dataset: str,
     n: int,
     seed: int = 0,
     config: str = "default",
     split: str = "train",
-) -> list[tuple[int, dict, list[str]]]:
+) -> list[tuple[int, dict, list[str], int]]:
     """Sample ~n *distinct* rows via random pages of the /rows endpoint, keeping
-    row indices and the names of any cells the server shortened to fit its
-    response limit.
+    row indices, the names of any cells the server shortened to fit its
+    response limit, and the offset of the page each row arrived in.
 
     A truncated cell only matters to a caller reading the text itself — a search
     cannot find a string in the part the server cut — so it travels alongside the
     row rather than in it.
+
+    The page offset travels the same way, and for the same reason it cannot be
+    reconstructed later: pages start at arbitrary offsets, so the ten rows of one
+    draw straddle any fixed grid over the index, and a caller that guessed at
+    `index // ROW_PAGE` would split correlated rows across two clusters — the
+    anti-conservative direction for an interval. The rows that shared a request
+    are the ones that were adjacent on disk, and only this function knows which
+    those were.
 
     Rows within a page are correlated (adjacent on disk), so we draw many small
     chunks from uniformly random offsets rather than a few full pages. The index
@@ -111,7 +125,7 @@ def sample_rows_with_truncation(
     """
     total = num_rows(dataset, config, split)
     rng = random.Random(seed)
-    chunk = 10
+    chunk = ROW_PAGE
 
     def draw(pages: int) -> list[int]:
         # Inclusive upper bound. `randrange` stops one short, which left the
@@ -120,7 +134,10 @@ def sample_rows_with_truncation(
         # permanently short of its own 11 rows.
         return sorted(rng.randrange(max(1, total - chunk + 1)) for _ in range(pages))
 
-    seen: dict[int, tuple[dict, list[str]]] = {}
+    # index -> (row, truncated cells, offset of the page it arrived in). First
+    # write wins, so a row covered by two overlapping pages is attributed to the
+    # one that actually fetched it rather than to whichever came later.
+    seen: dict[int, tuple[dict, list[str], int]] = {}
     offsets = draw((n + chunk - 1) // chunk)
     for _ in range(MAX_SAMPLE_ROUNDS):
         for off in offsets:
@@ -135,7 +152,7 @@ def sample_rows_with_truncation(
                 "rows", dataset=dataset, config=config, split=split, offset=off, length=chunk
             )
             for i, r in enumerate(j["rows"]):
-                seen.setdefault(off + i, (r["row"], r.get("truncated_cells") or []))
+                seen.setdefault(off + i, (r["row"], r.get("truncated_cells") or [], off))
         if len(seen) >= min(n, total):
             break
         shortfall = n - len(seen)
@@ -175,11 +192,28 @@ def sample_rows_with_truncation(
                 "rows", dataset=dataset, config=config, split=split, offset=off, length=chunk
             )
             for i, r in enumerate(j["rows"]):
-                seen.setdefault(off + i, (r["row"], r.get("truncated_cells") or []))
+                seen.setdefault(off + i, (r["row"], r.get("truncated_cells") or [], off))
 
-    rows = [(index, row, truncated) for index, (row, truncated) in sorted(seen.items())]
+    rows = [
+        (index, row, truncated, page)
+        for index, (row, truncated, page) in sorted(seen.items())
+    ]
     rng.shuffle(rows)
     return rows[:n]
+
+
+def sample_rows_with_truncation(
+    dataset: str,
+    n: int,
+    seed: int = 0,
+    config: str = "default",
+    split: str = "train",
+) -> list[tuple[int, dict, list[str]]]:
+    """The same sample, without the page each row was drawn in."""
+    return [
+        (index, row, truncated)
+        for index, row, truncated, _ in sample_rows_with_pages(dataset, n, seed, config, split)
+    ]
 
 
 def sample_rows_with_index(

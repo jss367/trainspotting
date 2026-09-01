@@ -347,6 +347,17 @@ stage with `sample_via`; `shards` is the default, because a stage that forgets
 to declare one should get the route with the honest caveat rather than the one
 that quietly samples 5 GB of a 450 GB repo.
 
+What the direct route still has is a cluster. `/rows` returns pages of ten
+adjacent rows, so a 300-document sample is 30 pages, and each document records
+the page it arrived in — the analogue of the shard route's shard path. Intervals
+are computed over those pages. On the Pile the correlation inside a page is
+close to nil, because the corpus was shuffled before release, so the design
+effect lands near 1 and the interval is almost the uncorrected one; measuring it
+rather than assuming it is what lets the file say so. Leaving the page out is a
+real failure mode and was one: with every document carrying the same empty
+cluster label, the correction read 300 documents as a single observation and
+printed a 0–83% interval.
+
 What the direct route gives up is provenance. Dolma 3 names each document's
 source and topic in its shard path and carries per-document filter metadata;
 the deduplicated Pile is one `text` column, its `pile_set_name` labels dropped
@@ -574,9 +585,11 @@ sampling run that quietly labels nothing.
 - Sampled estimates come with Wilson 95% intervals in `report`; 300 samples
   gives roughly ±5% worst case. Post-training intervals assume independent draws.
   Corpus intervals do not: they are widened by the measured design effect of
-  clustering by shard, so `--docs-per-shard` runs whose matches bunch inside
-  shards get an honestly wider interval, and runs whose matches are spread
-  evenly are not penalised for the grouping alone. The corrected interval is
+  clustering by whatever unit the sample was drawn in — the shard on the shard
+  route, the page of ten adjacent rows on the direct one — so `--docs-per-shard`
+  runs whose matches bunch inside shards get an honestly wider interval, and
+  runs whose matches are spread evenly are not penalised for the grouping
+  alone. The corrected interval is
   computed once, in the CLI, and stored in the result file rather than
   recomputed by the site.
 - The pretraining sampler only sees documents a range request can reach — the

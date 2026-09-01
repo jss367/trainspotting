@@ -474,7 +474,10 @@ ROWS_CAVEAT = (
     "weighting to approximate, no position bias to correct for, and any row "
     "could have been drawn. The draw is by pages of ten adjacent rows, which "
     "would cluster a sample in a corpus stored in source order; the Pile was "
-    "shuffled before release, so neighbouring rows come from unrelated sources."
+    "shuffled before release, so neighbouring rows come from unrelated sources. "
+    "Intervals cluster by page regardless — a page is this route's correlated "
+    "unit whether or not the correlation turns out to be there, and the "
+    "correction costs nothing when it is not."
 )
 
 
@@ -509,6 +512,17 @@ def sample_rows_documents(
     that held `pile_set_name`, `shard` because there is no file to point at. The
     row index takes its place, which addresses the document in the Hub viewer.
 
+    `cluster` is the one field this route fills where the shard route fills
+    `shard`, and it is not cosmetic: every interval over these documents is
+    computed over clusters, so leaving it empty would hand a 300-document sample
+    the interval for a single observation. The shard route's correlated unit is
+    the shard, because a shard is one Dolma 3 topic cluster. This route's is the
+    page of ten adjacent rows `hf.sample_rows_with_pages` returns per request —
+    the documents that were neighbours on disk. On the Pile that correlation is
+    close to nil, since it was shuffled before release, so the design effect
+    lands near 1 and the interval is almost the plain one. Clustering by it
+    anyway is what makes that a measurement rather than an assumption.
+
     A document the server shortened to fit its response limit is flagged rather
     than silently treated as short: `chars` would otherwise report the truncated
     length as the document's true one.
@@ -516,9 +530,9 @@ def sample_rows_documents(
     total = hf.num_rows(dataset)
     if progress:
         progress(0, n, dataset)
-    rows = hf.sample_rows_with_truncation(dataset, n, seed=seed)
+    rows = hf.sample_rows_with_pages(dataset, n, seed=seed)
     docs = []
-    for index, row, truncated in rows:
+    for index, row, truncated, page in rows:
         text = row.get(text_column)
         if not text or not str(text).strip():
             continue
@@ -530,6 +544,7 @@ def sample_rows_documents(
                 "source": "",
                 "topic": "",
                 "shard": "",
+                "cluster": f"page-{page}",
                 "truncated": text_column in truncated,
                 "metadata": {},
             }

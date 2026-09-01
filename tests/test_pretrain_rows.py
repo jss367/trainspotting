@@ -9,9 +9,11 @@ into the rows route, would each be a result file making a claim about how it
 was drawn that is not true of it.
 """
 
+import json
+
 import pytest
 
-from trainspotting import cli, hf, pretrain, registry
+from trainspotting import classify, cli, hf, pretrain, registry
 
 
 def test_a_stage_declares_its_route_and_shards_is_the_default():
@@ -46,12 +48,12 @@ def test_a_rows_document_carries_a_row_index_and_no_invented_provenance(monkeypa
     monkeypatch.setattr(hf, "num_rows", lambda *a, **k: 134_318_121)
     monkeypatch.setattr(
         hf,
-        "sample_rows_with_truncation",
+        "sample_rows_with_pages",
         lambda *a, **k: [
-            (5, {"text": "a document"}, []),
-            (9, {"text": "clipped"}, ["text"]),
-            (11, {"text": "   "}, []),      # whitespace only
-            (12, {"other": "no text"}, []),
+            (5, {"text": "a document"}, [], 5),
+            (9, {"text": "clipped"}, ["text"], 5),
+            (11, {"text": "   "}, [], 5),      # whitespace only
+            (12, {"other": "no text"}, [], 5),
         ],
     )
 
@@ -66,6 +68,198 @@ def test_a_rows_document_carries_a_row_index_and_no_invented_provenance(monkeypa
     # A cell the server shortened travels flagged: `chars` is then the length of
     # what arrived, not of the document.
     assert [d["truncated"] for d in docs] == [False, True]
+    # `cluster` is the exception to "leave it empty": these two rows arrived in
+    # one page, and that is the unit every interval over them has to widen for.
+    assert all(d["cluster"] == "page-5" for d in docs)
+
+
+def test_the_page_is_the_rows_route_cluster_and_survives_to_the_written_record(
+    tmp_path, monkeypatch
+):
+    """The empty `shard` a rows document carries is honest — there is no file to
+    name — but it is not a cluster identity, and `_cluster_wilson` groups on one.
+    Writing the sample without the page collapsed all 300 Pile documents into a
+    single cluster and reported n_effective = 1 at any sample size."""
+    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    monkeypatch.setattr(hf, "num_rows", lambda *a, **k: 1_000)
+    monkeypatch.setattr(hf, "dataset_revision", lambda *a, **k: "deadbeef")
+    monkeypatch.setattr(
+        hf,
+        "sample_rows_with_pages",
+        # Two pages of two, interleaved: a grid over the row index would not
+        # recover this grouping, which is why the offset travels with the row.
+        lambda *a, **k: [
+            (48, {"text": "a"}, [], 47),
+            (114, {"text": "b"}, [], 113),
+            (47, {"text": "c"}, [], 47),
+            (113, {"text": "d"}, [], 113),
+        ],
+    )
+    args = type("A", (), {"target": "pythia-12b-deduped", "stage": None, "sample": 4, "seed": 0})()
+
+    cli.cmd_pretrain(args)
+
+    written = json.loads((tmp_path / "pythia-12b-deduped.pretrain.docs.json").read_text())
+    assert [r["cluster"] for r in written["records"]] == [
+        "page-47",
+        "page-113",
+        "page-47",
+        "page-113",
+    ]
+
+
+def test_a_shard_document_keeps_the_shard_as_its_only_cluster_identity(tmp_path, monkeypatch):
+    """A shard sample must not grow a second field naming the same thing. The
+    committed Olmo samples have no `cluster`, and the interval reads `shard`
+    for them exactly as it did before this field existed."""
+    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    monkeypatch.setattr(pretrain, "list_shards", lambda *a, **k: ([{"size": 1}], "cafe123"))
+    monkeypatch.setattr(pretrain, "group_sizes", lambda *a, **k: {"common_crawl/art": 1})
+    monkeypatch.setattr(
+        pretrain,
+        "sample_documents",
+        lambda *a, **k: (
+            [
+                {
+                    "id": "d0",
+                    "text": "a document",
+                    "source": "common_crawl",
+                    "topic": "art",
+                    "shard": "data/common_crawl-art-0001/shard_00000000.jsonl.zst",
+                    "metadata": {},
+                }
+            ],
+            0,
+        ),
+    )
+    args = type(
+        "A",
+        (),
+        {
+            "target": "olmo-3-7b-think",
+            "stage": "pretrain",
+            "sample": 1,
+            "seed": 0,
+            "docs_per_shard": 1,
+        },
+    )()
+
+    cli.cmd_pretrain(args)
+
+    written = json.loads((tmp_path / "olmo-3-7b-think.pretrain.docs.json").read_text())
+    assert "cluster" not in written["records"][0]
+    assert written["records"][0]["shard"].endswith(".jsonl.zst")
+
+
+def _write_docs(path, records, **facts):
+    path.write_text(
+        json.dumps(
+            {
+                "dataset": "EleutherAI/the_pile_deduplicated",
+                "stage": "pretrain",
+                "name": "The Pile (deduplicated)",
+                "sample": len(records),
+                "seed": 0,
+                "revision": "deadbeef",
+                **facts,
+                "records": records,
+            }
+        )
+    )
+
+
+def test_a_rows_sample_does_not_collapse_to_one_effective_observation(tmp_path, monkeypatch):
+    """The regression. `ask --pretrain` on a rows sample used to report
+    n_effective = 1 and a 5–95% interval over 300 documents, because every one of
+    them carried the same empty `shard`. Thirty pages that mostly agree are worth
+    far more than one observation, and the file has to say so."""
+    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    monkeypatch.setattr(cli, "SITE_DATA", tmp_path)
+    # Thirty pages of ten, the shape a 300-document draw actually has. Matches
+    # are spread across pages rather than aligned with them, which is what a
+    # shuffled corpus looks like and where the design effect should land near 1.
+    records = [
+        {
+            "id": f"row-{page * 1_000 + i}",
+            "row": page * 1_000 + i,
+            "text": f"document {page}-{i}",
+            "chars": 20,
+            "source": "",
+            "topic": "",
+            "shard": "",
+            "cluster": f"page-{page * 1_000}",
+            "metadata": {},
+        }
+        for page in range(30)
+        for i in range(10)
+    ]
+    _write_docs(
+        tmp_path / "pythia-12b-deduped.pretrain.docs.json",
+        records,
+        route="rows",
+        rows_total=134_318_121,
+        caveat=pretrain.rows_sampling_caveat(),
+    )
+    monkeypatch.setattr(
+        classify,
+        "classify_prompts",
+        lambda prompts, **k: (["yes" if i % 7 == 0 else "no" for i in range(len(prompts))], {}),
+    )
+    args = type("A", (), {"target": "pythia-12b-deduped", "classifier": "test-model"})()
+
+    cli._label_pretrain_docs(args, "does this mention anything?", "slug")
+
+    scored = json.loads((tmp_path / "pythia-12b-deduped.pretrain.ask-slug.json").read_text())
+    lo, hi = scored["ci"]
+    # 30 clusters, not 1, and not 300 either: the correction is applied, it just
+    # has almost nothing to correct.
+    assert scored["n_effective"] > 100
+    assert hi - lo < 0.15
+    # And the cluster identity is what did it — the same records clustered by
+    # their (empty) shard are the bug this test exists for.
+    assert cli._cluster_wilson(scored["records"], key="shard")[2] == pytest.approx(1.0)
+
+
+def test_a_shard_sample_still_clusters_by_shard_without_a_cluster_field(tmp_path, monkeypatch):
+    """The committed Olmo samples predate `cluster`, and the interval they show
+    on the site must not move. `shard` is the fallback, so it does not."""
+    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    monkeypatch.setattr(cli, "SITE_DATA", tmp_path)
+    records = [
+        {
+            "id": f"d{s}-{i}",
+            "text": f"document {s}-{i}",
+            "chars": 20,
+            "source": "common_crawl",
+            "topic": "art",
+            "shard": f"data/common_crawl-art-000{s}/shard_0000000{s}.jsonl.zst",
+            "metadata": {},
+        }
+        for s in range(4)
+        for i in range(5)
+    ]
+    _write_docs(
+        tmp_path / "olmo-3-7b-think.pretrain.docs.json", records, route="shards", short_draws=0
+    )
+    monkeypatch.setattr(
+        classify,
+        "classify_prompts",
+        # Matches aligned with shard boundaries: the whole reason clustering
+        # exists. Twenty documents that disagree along shard lines are not twenty
+        # observations.
+        lambda prompts, **k: (["yes" if "document 0" in p or "document 1" in p else "no" for p in prompts], {}),
+    )
+    args = type("A", (), {"target": "olmo-3-7b-think", "classifier": "test-model"})()
+
+    cli._label_pretrain_docs(args, "q", "slug")
+
+    scored = json.loads((tmp_path / "olmo-3-7b-think.pretrain.ask-slug.json").read_text())
+    # Four shards of five, two unanimously matching: deff = 20/3, so twenty
+    # documents carry the information of three. What matters here is that the
+    # number is the shard one — clustering on the absent `cluster` field would
+    # have made it 1.
+    assert scored["n_effective"] == pytest.approx(3.0)
+    assert all(r["cluster"] == r["shard"] for r in scored["records"])
 
 
 def test_a_rows_run_writes_the_corpus_size_and_not_shard_facts(tmp_path, monkeypatch):
@@ -75,13 +269,11 @@ def test_a_rows_run_writes_the_corpus_size_and_not_shard_facts(tmp_path, monkeyp
     monkeypatch.setattr(hf, "num_rows", lambda *a, **k: 100)
     monkeypatch.setattr(hf, "dataset_revision", lambda *a, **k: "deadbeef")
     monkeypatch.setattr(
-        hf, "sample_rows_with_truncation", lambda *a, **k: [(3, {"text": "doc"}, [])]
+        hf, "sample_rows_with_pages", lambda *a, **k: [(3, {"text": "doc"}, [], 0)]
     )
     args = type("A", (), {"target": "pythia-12b-deduped", "stage": None, "sample": 1, "seed": 0})()
 
     cli.cmd_pretrain(args)
-
-    import json
 
     written = json.loads((tmp_path / "pythia-12b-deduped.pretrain.docs.json").read_text())
     assert written["route"] == "rows"
@@ -108,6 +300,23 @@ def test_ask_without_pretrain_on_a_base_model_says_what_to_pass():
     args = type("A", (), {"target": "pythia-12b-deduped", "question": "q", "slug": None, "pretrain": False})()
     with pytest.raises(SystemExit, match="--pretrain"):
         cli.cmd_ask(args)
+
+
+@pytest.mark.parametrize("as_json", [False, True])
+def test_sources_on_a_base_only_model_fails_instead_of_writing_an_empty_audit(
+    tmp_path, monkeypatch, as_json
+):
+    """It used to iterate an empty stage list, exit 0 having printed nothing, and
+    with --json write `{}` — an audit file the site would serve as a measured
+    empty breakdown. Every other prompt-reading command fails through
+    `_select_stages`; this one now does too."""
+    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    args = type("A", (), {"target": "pythia-12b-deduped", "json": as_json})()
+
+    with pytest.raises(SystemExit, match="no post-training stages"):
+        cli.cmd_sources(args)
+
+    assert not list(tmp_path.glob("*.sources.json"))
 
 
 def test_the_pile_composition_is_in_bytes_and_says_what_it_describes():
