@@ -162,6 +162,22 @@ def _quality(attrs: dict) -> float | None:
     return None
 
 
+def _identity(rec: dict) -> tuple:
+    """What makes two hits the same document.
+
+    `doc_ix` numbers a document within one suffix-array shard, so it is not an
+    identity on its own — `cli.cmd_find` keys on `(shard, doc_ix)` for exactly
+    this reason and says so. The retrieval path there knows its shard because it
+    picked it; `search_docs` does not return one (checked against the live API:
+    a hit carries `doc_ix`, `doc_len`, `disp_len`, `needle_offset`, `spans`,
+    `token_ids`, `metadata`, `blocked`, and nothing else), so the identity here
+    is the corpus file the document came from instead. Two documents sharing a
+    `doc_ix` across shards are in different files; two hits sharing both are the
+    same document seen twice, which is the case this deduplicates.
+    """
+    return (rec.get("shard"), rec.get("doc_ix"))
+
+
 def normalize(doc: dict) -> dict:
     """One search_docs hit, flattened to the fields that make a count readable.
 
@@ -265,11 +281,12 @@ def sample_documents(index: str, query: str, occurrences: int, want: int = MAX_D
         for raw in documents:
             rec = normalize(raw)
             drawn += 1
-            if rec["doc_ix"] in seen:
-                seen[rec["doc_ix"]]["occurrences_drawn"] += 1
+            key = _identity(rec)
+            if key in seen:
+                seen[key]["occurrences_drawn"] += 1
             else:
                 rec["occurrences_drawn"] = 1
-                seen[rec["doc_ix"]] = rec
+                seen[key] = rec
         # Count what was asked for, not what came back: a short reply means the
         # index has no more to give, and looping on the shortfall would spin.
         remaining -= maxnum

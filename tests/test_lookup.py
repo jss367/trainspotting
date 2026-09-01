@@ -9,6 +9,8 @@ second is worse than a broken promise, because `drawn` is the denominator every
 share on the case-study page is computed over.
 """
 
+import json
+
 import pytest
 
 from trainspotting import lookup
@@ -144,3 +146,33 @@ def test_a_negative_document_count_is_a_usage_error_but_zero_is_not():
     assert _count_int("12") == 12
     with pytest.raises(argparse.ArgumentTypeError):
         _count_int("-1")
+
+
+def test_two_documents_sharing_a_doc_ix_are_not_merged(monkeypatch):
+    """`doc_ix` numbers a document inside one suffix-array shard, so it is not
+    an identity: merging on it alone would fold two documents into one and file
+    both draws under the first one's domain, which `domain_shares` then reports
+    as a site with twice the presence it has."""
+    hits = [
+        {"doc_ix": 7, "spans": [["a", None]], "doc_len": 10,
+         "metadata": json.dumps({"path": "cc_en_head/cc_en_head-0001.json.gz"})},
+        {"doc_ix": 7, "spans": [["b", None]], "doc_len": 10,
+         "metadata": json.dumps({"path": "cc_en_tail/cc_en_tail-0900.json.gz"})},
+    ]
+    monkeypatch.setattr(lookup, "_post", lambda payload: {"documents": hits})
+
+    out = lookup.sample_documents("idx", "q", occurrences=2, want=2)
+
+    assert len(out["documents"]) == 2
+    assert out["drawn"] == 2
+
+
+def test_the_same_document_drawn_twice_is_counted_once(monkeypatch):
+    hit = {"doc_ix": 7, "spans": [["a", None]], "doc_len": 10,
+           "metadata": json.dumps({"path": "cc_en_head/cc_en_head-0001.json.gz"})}
+    monkeypatch.setattr(lookup, "_post", lambda payload: {"documents": [hit, dict(hit)]})
+
+    out = lookup.sample_documents("idx", "q", occurrences=2, want=2)
+
+    assert len(out["documents"]) == 1
+    assert out["documents"][0]["occurrences_drawn"] == 2

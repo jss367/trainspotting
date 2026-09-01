@@ -1732,7 +1732,11 @@ function caseStudyCards(main, d){
     <div class="findings">
       <div class="finding">
         <div class="n">${num(d.probe.documents.length)}</div>
-        <div class="t">documents in ${esc(probeIndex.label)} hold one particular post — every copy of it the corpus has.</div>
+        <div class="t">documents in ${esc(probeIndex.label)} hold one particular post —
+          ${d.probe.exhaustive
+            ? "every copy of it the corpus has."
+            : `a sample of the copies the corpus has, drawn from ${num(d.probe.drawn)} draws. The index
+               answered with fewer than the whole occurrence list, so this is not all of them.`}</div>
       </div>
       <div class="finding">
         <div class="n">${num(d.spread.on_subject_site)} of ${num(d.spread.drawn)}</div>
