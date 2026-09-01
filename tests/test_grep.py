@@ -1114,3 +1114,18 @@ def test_a_rejected_tool_call_is_not_produce_side():
     assert sum(1 for e in exprs["prompt"] if 'm."functions"' in e) == 2
     # and each column's extra subfields are priced against that column
     assert ("rejected", "tool_calls") in leaves
+
+
+def test_a_field_present_but_not_textual_is_not_searched():
+    """Instruct-DPO turns carry `tool_calls`, `function_call` and `refusal` as
+    INTEGER — present, and holding nothing but nulls. Projecting them yields
+    integers where the scan expects strings and DuckDB refuses to unify the list
+    types, so presence is not the test; being text is."""
+    ints = ('STRUCT("content" VARCHAR, "role" VARCHAR, tool_calls INTEGER[], '
+            'refusal INTEGER, function_call INTEGER)[]')
+    exprs, leaves, _ = grep.text_fields({"chosen": ints, "rejected": ints})
+    assert not any("tool_calls" in e for group in exprs.values() for e in group)
+    assert ("chosen", "tool_calls") not in leaves
+    text = 'STRUCT("content" VARCHAR, "role" VARCHAR, "functions" VARCHAR)[]'
+    exprs, _, _ = grep.text_fields({"messages": text})
+    assert any('m."functions"' in e for e in exprs["prompt"])

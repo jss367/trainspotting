@@ -215,6 +215,19 @@ def schema(con, url: str) -> dict[str, str]:
 PAIR = ("chosen", "rejected")
 
 
+def _text_subfield(typ: str, sub: str) -> bool:
+    """Whether `sub` is a text field of this struct type, not merely present.
+
+    Presence is not enough and the difference is not cosmetic. Instruct-DPO
+    turns carry `tool_calls`, `function_call` and `refusal` as INTEGER — the
+    columns exist and hold nothing but nulls — so projecting them yields
+    integers where the scan expects strings, and DuckDB refuses to unify the
+    list types rather than searching an empty column. A field with no text in
+    it is not a field this layer has anything to say about.
+    """
+    return re.search(rf'"?{re.escape(sub)}"?\s+VARCHAR', typ) is not None
+
+
 def _pair_exprs(typ: str) -> list[tuple[str, str, tuple[str, ...]]]:
     """Expressions for a DPO pair, split where the two completions branch.
 
@@ -243,7 +256,7 @@ def _pair_exprs(typ: str) -> list[tuple[str, str, tuple[str, ...]]]:
     # branch would then move earlier than the text does and shared history would
     # land back in `chosen` and `rejected`, which is the thing the split exists
     # to stop. `search._turn_text` compares the same fields for the same reason.
-    fields = ["role", "content", *(f for f in MESSAGE_EXTRAS if f'"{f}"' in typ or f" {f} " in typ)]
+    fields = ["role", "content", *(f for f in MESSAGE_EXTRAS if _text_subfield(typ, f))]
     same_turn = " AND ".join(
         f"coalesce(z[1].{_ident(f)}, '') IS NOT DISTINCT FROM coalesce(z[2].{_ident(f)}, '')"
         for f in fields
@@ -273,7 +286,7 @@ def _pair_exprs(typ: str) -> list[tuple[str, str, tuple[str, ...]]]:
     # carry a model's tool use. The tool *menu* is input and shared, so it stays
     # prompt from both.
     for sub, group in MESSAGE_EXTRAS.items():
-        if not (f'"{sub}"' in typ or f" {sub} " in typ):
+        if not _text_subfield(typ, sub):
             continue
         for col, name in ((c, "chosen"), (r, "rejected")):
             side = name if group == "response" else group
@@ -307,7 +320,7 @@ def _message_exprs(col: str, typ: str) -> list[tuple[str, str, tuple[str, ...]]]
         out.append((produced, f"list_transform(list_filter({q}, m -> {emitted}), m -> m.content)", both))
         out.append(("prompt", f"list_transform(list_filter({q}, m -> NOT ({emitted})), m -> m.content)", both))
     for sub, group in MESSAGE_EXTRAS.items():
-        if f'"{sub}"' in typ or f" {sub} " in typ:
+        if _text_subfield(typ, sub):
             out.append((group, f"list_transform({q}, m -> m.{_ident(sub)})", (sub,)))
     return out
 
