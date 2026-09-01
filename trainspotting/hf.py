@@ -216,21 +216,32 @@ def sample_rows(
 
 def search_count(
     dataset: str, query: str, config: str = "default", split: str = "train"
-) -> int:
-    """How many rows in the split contain `query`, via full-text search.
+) -> tuple[int, bool]:
+    """How many rows of the split contain `query`, via full-text search.
 
-    The datasets-server indexes the string columns of every fully-converted
-    dataset with a DuckDB full-text index, so this is an exact count over the
-    whole split — not a sample, and nothing is downloaded. The first search
-    against a cold dataset warms the index and can take minutes; `_get` waits
-    it out with extra retries. `num_rows_total` is the whole match count
-    regardless of the page size, so this asks for the smallest legal page (one
-    row) and reads the total off it.
+    Returns (matches, partial), on the same terms as `column_frequencies`: the
+    server's full-text index covers only the first 5 GB of a split, and on a
+    bigger one it sets `partial` and the count is over that prefix. Dolci Think
+    SFT is 36 GB, so the flag is not hypothetical — treating a partial count as
+    a whole-split one would understate it about sevenfold, and understate it for
+    exactly the largest stages, which is worse than a wrong number: it is a
+    ranking that puts the biggest mixes last for being big.
 
-    Search matches whole tokens, so a multi-word query is an AND of its words
-    near each other rather than a literal substring; a phrase pulled from a
-    transcript is exactly that shape, which is why `behavior` emits word
-    windows rather than raw substrings.
+    Nothing is downloaded and nothing is sampled. The index covers the string
+    columns, including strings nested inside a struct or a list of structs, so
+    the assistant turns of a `messages` column are searched and not just the
+    scalar metadata beside them. The first search against a cold dataset warms
+    the index and can take minutes; `_get` waits it out with extra retries.
+    `num_rows_total` is the whole match count regardless of the page size, so
+    this asks for the smallest legal page (one row) and reads the total off it.
+
+    Matching is by token, not by substring: the server stems each token
+    (Porter) and ANDs the query's tokens together, so a multi-word query finds
+    rows holding all of its words rather than the literal phrase, and finds
+    "develops" for "developed". A phrase pulled from a transcript is exactly
+    that shape, which is why `behavior` emits word windows rather than raw
+    substrings — but a count is an upper bound on verbatim occurrences, and a
+    hit is worth clicking through to `search` before it is believed.
     """
     j = _get(
         "search",
@@ -242,7 +253,7 @@ def search_count(
         offset=0,
         length=1,
     )
-    return j["num_rows_total"]
+    return j["num_rows_total"], bool(j.get("partial"))
 
 
 HUB = "https://huggingface.co"

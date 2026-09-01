@@ -44,9 +44,16 @@ def _sentences(text: str):
     Newlines and sentence punctuation both end a segment: a phrase stitched
     across a sentence boundary is not something the training data can contain
     verbatim, so it is not worth searching for.
+
+    Closing quotes and brackets sit between the punctuation and the space in
+    quoted or parenthesized prose (`... developed by OpenAI." Next sentence`),
+    so they are consumed as part of the boundary rather than left to glue two
+    sentences into one segment — which would let a query straddle the join and,
+    worse, promote the following sentence's opening capital to an anchor by
+    putting it mid-segment.
     """
     for line in text.splitlines():
-        for seg in re.split(r"(?<=[.!?;:])\s+", line):
+        for seg in re.split(r"(?<=[.!?;:])[\"'”’)\]}]*\s+", line):
             seg = seg.strip()
             if seg:
                 yield seg
@@ -80,9 +87,19 @@ def distinctive_ngrams(text: str, max_queries: int = 6) -> list[str]:
     by the summed weights of its tokens; a window with no anchor is dropped
     outright, because an all-common-word phrase matches training rows by
     coincidence rather than provenance. Selection is greedy by score, and a
-    window that overlaps an already-chosen one (or repeats it verbatim — boiler-
-    plate recurs in transcripts) is skipped, so the result covers `max_queries`
-    distinct spans of the input rather than eight offsets of its best sentence.
+    window is skipped when it repeats an already-chosen query verbatim (boiler-
+    plate recurs in transcripts) or when fewer than half its words are text no
+    chosen query already covers — so the result spreads over the input rather
+    than emitting eight offsets of its best sentence.
+
+    Half, not all: requiring windows to be disjoint meant a sentence shorter
+    than two windows could only ever yield one query, and one sentence often
+    carries two separable anchors. "As an AI language model developed by
+    OpenAI, my knowledge cutoff is September 2021." is fourteen words, so every
+    eight-word window overlaps every other one, and the date — the more
+    diagnostic half of that behavior — was unreachable at any `max_queries`.
+    A half-window of new text is still a different span; a one-word shift is
+    not.
     """
     candidates = []  # (score, order, positions, query)
     for s_idx, seg in enumerate(_sentences(text)):
@@ -120,7 +137,7 @@ def distinctive_ngrams(text: str, max_queries: int = 6) -> list[str]:
     for _, _, positions, query in candidates:
         if len(chosen) >= max_queries:
             break
-        if positions & taken or query.lower() in seen:
+        if query.lower() in seen or 2 * len(positions - taken) < len(positions):
             continue
         chosen.append(query)
         taken |= positions

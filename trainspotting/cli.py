@@ -1084,6 +1084,14 @@ def cmd_trace(args):
     or the behavior is a disposition with no signature words — the fix is
     `trainspotting ask`, which judges the meaning of sampled examples instead of
     matching their text. The closing line says so.
+
+    Two things a count here is not. The server's index stops at the first 5 GB
+    of a split, which the two 36 GB Think SFT mixes are well past, so those
+    stages report a lower bound and say so rather than being ranked last for
+    being large. And the match is a stemmed AND over the query's tokens, not the
+    literal phrase, so a stage that ranks high is where to point `search` —
+    which reads the rows and says which side of the example the string is on —
+    rather than an answer on its own.
     """
     text = sys.stdin.read() if args.text == "-" else args.text
     queries = behavior.distinctive_ngrams(text, max_queries=args.max_queries)
@@ -1101,10 +1109,11 @@ def cmd_trace(args):
     results = []
     for s in _select_stages(args, registry.post_training_stages, "post-training"):
         total = hf.num_rows(s["hf_dataset"])
-        per_query = {}
+        per_query, partial = {}, False
         for q in queries:
             print(f"  {s['stage']}: searching {q!r} ...", file=sys.stderr)
-            per_query[q] = hf.search_count(s["hf_dataset"], q)
+            per_query[q], q_partial = hf.search_count(s["hf_dataset"], q)
+            partial = partial or q_partial
         # Summed across queries, so a row matching two of them counts twice —
         # this ranks where the behavior concentrates, it is not a distinct-row
         # count. The per-query lines below let a single dominant phrase be told
@@ -1117,6 +1126,9 @@ def cmd_trace(args):
                 "total": total,
                 "hits": hits,
                 "density": hits / total * 1e6 if total else 0.0,
+                # The server indexed only the first 5 GB of this split, so the
+                # count is over a prefix of it while `total` is the whole thing.
+                "partial": partial,
                 "per_query": per_query,
             }
         )
@@ -1126,11 +1138,22 @@ def cmd_trace(args):
     print("Stages ranked by matches per million rows.\n")
     for r in results:
         print(
-            f"## {r['stage']} — {r['density']:.1f}/M"
+            f"## {r['stage']} — {'≥' if r['partial'] else ''}{r['density']:.1f}/M"
             f"  ({r['hits']} matches in {r['total']:,} rows, {r['dataset']})"
         )
+        if r["partial"]:
+            print(
+                "  note: the index covers only the first 5 GB of this split, so"
+                " the matches are over a prefix of the rows they are divided by"
+                " — a lower bound, not comparable with a fully indexed stage."
+            )
         for q, c in sorted(r["per_query"].items(), key=lambda kv: -kv[1]):
-            print(f"  {c:>7,}  {q}")
+            # `!r`, like the stderr echo above: a query is a slice of text the
+            # user pasted, and an escape sequence survives tokenization (`\x1b`
+            # is not whitespace and `\w+` matches the rest of the sequence), so
+            # printing it raw would let a transcript recolour or overwrite the
+            # report that is quoting it back.
+            print(f"  {c:>7,}  {q!r}")
         print()
     if not any(r["hits"] for r in results):
         print(
@@ -1138,6 +1161,14 @@ def cmd_trace(args):
             " with no signature string, or the phrases may be paraphrased in"
             " training.\nTry `trainspotting ask` to judge what sampled examples"
             " teach — it reads meaning, not verbatim text."
+        )
+    else:
+        top = results[0]
+        print(
+            "The index counts rows, not sides. Read the examples behind the top"
+            f" stage with `trainspotting search {args.target} --stage"
+            f" {top['stage']} <phrase>`, which says whether the string is in the"
+            " prompt, the response, or the rejected half of a pair."
         )
 
 

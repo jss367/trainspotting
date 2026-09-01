@@ -276,21 +276,40 @@ which no longer lines up with them.
 assumes you already know what to look for; `trace` starts from what the model
 did. Paste the text — a transcript, a description, the sentence that surprised
 you — and it pulls the distinctive phrases out of it and counts how many rows of
-each post-training stage contain each one, exactly, over the whole split (the
-datasets-server full-text index, nothing sampled). It ranks the stages by
-matches per million rows, so `"As an AI language model developed by OpenAI"`
-lands you on whichever mix carries the most of that provenance rather than
-leaving you to guess a `grep`. A phrase is kept only if it is anchored on a
-name, a number, or a mid-sentence capital; a window of pure function words
-matches rows by coincidence, so those are dropped, and boundary function words
-are trimmed off the ones kept because search ANDs a query's tokens together.
+each post-training stage contain each one, over the whole split (the
+datasets-server full-text index, nothing sampled and nothing downloaded). It
+ranks the stages by matches per million rows, so `"As an AI language model
+developed by OpenAI"` lands you on whichever mix carries the most of that
+provenance rather than leaving you to guess a `grep`. The index reaches the
+assistant turns, not just the metadata beside them: it covers string values
+nested inside a struct or a list of structs, which is what an SFT `messages`
+column and a DPO `chosen`/`rejected` column are.
+
+A phrase is kept only if it is anchored on a name, a number, or a mid-sentence
+capital; a window of pure function words matches rows by coincidence, so those
+are dropped, and boundary function words are trimmed off the ones kept because
+search ANDs a query's tokens together. Two anchors in one sentence get two
+queries — a candidate window has to bring half a window of new text, not be
+fully disjoint, or `"...developed by OpenAI, my knowledge cutoff is September
+2021."` would spend its whole budget on the lab and never reach the date.
+
+Two things a `trace` number is not, both printed next to it:
+
+- **Not the phrase.** The server stems each token and ANDs them, so a hit is a
+  row holding all of the query's words, not the literal string — an upper bound
+  on verbatim occurrences. A high-ranking stage is where to point `search`,
+  which reads the rows and says which *side* of the example the string is on.
+- **Not always the whole split.** The full-text index stops at the first 5 GB,
+  which the two 36 GB Think SFT mixes are well past. Those stages print `≥` and
+  a note rather than being ranked last for being large.
+
 The first search against a cold split can take minutes while the server builds
 the index. When the behavior has no signature string — it is a disposition, or
 the training paraphrases it — `trace` finds nothing and says to reach for `ask`,
 which judges what sampled examples *teach* instead of matching their text
-(`"does this example teach the model to identify as ChatGPT?"`). The two compose:
-`trace` narrows to a stage by exact match, `ask` characterizes the fuzzy cases
-`trace` cannot see.
+(`"does this example teach the model to identify as ChatGPT?"`). All three
+compose: `trace` narrows to a stage, `search` says which side of the example the
+string landed on, and `ask` characterizes the fuzzy cases neither can see.
 
 ## Pretraining data
 
