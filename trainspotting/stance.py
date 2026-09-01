@@ -43,7 +43,7 @@ small for that reason.
 |---|---|---|
 | sft | the prompt and the assistant turns the model is fit to | the target response itself cuts against the question |
 | dpo | the shared prefix, then both completions, marked preferred / dispreferred | the *dispreferred* completion is the one that serves the question — training pushes away from it |
-| rlvr | the prompt, the verifier and what it checks, and the pass rate | the reward pays for output that cuts against the question |
+| rlvr | the prompt, the verifier and what it checks, and the pass rate — not a stored generation, whose own outcome the schema does not record | the reward pays for output that cuts against the question |
 | chat | the conversation | nothing was fit to it; `chat` targets are refused rather than judged |
 
 A chat log is not a training example and has no direction, which is the same
@@ -221,10 +221,17 @@ def _reward_parts(rec: dict) -> list[tuple[str, str]]:
                 f" ({rollouts['passrate']:.0%})",
             )
         )
-    if (rollouts.get("sample") or {}).get("text"):
-        parts.append(
-            ("[REWARD: one generation the verifier scored]", rollouts["sample"]["text"])
-        )
+    # The stored sample is deliberately NOT rendered. `context` keeps the first
+    # of the row's `outputs` and the aggregate pass rate; the schema has no
+    # per-output score, so whether *this* generation passed is not recoverable —
+    # the math fixture stores 7 outputs and "4.0 correct" and nothing tying the
+    # two together. Shown beside [REWARD] it reads as rewarded behaviour, and on
+    # a row with mixed outcomes a failed generation full of value-bearing text
+    # would invert the direction this layer exists to report. The verifier, what
+    # it checks and how often it paid out are the reward, and they are not
+    # ambiguous. The sample stays in the context record, where the site shows it
+    # as a reference generation rather than as evidence of what training paid
+    # for.
     return parts
 
 

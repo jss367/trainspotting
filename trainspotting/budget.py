@@ -35,17 +35,40 @@ samples several, so the true figure is larger by whatever that factor was.
 
 ## The rate
 
-Weighted by fit characters, not by rows. A stage's matching examples are not
-average-length — in Dolci-Think-SFT a reasoning trace runs tens of thousands of
-characters and a one-line prompt does not — so counting rows would answer "what
-fraction of examples" when the question is "what fraction of training".
+Which weighting is right depends on how the stage was sampled, and the two
+halves of this tool sample differently.
 
-    char rate  =  Σ fit chars over matching examples  /  Σ fit chars over all judged
+**Post-training rows are drawn uniformly**, so a rate over rows is a rate over
+examples, not over training. A stage's matching examples are not average-length
+— in Dolci-Think-SFT a reasoning trace runs tens of thousands of characters and
+a one-line prompt does not — so the rate is weighed by fit characters:
+
+    rate  =  Σ fit chars over matching examples  /  Σ fit chars over all judged
+
+**Corpus documents are not.** `pretrain.sample_documents` draws shards with
+probability proportional to compressed size and takes one document from each,
+precisely so the source mix comes out token-weighted. Under that design every
+sampled document represents the same byte mass — a stratum holding twice the
+bytes wins twice as many shard draws, so it contributes twice as many documents
+— and the plain document rate *is* the byte-weighted rate. Multiplying by each
+document's own length would apply the size weighting a second time: Longmino's
+200k-character PDFs and a 2k-character web page each stand for one draw's worth
+of corpus, and charging the first 100x the second would let long-document strata
+swamp the estimate. So a corpus stage uses its document rate unchanged.
+
+Each stage records which rule it used in `weighting`.
+
+The residual this leaves is within a shard, not between shards: the sampler
+picks uniformly among a shard's reachable documents rather than proportionally
+to their length, so a long document is slightly underweighted against its byte
+share. One document per shard gives nothing to estimate that shard's mean length
+from, so it is left as a caveat rather than corrected badly.
 
 The interval is the count-based one (cluster-corrected for corpora, where the
-`ask` run already stored it) rescaled by char-rate / count-rate. It carries the
-sampling uncertainty in the *rate* and not the extra uncertainty in the length
-ratio, so it is narrower than the truth by that much.
+`ask` run already stored it) rescaled by rate / count-rate — which is 1 for a
+corpus stage. For post-training it carries the sampling uncertainty in the
+*rate* and not the extra uncertainty in the length ratio, so it is narrower than
+the truth by that much.
 
 ## What it does not do
 
@@ -225,6 +248,10 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
             "fit_chars_total": total_chars,
             "fit_chars_matched": matched_chars,
             "char_rate": char_rate,
+            # Rows are drawn uniformly, so length weighting is the correction
+            # that turns a rate over examples into a rate over training.
+            "rate": char_rate,
+            "weighting": "fit characters",
         }
     )
     if unjoined:
@@ -294,27 +321,31 @@ def _pretrain_stage(target_name: str, stage: dict, slug: str) -> dict:
         out["notes"].append("interval recomputed here; the ask run stored none")
 
     lengths = _doc_lengths(target_name, name, records)
-    total_chars = sum(lengths)
-    matched_chars = sum(c for r, c in zip(records, lengths) if r["match"])
+    count_rate = k / n if n else 0.0
     out.update(
         {
             "measured": True,
             "question": ask["question"],
             "n": n,
             "matched": k,
-            "count_rate": k / n if n else 0.0,
+            "count_rate": count_rate,
             "count_ci": [lo, hi],
-            "weighed": sum(1 for c in lengths if c),
-            "fit_chars_total": total_chars,
-            "fit_chars_matched": matched_chars,
-            "char_rate": _rate(matched_chars, total_chars),
+            "weighed": n,
+            # Shards are drawn with probability proportional to size and one
+            # document is taken from each, so every sampled document already
+            # stands for the same byte mass. The document rate is the
+            # byte-weighted rate; weighing it by length again would apply the
+            # size weighting twice. See the module docstring.
+            "rate": count_rate,
+            "weighting": "none — shards are already drawn proportional to size",
+            # Kept as a diagnostic, not as the estimator: a large gap between
+            # this and the rate says the matching documents are unusually long
+            # or short, which is worth seeing and is not a correction to make.
+            "fit_chars_total": sum(lengths),
+            "fit_chars_matched": sum(c for r, c in zip(records, lengths) if r["match"]),
         }
     )
-    if not total_chars:
-        out["notes"].append(
-            "no document lengths available, so the rate is weighed by document count"
-        )
-        out["char_rate"] = out["count_rate"]
+    out["char_rate"] = _rate(out["fit_chars_matched"], out["fit_chars_total"])
     judged = ask.get("judged_chars", extract.MAX_DOCUMENT_CHARS)
     long_docs = sum(1 for c in lengths if c > judged)
     if long_docs:
@@ -357,20 +388,21 @@ def _apply_rate(out: dict) -> None:
     size = out.get("size_tokens")
     if not out.get("measured") or size is None:
         return
-    if 0 < out["matched"] < FEW_MATCHES:
+    if 0 < out["matched"] < FEW_MATCHES and out["rate"] != out["count_rate"]:
         out["notes"].append(
             f"weighing by length rests on {out['matched']} matching example(s), so the"
-            f" gap between the row rate ({out['count_rate'] * 100:.1f}%) and the length"
-            f" rate ({out['char_rate'] * 100:.1f}%) is those examples' lengths, not a"
+            f" gap between the row rate ({out['count_rate'] * 100:.1f}%) and the weighed"
+            f" rate ({out['rate'] * 100:.1f}%) is those examples' lengths, not a"
             " measured property of matching content"
         )
-    out["matching_tokens"] = out["char_rate"] * size
-    # The interval is over the count rate; rescale it by however much weighing
-    # by length moved the point estimate, and treat that factor as known. It is
-    # not — matching examples being longer is itself measured on 300 draws — so
-    # this is narrower than the truth.
+    out["matching_tokens"] = out["rate"] * size
+    # The interval is over the count rate; rescale it by however much the
+    # stage's weighting moved the point estimate, and treat that factor as
+    # known. It is not — matching examples being longer is itself measured on
+    # 300 draws — so this is narrower than the truth. For a corpus stage the
+    # rate *is* the count rate and the factor is exactly 1.
     count_rate = out["count_rate"]
-    ratio = out["char_rate"] / count_rate if count_rate else 1.0
+    ratio = out["rate"] / count_rate if count_rate else 1.0
     lo, hi = out["count_ci"]
     out["matching_tokens_ci"] = [lo * ratio * size, hi * ratio * size]
 

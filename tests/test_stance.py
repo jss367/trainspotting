@@ -77,6 +77,11 @@ def test_the_verifier_and_its_pass_rate_reach_the_judge():
     assert "constraint checker" in rendered
     assert "exactly 2 paragraphs" in rendered
     assert "54%" in rendered
+    # But not the stored generation. The schema records 7 outputs and "4.0
+    # correct" with nothing tying the two together, so whether this one passed
+    # is unknowable — and beside [REWARD] a failed generation reads as the
+    # behaviour training paid for, which inverts the answer.
+    assert "gen" not in rendered
 
 
 def test_a_chat_log_has_no_direction_to_render():

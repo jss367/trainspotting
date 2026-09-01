@@ -310,6 +310,14 @@ net, `toward − away`.
 | DPO | the shared prefix, then both completions marked preferred / dispreferred | the *dispreferred* completion is the one that serves the question |
 | RLVR | the prompt, the verifier and what it checks, and the pass rate | the reward pays for output that cuts against the question |
 
+An RL row's stored reference generation is deliberately left out of that. The
+schema records a row's `outputs` and an aggregate `total_correct_rollouts` with
+nothing tying the two together, so whether the stored one passed is not
+recoverable — and shown beside the verifier, a generation that failed reads as
+the behaviour training paid for, which inverts exactly the answer this layer
+exists to give. It stays in the context record, where the site shows it as a
+reference generation rather than as evidence of what was rewarded.
+
 The markup is the instrument, so it has to survive the character budget. Each
 part of an example is cut to its own share rather than the joined text being cut
 once at the end: a single excerpt over the whole thing sliced straight through
@@ -382,16 +390,38 @@ Dolci-Instruct-SFT's 622M, almost all of it reasoning traces.
 
 ### The rate
 
-Weighted by fit characters, not by rows, because a stage's matching examples are
-not average-length. In Dolci-Think-SFT the three matching examples are short:
-1.0% of rows, 0.1% of the text. Counting rows answers "what fraction of
-examples" when the question is "what fraction of training".
+Which weighting is right depends on how the stage was sampled, and the two
+halves of the pipeline are sampled differently. Each stage records the rule it
+used in `weighting`.
+
+**Post-training rows are drawn uniformly**, so they are weighed by fit
+characters. A stage's matching examples are not average-length: in
+Dolci-Think-SFT the three matching examples are short, 1.0% of rows and 0.1% of
+the text. Counting rows there answers "what fraction of examples" when the
+question is "what fraction of training".
+
+**Corpus documents are weighed by nothing extra.** `trainspotting pretrain`
+draws shards with probability proportional to compressed size and takes one
+document from each, precisely so the source mix comes out token-weighted. Under
+that design every sampled document stands for the same byte mass — a stratum
+holding twice the bytes wins twice as many shard draws, so it yields twice as
+many documents — which makes the plain document rate the byte-weighted rate
+already. Weighing it by each document's own length would apply the size
+weighting a second time, and a 200k-character Longmino PDF would count a
+hundred web pages' worth against a stratum holding exactly as many bytes.
+
+What that leaves is a residual *within* a shard, not between shards: the sampler
+picks uniformly among a shard's reachable documents rather than in proportion to
+their length, so a long document is slightly underweighted against its byte
+share. One document per shard gives nothing to estimate that shard's mean length
+from, so it stays a caveat rather than a correction made badly.
 
 The interval is the count-based one — cluster-corrected for corpora, where the
-`ask` run already stored it — rescaled by char-rate over count-rate. It carries
-the sampling uncertainty in the rate and not the extra uncertainty in the length
-ratio, so it is narrower than the truth by that much, and the output says so
-whenever the reweighting rests on fewer than ten matching examples.
+`ask` run already stored it — rescaled by the weighed rate over the count rate,
+which is exactly 1 for a corpus stage. For post-training it carries the sampling
+uncertainty in the rate and not the extra uncertainty in the length ratio, so it
+is narrower than the truth by that much, and the output says so whenever the
+reweighting rests on fewer than ten matching examples.
 
 ### What it does not do
 
@@ -723,6 +753,11 @@ sampling run that quietly labels nothing.
   characters, and then fits the rendered example into 12,000. A value expressed
   only in the part that was cut is not visible to it. Every view links to the
   untruncated row on HuggingFace.
+- The corpus rate assumes shard-proportional sampling did the token weighting,
+  which is true between shards and only approximately true within one: a
+  document is drawn uniformly from its shard's reachable head rather than by
+  length. Long documents are slightly underweighted for that reason, and the
+  `short_draws` bias documented above pushes the same way.
 - A `budget` total is withheld, in the CLI and on the site, when the stages
   under one slug were scored against different wordings of the question. A slug
   is not a question: `--slug` takes any string and a generated one is cut to 60

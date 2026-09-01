@@ -67,13 +67,13 @@ def test_the_token_interval_is_the_count_interval_rescaled_by_the_length_ratio()
         "n": 100,
         "count_rate": 0.5,
         "count_ci": [0.4, 0.6],
-        "char_rate": 0.25,  # matching examples are half the average length
+        "rate": 0.25,  # matching examples are half the average length
         "size_tokens": 1_000,
         "notes": [],
     }
     budget._apply_rate(out)
     assert out["matching_tokens"] == pytest.approx(250)
-    # The ratio char/count is 0.5, so the interval halves with the point estimate.
+    # The ratio rate/count is 0.5, so the interval halves with the point estimate.
     assert out["matching_tokens_ci"] == pytest.approx([200, 300])
 
 
@@ -87,7 +87,7 @@ def test_a_zero_rate_keeps_the_upper_end_of_its_interval():
         "n": 300,
         "count_rate": 0.0,
         "count_ci": [0.0, 0.0126],
-        "char_rate": 0.0,
+        "rate": 0.0,
         "size_tokens": 1_000_000,
         "notes": [],
     }
@@ -103,7 +103,7 @@ def test_weighing_by_length_on_a_handful_of_matches_says_so():
         "n": 300,
         "count_rate": 0.01,
         "count_ci": [0.003, 0.029],
-        "char_rate": 0.001,
+        "rate": 0.001,
         "size_tokens": 1_000,
         "notes": [],
     }
@@ -198,3 +198,34 @@ def test_one_slug_over_two_wordings_gets_no_total(capsys):
 
     assert _warn_mixed_questions({"slug": "s", "question_variants": []}) is False
     assert capsys.readouterr().out == ""
+
+
+def test_a_corpus_rate_is_not_weighed_by_length_a_second_time():
+    """Shard selection already does the token weighting.
+
+    `pretrain.sample_documents` draws shards with probability proportional to
+    compressed size and takes one document from each, so every sampled document
+    stands for the same byte mass and the document rate *is* the byte-weighted
+    rate. Weighing by each document's own length on top would let a stratum of
+    200k-character Longmino PDFs count 100x a stratum of 2k-character web pages
+    that holds exactly as many bytes.
+    """
+    out = {
+        "measured": True,
+        "matched": 10,
+        "n": 100,
+        "count_rate": 0.10,
+        "count_ci": [0.055, 0.175],
+        # The matching documents happen to be ten times the average length.
+        "rate": 0.10,
+        "char_rate": 0.53,
+        "size_tokens": 1_000_000,
+        "notes": [],
+    }
+    budget._apply_rate(out)
+    assert out["matching_tokens"] == pytest.approx(100_000)
+    # And the interval is the plain count interval — the rescaling factor is 1.
+    assert out["matching_tokens_ci"] == pytest.approx([55_000, 175_000])
+    # The length note is for stages that actually reweigh; it would be a
+    # non-sequitur here.
+    assert out["notes"] == []

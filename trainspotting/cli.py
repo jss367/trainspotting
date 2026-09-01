@@ -1090,6 +1090,7 @@ def cmd_stance(args):
             RESULTS / f"{args.target}.{s['stage']}.stance-{slug}.json",
             {
                 "question": args.question,
+                "slug": slug,
                 "dataset": data["dataset"],
                 # The example is the one the context run stored, so the revision
                 # is that run's — not whatever `main` points at now.
@@ -1137,6 +1138,20 @@ def _fmt_est(n: float | None) -> str:
     return f"{n:.0f}"
 
 
+# Why the rate column is not one rule. The two halves of the pipeline sample
+# differently, and the correction that is right for one is a double count on the
+# other — so the table has to say which it applied where.
+_WEIGHTING_FOOTNOTE = """
+Fit tokens are what the model was trained to produce, at {cpt:g} characters per token.
+Rate: post-training rows are drawn uniformly, so their rate is weighed by fit
+characters — otherwise it answers "what fraction of examples" rather than "what
+fraction of training". Corpus documents come from shards drawn with probability
+proportional to size, which already weights by tokens, so their document rate is
+used unchanged; weighing it by length would apply that a second time.
+This weighs tokens, not learning: a post-training token and a pretraining token
+are not equally formative, and nothing here corrects for that."""
+
+
 def _warn_mixed_questions(est: dict) -> bool:
     """Say so, on stdout, when a slug covers more than one wording — and report
     whether it does, so callers can withhold the total.
@@ -1173,20 +1188,22 @@ def _fmt_share(share: float) -> str:
     return f"{pct:.2f}%" if pct >= 0.01 or pct == 0 else f"{pct:.2g}%"
 
 
-BUDGET_COLS = f"{'stage':<14}{'fit tokens':>11}  {'by row':>13}  {'by length':>9}  {'matching tokens':>17}"
+BUDGET_COLS = f"{'stage':<14}{'fit tokens':>11}  {'sampled':>13}  {'rate':>9}  {'matching tokens':>17}"
 
 
 def _budget_row(s: dict) -> str:
     size = _fmt_est(s.get("size_tokens")) + ("*" if s.get("size_is_floor") else " ")
     if not s.get("measured"):
         return f"{s['stage']:<14}{size:>12}  not measured"
-    by_row = f"{s['matched']}/{s['n']}  {s['count_rate'] * 100:4.1f}%"
+    sampled = f"{s['matched']}/{s['n']}  {s['count_rate'] * 100:4.1f}%"
     matching = _fmt_est(s.get("matching_tokens"))
     ci = s.get("matching_tokens_ci")
     if ci:
         matching += f" ({_fmt_est(ci[0])}–{_fmt_est(ci[1])})"
+    # `rate` is the estimator the stage's sampling design calls for, which is
+    # not the same rule for both halves of the pipeline — see the footnote.
     return (
-        f"{s['stage']:<14}{size:>12}  {by_row:>13}  {s['char_rate'] * 100:8.1f}%"
+        f"{s['stage']:<14}{size:>12}  {sampled:>13}  {s['rate'] * 100:8.1f}%"
         f"  {matching:>17}"
     )
 
@@ -1247,12 +1264,7 @@ def cmd_budget(args):
         print()
         for stage, note in notes:
             print(f"note ({stage}): {note}")
-    print(
-        f"\nFit tokens are what the model was trained to produce, at"
-        f" {budget.CHARS_PER_TOKEN:g} characters per token."
-        "\nThis weighs tokens, not learning: a post-training token and a"
-        " pretraining token are not equally formative, and nothing here corrects for that."
-    )
+    print(_WEIGHTING_FOOTNOTE.format(cpt=budget.CHARS_PER_TOKEN))
     if args.json:
         path = _write_json(RESULTS / f"{args.target}.budget-{args.slug}.json", est)
         print(f"\nwrote {path}", file=sys.stderr)
