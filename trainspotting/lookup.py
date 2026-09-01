@@ -220,27 +220,39 @@ def normalize(doc: dict) -> dict:
 def sample_documents(index: str, query: str, occurrences: int, want: int = MAX_DOCS_PER_CALL) -> dict:
     """Documents behind `query`, and whether they are all of them.
 
-    Under the ten-per-call cap this makes repeated calls and merges them. The
-    calls are independent uniform draws over occurrences, so `drawn` (with
-    repeats) is the denominator for any share computed over the sample, while
-    `documents` is deduplicated for display. Conflating the two would report
-    "half these copies are on scraper sites" off a denominator that had already
-    collapsed a site's five copies into one.
+    Above the ten-per-call cap this makes repeated calls and merges them, the
+    last asking for the remainder so a `want` of 11 costs eleven documents
+    rather than twenty. The calls are independent uniform draws over
+    occurrences, so `drawn` (with repeats) is the denominator for any share
+    computed over the sample, while `documents` is deduplicated for display.
+    Conflating the two would report "half these copies are on scraper sites"
+    off a denominator that had already collapsed a site's five copies into one.
 
-    `exhaustive` is the only claim worth making carefully: at or under the cap a
-    single call sees every occurrence, so the document list is complete and a
-    re-run reproduces it. Above the cap it is a snapshot.
+    `exhaustive` is the only claim worth making carefully: it means the sample
+    holds every occurrence, which takes both a count at or under the cap (one
+    call can see them all) and a `want` that reached for all of them. Anything
+    else is a snapshot, including three documents of a phrase that occurs eight
+    times.
     """
-    exhaustive = occurrences <= MAX_DOCS_PER_CALL
     # Asking for more documents than there are occurrences does not return
     # fewer — the server samples occurrences with replacement and pads to
     # `maxnum`, so a two-occurrence query answered ten of the same two. Ask for
     # exactly the occurrences that exist and the result is each of them once.
-    maxnum = occurrences if exhaustive else min(MAX_DOCS_PER_CALL, want)
-    calls = 1 if exhaustive else max(1, -(-want // MAX_DOCS_PER_CALL))
+    # Asking for more than the caller wanted is the same error in the other
+    # direction: `--docs 11` used to spend two full ten-document calls and hand
+    # back twenty, which breaks the "up to N" the CLI promises and, worse, puts
+    # twenty in the `drawn` denominator every share is computed over.
+    budget = min(want, occurrences)
+    # The claim is that the sample holds every occurrence, which needs both: one
+    # call can see them all, and this call asked for them all. A caller that
+    # asked for three of eight has a sample, not a census, however small the
+    # count is.
+    exhaustive = occurrences <= MAX_DOCS_PER_CALL and budget == occurrences
     seen: dict[int, dict] = {}
     drawn = 0
-    for _ in range(calls):
+    remaining = budget
+    while remaining > 0:
+        maxnum = min(MAX_DOCS_PER_CALL, remaining)
         j = _post(
             {
                 "index": index,
@@ -249,7 +261,8 @@ def sample_documents(index: str, query: str, occurrences: int, want: int = MAX_D
                 "maxnum": maxnum,
             }
         )
-        for raw in j.get("documents", []):
+        documents = j.get("documents", [])
+        for raw in documents:
             rec = normalize(raw)
             drawn += 1
             if rec["doc_ix"] in seen:
@@ -257,6 +270,11 @@ def sample_documents(index: str, query: str, occurrences: int, want: int = MAX_D
             else:
                 rec["occurrences_drawn"] = 1
                 seen[rec["doc_ix"]] = rec
+        # Count what was asked for, not what came back: a short reply means the
+        # index has no more to give, and looping on the shortfall would spin.
+        remaining -= maxnum
+        if not documents:
+            break
     # Every call redraws from the whole occurrence list, so the same document
     # recurs across calls. Keep one copy and count the hits: the copy is what a
     # reader opens, the count is what any share over the sample is weighted by.
