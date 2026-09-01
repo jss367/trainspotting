@@ -57,8 +57,15 @@ TURN_FIELDS = search.STRUCTURED_TURN_FIELDS + search.INPUT_TURN_FIELDS
 def _turns(messages) -> list[dict]:
     out = []
     for m in messages or []:
+        # Type check first. Building `extra` above it called `.get` on whatever
+        # the list held, so one null element — valid in a list-of-struct — took
+        # down the whole export with an AttributeError instead of being skipped.
+        # The original ordering guarded this and I moved the guard behind the
+        # new field read.
+        if not isinstance(m, dict):
+            continue
         extra = {k: m.get(k) for k in TURN_FIELDS if m.get(k)}
-        if not (isinstance(m, dict) and (m.get("content") or extra)):
+        if not (m.get("content") or extra):
             continue
         reasoning, answer = _split_think(str(m.get("content") or ""))
         turn = {"role": m.get("role", "?"), **_text(answer)}

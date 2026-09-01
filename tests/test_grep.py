@@ -1111,7 +1111,9 @@ def test_a_rejected_tool_call_is_not_produce_side():
     # Matched on the projection rather than the substring: the branch
     # comparison also names these fields, correctly, since it compares exactly
     # what a search can read.
-    assert sum(1 for e in exprs["prompt"] if 'm."functions"' in e) == 2
+    # Three: the menu offered on each post-branch tail, plus the one on the
+    # shared prefix, which the branch slicing would otherwise drop.
+    assert sum(1 for e in exprs["prompt"] if 'm."functions"' in e) == 3
     # and each column's extra subfields are priced against that column
     assert ("rejected", "tool_calls") in leaves
 
@@ -1129,3 +1131,22 @@ def test_a_field_present_but_not_textual_is_not_searched():
     text = 'STRUCT("content" VARCHAR, "role" VARCHAR, "functions" VARCHAR)[]'
     exprs, _, _ = grep.text_fields({"messages": text})
     assert any('m."functions"' in e for e in exprs["prompt"])
+
+
+def test_a_tool_call_in_shared_history_is_not_either_completion(con, tmp_path):
+    """The branch split fixed this for `content` and the commit that added the
+    structured fields reintroduced it one field over: searching the whole list
+    put a shared tool call into both completions."""
+    path = tmp_path / "sharedtool.parquet"
+    shared = ("{'role': 'user', 'content': 'q', 'tool_calls': ''},"
+              "{'role': 'assistant', 'content': 'ctx', 'tool_calls': 'lookup(ChatGPT)'}")
+    con.execute(
+        f"""COPY (SELECT
+              [{shared}, {{'role': 'assistant', 'content': 'A', 'tool_calls': ''}}] AS chosen,
+              [{shared}, {{'role': 'assistant', 'content': 'B', 'tool_calls': ''}}] AS rejected
+            ) TO '{path}' (FORMAT parquet)"""
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    r = grep.scan(con, grep.read_parquet_sql([str(path)]), exprs, None, "ChatGPT")
+    assert r["by_group"]["chosen"] == 0 and r["by_group"]["rejected"] == 0

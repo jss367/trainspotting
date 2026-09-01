@@ -1923,10 +1923,12 @@ function searchFields(rec){
   const turns = (list, tag) => (list || []).forEach(t => {
     if (t.reasoning) push(tag + t.role + " reasoning", t.reasoning.text, t.reasoning.chars);
     push(tag + t.role, t.text, t.chars);
-    // The tools a turn was offered and the call it made. Real training text
-    // that both CLI searchers read, absent from the export until now.
-    cell(t.functions, tag + t.role + " functions");
-    cell(t.function_calls, tag + t.role + " function calls");
+    // Every structured field the export now carries. `context.TURN_FIELDS`
+    // widened to the full set `search` knows; reading only two of them here
+    // meant the index could retain and fetch a file for a match in the other
+    // three while this scan then reported nothing.
+    for (const k of ["tool_calls", "function_call", "function_calls", "refusal", "functions"])
+      cell(t[k], tag + t.role + " " + k.replace(/_/g, " "));
   });
   turns(rec.turns, "");                          // sft: the target response
   // A pair shares a conversation prefix and differs only from where one answer
@@ -1943,8 +1945,8 @@ function searchFields(rec){
     // keyed without it, the turn read as shared, the rejected copy was never
     // scanned at all, and the chosen reasoning was labelled context.
     const key = t => JSON.stringify([t.role, t.text, t.reasoning && t.reasoning.text,
-                                     t.functions && t.functions.text,
-                                     t.function_calls && t.function_calls.text]);
+      ...["tool_calls", "function_call", "function_calls", "refusal", "functions"]
+        .map(k => t[k] && t[k].text)]);
     let b = 0;
     while (b < ch.length && b < rj.length && key(ch[b]) === key(rj[b])) b++;
     turns(ch.slice(0, b), "");                   // shared: the conversation, not a claim

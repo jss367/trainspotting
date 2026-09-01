@@ -290,7 +290,18 @@ def _pair_exprs(typ: str) -> list[tuple[str, str, tuple[str, ...]]]:
             continue
         for col, name in ((c, "chosen"), (r, "rejected")):
             side = name if group == "response" else group
-            out.append((side, f"list_transform({col}, m -> m.{_ident(sub)})", (name, sub)))
+            # Sliced at the branch, exactly as `content` is. Searching the whole
+            # list put a tool call from the *shared* history into both
+            # completions — the same defect the branch split fixed for content,
+            # reintroduced one field over by the commit that added these.
+            scope = tail(col) if side in PAIR else col
+            out.append((side, f"list_transform({scope}, m -> m.{_ident(sub)})", (name, sub)))
+        if group != "response":
+            # An input field on the shared prefix is prompt, and would otherwise
+            # be dropped by the slicing above.
+            out.append(("prompt",
+                        f"list_transform(list_slice({c}, 1, {b} - 1), m -> m.{_ident(sub)})",
+                        ("chosen", sub)))
     return out
 
 
