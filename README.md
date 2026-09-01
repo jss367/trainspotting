@@ -684,7 +684,10 @@ column and a DPO `chosen`/`rejected` column are.
 A window is kept only if it is anchored: on a number, on a capital past a
 token's first letter (`ChatGPT`, `OpenAI` — English does not shape words that
 way, so those are names wherever they sit, including the opening word of a
-transcript), or on a capital anywhere but the start of its sentence. The anchor
+transcript), or on a capital anywhere but the start of a *sentence*. After a
+colon is not the start of a sentence, since nothing there forced the capital, so
+`"Assistant: Claude"` yields `Claude` while `"Weather today is mild"` still
+yields nothing. The anchor
 is what makes a query selective, not the length, so a window of pure function
 words is dropped however long it is — it would match training rows by
 coincidence — while `"Assistant: ChatGPT"` yields `ChatGPT`. Boundary function
