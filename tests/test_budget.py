@@ -609,3 +609,64 @@ def test_a_stage_nobody_asked_is_still_sized():
     assert out["measured"] is False        # nothing was asked here
     assert out["size_tokens"] == 1000 * 800 / 4   # but it still has a size
     assert budget.totals([out])["post-training"]["size_tokens"] == out["size_tokens"]
+
+
+def test_one_restamped_stage_does_not_look_like_two_rubrics():
+    """Missing provenance is silence, not evidence.
+
+    Every run committed before `system_sha` was stamped records null. Re-running
+    a single stage then leaves {null, "abc"} in the family set, which read as
+    two rubrics and withheld the pipeline total from an ordinary incremental
+    `ask --stage ...`.
+    """
+    mix = budget.mixing([
+        stage("post-training", sha=None),
+        stage("post-training", sha=None),
+        stage("post-training", sha="freshly-stamped"),
+    ])
+    assert mix["mixed"] is False
+    assert mix["rubric_conflict"] == []
+    # Two hashes that were actually recorded are still a conflict.
+    assert budget.mixing([stage("post-training", sha="a"),
+                          stage("post-training", sha="b")])["rubric_conflict"] == ["post-training"]
+
+
+def test_stored_examples_from_another_dataset_cannot_size_a_stage():
+    """Sizing runs before the ask path's guards, so it needs its own.
+
+    An unasked stage reaches no other provenance check, so a context file left
+    from a repointed dataset would supply one dataset's fit lengths against
+    another's row count — straight into the pipeline denominator.
+    """
+    out = {"kind": "sft", "fit_text": "assistant turns", "notes": []}
+    ctx = {"dataset": "old/mix", "records": [
+        {"row": 0, "key": "p", "kind": "sft",
+         "turns": [{"role": "assistant", "text": "x", "chars": 400}]}]}
+    budget._size_post_training("m", {"stage": "sft", "hf_dataset": "new/mix"}, ctx, out)
+    assert "size_tokens" not in out
+    assert any("old/mix" in n and "new/mix" in n for n in out["notes"])
+
+    # And a context sample that straddled a republish describes two trees.
+    out = {"kind": "sft", "fit_text": "assistant turns", "notes": []}
+    budget._size_post_training(
+        "m", {"stage": "sft", "hf_dataset": "x/y"},
+        {"dataset": "x/y", "revision_moved_to": "b" * 40, "records": ctx["records"]}, out)
+    assert "size_tokens" not in out
+    assert any("straddled a republish" in n for n in out["notes"])
+
+
+def test_a_measured_but_unsized_stage_makes_the_total_partial():
+    """`totals()` drops an unsized stage from the denominator and the sum.
+
+    So the share is as partial as one with an unasked stage, and printing it
+    bare — beside "3 of 3 stages measured" — states a whole-pipeline percentage
+    that is neither whole nor a bound.
+    """
+    stages = [
+        {"stage": "sft", "family": "post-training", "measured": True, "size_tokens": 1_000,
+         "matching_tokens": 10, "matching_tokens_ci": [5, 20]},
+        {"stage": "dpo", "family": "post-training", "measured": True, "size_tokens": None},
+    ]
+    t = budget.totals(stages)["post-training"]
+    assert t["measured"] == t["stages"] == 2      # nothing looks missing
+    assert t["unsized"] == ["dpo"]                 # but one side is gone

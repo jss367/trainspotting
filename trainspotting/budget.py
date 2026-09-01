@@ -246,6 +246,25 @@ def _size_post_training(target_name: str, stage: dict, ctx: dict, out: dict) -> 
     bound this output calls it.
     """
     name = stage["stage"]
+    # Sizing moved ahead of the ask path so an unasked stage stays in the
+    # denominator — which also moved it outside the provenance guards that path
+    # runs. An unasked stage reaches no other check, so the stored examples have
+    # to be validated here or a context file left over from a repointed dataset
+    # would supply fit lengths for one dataset against another's row count.
+    if ctx.get("dataset") and ctx["dataset"] != stage["hf_dataset"]:
+        out["notes"].append(
+            f"stage size unknown — the stored examples are from {ctx['dataset']} but"
+            f" this stage now names {stage['hf_dataset']}; re-run"
+            f" `trainspotting context {target_name} --stage {name}`"
+        )
+        return
+    if ctx.get("revision_moved_to"):
+        out["notes"].append(
+            "stage size unknown — the stored examples straddled a republish while"
+            " they were drawn, so their lengths describe two trees; re-run"
+            f" `trainspotting context {target_name} --stage {name}`"
+        )
+        return
     all_examples = ctx.get("records", [])
     sample_fit = [f for f in (fit_chars(c) for c in all_examples) if f is not None]
     source = stage_sources(target_name, name)
@@ -660,9 +679,16 @@ def mixing(measured: list[dict]) -> dict:
     """
     variants = sorted({s["question"] for s in measured})
     judges = sorted({s.get("classifier") for s in measured if s.get("classifier")})
+    # Only hashes that exist. Every run committed before `system_sha` was
+    # stamped records null, so a set holding {null, "abc"} after one stage is
+    # re-run would read as two rubrics and withhold the pipeline total from an
+    # ordinary incremental `ask --stage ...`. Missing provenance is silence, the
+    # same way it is for the classifier and for the revision checks — a conflict
+    # needs two distinct hashes that were actually recorded.
     rubrics: dict[str, set] = {}
     for s in measured:
-        rubrics.setdefault(s.get("family"), set()).add(s.get("system_sha"))
+        if s.get("system_sha"):
+            rubrics.setdefault(s.get("family"), set()).add(s["system_sha"])
     conflict = sorted(fam for fam, shas in rubrics.items() if len(shas) > 1)
     mixed = len(variants) > 1 or len(judges) > 1 or bool(conflict)
     return {

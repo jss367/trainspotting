@@ -1111,7 +1111,11 @@ async function budgetCard(main, model, slug){
   // The denominator is every sized stage, asked or not, so with one still
   // unasked this is a lower bound on the whole pipeline — not a share of the
   // part that was measured. The two differ by three orders of magnitude here.
-  const partial = all.measured < all.stages;
+  // A stage that was measured but could not be sized is excluded from both the
+  // denominator and the matching sum, so the share is as partial as if the
+  // stage had never been asked — `unsized` has to count here too, or the card
+  // prints a bare percentage and claims every stage was measured.
+  const partial = all.measured < all.stages || (all.unsized || []).length > 0;
   total.innerHTML = `<td>whole pipeline</td><td>${tokens(all.size_tokens)}</td>`
     + (mixed
       ? `<td colspan="3">no single total — these stages were scored with different ${mixedWhat(est)}</td>`

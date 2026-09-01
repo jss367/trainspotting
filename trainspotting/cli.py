@@ -1256,7 +1256,10 @@ def cmd_budget(args):
         if not t["stages"]:
             continue
         line = f"{label:<16}{_fmt_est(t['size_tokens']):>10} fit tokens"
-        partial = t["measured"] < t["stages"]
+        # A measured stage that could not be sized is dropped from both the
+        # denominator and the matching sum, so the share is as partial as an
+        # unasked one — `unsized` has to count here too.
+        partial = t["measured"] < t["stages"] or bool(t["unsized"])
         if mixed:
             line += "  →  no single total (see above)"
         elif t["measured"]:
@@ -1501,7 +1504,10 @@ def _report_questions(target_name: str, target: dict) -> None:
         for st in est["stages"]:
             print(_budget_row(st))
         t = est["totals"]["all"]
-        partial = t["measured"] < t["stages"]
+        # A measured stage that could not be sized is dropped from both the
+        # denominator and the matching sum, so the share is as partial as an
+        # unasked one — `unsized` has to count here too.
+        partial = t["measured"] < t["stages"] or bool(t["unsized"])
         print(
             f"\nwhole pipeline: {_fmt_est(t['size_tokens'])} fit tokens — no single"
             " total, see the warning above"
