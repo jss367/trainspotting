@@ -1393,3 +1393,22 @@ def test_the_produce_union_excludes_rejected_and_rollout_rows():
     assert influence._union(100, 40, [60, 60]) == (60, 100)
     # and with nothing off the produce side the interval still settles outright
     assert influence._union(180, 0, [100, 80]) == (180, 180)
+
+
+def test_the_row_basis_fallback_ranks_on_what_the_model_reads():
+    """One prompt hit beside 99 rejected ones is not evidence of 100. `rate`
+    counts every matched row, so it outranked ten genuine prompt hits and the
+    verdict called all 100 text the model was trained to read."""
+    t = influence.compare([
+        _bare("dpo", 100, 100_000, {"prompt": 1, "chosen": 0, "rejected": 99}),
+        _bare("sft", 10, 100_000, {"prompt": 10, "response": 0}),
+    ], THINK)
+    assert t["basis"] == "rows"
+    assert t["best"]["stage"] == "sft"
+
+
+def test_the_read_rate_excludes_rejected_and_rollout():
+    r = _bare("dpo", 100, 1000, {"prompt": 1, "chosen": 0, "rejected": 99})
+    trace = influence.stage_trace(r)
+    assert trace["rate"] == 0.1              # every matched row
+    assert trace["read_rate"] == 0.001       # the one the model reads

@@ -1938,7 +1938,12 @@ function searchFields(rec){
   if (rec.chosen || rec.rejected){
     const ch = (rec.chosen && rec.chosen.turns) || [];
     const rj = (rec.rejected && rec.rejected.turns) || [];
-    const key = t => JSON.stringify([t.role, t.text, t.functions && t.functions.text,
+    // Every field a search can reach, reasoning included. A Think pair can
+    // agree on its final answer and differ only in the thinking that led there;
+    // keyed without it, the turn read as shared, the rejected copy was never
+    // scanned at all, and the chosen reasoning was labelled context.
+    const key = t => JSON.stringify([t.role, t.text, t.reasoning && t.reasoning.text,
+                                     t.functions && t.functions.text,
                                      t.function_calls && t.function_calls.text]);
     let b = 0;
     while (b < ch.length && b < rj.length && key(ch[b]) === key(rj[b])) b++;

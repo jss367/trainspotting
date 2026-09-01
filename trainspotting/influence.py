@@ -87,6 +87,25 @@ def produced(result) -> tuple[int, int] | None:
     return _union(result.get("matched", 0), sum(elsewhere), counts)
 
 
+def _readable(result, rows: int) -> float | None:
+    """Share of a stage's rows matching somewhere the model reads.
+
+    Prompt and the produce side; not `rejected`, which it is trained away from,
+    nor `rollout`, which is never shown to it. Bounded the same way the produce
+    union is, and for the same reason: per-group counts overlap, so the honest
+    figure is an interval and the low end is what a ranking may lean on.
+    """
+    by_group = dict(result.get("by_group") or {})
+    fields = set(result.get("fields") or [])
+    live = [g for g in ("prompt", *PRODUCE) if g in fields]
+    if not live:
+        return None
+    elsewhere = sum(by_group.get(g, 0) for g in GROUPS
+                    if g not in ("prompt", *PRODUCE) and g in fields)
+    lo, _ = _union(result.get("matched", 0), elsewhere, [by_group.get(g, 0) for g in live])
+    return lo / rows if rows else None
+
+
 def _only_against(r) -> bool:
     """Every match this stage found is evidence against it, or of nothing.
 
@@ -270,6 +289,15 @@ def stage_trace(result) -> dict:
         "rows": rows,
         "hits": hits,
         "rate": hits / rows if rows else None,
+        # The rate the row-basis fallback ranks on: rows matching somewhere the
+        # model actually reads. `rate` counts every matched row, which includes
+        # rejected completions the objective pushes it off and reference
+        # rollouts it never sees — so one prompt hit beside 99 rejected ones
+        # outranked ten real prompt hits, and the verdict called all 100 text
+        # the model was trained to read. A stage with no readable hit at all is
+        # `only_against` and is blocked from the ranking outright; this is for
+        # the ones with a few.
+        "read_rate": (_readable(result, rows) if rows else None),
         "by_group": dict(result.get("by_group") or {}),
         "fields": list(result.get("fields") or []),
         # Groups the mix actually has, when the run recorded them: it is what
@@ -391,7 +419,7 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
             # of, so no argument to this command would have covered them.
             "status": UNSEARCHED if s.get("hf_dataset") else UNREACHABLE,
             "rows": None, "hits": None, "rate": None, "by_group": {}, "fields": [],
-            "available_fields": [], "coverage_gaps": [],
+            "available_fields": [], "coverage_gaps": [], "read_rate": None,
             "produced": None, "produced_rate": None,
             "produced_rate_hi": None,
             "sources": [], "concentration": None, "concentration_all": None,
@@ -431,7 +459,7 @@ def compare(results: list[dict], stages: list[dict]) -> dict:
     # Falling back to the overall rate has two causes worth telling apart: no
     # run read a produce-side column, or every run did and found nothing there.
     produce_searched = any(r["produced"] is not None for r in searched + inconclusive)
-    key = "produced_rate" if basis == "produced" else "rate"
+    key = "produced_rate" if basis == "produced" else "read_rate"
     for r in hitting:
         r["rank_block"] = _rank_block(r, basis, key)
         # Explain the number that was ranked on. Under the produce-side basis a
