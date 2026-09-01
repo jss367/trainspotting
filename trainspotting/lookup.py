@@ -30,6 +30,7 @@ site, which is why it is a separate view that names its corpus in every row.
 """
 
 import collections
+import itertools
 import json
 import time
 from urllib.parse import urlsplit
@@ -162,6 +163,10 @@ def _quality(attrs: dict) -> float | None:
     return None
 
 
+# Counter for hits with no file and no URL, so each stays its own document.
+_UNIDENTIFIED = itertools.count()
+
+
 def _identity(rec: dict) -> tuple:
     """What makes two hits the same document.
 
@@ -175,7 +180,18 @@ def _identity(rec: dict) -> tuple:
     `doc_ix` across shards are in different files; two hits sharing both are the
     same document seen twice, which is the case this deduplicates.
     """
-    return (rec.get("shard"), rec.get("doc_ix"))
+    if rec.get("shard"):
+        return ("shard", rec["shard"], rec.get("doc_ix"))
+    # No file to name it by — which is exactly what the malformed-metadata
+    # fallback produces, so this is not a rare branch. A URL still identifies
+    # the page. With neither, two hits are only known to share a shard-local
+    # index, which is not evidence they are the same document, so nothing is
+    # merged: over-counting distinct documents costs a slightly higher document
+    # count, while merging costs both draws being attributed to one of them's
+    # domain, and `domain_shares` is what the study's headline is computed over.
+    if rec.get("url"):
+        return ("url", rec["url"], rec.get("doc_ix"))
+    return ("unidentified", next(_UNIDENTIFIED))
 
 
 def normalize(doc: dict) -> dict:

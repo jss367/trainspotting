@@ -121,7 +121,8 @@ def test_repeats_across_calls_are_counted_once_as_documents_and_kept_in_drawn(mo
         "_post",
         lambda payload: {
             "documents": [
-                {"doc_ix": 7, "spans": [["text", None]], "doc_len": 10}
+                {"doc_ix": 7, "spans": [["text", None]], "doc_len": 10,
+                 "metadata": json.dumps({"path": "cc_en_head/cc_en_head-0001.json.gz"})}
                 for _ in range(payload["maxnum"])
             ]
         },
@@ -232,3 +233,37 @@ def test_one_unreadable_document_does_not_abort_the_sample(metadata, monkeypatch
 
     assert len(out["documents"]) == 2
     assert any(d["url"] == "http://example.com/b" for d in out["documents"])
+
+
+def test_hits_with_no_identity_at_all_are_not_merged(monkeypatch):
+    """A hit whose metadata would not decode has no file and no URL — which is
+    exactly what the malformed-metadata fallback produces. Two such hits share
+    only a shard-local index, which is not evidence they are the same document,
+    and merging them would attribute both draws to one of their domains."""
+    monkeypatch.setattr(
+        lookup,
+        "_post",
+        lambda payload: {
+            "documents": [
+                {"doc_ix": 7, "spans": [["a", None]], "doc_len": 10, "metadata": "{broken"},
+                {"doc_ix": 7, "spans": [["b", None]], "doc_len": 10, "metadata": "{also broken"},
+            ]
+        },
+    )
+
+    out = lookup.sample_documents("idx", "q", occurrences=2, want=2)
+
+    assert len(out["documents"]) == 2
+    assert all(d["occurrences_drawn"] == 1 for d in out["documents"])
+
+
+def test_a_url_identifies_a_document_when_the_file_does_not(monkeypatch):
+    """Provenance that names no shard file can still name the page."""
+    hit = {"doc_ix": 7, "spans": [["a", None]], "doc_len": 10,
+           "metadata": json.dumps({"metadata": {"url": "http://example.com/a"}})}
+    monkeypatch.setattr(lookup, "_post", lambda payload: {"documents": [hit, dict(hit)]})
+
+    out = lookup.sample_documents("idx", "q", occurrences=2, want=2)
+
+    assert len(out["documents"]) == 1
+    assert out["documents"][0]["occurrences_drawn"] == 2
