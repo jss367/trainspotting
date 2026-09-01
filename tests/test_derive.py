@@ -113,6 +113,31 @@ def test_dpo_branches_where_the_reasoning_diverges_even_if_the_answer_matches():
     assert total == 50 + target
 
 
+def test_dpo_branches_on_a_digest_where_the_stored_text_was_cut():
+    """`context._text` keeps the first 4,000 characters and the true length, so
+    two long turns can be indistinguishable in the record and different in the
+    dataset. The digest of the whole field settles it; without one, a pair of
+    4,001-character responses differing in their last character scans as fully
+    shared and comes back with no target."""
+    opening = turn("user", 20, "ask")
+    long_a = {"role": "assistant", "text": "x" * 4000, "chars": 4001, "sha": "aaaa1111"}
+    long_b = {"role": "assistant", "text": "x" * 4000, "chars": 4001, "sha": "bbbb2222"}
+
+    rec = {"kind": "dpo", "chosen": {"turns": [opening, long_a]},
+           "rejected": {"turns": [opening, long_b]}}
+    total, target = derive.example_chars(rec)
+    assert derive._shared_turns(rec["chosen"]["turns"], rec["rejected"]["turns"]) == 1
+    assert target == 4001 * 2      # two responses, not one shared one
+
+    # Same digest is the same text however long it is.
+    rec["rejected"]["turns"][1] = dict(long_a)
+    assert derive._shared_turns(rec["chosen"]["turns"], rec["rejected"]["turns"]) == 2
+
+    # A record written before digests existed compares on what it has.
+    no_sha = [{k: v for k, v in t.items() if k != "sha"} for t in (long_a, long_b)]
+    assert derive._shared_turns([opening, no_sha[0]], [opening, no_sha[1]]) == 2
+
+
 def test_rl_stores_no_target_and_chat_is_not_a_training_example():
     rl = {"kind": "rlvr", "prompt_full": {"chars": 500}, "reward": {}}
     assert derive.example_chars(rl) == (500, 0)

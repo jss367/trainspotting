@@ -1452,6 +1452,9 @@ function budgetRows(m, sources, profiles, corpusSummaries){
       // as a small sample.
       deff: p && p.chars ? p.chars.deff : null,
       clusters: p && p.chars ? p.chars.clusters : null,
+      // Whether the sampled mean and the row count it is multiplied by were
+      // read from the same tree. These dataset ids move.
+      revisions: p ? p.revisions : null,
     };
   });
 }
@@ -1523,6 +1526,20 @@ function budgetCard(m, rows){
         : "");
     card.appendChild(p);
   }
+  // A stage whose sample and row count come from different trees has no
+  // honest total, so the export withholds one — and an absence on a size chart
+  // reads as "nothing here" rather than "not comparable". Say which.
+  const mixed = rows.filter(r => !r.base && !r.tokens && r.revisions && r.revisions.agree === false);
+  if (mixed.length){
+    const p = document.createElement("p");
+    p.className = "note";
+    p.style.margin = "0 0 14px";
+    p.textContent = `${mixed.map(r => r.stage).join(", ")} ${mixed.length === 1 ? "is" : "are"} missing above: `
+      + `the sampled examples and the exact row count were read from different revisions of the dataset, `
+      + `so multiplying one by the other would report a mixed-tree number as one measurement. `
+      + `Re-run trainspotting context or trainspotting sources for ${mixed.length === 1 ? "it" : "them"}.`;
+    card.appendChild(p);
+  }
   const grp = document.createElement("div");
   grp.className = "grp";
   grp.textContent = "the same tokens on a log axis";
@@ -1539,6 +1556,9 @@ function budgetCard(m, rows){
           + `<br>95% CI ${fmtTok(r.lo)}–${fmtTok(r.hi)} on the sampled mean length`
           + (r.deff > 1.05
             ? `<br>widened ${r.deff.toFixed(1)}× for clustering — ${r.clusters} draws of ten consecutive rows, not ${r.lengths.n} independent ones`
+            : "")
+          + (r.revisions && r.revisions.agree === null
+            ? `<br>the sample and the row count are not pinned to the same dataset revision — one of the two runs predates the stamp, so the pairing is unproven`
             : "")
         : `<br>published in the OLMo 3 paper`),
   })));

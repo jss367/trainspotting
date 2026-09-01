@@ -114,10 +114,27 @@ for ctx_file in sorted(out.glob("*.context.json")):
     # samples. Without it the shape of an example is still measurable and the
     # token total is not, so the profile simply carries no estimate.
     src = json.loads(src_file.read_text()).get(d["stage"], {}) if src_file.exists() else {}
-    write_derived(
-        ctx_file.name.replace(".context.json", ".profile.json"),
-        derive.stage_profile(d, src.get("total")),
-    )
+    # A token total multiplies a mean measured over one tree by a row count
+    # counted over another. These dataset ids move — Ai2 has republished these
+    # mixes — and both layers stamp the revision they read for exactly that
+    # reason, so the two stamps have to agree before the multiplication means
+    # anything. A mismatch is a mixed-tree number and gets no estimate at all;
+    # where either side predates revision recording the pairing is merely
+    # unproven, and the profile says so rather than dropping a figure that is
+    # probably fine.
+    revisions = {"context": d.get("revision"), "sources": src.get("revision")}
+    if revisions["context"] and revisions["sources"]:
+        agree = revisions["context"] == revisions["sources"]
+    else:
+        agree = None
+    profile = derive.stage_profile(d, src.get("total") if agree is not False else None)
+    profile["revisions"] = {**revisions, "agree": agree}
+    if agree is False:
+        print(
+            f"  ! {ctx_file.name}: sampled at {revisions['context'][:7]} but counted at "
+            f"{revisions['sources'][:7]} — no token estimate, re-run one of them"
+        )
+    write_derived(ctx_file.name.replace(".context.json", ".profile.json"), profile)
 
 total += sum((out / name).stat().st_size for name in derived)
 

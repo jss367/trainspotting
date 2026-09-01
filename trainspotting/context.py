@@ -14,6 +14,8 @@ Records are keyed by the same prompt text the classifier saw, so the site can
 join them onto committed label and ask results without re-running any model.
 """
 
+import hashlib
+
 from trainspotting import rewards
 
 MAX_TEXT = 4000  # per field; the full row stays one click away on HuggingFace
@@ -21,9 +23,22 @@ KEY_CHARS = 400  # prompt prefix that joins a context record to a labeled prompt
 
 
 def _text(value) -> dict:
-    """A text field plus its true length, so truncation is visible and lengths stay honest."""
+    """A text field plus its true length, so truncation is visible and lengths stay honest.
+
+    A field cut for display also carries a digest of the whole thing. Two turns
+    of equal length whose first MAX_TEXT characters agree are indistinguishable
+    from the stored record otherwise, and `derive._shared_turns` reads exactly
+    that comparison to decide where a preference pair branches — two 4,001
+    character responses differing in their last character would scan as one
+    shared turn and the pair would come back with no target at all. The digest
+    is only on the fields that were actually cut, so it costs nothing on the
+    ones that were not.
+    """
     s = "" if value is None else str(value)
-    return {"text": s[:MAX_TEXT], "chars": len(s)}
+    out = {"text": s[:MAX_TEXT], "chars": len(s)}
+    if len(s) > MAX_TEXT:
+        out["sha"] = hashlib.sha256(s.encode()).hexdigest()[:16]
+    return out
 
 
 def _split_think(text: str) -> tuple[str | None, str]:

@@ -97,13 +97,28 @@ def _shared_turns(chosen: list[dict], rejected: list[dict]) -> int:
     # differently at the same length toward the same answer — and then counts
     # one copy of a turn that is really two, with neither reasoning span as a
     # target.
+    def part_same(a: dict, b: dict) -> bool:
+        """One field of a turn: its length, and its content as far as the record
+        proves it. A field cut for display carries a digest of the whole thing
+        (`context._text`), so two long fields agreeing on their first 4,000
+        characters are compared on the digest rather than on the prefix — the
+        prefix alone would call two 4,001-character responses identical when
+        only their last character differs, and the pair would come back with no
+        target at all. Where one side has a digest and the other does not, the
+        record predates the digest and the prefix is all there is; the honest
+        comparison is then the one that was possible when it was written.
+        """
+        if a.get("chars") != b.get("chars"):
+            return False
+        if a.get("sha") and b.get("sha"):
+            return a["sha"] == b["sha"]
+        return a.get("text") == b.get("text")
+
     def same(a: dict, b: dict) -> bool:
         return (
             a.get("role") == b.get("role")
-            and a.get("chars") == b.get("chars")
-            and a.get("text") == b.get("text")
-            and (a.get("reasoning") or {}).get("chars") == (b.get("reasoning") or {}).get("chars")
-            and (a.get("reasoning") or {}).get("text") == (b.get("reasoning") or {}).get("text")
+            and part_same(a, b)
+            and part_same(a.get("reasoning") or {}, b.get("reasoning") or {})
         )
 
     n = 0
