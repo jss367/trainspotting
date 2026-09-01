@@ -27,6 +27,7 @@ choice inside that range changes the finding, which is a factor of about 10,000.
 
 import math
 
+from trainspotting import hf
 from trainspotting.context import KEY_CHARS
 
 # The one assumption in the token estimates. Stated here, restated on the site.
@@ -210,6 +211,16 @@ def clusters_of(rows: list[int | None]) -> list[list[int]] | None:
     merge into one longer run, which costs a little precision and claims
     nothing false.
 
+    A draw does not always survive whole: `cmd_context` drops a fetched row
+    whose prompt will not extract, which leaves a gap in the middle of a page
+    and would split it into two runs that are not two draws. WildChat is the
+    committed example — rows 509532-509535 and 509537-509541 are one fetch of
+    ten with 509536 missing — and counting them as two clusters reported 31
+    draws instead of 30 and narrowed the interval accordingly. Two rows from
+    one page are at most `hf.CHUNK - 1` apart, so that is the gap a run
+    tolerates. Two genuinely separate offsets landing that close merge instead,
+    which is rare on a large split and errs toward the wider interval.
+
     Returns positions grouped by run, or None when the records carry no row
     index (runs committed before the sampler recorded one).
     """
@@ -218,7 +229,7 @@ def clusters_of(rows: list[int | None]) -> list[list[int]] | None:
     order = sorted(range(len(rows)), key=lambda i: rows[i])
     groups: list[list[int]] = []
     for i in order:
-        if groups and rows[i] == rows[groups[-1][-1]] + 1:
+        if groups and rows[i] - rows[groups[-1][-1]] < hf.CHUNK:
             groups[-1].append(i)
         else:
             groups.append([i])

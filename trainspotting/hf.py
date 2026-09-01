@@ -69,6 +69,13 @@ def column_frequencies(
 MAX_SAMPLE_ROUNDS = 6
 
 
+# Rows per random offset. Small on purpose: rows adjacent on disk are
+# correlated, so many small draws sample the split better than a few large
+# pages. `derive.clusters_of` reads this to recover the draws from row indices,
+# which is what any interval over one of these samples has to be computed over.
+CHUNK = 10
+
+
 def sample_rows_with_truncation(
     dataset: str,
     n: int,
@@ -111,7 +118,7 @@ def sample_rows_with_truncation(
     """
     total = num_rows(dataset, config, split)
     rng = random.Random(seed)
-    chunk = 10
+    chunk = CHUNK
 
     def draw(pages: int) -> list[int]:
         # Inclusive upper bound. `randrange` stops one short, which left the

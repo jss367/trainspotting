@@ -177,6 +177,19 @@ def test_clusters_are_the_samplers_draws_not_its_rows():
     assert derive.clusters_of([1, None, 3]) is None
 
 
+def test_a_draw_missing_a_row_is_still_one_draw():
+    """`cmd_context` drops a fetched row whose prompt will not extract, which
+    leaves a hole in the middle of a page. Splitting there would count one fetch
+    as two draws and narrow the interval — WildChat's committed sample reported
+    31 draws instead of 30 for exactly one missing row."""
+    rows = [509532, 509533, 509534, 509535, 509537, 509538, 509539, 509540, 509541]
+
+    assert len(derive.clusters_of(rows)) == 1
+
+    # A gap of a whole chunk is a different offset, not a hole.
+    assert len(derive.clusters_of(rows + [509551])) == 2
+
+
 def test_the_interval_widens_when_the_draws_are_correlated():
     """Neighbouring rows share a source dataset and a length profile. Scoring
     300 correlated rows as 300 independent ones makes every whisker on the page
@@ -287,7 +300,11 @@ def test_labeled_prompts_reach_their_sampled_row(profile):
     keys = {r["k"] for r in d["records"]}
     records = json.loads(labels.read_text())["records"]
     joined = sum(derive.prompt_key(r["prompt"]) in keys for r in records)
-    assert joined >= len(records) - d["ambiguous_keys"]
+    # Every labeled prompt, not merely most of them. A key shared by two rows is
+    # still a key the profile holds, so ambiguity does not cost a match here —
+    # it costs a row in the grid, which `valueByKey` handles and its own tests
+    # cover. Allowing slack for it let an unrelated missing hash hide.
+    assert joined == len(records)
 
 
 def site_function(name: str) -> str:
@@ -412,5 +429,8 @@ def test_committed_profiles_are_internally_consistent(profile):
         assert d["tokens"]["lo"] <= d["tokens"]["tokens"] <= d["tokens"]["hi"]
         assert d["tokens"]["tokens"] == pytest.approx(
             d["chars"]["mean"] / derive.CHARS_PER_TOKEN * d["examples"])
-    assert sum(d["chars"]["hist"]) <= d["chars"]["n"]
+    # Both tails clamp into the end bins, so every sampled example is in one.
+    # A `<=` here would accept a profile that quietly dropped records from the
+    # length view.
+    assert sum(d["chars"]["hist"]) == d["chars"]["n"]
     assert not math.isnan(d["chars"]["se"])
