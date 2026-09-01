@@ -996,8 +996,8 @@ def test_a_pair_is_mapped_to_its_own_sides():
     exprs, _, _ = grep.text_fields({"chosen": typ, "rejected": typ, "prompt": "VARCHAR"})
     assert set(exprs) == {"prompt", "chosen", "rejected"}
     assert '"chosen"' in exprs["chosen"][0] and '"rejected"' in exprs["rejected"][0]
-    # both pairs' user turns are the same turns, so the input side stays shared
-    assert len(exprs["prompt"]) == 3
+    # the shared prefix and the post-branch user turns of both completions
+    assert len(exprs["prompt"]) == 4
 
 
 def test_an_sft_message_list_keeps_the_plain_response_group():
@@ -1023,3 +1023,62 @@ def test_a_dataset_target_gets_no_training_origin_verdict():
     assert registry.resolve("olmo-3-7b-think")["is_model"] is True
     source = pathlib.Path("trainspotting/cli.py").read_text()
     assert 'if target["is_model"]:\n        trace = influence.compare(' in source
+
+
+# --- review round 11 --------------------------------------------------------
+
+
+@pytest.fixture
+def multiturn_pair(con, tmp_path):
+    """A pair that branches at the last turn, sharing an assistant turn before
+    it — the shape that made a hit in the shared history count as both."""
+    path = tmp_path / "pair.parquet"
+    shared = ("{'role': 'user', 'content': 'hi'},"
+              "{'role': 'assistant', 'content': 'shared ChatGPT reply'},"
+              "{'role': 'user', 'content': 'and then?'}")
+    con.execute(
+        f"""COPY (SELECT
+              [{shared}, {{'role': 'assistant', 'content': 'chosen answer'}}] AS chosen,
+              [{shared}, {{'role': 'assistant', 'content': 'rejected answer'}}] AS rejected
+            ) TO '{path}' (FORMAT parquet)"""
+    )
+    return path
+
+
+def test_a_shared_assistant_turn_is_context_not_either_completion(con, multiturn_pair):
+    """The pair is judged *in* that conversation; neither completion claims it.
+    By role it landed in `chosen` and `rejected` both, so a phrase in the shared
+    history counted twice as text the objective pushes the model toward."""
+    schema = grep.schema(con, str(multiturn_pair))
+    exprs, _, _ = grep.text_fields(schema)
+    result = grep.scan(
+        con, grep.read_parquet_sql([str(multiturn_pair)]), exprs, None, "ChatGPT"
+    )
+    assert result["by_group"] == {"prompt": 1, "chosen": 0, "rejected": 0}
+
+
+def test_the_divergent_answers_are_still_attributed(con, multiturn_pair):
+    """The split must not swallow the thing it exists to measure."""
+    schema = grep.schema(con, str(multiturn_pair))
+    exprs, _, _ = grep.text_fields(schema)
+    from_sql = grep.read_parquet_sql([str(multiturn_pair)])
+    chosen = grep.scan(con, from_sql, exprs, None, "chosen answer")
+    rejected = grep.scan(con, from_sql, exprs, None, "rejected answer")
+    assert chosen["by_group"]["chosen"] == 1 and chosen["by_group"]["rejected"] == 0
+    assert rejected["by_group"]["rejected"] == 1 and rejected["by_group"]["chosen"] == 0
+
+
+def test_a_single_turn_pair_still_splits_at_the_first_turn(con, tmp_path):
+    """The common case: one user turn, two candidate answers, nothing shared
+    after it."""
+    path = tmp_path / "single.parquet"
+    con.execute(
+        f"""COPY (SELECT
+              [{{'role': 'user', 'content': 'q'}}, {{'role': 'assistant', 'content': 'yes ChatGPT'}}] AS chosen,
+              [{{'role': 'user', 'content': 'q'}}, {{'role': 'assistant', 'content': 'no'}}] AS rejected
+            ) TO '{path}' (FORMAT parquet)"""
+    )
+    schema = grep.schema(con, str(path))
+    exprs, _, _ = grep.text_fields(schema)
+    r = grep.scan(con, grep.read_parquet_sql([str(path)]), exprs, None, "ChatGPT")
+    assert r["by_group"] == {"prompt": 0, "chosen": 1, "rejected": 0}

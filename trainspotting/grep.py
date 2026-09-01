@@ -199,6 +199,55 @@ def schema(con, url: str) -> dict[str, str]:
     return {name: str(typ) for name, typ, *_ in rows}
 
 
+PAIR = ("chosen", "rejected")
+
+
+def _pair_exprs(typ: str) -> list[tuple[str, str, tuple[str, ...]]]:
+    """Expressions for a DPO pair, split where the two completions branch.
+
+    A multi-turn pair shares a conversation prefix — assistant turns included —
+    and differs only from the point one answer diverges from the other. Those
+    shared turns are the conversation the pair is judged *in*, not either
+    candidate answer. Attributing them by role put a string from the shared
+    history into both `chosen` and `rejected`, so a phrase neither completion
+    contains counted twice as text the objective pushes the model toward.
+
+    `search.py` has drawn the line here from the start (`_shared_turns`); this
+    is the same rule expressed over columns instead of parsed records, which is
+    the third finding to come out of those two maps being written twice.
+    """
+    c, r = _ident("chosen"), _ident("rejected")
+    roles = ", ".join(_lit(x) for x in RESPONSE_ROLES)
+    emitted = f"lower(coalesce(m.role, '')) IN ({roles})"
+    both = ("content", "role")
+    # 1-based index of the first turn the two completions disagree on, or one
+    # past the shorter list when one is a prefix of the other.
+    same = f"list_transform(list_zip({c}, {r}), z -> (z[1] IS NOT DISTINCT FROM z[2]))"
+    b = f"coalesce(list_position({same}, false), least(len({c}), len({r})) + 1)"
+
+    def tail(col):
+        return f"list_slice({col}, {b}, len({col}))"
+
+    def content(expr, keep):
+        return f"list_transform(list_filter({expr}, m -> {keep}), m -> m.content)"
+
+    out = [
+        # The shared prefix in full, whatever role each turn carries.
+        ("prompt", f"list_transform(list_slice({c}, 1, {b} - 1), m -> m.content)", both),
+        ("chosen", content(tail(c), emitted), both),
+        ("rejected", content(tail(r), emitted), both),
+    ]
+    # A user turn after the branch is still something the model reads, not
+    # something either completion claims.
+    for col in (c, r):
+        out.append(("prompt", content(tail(col), f"NOT ({emitted})"), both))
+    for sub, group in MESSAGE_EXTRAS.items():
+        if f'"{sub}"' in typ or f" {sub} " in typ:
+            for col in (c, r):
+                out.append((group, f"list_transform({col}, m -> m.{_ident(sub)})", (sub,)))
+    return out
+
+
 def _message_exprs(col: str, typ: str) -> list[tuple[str, str, tuple[str, ...]]]:
     """(group, expression, subfields read) for each searchable part of a message list.
 
@@ -256,9 +305,22 @@ def text_fields(
             if (col, sub) not in leaves:
                 leaves.append((col, sub))
 
+    pair = all(
+        c in schema_ and schema_[c].startswith("STRUCT") for c in PAIR
+    )
     for col, typ in schema_.items():
         q = _ident(col)
-        if col in MESSAGE_LISTS and typ.startswith("STRUCT"):
+        if pair and col in PAIR:
+            # The two are one mapping, emitted once when `chosen` comes round.
+            # Both columns are read by it, so both contribute leaves.
+            if col == "chosen":
+                for group, expr, subs in _pair_exprs(typ):
+                    add(group, expr, "chosen", subs)
+            if any(g in want for g in ("prompt", *PAIR)):
+                for sub in ("content", "role"):
+                    if (col, sub) not in leaves:
+                        leaves.append((col, sub))
+        elif col in MESSAGE_LISTS and typ.startswith("STRUCT"):
             for group, expr, subs in _message_exprs(col, typ):
                 add(group, expr, col, subs)
         elif col in PLAIN_TEXT and typ == "VARCHAR":

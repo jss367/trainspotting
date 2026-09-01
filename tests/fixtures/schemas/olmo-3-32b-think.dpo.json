@@ -15,7 +15,7 @@
     "preference_type": "VARCHAR"
   },
   "groups": {
-    "prompt": 3,
+    "prompt": 4,
     "chosen": 1,
     "rejected": 1
   },

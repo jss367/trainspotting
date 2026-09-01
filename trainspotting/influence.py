@@ -154,7 +154,14 @@ def _sources(result) -> list[dict]:
         # prompts — none of the evidence the ranking actually ran on.
         per_group = groups.get(name, {})
         p_counts = [per_group.get(g, 0) for g in PRODUCE if g in fields]
-        p_lo, p_hi = (_union(hits, per_group.get("prompt", 0), p_counts)
+        # Every non-produce group, exactly as the stage-level bound does. This
+        # one kept passing the prompt count alone after the stage-level one was
+        # corrected, so a source with rejected-only or rollout-only rows read as
+        # produce-side and could fabricate a concentration the verdict then
+        # names as the origin.
+        p_elsewhere = sum(per_group.get(g, 0) for g in GROUPS
+                          if g not in PRODUCE and g in fields)
+        p_lo, p_hi = (_union(hits, p_elsewhere, p_counts)
                       if (p_counts and per_group) else (None, None))
         p_rate = (p_lo / n) if (p_lo is not None and n) else None
         out.append({

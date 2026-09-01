@@ -13,7 +13,7 @@
     "preference_type": "VARCHAR"
   },
   "groups": {
-    "prompt": 2,
+    "prompt": 3,
     "chosen": 1,
     "rejected": 1
   },

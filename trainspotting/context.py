@@ -14,6 +14,8 @@ Records are keyed by the same prompt text the classifier saw, so the site can
 join them onto committed label and ask results without re-running any model.
 """
 
+import json
+
 from trainspotting import rewards
 
 MAX_TEXT = 4000  # per field; the full row stays one click away on HuggingFace
@@ -41,15 +43,26 @@ def _split_think(text: str) -> tuple[str | None, str]:
     return head.strip(), text[i + len("</think>") :].strip()
 
 
+# Text a turn can carry besides `content`: the tools it was offered, and the
+# call it made. Both are real training text — `grep` and `search` search them —
+# and dropping them here made them invisible to anything reading the export,
+# so a tool name occurring only in a function definition came back as a clean
+# "no match" from the site rather than as "not exported".
+TURN_FIELDS = ("functions", "function_calls")
+
+
 def _turns(messages) -> list[dict]:
     out = []
     for m in messages or []:
-        if not (isinstance(m, dict) and m.get("content")):
+        extra = {k: m.get(k) for k in TURN_FIELDS if m.get(k)}
+        if not (isinstance(m, dict) and (m.get("content") or extra)):
             continue
-        reasoning, answer = _split_think(str(m["content"]))
+        reasoning, answer = _split_think(str(m.get("content") or ""))
         turn = {"role": m.get("role", "?"), **_text(answer)}
         if reasoning:
             turn["reasoning"] = _text(reasoning)
+        for k, v in extra.items():
+            turn[k] = _text(v if isinstance(v, str) else json.dumps(v))
         out.append(turn)
     return out
 

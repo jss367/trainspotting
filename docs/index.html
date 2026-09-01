@@ -1923,6 +1923,10 @@ function searchFields(rec){
   const turns = (list, tag) => (list || []).forEach(t => {
     if (t.reasoning) push(tag + t.role + " reasoning", t.reasoning.text, t.reasoning.chars);
     push(tag + t.role, t.text, t.chars);
+    // The tools a turn was offered and the call it made. Real training text
+    // that both CLI searchers read, absent from the export until now.
+    cell(t.functions, tag + t.role + " functions");
+    cell(t.function_calls, tag + t.role + " function calls");
   });
   turns(rec.turns, "");                          // sft: the target response
   if (rec.chosen) turns(rec.chosen.turns, "chosen ");
