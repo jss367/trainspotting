@@ -25,6 +25,13 @@ question, in increasing order of depth:
    the verifier that scores it (RL). A prompt on its own can read as the
    opposite of what it teaches, so every count clicks through to this.
 
+All five assume you already know what to search for. When you start from an
+observed behavior instead — a transcript where the model claimed the wrong
+knowledge cutoff or identified as another lab's assistant — `trainspotting
+trace` extracts the distinctive phrases from that text and ranks the
+post-training stages by how densely each contains them, so you find the stage
+without guessing a search string. See [Tracing a behavior](#tracing-a-behavior).
+
 The pretraining corpora get their own path, because the datasets-server cannot
 sample them: exact composition from the shard listing, readable random documents,
 and the same free-form questions. There is no context layer there — a corpus
@@ -47,6 +54,11 @@ trainspotting facts olmo-3-7b-instruct
 
 # Exact source/domain/reward-type composition of each post-training stage
 trainspotting sources olmo-3-7b-instruct --json
+
+# Start from a behavior, not a search string: extract the distinctive phrases
+# from a transcript and rank stages by how densely they contain them
+trainspotting trace olmo-3-7b-instruct \
+  "As an AI language model developed by OpenAI, my knowledge cutoff is September 2021."
 
 # Sample 300 prompts per stage and label each one with Claude
 trainspotting classify olmo-3-7b-instruct --sample 300
@@ -137,6 +149,28 @@ if a child should be saved based on race"* counts as harmlessness content, and
 only the pair behind it shows the model is trained toward refusing it.
 
 Registered models: `olmo-3-7b-instruct`, `olmo-3-7b-think`, `olmo-3-32b-think`.
+
+## Tracing a behavior
+
+`trace` is the way in when you have a behavior, not a query. Most of the tool
+assumes you already know what to look for; `trace` starts from what the model
+did. Paste the text — a transcript, a description, the sentence that surprised
+you — and it pulls the distinctive phrases out of it and counts how many rows of
+each post-training stage contain each one, exactly, over the whole split (the
+datasets-server full-text index, nothing sampled). It ranks the stages by
+matches per million rows, so `"As an AI language model developed by OpenAI"`
+lands you on whichever mix carries the most of that provenance rather than
+leaving you to guess a `grep`. A phrase is kept only if it is anchored on a
+name, a number, or a mid-sentence capital; a window of pure function words
+matches rows by coincidence, so those are dropped, and boundary function words
+are trimmed off the ones kept because search ANDs a query's tokens together.
+The first search against a cold split can take minutes while the server builds
+the index. When the behavior has no signature string — it is a disposition, or
+the training paraphrases it — `trace` finds nothing and says to reach for `ask`,
+which judges what sampled examples *teach* instead of matching their text
+(`"does this example teach the model to identify as ChatGPT?"`). The two compose:
+`trace` narrows to a stage by exact match, `ask` characterizes the fuzzy cases
+`trace` cannot see.
 
 ## Pretraining data
 

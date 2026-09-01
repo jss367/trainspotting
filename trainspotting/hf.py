@@ -14,16 +14,23 @@ BASE = "https://datasets-server.huggingface.co"
 ROWS_PER_PAGE = 100  # server maximum for /rows length
 
 
-def _get(path: str, **params) -> dict:
+def _get(path: str, retries: int = 6, **params) -> dict:
     """GET with backoff. The datasets-server rate-limits (429) and occasionally
-    500s on a large page; both clear on a retry."""
-    for attempt in range(6):
+    500s on a large page; both clear on a retry.
+
+    The /search endpoint has a third transient state: the first query against a
+    large dataset returns 500 with an "index is loading" body while the server
+    builds its full-text index, which for a multi-million-row split can take
+    several minutes. It is the same retry as any other 500, only slower to
+    clear, so callers that hit it raise `retries`.
+    """
+    for attempt in range(retries):
         r = requests.get(f"{BASE}/{path}", params=params, timeout=60)
         if r.status_code == 429:
             time.sleep(int(r.headers.get("retry-after", 0)) or 5 * 2**attempt)
             continue
         if r.status_code >= 500:
-            time.sleep(2 * 2**attempt)
+            time.sleep(min(30, 2 * 2**attempt))
             continue
         r.raise_for_status()
         return r.json()
@@ -93,6 +100,37 @@ def sample_rows(
 ) -> list[dict]:
     """The same sample as sample_rows_with_index, without the indices."""
     return [row for _, row in sample_rows_with_index(dataset, n, seed, config, split)]
+
+
+def search_count(
+    dataset: str, query: str, config: str = "default", split: str = "train"
+) -> int:
+    """How many rows in the split contain `query`, via full-text search.
+
+    The datasets-server indexes the string columns of every fully-converted
+    dataset with a DuckDB full-text index, so this is an exact count over the
+    whole split — not a sample, and nothing is downloaded. The first search
+    against a cold dataset warms the index and can take minutes; `_get` waits
+    it out with extra retries. `num_rows_total` is the whole match count
+    regardless of the page size, so this asks for the smallest legal page (one
+    row) and reads the total off it.
+
+    Search matches whole tokens, so a multi-word query is an AND of its words
+    near each other rather than a literal substring; a phrase pulled from a
+    transcript is exactly that shape, which is why `behavior` emits word
+    windows rather than raw substrings.
+    """
+    j = _get(
+        "search",
+        retries=20,
+        dataset=dataset,
+        config=config,
+        split=split,
+        query=query,
+        offset=0,
+        length=1,
+    )
+    return j["num_rows_total"]
 
 
 HUB = "https://huggingface.co"

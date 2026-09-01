@@ -5,7 +5,7 @@ import re
 import sys
 from pathlib import Path
 
-from . import classify, context, extract, hf, languages, pretrain, registry
+from . import behavior, classify, context, extract, hf, languages, pretrain, registry
 
 RESULTS = Path(__file__).resolve().parent.parent / "results"
 # The committed half of the bulk artifacts: gitignored under results/, shipped
@@ -559,6 +559,77 @@ def cmd_context(args):
         print(f"{s['stage']}: {len(records)} records -> {path} ({path.stat().st_size / 1e6:.1f} MB)", file=sys.stderr)
 
 
+def cmd_trace(args):
+    """Turn an observed behavior into searches and rank stages by where it hits.
+
+    The entry point for someone who has a transcript, not a grep string: paste
+    the text the model produced, and this pulls the distinctive phrases out of
+    it, counts how many rows of each post-training stage contain each phrase
+    (exact full-text search over the whole split, nothing sampled), and ranks
+    the stages by how densely the behavior appears.
+
+    This is provenance by verbatim match, so it only answers when the behavior
+    left a distinctive string. When it finds nothing — the phrases are generic,
+    or the behavior is a disposition with no signature words — the fix is
+    `trainspotting ask`, which judges the meaning of sampled examples instead of
+    matching their text. The closing line says so.
+    """
+    text = sys.stdin.read() if args.text == "-" else args.text
+    queries = behavior.distinctive_ngrams(text, max_queries=args.max_queries)
+    if not queries:
+        sys.exit(
+            "no distinctive phrase to search on — the text has no window anchored"
+            " on a name, number, or rare word.\nTry `trainspotting ask` to judge"
+            " what sampled examples teach instead of matching their text."
+        )
+    print("searching for:", file=sys.stderr)
+    for q in queries:
+        print(f"  {q!r}", file=sys.stderr)
+    print(file=sys.stderr)
+
+    results = []
+    for s in _select_stages(args, registry.post_training_stages, "post-training"):
+        total = hf.num_rows(s["hf_dataset"])
+        per_query = {}
+        for q in queries:
+            print(f"  {s['stage']}: searching {q!r} ...", file=sys.stderr)
+            per_query[q] = hf.search_count(s["hf_dataset"], q)
+        # Summed across queries, so a row matching two of them counts twice —
+        # this ranks where the behavior concentrates, it is not a distinct-row
+        # count. The per-query lines below let a single dominant phrase be told
+        # apart from a genuinely dense stage.
+        hits = sum(per_query.values())
+        results.append(
+            {
+                "stage": s["stage"],
+                "dataset": s["hf_dataset"],
+                "total": total,
+                "hits": hits,
+                "density": hits / total * 1e6 if total else 0.0,
+                "per_query": per_query,
+            }
+        )
+
+    results.sort(key=lambda r: -r["density"])
+    print(f"\n# Behavior trace: {args.model}\n")
+    print("Stages ranked by matches per million rows.\n")
+    for r in results:
+        print(
+            f"## {r['stage']} — {r['density']:.1f}/M"
+            f"  ({r['hits']} matches in {r['total']:,} rows, {r['dataset']})"
+        )
+        for q, c in sorted(r["per_query"].items(), key=lambda kv: -kv[1]):
+            print(f"  {c:>7,}  {q}")
+        print()
+    if not any(r["hits"] for r in results):
+        print(
+            "No stage contained these phrases. The behavior may be a disposition"
+            " with no signature string, or the phrases may be paraphrased in"
+            " training.\nTry `trainspotting ask` to judge what sampled examples"
+            " teach — it reads meaning, not verbatim text."
+        )
+
+
 def cmd_report(args):
     model = registry.get_model(args.model)
     print(f"# Training-data audit: {args.model}\n")
@@ -637,6 +708,21 @@ def main():
         help="also score pretraining documents sampled by `trainspotting pretrain`",
     )
     p.set_defaults(fn=cmd_ask)
+
+    p = sub.add_parser(
+        "trace",
+        help="find which stages a pasted behavior's distinctive phrases occur in",
+    )
+    p.add_argument("model")
+    p.add_argument("text", help="transcript or description to trace ('-' reads stdin)")
+    p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
+    p.add_argument(
+        "--max-queries",
+        type=_positive_int,
+        default=6,
+        help="most distinctive phrases to extract and search for",
+    )
+    p.set_defaults(fn=cmd_trace)
 
     p = sub.add_parser("pretrain", help="sample documents from the Dolma 3 pretraining shards")
     p.add_argument("model")
