@@ -88,11 +88,11 @@ def _shared_turns(chosen: list[dict], rejected: list[dict]) -> int:
         if a.get("role") != b.get("role") or _turn_chars(a) != _turn_chars(b) or a.get("text") != b.get("text"):
             break
         n += 1
-    # Two identical completions are not a pair with no completion. Fall back to
-    # the last turn on each side so the example still has a target.
-    if n and n == len(chosen) == len(rejected):
-        n -= 1
-    return n
+    # A side swallowed whole by the shared prefix is not a side with no
+    # completion — a pair whose completions happen to be identical, or whose
+    # shorter side is a prefix of the longer, would otherwise come back with no
+    # target at all. Leave each side its last turn.
+    return min(n, len(chosen) - 1, len(rejected) - 1) if n else 0
 
 
 def example_chars(rec: dict) -> tuple[int, int]:

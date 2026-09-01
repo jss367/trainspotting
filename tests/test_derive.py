@@ -68,6 +68,21 @@ def test_dpo_with_identical_sides_still_has_a_target():
     assert target == 40 and total == 50
 
 
+def test_dpo_leaves_a_completion_on_a_side_the_prefix_would_swallow():
+    """One side being a prefix of the other is not one side with nothing to
+    compare. Without the clamp the shorter side contributes no target at all
+    and the pair reads as one-sided."""
+    shared = [turn("user", 10, "q"), turn("assistant", 20, "a")]
+    rec = {
+        "kind": "dpo",
+        "chosen": {"turns": shared + [turn("assistant", 30, "more")]},
+        "rejected": {"turns": list(shared)},
+    }
+    total, target = derive.example_chars(rec)
+    assert target == 20 + 30 + 20     # both sides keep their last turn
+    assert total == 10 + target
+
+
 def test_rl_stores_no_target_and_chat_is_not_a_training_example():
     rl = {"kind": "rlvr", "prompt_full": {"chars": 500}, "reward": {}}
     assert derive.example_chars(rl) == (500, 0)
