@@ -196,9 +196,18 @@ def index_context(records: list[dict]) -> dict:
 
 
 def context_for(rec: dict, by_key: dict) -> dict | None:
-    """The context record a result record addresses, by row if it has one."""
-    if rec.get("row") is not None and ("row", rec["row"]) in by_key:
-        return by_key[("row", rec["row"])]
+    """The context record a result record addresses, by row if it has one.
+
+    A record that carries a row resolves by row or not at all. Falling back to
+    the prompt prefix when its row is absent — two runs at different seeds draw
+    different rows — would silently attach the label to whichever example
+    happens to open with the same 400 characters, and those collide: 8 of the
+    300 sampled Dolci-Think-DPO examples share an opening with another, and a
+    chat log is far worse. The prefix key exists only for records written before
+    result files carried a row.
+    """
+    if rec.get("row") is not None:
+        return by_key.get(("row", rec["row"]))
     return by_key.get(("key", rec["prompt"][: 400]))
 
 
@@ -226,6 +235,85 @@ def _rate(matched_chars: float, total_chars: float) -> float:
     return matched_chars / total_chars if total_chars else 0.0
 
 
+def _size_post_training(target_name: str, stage: dict, ctx: dict, out: dict) -> None:
+    """Set a post-training stage's fit-token size, whatever else is known.
+
+    Independent of any ask run, because a stage's size is a property of the
+    stage and the pipeline denominator has to be stable. `ask --stage sft` left
+    dpo and rlvr unsized, and `totals()` drops an unsized stage — so the
+    pipeline share was taken over a denominator that would *grow* the next time
+    someone measured something. A share whose denominator grows is not the lower
+    bound this output calls it.
+    """
+    name = stage["stage"]
+    all_examples = ctx.get("records", [])
+    sample_fit = [f for f in (fit_chars(c) for c in all_examples) if f is not None]
+    source = stage_sources(target_name, name)
+    rows = source.get("total")
+    # The row count comes from a third run, and it can be older than the other
+    # two. `context` and `ask` agreeing on a revision says nothing about when
+    # `sources` was last taken, and a republish that changes the split's length
+    # would multiply this sample's mean by a row count for a different tree. The
+    # rate survives that — it is a share, not a count — so a stale source leaves
+    # the stage unsized rather than unmeasured.
+    src_rev, src_dataset = source.get("revision"), source.get("dataset")
+    sample_rev = ctx.get("revision")
+    # `cmd_sources` reads /statistics and /info as two requests and stamps
+    # `revision_moved_to` when the tree changed between them, because the row
+    # count may then describe a different tree than the frequencies. A count
+    # that ambiguous cannot size anything, and its starting revision matching
+    # the sample's says nothing about which tree it ended on.
+    src_straddled = bool(rows is not None and source.get("revision_moved_to"))
+    stale_source = src_straddled or bool(rows is not None and (
+        (src_rev and sample_rev and src_rev != sample_rev)
+        or (src_dataset and src_dataset != stage["hf_dataset"])
+    ))
+    if src_straddled:
+        rows = None
+        out["notes"].append(
+            "stage size unknown — the `sources` run straddled a republish while it"
+            " counted, so its row total is ambiguous; re-run"
+            f" `trainspotting sources {target_name} --json`. The rate below is a"
+            " share and is unaffected."
+        )
+    elif stale_source:
+        rows = None
+        out["notes"].append(
+            f"stage size unknown — the `sources` run describes"
+            f" {src_dataset or 'another dataset'} at {(src_rev or '?')[:7]} while these"
+            f" examples were drawn at {(sample_rev or '?')[:7]}; re-run"
+            f" `trainspotting sources {target_name} --json`. The rate below is a share"
+            " and is unaffected."
+        )
+    # Size is a property of the stage, so it is estimated over the whole stored
+    # draw rather than over the rows the classifier happened to answer about.
+    # Refusals are not random — they land on jailbreak-style prompts, which the
+    # README already flags as a biased slice — so letting classifier success
+    # decide the mean example length would put that bias into `size_tokens` and
+    # every matching-token figure derived from it. The *rate* stays over the
+    # labeled subset, which is the only part there is a judgment for.
+    if rows is None or not sample_fit:
+        if not stale_source and all_examples:
+            out["notes"].append(
+                f"stage size unknown — run `trainspotting sources {target_name} --json`"
+                if rows is None
+                else "stage size unknown — no example stores text the model was fit to"
+            )
+        return
+    mean_fit = sum(sample_fit) / len(sample_fit)
+    out["rows"] = rows
+    out["sized_over"] = len(sample_fit)
+    out["mean_fit_chars"] = mean_fit
+    out["size_tokens"] = rows * mean_fit / CHARS_PER_TOKEN
+    out["size_basis"] = (
+        f"{rows:,} rows x {mean_fit:,.0f} mean chars of {out['fit_text']} / {CHARS_PER_TOKEN:g}"
+    )
+    # An RL stage's real target is the rollouts the policy sampled during
+    # training, and the mix ships reference generations instead. One per prompt
+    # is the smallest defensible reading of it.
+    out["size_is_floor"] = out["kind"] == "rlvr"
+
+
 def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
     name = stage["stage"]
     kind = registry.stage_kind(stage)
@@ -238,12 +326,14 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
         "fit_text": FIT_TEXT.get(kind, "unknown"),
         "notes": [],
     }
+    ctx = load(f"{target_name}.{name}.context.json") or {}
+    # Sized first, and regardless of whether the question was ever asked here.
+    _size_post_training(target_name, stage, ctx, out)
     ask = load(f"{target_name}.{name}.ask-{slug}.json")
     if not ask:
         out["measured"] = False
         return out
     records = ask["records"]
-    ctx = load(f"{target_name}.{name}.context.json") or {}
     # A row index addresses a position in a split, not a document. Ai2 has
     # republished these mixes, and after a republish the same index is different
     # text — so joining an old ask run to a freshly drawn context sample would
@@ -251,6 +341,17 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
     # from it. Both stamps have to agree before the join means anything; either
     # being unknown (every run committed before the field existed) is not
     # evidence of a mismatch, so only a known disagreement stops it.
+    # The same check the corpus path needs: a stage repointed at another dataset
+    # leaves an ask file describing the old one, and its rate would be applied
+    # to the new one's row count.
+    for who, art in (("ask run", ask), ("stored examples", ctx)):
+        if art.get("dataset") and art["dataset"] != stage["hf_dataset"]:
+            out["measured"] = False
+            out["unusable"] = (
+                f"the {who} describes {art['dataset']} but this stage now names"
+                f" {stage['hf_dataset']}"
+            )
+            return out
     ask_rev, ctx_rev = ask.get("revision"), ctx.get("revision")
     # A run that straddled a republish is not addressable by row either, and
     # comparing the two starting revisions cannot see it: both halves can begin
@@ -373,71 +474,6 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
         )
         return out
 
-    source = stage_sources(target_name, name)
-    rows = source.get("total")
-    # The row count comes from a third run, and it can be older than the other
-    # two. `context` and `ask` agreeing on a revision says nothing about when
-    # `sources` was last taken, and a republish that changes the split's length
-    # would multiply this sample's mean by a row count for a different tree. The
-    # rate survives that — it is a share, not a count — so a stale source leaves
-    # the stage unsized rather than unmeasured.
-    src_rev, src_dataset = source.get("revision"), source.get("dataset")
-    sample_rev = ctx_rev or ask_rev
-    # `cmd_sources` reads /statistics and /info as two requests and stamps
-    # `revision_moved_to` when the tree changed between them, because the row
-    # count may then describe a different tree than the frequencies. A count
-    # that ambiguous cannot size anything, and its starting revision matching
-    # the sample's says nothing about which tree it ended on.
-    src_straddled = bool(rows is not None and source.get("revision_moved_to"))
-    stale_source = src_straddled or bool(rows is not None and (
-        (src_rev and sample_rev and src_rev != sample_rev)
-        or (src_dataset and src_dataset != stage["hf_dataset"])
-    ))
-    if src_straddled:
-        rows = None
-        out["notes"].append(
-            "stage size unknown — the `sources` run straddled a republish while it"
-            " counted, so its row total is ambiguous; re-run"
-            f" `trainspotting sources {target_name} --json`. The rate below is a"
-            " share and is unaffected."
-        )
-    elif stale_source:
-        rows = None
-        out["notes"].append(
-            f"stage size unknown — the `sources` run describes"
-            f" {src_dataset or 'another dataset'} at {(src_rev or '?')[:7]} while these"
-            f" examples were drawn at {(sample_rev or '?')[:7]}; re-run"
-            f" `trainspotting sources {target_name} --json`. The rate below is a share"
-            " and is unaffected."
-        )
-    # Size is a property of the stage, so it is estimated over the whole stored
-    # draw rather than over the rows the classifier happened to answer about.
-    # Refusals are not random — they land on jailbreak-style prompts, which the
-    # README already flags as a biased slice — so letting classifier success
-    # decide the mean example length would put that bias into `size_tokens` and
-    # every matching-token figure derived from it. The *rate* stays over the
-    # labeled subset, which is the only part there is a judgment for.
-    sample_fit = [f for f in (fit_chars(c) for c in all_examples) if f is not None]
-    if rows is None or not sample_fit:
-        if not stale_source:
-            out["notes"].append(
-                f"stage size unknown — run `trainspotting sources {target_name} --json`"
-                if rows is None
-                else "stage size unknown — no example stores text the model was fit to"
-            )
-        return out
-    mean_fit = sum(sample_fit) / len(sample_fit)
-    out["rows"] = rows
-    out["sized_over"] = len(sample_fit)
-    out["mean_fit_chars"] = mean_fit
-    out["size_tokens"] = rows * mean_fit / CHARS_PER_TOKEN
-    out["size_basis"] = (
-        f"{rows:,} rows x {mean_fit:,.0f} mean chars of {out['fit_text']} / {CHARS_PER_TOKEN:g}"
-    )
-    # An RL stage's real target is the rollouts the policy sampled during
-    # training, and the mix ships reference generations instead. One per prompt
-    # is the smallest defensible reading of it.
-    out["size_is_floor"] = kind == "rlvr"
     _apply_rate(out)
     return out
 
@@ -459,6 +495,22 @@ def _pretrain_stage(target_name: str, stage: dict, slug: str) -> dict:
     ask = load(f"{target_name}.{name}.ask-{slug}.json")
     if not ask:
         out["measured"] = False
+        return out
+    # The rate belongs to the corpus it was measured on, and this stage's token
+    # count comes from the registry — which gets repointed. The README records
+    # exactly that drift: the 7B stages named the -1125 mixes long after they
+    # moved to -1025. Applying an old mix's rate to a new mix's trillions of
+    # tokens is the largest single error available here.
+    if ask.get("dataset") and out["dataset"] and ask["dataset"] != out["dataset"]:
+        out["measured"] = False
+        out["unusable"] = (
+            f"the ask run sampled {ask['dataset']} but this stage now names"
+            f" {out['dataset']}"
+        )
+        out["notes"].append(
+            f"re-run `trainspotting pretrain {target_name} --stage {name}` and the"
+            " question against the corpus the registry points at now"
+        )
         return out
     records = ask["records"]
     n = len(records)

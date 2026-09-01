@@ -420,7 +420,9 @@ def test_a_corpus_run_that_judged_nothing_is_not_a_confident_zero():
     import trainspotting.budget as b
 
     saved = b.load
-    b.load = lambda name: ({"question": "Q?", "records": [], "dataset": "d"}
+    # Dataset matches the stage, so the empty-run guard is what fires and not
+    # the repointed-corpus one.
+    b.load = lambda name: ({"question": "Q?", "records": [], "dataset": "x/y"}
                            if ".ask-" in name else None)
     try:
         out = b._pretrain_stage(
@@ -560,3 +562,50 @@ def test_a_sources_run_that_straddled_a_republish_cannot_size_the_stage():
     assert out["measured"] is True and out["rate"] == 1.0
     assert "size_tokens" not in out
     assert any("straddled a republish while it counted" in n for n in out["notes"])
+
+
+def test_a_record_with_a_row_does_not_fall_back_to_the_prompt_prefix():
+    """Two runs at different seeds draw different rows.
+
+    Falling back to the prefix then attaches the label to whichever stored
+    example happens to open with the same 400 characters — and those collide:
+    8 of the 300 sampled Dolci-Think-DPO examples share an opening with another.
+    The prefix key is only for records written before result files carried a row.
+    """
+    same = "a" * 400
+    by_key = {("row", 3): {"kind": "sft", "row": 3}, ("key", same): {"kind": "sft", "row": 3}}
+    # Row 9 was never stored: the answer is "no example", not "some example".
+    assert budget.context_for({"row": 9, "prompt": same}, by_key) is None
+    assert budget.context_for({"row": 3, "prompt": same}, by_key)["row"] == 3
+    # A record predating the field still resolves by prefix.
+    assert budget.context_for({"prompt": same}, by_key)["row"] == 3
+
+
+def test_a_stage_nobody_asked_is_still_sized():
+    """The pipeline denominator has to be stable.
+
+    `ask --stage sft` left dpo and rlvr unsized, `totals()` drops an unsized
+    stage, and the pipeline share was therefore over a denominator that would
+    grow the next time someone measured something — which is not the lower
+    bound the output calls it.
+    """
+    import trainspotting.budget as b
+
+    files = {
+        "m.dpo.context.json": {"revision": "a" * 40, "records": [
+            {"row": 0, "key": "p", "kind": "dpo",
+             "chosen": {"turns": [{"role": "assistant", "text": "x", "chars": 400}]},
+             "rejected": {"turns": [{"role": "assistant", "text": "y", "chars": 400}]}}]},
+        "m.sources.json": {"dpo": {"total": 1000, "revision": "a" * 40, "dataset": "x/y"}},
+    }
+    saved = b.load
+    b.load = lambda name: files.get(name)          # no ask file for this stage
+    try:
+        out = b._post_training_stage(
+            "m", {"stage": "dpo", "name": "DPO", "hf_dataset": "x/y", "kind": "dpo"}, "q"
+        )
+    finally:
+        b.load = saved
+    assert out["measured"] is False        # nothing was asked here
+    assert out["size_tokens"] == 1000 * 800 / 4   # but it still has a size
+    assert budget.totals([out])["post-training"]["size_tokens"] == out["size_tokens"]
