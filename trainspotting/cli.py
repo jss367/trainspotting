@@ -1293,18 +1293,56 @@ def _fmt_est(n: float | None) -> str:
     return f"{n:.0f}"
 
 
-# Why the rate column is not one rule. The two halves of the pipeline sample
-# differently, and the correction that is right for one is a double count on the
-# other — so the table has to say which it applied where.
+# Why the rate column is not one rule. The correction that is right for one
+# sampling design is a double count under another, and which applies is a
+# property of how a stage was *drawn* rather than of what kind of stage it is —
+# a corpus the datasets-server indexes in full is paged uniformly over documents
+# and takes the same length weighting a post-training mix takes. Keyed by the
+# `weighting` string `budget` records, longest prefix first, so the table
+# explains the rules it actually used and no others.
+_WEIGHTING_RULES = [
+    (
+        "fit characters — rows",
+        "A corpus paged uniformly over documents is weighed by fit characters:\n"
+        "without that its rate is a share of documents rather than of training.",
+    ),
+    (
+        "fit characters",
+        'Post-training rows are drawn uniformly, so their rate is weighed by fit\n'
+        'characters — otherwise it answers "what fraction of examples" rather than\n'
+        '"what fraction of training".',
+    ),
+    (
+        "none",
+        "Corpus documents drawn by shard come from shards drawn with probability\n"
+        "proportional to size, which already weights by tokens, so their document rate\n"
+        "is used unchanged; weighing it by length would apply that a second time.",
+    ),
+    (
+        "document count",
+        "One corpus stage stores no document lengths to weigh by, so its unweighed\n"
+        "document rate reads its matches as if every document were the same size.",
+    ),
+]
+
 _WEIGHTING_FOOTNOTE = """
 Fit tokens are what the model was trained to produce, at {cpt:g} characters per token.
-Rate: post-training rows are drawn uniformly, so their rate is weighed by fit
-characters — otherwise it answers "what fraction of examples" rather than "what
-fraction of training". Corpus documents come from shards drawn with probability
-proportional to size, which already weights by tokens, so their document rate is
-used unchanged; weighing it by length would apply that a second time.
+Rate: {rules}
 This weighs tokens, not learning: a post-training token and a pretraining token
 are not equally formative, and nothing here corrects for that."""
+
+
+def _weighting_footnote(est: dict) -> str:
+    """The rate-column footnote, naming only the weightings this estimate used."""
+    used = {s["weighting"] for s in est["stages"] if s.get("weighting")}
+    rules = []
+    for prefix, text in _WEIGHTING_RULES:
+        if any(w.startswith(prefix) for w in used) and text not in rules:
+            rules.append(text)
+            used = {w for w in used if not w.startswith(prefix)}
+    return _WEIGHTING_FOOTNOTE.format(
+        cpt=budget.CHARS_PER_TOKEN, rules=" ".join(rules) if rules else "n/a"
+    )
 
 
 def _warn_mixed_questions(est: dict) -> bool:
@@ -1494,7 +1532,7 @@ def cmd_budget(args):
         print()
         for stage, note in notes:
             print(f"note ({stage}): {note}")
-    print(_WEIGHTING_FOOTNOTE.format(cpt=budget.CHARS_PER_TOKEN))
+    print(_weighting_footnote(est))
     if args.json:
         path = _write_json(RESULTS / f"{args.target}.budget-{args.slug}.json", est)
         print(f"\nwrote {path}", file=sys.stderr)

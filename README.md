@@ -575,7 +575,11 @@ Dolci-Think-SFT the three matching examples are short, 1.0% of rows and 0.1% of
 the text. Counting rows there answers "what fraction of examples" when the
 question is "what fraction of training".
 
-**Corpus documents are weighed by nothing extra.** `trainspotting pretrain`
+**Corpus documents depend on the route they were drawn by**, which is the point
+worth being careful about: being a corpus is not what decides the correction,
+how the documents were sampled is.
+
+*Shard-drawn corpora are weighed by nothing extra.* `trainspotting pretrain`
 draws shards with probability proportional to compressed size and takes one
 document from each, precisely so the source mix comes out token-weighted. Under
 that design every sampled document stands for the same byte mass — a stratum
@@ -591,9 +595,17 @@ their length, so a long document is slightly underweighted against its byte
 share. One document per shard gives nothing to estimate that shard's mean length
 from, so it stays a caveat rather than a correction made badly.
 
+*Rows-drawn corpora are weighed by fit characters*, exactly as post-training
+rows are. The `rows` route pages the datasets-server uniformly over every
+document in the corpus, so nothing in the draw is proportional to size and the
+document rate is a share of documents rather than of training. The deduplicated
+Pile makes that concrete: its 300 sampled documents run from a few hundred
+characters to seventy thousand, so which end of that range the matches land in
+moves the matching-token total by more than the rate itself does.
+
 The interval is the count-based one — cluster-corrected for corpora, where the
 `ask` run already stored it — rescaled by the weighed rate over the count rate,
-which is exactly 1 for a corpus stage. It is computed over the rows the point
+which is exactly 1 for a shard-drawn corpus stage. It is computed over the rows the point
 estimate was actually built from, which for an RL stage is much smaller than the
 sample: Dolci-Instruct-RL stores a reference generation for 60 of 300 judged
 rows, and taking the interval over all 300 claimed five times the evidence there
@@ -1164,11 +1176,14 @@ sampling run that quietly labels nothing.
   run (`sources`) which can be staler still; when it names a different revision
   the stage keeps its rate, which is a share, and loses its token figure, which
   is a count.
-- The corpus rate assumes shard-proportional sampling did the token weighting,
-  which is true between shards and only approximately true within one: a
-  document is drawn uniformly from its shard's reachable head rather than by
-  length. Long documents are slightly underweighted for that reason, and the
-  `short_draws` bias documented above pushes the same way.
+- A shard-drawn corpus rate assumes shard-proportional sampling did the token
+  weighting, which is true between shards and only approximately true within
+  one: a document is drawn uniformly from its shard's reachable head rather than
+  by length. Long documents are slightly underweighted for that reason, and the
+  `short_draws` bias documented above pushes the same way. A rows-drawn corpus
+  has neither problem and is length-weighted instead, so its residual is the one
+  post-training carries: the interval treats the length ratio as known when it
+  was itself measured on the same 300 documents.
 - A `budget` total is withheld, in the CLI and on the site, when the stages
   under one slug were not scored by the same instrument — different wordings of
   the question, different classifiers, or a rubric that moved between stages of

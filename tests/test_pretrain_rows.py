@@ -390,3 +390,174 @@ def test_find_runs_without_a_target(monkeypatch):
     )
     cli.main()
     assert seen["index"] == "v4_piletrain_llama"
+
+
+# ---------------------------------------------------------------------------
+# What the budget does with a rows-drawn corpus. The correction that is right
+# for one sampling design is a double count under the other, so this is where
+# the two routes are easiest to conflate and worst to get wrong.
+
+PILE_STAGE = {
+    "stage": "pretrain",
+    "name": "The Pile (deduplicated)",
+    "tokens": 1_000_000_000,
+    "sample_dataset": "x/y",
+    "sample_via": "rows",
+}
+DOLMA_STAGE = {
+    "stage": "pretrain",
+    "name": "Dolma 3",
+    "tokens": 1_000_000_000,
+    "sample_dataset": "x/y",
+}
+
+
+def _corpus_ask(matched, missed, chars=True):
+    """An `ask --pretrain` run: `matched` and `missed` are document lengths."""
+    records = [{"prompt": f"m{i}", "match": True} for i in range(len(matched))]
+    records += [{"prompt": f"x{i}", "match": False} for i in range(len(missed))]
+    if chars:
+        for record, length in zip(records, list(matched) + list(missed)):
+            record["chars"] = length
+    return {"question": "Q?", "records": records, "dataset": "x/y", "ci": [0.05, 0.18]}
+
+
+def _budget_stage(monkeypatch, stage, ask):
+    from trainspotting import budget
+
+    monkeypatch.setattr(budget, "load", lambda name: ask if ".ask-" in name else None)
+    return budget._pretrain_stage("m", stage, "q")
+
+
+def test_a_rows_corpus_rate_is_weighed_by_document_length(monkeypatch):
+    """Uniform over documents is not uniform over tokens.
+
+    The shard sampler draws shards proportional to size, so its document rate is
+    already the byte-weighted one. This route draws documents instead, so its
+    document rate answers "what fraction of documents" — and the Pile's sampled
+    documents run from a few hundred characters to seventy thousand, so which
+    end the matches land in moves the matching-token total by an order of
+    magnitude. Same correction post-training rows get, for the same reason.
+    """
+    # Ten matches in a hundred documents, and the matching ones are a tenth of
+    # average length: 10% of documents, 1.1% of the text.
+    out = _budget_stage(monkeypatch, PILE_STAGE, _corpus_ask([200] * 10, [2000] * 90))
+    assert out["count_rate"] == pytest.approx(0.10)
+    assert out["rate"] == pytest.approx(2_000 / 182_000)
+    assert out["weighting"].startswith("fit characters")
+    assert out["matching_tokens"] == pytest.approx(2_000 / 182_000 * 1_000_000_000)
+    # The stored interval is over the document rate, so it is rescaled by
+    # however far the weighting moved the point estimate — the same treatment a
+    # post-training stage's interval gets, and never wider than the stage.
+    ratio = out["rate"] / out["count_rate"]
+    assert out["matching_tokens_ci"] == pytest.approx(
+        [0.05 * ratio * 1e9, 0.18 * ratio * 1e9]
+    )
+
+
+def test_a_shard_corpus_rate_is_still_not_weighed_by_length(monkeypatch):
+    """The other half of the same rule, on identical records.
+
+    Shard selection did the token weighting already; applying length weighting
+    here as well would let a stratum of 200k-character PDFs count a hundred times
+    a stratum of web pages holding exactly as many bytes.
+    """
+    ask = _corpus_ask([200] * 10, [2000] * 90)
+    out = _budget_stage(monkeypatch, DOLMA_STAGE, ask)
+    assert out["rate"] == out["count_rate"] == pytest.approx(0.10)
+    assert out["weighting"].startswith("none")
+    assert out["matching_tokens"] == pytest.approx(100_000_000)
+    # Still recorded, because the gap between the two is worth seeing even where
+    # it is not the correction being made.
+    assert out["char_rate"] == pytest.approx(2_000 / 182_000)
+
+
+def test_a_rows_corpus_with_no_stored_lengths_says_so_rather_than_reporting_zero(
+    monkeypatch,
+):
+    """A run from before `chars` existed has nothing to weigh by, and `0/0` would
+    turn every match into a rate of zero across the stage's whole budget."""
+    ask = _corpus_ask([200] * 10, [2000] * 90, chars=False)
+    out = _budget_stage(monkeypatch, PILE_STAGE, ask)
+    assert out["rate"] == pytest.approx(0.10)
+    assert "no stored lengths" in out["weighting"]
+    assert any("weighed by document length" in note for note in out["notes"])
+
+
+def test_the_long_document_note_matches_the_weighting_that_was_applied(monkeypatch):
+    """The note explains what a document longer than the judged excerpt costs,
+    and that depends on the route: under a shard draw it counts once whatever
+    its length, under a rows draw its length *is* its weight."""
+    ask = _corpus_ask([200_000], [2000] * 99)
+    rows = _budget_stage(monkeypatch, PILE_STAGE, ask)
+    shards = _budget_stage(monkeypatch, DOLMA_STAGE, ask)
+    assert any("weighs more than a short one's" in n for n in rows["notes"])
+    assert any("still counts once" in n for n in shards["notes"])
+    assert not any("still counts once" in n for n in rows["notes"])
+
+
+def test_a_rows_draw_records_a_revision_that_moved_under_it(monkeypatch):
+    """Thirty /rows requests served from `main` can straddle a republish.
+
+    The shard route names a pinned revision in every range-request URL and
+    cannot; this one is served whatever the tree is at the time, so it takes the
+    second lookup every other paged sampler here takes. Stamping only the
+    pre-draw SHA would present that ambiguity as a settled fact.
+    """
+    from trainspotting import hf as hf_mod
+
+    seen = iter(["a" * 40, "b" * 40])
+    monkeypatch.setattr(hf_mod, "dataset_revision", lambda ds: next(seen))
+    monkeypatch.setattr(
+        cli.pretrain, "sample_rows_documents", lambda *a, **k: ([], 134_318_121)
+    )
+    args = type("A", (), {"sample": 300, "seed": 0})()
+    _, facts = cli._pretrain_rows(args, {"text_column": "text"}, "x/y")
+    assert facts["revision"] == "a" * 40
+    assert facts["revision_moved_to"] == "b" * 40
+
+    # A tree that did not move stamps nothing, so the field means what it says.
+    monkeypatch.setattr(hf_mod, "dataset_revision", lambda ds: "a" * 40)
+    _, facts = cli._pretrain_rows(args, {"text_column": "text"}, "x/y")
+    assert "revision_moved_to" not in facts
+
+
+def test_a_base_model_report_still_reports_its_corpus_questions(
+    tmp_path, monkeypatch, capsys
+):
+    """The early return that skips the prompt sections used to skip everything.
+
+    `report` told the reader to run `ask --pretrain`, then dropped the result of
+    doing so: the corpus rate and the training-budget rollup are the one audit
+    layer a base model supports, and they live below the sections that do not
+    apply to it.
+    """
+    monkeypatch.setattr(paths, "RESULTS", tmp_path)
+    monkeypatch.setattr(paths, "SITE_DATA", tmp_path)
+    stage = registry.pretrain_stages(registry.resolve("pythia-12b-deduped"))[0]
+    (tmp_path / "pythia-12b-deduped.pretrain.ask-q.json").write_text(
+        json.dumps(
+            {
+                "question": "Does this document discuss chemistry?",
+                "dataset": stage["sample_dataset"],
+                "classifier": "claude-opus-5",
+                "ci": [0.02, 0.09],
+                "records": [
+                    {"prompt": f"d{i}", "match": i < 15, "chars": 1000 + i}
+                    for i in range(300)
+                ],
+            }
+        )
+    )
+    args = type("A", (), {"target": "pythia-12b-deduped"})()
+    cli.cmd_report(args)
+    out = capsys.readouterr().out
+
+    # The sections that do not apply are still skipped, and said once.
+    assert "no post-training stages" in out
+    assert "HHH classification" not in out
+    assert "## Language" not in out
+    # The ones that do apply are there.
+    assert "Does this document discuss chemistry?" in out
+    assert "Training budget" in out
+    assert "pretrain" in out

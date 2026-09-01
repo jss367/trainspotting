@@ -3067,15 +3067,28 @@ async function budgetCard(main, model, slug){
   }
   if (all.unsized.length) notes.push(`No size for ${all.unsized.join(", ")}; excluded from the total.`);
   for (const st of est.stages) for (const n of (st.notes || [])) notes.push(`${st.stage}: ${n}`);
-  // The rate column is not one rule, because the two halves sample differently
-  // and the correction that is right for one double-counts on the other.
+  // The rate column is not one rule, because the correction that is right for
+  // one sampling design double-counts on another. Which one applies is a
+  // property of how a stage was *drawn*, not of what kind of stage it is: a
+  // corpus the datasets-server indexes in full is paged uniformly over
+  // documents and needs exactly the weighting a post-training mix needs.
+  // So describe the rules this estimate actually used, and no others.
+  const rateRule = r =>
+    r.startsWith("fit characters — rows")
+      ? "A corpus paged uniformly over documents is weighed by fit characters: without that its rate "
+        + "is a share of documents rather than a share of training."
+    : r.startsWith("fit characters")
+      ? "Post-training rows are drawn uniformly, so their rate is weighed by fit characters — "
+        + "otherwise it answers what fraction of examples rather than what fraction of training."
+    : r.startsWith("none")
+      ? "Corpus documents drawn by shard come from shards drawn with probability proportional to size, "
+        + "which already weights by tokens, so their document rate is used unchanged; weighing it by "
+        + "length would apply that a second time."
+      : "One corpus stage stores no document lengths to weigh by, so its unweighed document rate is "
+        + "used and reads its matches as if every document were the same size.";
   const rules = [...new Set(est.stages.filter(st => st.weighting).map(st => st.weighting))];
-  if (rules.length){
-    notes.push("Rate: post-training rows are drawn uniformly, so their rate is weighed by fit characters — "
-      + "otherwise it answers what fraction of examples rather than what fraction of training. Corpus documents "
-      + "come from shards drawn with probability proportional to size, which already weights by tokens, so their "
-      + "document rate is used unchanged; weighing it by length would apply that a second time.");
-  }
+  const rateNotes = [...new Set(rules.map(rateRule))];
+  if (rateNotes.length) notes.push("Rate: " + rateNotes.join(" "));
   notes.push(`Fit characters are converted at ${est.chars_per_token} per token. This weighs tokens, not learning: `
     + `a post-training token and a pretraining token are not equally formative, and nothing here corrects for that.`);
   for (const text of notes){
