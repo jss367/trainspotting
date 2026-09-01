@@ -1923,6 +1923,21 @@ function sameDraw(profile, run){
 // do not match on them. A complete join is a demonstration that the same rows
 // were drawn. A poor one is the failure this guards against, and it refuses.
 const JOIN_FLOOR = 0.9;
+
+// Where both sides kept row indices there is nothing to infer: the sampler's
+// own numbering says whether two runs drew the same rows. A languages run
+// records one per prompt and so does a profile, so that pair is decided here
+// and never reaches the hash-rate evidence below.
+function sameRows(profile, run){
+  const mine = profile.records.map(r => r.row).filter(r => r != null);
+  const theirs = (run.records || []).map(r => r.row).filter(r => r != null);
+  if (mine.length !== profile.records.length || theirs.length !== run.records.length) return null;
+  const set = new Set(mine);
+  const shared = theirs.filter(r => set.has(r)).length;
+  return {shared, mine: mine.length, theirs: theirs.length,
+          identical: shared === mine.length && shared === theirs.length};
+}
+
 function joinEvidence(matched, total, profile, run){
   const proven = profile.revisions && profile.revisions.context && run.revision;
   const rate = total ? matched / total : 1;
@@ -2030,9 +2045,28 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
         {key: "…", short: "…", label: "every other language"}];
       const build = parent => {
         const cross = crossRows(langs.records, keyToValue, r => top.includes(r.label) ? r.label : "…", 12, dropped);
+        // Same guard as the taxonomy grid, one better where it can be: these
+        // records carry row indices, so the two runs are compared on the
+        // sampler's own numbering rather than on how many prompts happen to
+        // hash into the map.
+        const rows = sameRows(p, langs);
+        const evidence = rows
+          ? (rows.identical ? {note: null}
+             : {refuse: `they drew different rows — ${rows.shared} of ${rows.theirs} in that run are among the ${rows.mine} sampled examples`})
+          : joinEvidence(langs.records.length - cross.unmatched, langs.records.length, p, langs);
+        if (evidence.refuse){
+          noLabels(parent, `the language run cannot be crossed against these examples: ${evidence.refuse}.`);
+          return;
+        }
         heatTable(parent, cross.rows, cols, ctx);
         parent.appendChild(explain("prompts", cross,
           `, the top ${top.length} detected languages drawn and everything else in the last column`));
+        if (evidence.note){
+          const n = document.createElement("p");
+          n.className = "note";
+          n.textContent = evidence.note;
+          parent.appendChild(n);
+        }
       };
       if (!drewLabels){
         const sub = document.createElement("p");

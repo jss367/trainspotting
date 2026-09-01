@@ -344,7 +344,14 @@ def stage_profile(ctx: dict, examples: int | None = None) -> dict:
         meta = {k: v for k, v in (rec.get("meta") or {}).items() if v not in (None, "")}
         for k, v in meta.items():
             columns.setdefault(k, set()).add(str(v))
-        out.append({"k": key, "m": {k: str(v) for k, v in meta.items()}})
+        # The row index travels too. It costs a couple of kilobytes a stage and
+        # it is the only identity on this page that proves rather than infers:
+        # a languages run records the same indices, so the two can be compared
+        # outright instead of through a hash of a prompt's opening.
+        rec_out = {"k": key, "m": {k: str(v) for k, v in meta.items()}}
+        if rec.get("row") is not None:
+            rec_out["row"] = rec["row"]
+        out.append(rec_out)
 
     rows = [rec.get("row") for rec in records]
     stats = summarize(totals, rows)
