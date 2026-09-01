@@ -191,7 +191,7 @@ def test_a_draw_missing_a_row_is_still_one_draw():
     assert len(derive.clusters_of(rows)) == 1
 
     # A gap of a whole chunk is a different offset, not a hole.
-    assert len(derive.clusters_of(rows + [509551])) == 2
+    assert len(derive.clusters_of([*rows, 509551])) == 2
 
 
 def test_the_interval_widens_when_the_draws_are_correlated():
@@ -267,6 +267,21 @@ def test_one_cluster_reports_no_interval_at_all():
     est = derive._estimate(stats, 1_000_000)
     assert est["tokens"] > 0
     assert "lo" not in est and "hi" not in est
+
+
+def test_a_sample_of_one_exports_no_interval_rather_than_a_nan():
+    """Zero degrees of freedom makes the critical value infinite while the error
+    is exactly zero, and `inf * 0.0` is NaN — which `json.dump` writes as a bare
+    `NaN` that a browser's parser rejects, so the page fails to load the profile
+    at all rather than showing a bad number."""
+    stats = derive.summarize([1234])
+
+    assert stats["df"] == 0
+    est = derive._estimate(stats, 1000)
+
+    assert est["tokens"] > 0
+    assert "lo" not in est and "hi" not in est
+    assert "NaN" not in json.dumps(est)
 
 
 def test_the_critical_value_answers_to_the_number_of_draws():

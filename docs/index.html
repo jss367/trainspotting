@@ -2011,8 +2011,9 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
   card.innerHTML = `<h2>Where in the mix each kind of content comes from</h2>
     <p class="sub">The same sampled prompts as the card above, crossed against the source column
       their row carries. A cell is the count; its colour is that share of the row. Click one to read
-      the prompts behind it. The join is the prompt's opening, the same one every drill-down on this
-      page uses.</p>`;
+      the prompts behind it. Where both runs recorded the sampler's row numbers the two are joined on
+      those; for a run committed before they were recorded, the join is the prompt's opening, the
+      same one every drill-down on this page uses.</p>`;
   let any = false;
   for (const s of post){
     const p = profiles[s.stage];

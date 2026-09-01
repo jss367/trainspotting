@@ -361,8 +361,13 @@ def _estimate(stats: dict, examples: int | None) -> dict | None:
     out = {"tokens": per * examples, "per_example": per}
     # A sample that came back as one fetch has no estimable sampling error, so
     # it gets a total and no interval rather than an interval that assumes what
-    # the correction denies.
-    if stats.get("se") is None:
+    # the correction denies. Zero degrees of freedom is the same situation
+    # arriving by a different route — one record, no clusters — and it has to be
+    # caught here too: `t95(0)` is infinite and the error is exactly zero, so
+    # the interval would come out `inf * 0.0`, which is NaN, which serializes
+    # into the exported profile as a token no browser's JSON parser accepts.
+    # The page would fail to load the file rather than show a wide interval.
+    if stats.get("se") is None or not stats.get("df"):
         return out
     half = t95(stats.get("df") or 0) * stats["se"] / CHARS_PER_TOKEN
     out["lo"] = max(0.0, per - half) * examples
