@@ -157,11 +157,33 @@ def test_a_closing_brace_ends_a_sentence_too():
     worse half: glued together, the next sentence's opening capital sits
     mid-segment and `_weight` scores it as an anchor."""
     assert list(behavior._sentences("I was made by OpenAI.} Then September 2021.")) == [
-        "I was made by OpenAI.",
-        "Then September 2021.",
+        ("I was made by OpenAI.", True),
+        # A full stop does start a sentence after it, so "Then" keeps its
+        # exemption — it is the colon that does not.
+        ("Then September 2021.", True),
     ]
     for q in behavior.distinctive_ngrams("I was made by OpenAI.} Then September 2021."):
         assert not ("OpenAI" in q and "September" in q), q
+
+
+def test_a_capital_after_a_colon_is_the_name_it_looks_like():
+    """The sentence-initial exemption exists because every sentence capitalizes
+    its first word. A colon capitalizes nothing, so a word after one carries its
+    capital on its own account — and splitting at the colon had been making the
+    traced identity look like an ordinary sentence opener."""
+    assert behavior.distinctive_ngrams("Assistant: Claude") == ["Claude"]
+    assert behavior.distinctive_ngrams("Model: Gemini") == ["Gemini"]
+    assert list(behavior._sentences("Assistant: Claude")) == [
+        ("Assistant:", True),
+        ("Claude", False),
+    ]
+    # The same two names after a full stop stay exempt, which is the whole
+    # distinction: there a capital is the sentence rule's doing and says nothing.
+    assert list(behavior._sentences("Claude helped. Anthropic wrote it")) == [
+        ("Claude helped.", True),
+        ("Anthropic wrote it", True),
+    ]
+    assert behavior.distinctive_ngrams("Claude helped. Anthropic wrote it") == []
 
 
 def test_a_quoted_sentence_ends_where_the_quote_closes():

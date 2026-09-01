@@ -39,23 +39,48 @@ STOPWORDS = frozenset(
 
 _WORD = re.compile(r"\w+", re.UNICODE)
 
+# The punctuation that can end a segment, captured so the splitter can say
+# which one did: a full stop starts a new sentence after it and a colon
+# does not, and `_weight` treats the following capital differently.
+_BOUNDARY = re.compile(r"([.!?;:])[\"'\u201d\u2019)\]}]*\s+")
+
 
 def _sentences(text: str):
-    """Verbatim segments a query may not cross.
+    """(segment, opens_a_sentence) for each verbatim span a query may not cross.
 
     Newlines and sentence punctuation both end a segment: a phrase stitched
     across a sentence boundary is not something the training data can contain
-    verbatim, so it is not worth searching for.
+    verbatim, so it is not worth searching for. A closing quote or bracket sits
+    between the punctuation and the space when the sentence being ended is a
+    quoted one, and a boundary missed there is a query stitched across it —
+    `OpenAI." Then it` is not a phrase any training row contains.
+
+    The flag says whether the segment's first word actually begins a sentence,
+    which is not the same as beginning a segment. `_weight` refuses to treat a
+    sentence's opening capital as an anchor, because every sentence has one;
+    but a colon or semicolon capitalizes nothing, so the word after one carries
+    its capital on its own account. Without the distinction, splitting
+    `Assistant: Claude` at the colon made `Claude` look sentence-initial and
+    the identity being traced scored as an ordinary word.
     """
     for line in text.splitlines():
-        # A closing quote or bracket sits between the punctuation and the
-        # space when the sentence being ended is a quoted one, and a boundary
-        # missed there is a query stitched across it: `OpenAI." Then it` is not
-        # a phrase any training row contains.
-        for seg in re.split(r"(?<=[.!?;:])[\"'\u201d\u2019)\]}]*\s+", line):
-            seg = seg.strip()
+        parts = _BOUNDARY.split(line)
+        # `parts` alternates segment, delimiter, segment, ... — the delimiter
+        # that closed one segment is what decides whether the next one opens a
+        # sentence, so it is tracked across the loop rather than re-derived.
+        opens = True
+        for i in range(0, len(parts), 2):
+            # The captured punctuation goes back on the segment it closed, so a
+            # query still reads as the text it was cut from ("…September 2021.")
+            # while the splitter keeps the delimiter it needs to classify what
+            # follows. Anything between it and the space — a closing quote or
+            # bracket — stays dropped.
+            delim = parts[i + 1] if i + 1 < len(parts) else ""
+            seg = ((parts[i] or "") + delim).strip()
             if seg:
-                yield seg
+                yield seg, opens
+            if delim:
+                opens = delim in ".!?"
 
 
 def _weight(token: str, sentence_initial: bool) -> int:
@@ -116,7 +141,7 @@ def distinctive_ngrams(text: str, max_queries: int = 6) -> list[str]:
     than eight offsets of the best sentence.
     """
     candidates = []  # (score, order, anchors, query)
-    for s_idx, seg in enumerate(_sentences(text)):
+    for s_idx, (seg, opens) in enumerate(_sentences(text)):
         # No minimum segment length. The anchor requirement below is the real
         # floor on how generic a query may be, and a word count on top of it
         # threw away the shortest segments that are nothing but anchor:
@@ -124,7 +149,10 @@ def distinctive_ngrams(text: str, max_queries: int = 6) -> list[str]:
         # two-word segments, `Assistant: ChatGPT` into two one-word ones, and a
         # three-word minimum answered all of them with "no distinctive phrase".
         tokens = seg.split()
-        weights = [_weight(t, i == 0) for i, t in enumerate(tokens)]
+        # Only the first word of a segment that really opens a sentence gets the
+        # no-anchor treatment. After a colon nothing forced the capital, so
+        # `Assistant: Claude` keeps `Claude` as the name it is.
+        weights = [_weight(t, i == 0 and opens) for i, t in enumerate(tokens)]
         size = min(WINDOW, len(tokens))
         for start in range(len(tokens) - size + 1):
             window = weights[start : start + size]
