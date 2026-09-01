@@ -1929,8 +1929,23 @@ function searchFields(rec){
     cell(t.function_calls, tag + t.role + " function calls");
   });
   turns(rec.turns, "");                          // sft: the target response
-  if (rec.chosen) turns(rec.chosen.turns, "chosen ");
-  if (rec.rejected) turns(rec.rejected.turns, "rejected ");
+  // A pair shares a conversation prefix and differs only from where one answer
+  // diverges. Labelling by role put that shared history under "chosen
+  // assistant" — and because dedup is on the text, the rejected copy was then
+  // dropped, so a query matching only shared history was presented as a hit on
+  // the preferred completion. Twelve records of the committed Instruct DPO
+  // sample have such a prefix. The CLI splits at the branch; so does this.
+  if (rec.chosen || rec.rejected){
+    const ch = (rec.chosen && rec.chosen.turns) || [];
+    const rj = (rec.rejected && rec.rejected.turns) || [];
+    const key = t => JSON.stringify([t.role, t.text, t.functions && t.functions.text,
+                                     t.function_calls && t.function_calls.text]);
+    let b = 0;
+    while (b < ch.length && b < rj.length && key(ch[b]) === key(rj[b])) b++;
+    turns(ch.slice(0, b), "");                   // shared: the conversation, not a claim
+    turns(ch.slice(b), "chosen ");
+    turns(rj.slice(b), "rejected ");
+  }
   const reward = rec.reward || {};
   for (const k of ["ground_truth", "solution", "constraint"]){
     const v = reward[k], field = k.replace(/_/g, " ");

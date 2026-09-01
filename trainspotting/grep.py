@@ -222,7 +222,20 @@ def _pair_exprs(typ: str) -> list[tuple[str, str, tuple[str, ...]]]:
     both = ("content", "role")
     # 1-based index of the first turn the two completions disagree on, or one
     # past the shorter list when one is a prefix of the other.
-    same = f"list_transform(list_zip({c}, {r}), z -> (z[1] IS NOT DISTINCT FROM z[2]))"
+    #
+    # Compared on the fields a search can read, not on the whole struct. A
+    # WildChat-derived turn carries its own request metadata — a timestamp, a
+    # temperature, an OpenAI id, a system fingerprint — and comparing structs
+    # makes any of those differing on a shared turn look like the branch. The
+    # branch would then move earlier than the text does and shared history would
+    # land back in `chosen` and `rejected`, which is the thing the split exists
+    # to stop. `search._turn_text` compares the same fields for the same reason.
+    fields = ["role", "content", *(f for f in MESSAGE_EXTRAS if f'"{f}"' in typ or f" {f} " in typ)]
+    same_turn = " AND ".join(
+        f"coalesce(z[1].{_ident(f)}, '') IS NOT DISTINCT FROM coalesce(z[2].{_ident(f)}, '')"
+        for f in fields
+    )
+    same = f"list_transform(list_zip({c}, {r}), z -> ({same_turn}))"
     b = f"coalesce(list_position({same}, false), least(len({c}), len({r})) + 1)"
 
     def tail(col):
