@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trainspotting import budget, derive, languages, paths, registry, rewards  # noqa: E402
+from trainspotting import budget, casestudy, derive, languages, paths, registry, rewards  # noqa: E402
 
 # Bulk text the site fetches on demand: full training examples behind a prompt,
 # and sampled pretraining documents. Both are regenerable caches of upstream
@@ -243,6 +243,41 @@ for docs in out.glob("*.docs.json"):
         sys.exit(
             f"README says {claimed.group(1)} short draws for {model} {d['stage']}, "
             f"but the exported sample records {d['short_draws']}"
+        )
+
+# The third class of the same drift, and the one most likely to happen: a lookup
+# study runs against a live index with no revision to pin, so every re-run moves
+# its numbers and the README paragraph quoting them goes stale silently.
+#
+# The date used to stand in for the figures, and it cannot: two runs on the same
+# day return different documents while the date holds still, and a date can be
+# bumped without reading a single number under it. So the README carries a
+# fingerprint of the figures themselves — see `casestudy.quoted_figures` — and
+# any of them moving fails this until someone re-reads the paragraph and pastes
+# in the new one. That is the whole point of it: the fingerprint records that a
+# person checked the prose against this data, not that a file was regenerated.
+#
+# Only the studies this run copied. A study is retired by deleting its results
+# file and its README section, and the export does not delete what it no longer
+# writes — so globbing docs/data/ would hold the retired copy's figures against
+# a README that correctly no longer mentions them, and fail every export until
+# someone thought to delete a file the manifest already ignores.
+for name in sorted(n for n in copied if n.startswith("case-study.")):
+    study = out / name
+    d = json.loads(study.read_text())
+    fp = casestudy.fingerprint(d)
+    marker = f"<!-- figures: {study.stem} {fp} -->"
+    if marker not in readme:
+        sys.exit(
+            f"{study.name}'s quoted figures have moved (run on {d['run_on']}).\n"
+            f"Re-read the paragraph in the README against the new numbers:\n"
+            + "\n".join(f"    {k}: {v}" for k, v in casestudy.quoted_figures(d).items())
+            + f"\nThen put this line under it:\n    {marker}"
+        )
+    if f"As of {d['run_on']}" not in flat_readme:
+        sys.exit(
+            f"{study.name} was run on {d['run_on']}, which the README does not "
+            f"claim ('As of {d['run_on']}')"
         )
 
 (out / "manifest.json").write_text(json.dumps(sorted(set(copied + kept + derived)), indent=2))
