@@ -239,6 +239,16 @@ def quoted_figures(study: dict) -> dict:
             "drawn": study["spread"]["drawn"],
             "documents": len(study["spread"]["documents"]),
             "on_subject_site": study["spread"]["on_subject_site"],
+            # A re-run can swap an off-site hit for one whose document has no
+            # readable URL and leave every count above unmoved, while the prose
+            # says all N draws are on other people's pages. The page now
+            # distinguishes those draws, so the fingerprint has to as well or
+            # the export would keep accepting a sentence that stopped being true.
+            "unknown_domain": sum(
+                d["occurrences"]
+                for d in study["spread"].get("domains", [])
+                if not d.get("domain") or d["domain"] == "(no url recorded)"
+            ),
         },
         # Per-query, per-index counts: the headline "333 occurrences in Dolma
         # 1.7, 883 in DCLM-baseline" comes straight out of here.

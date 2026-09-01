@@ -1839,8 +1839,15 @@ function caseStudyCards(main, d){
   // more than once, then roll the rest into a single row that keeps the count.
   // The subject's own site always gets its own row however rare it is: whether
   // it is there at all is the question this section answers.
-  const named = d.spread.domains.filter(x => x.occurrences > 1 || x.domain === d.site);
-  const tail = d.spread.domains.filter(x => !named.includes(x));
+  // "(no url recorded)" is not a site. It rides in `domains` because that is
+  // where `domain_shares` puts a draw whose document had no readable URL, and
+  // rolling it into the tail would count it as one more site holding a copy —
+  // contradicting the headline and the conclusion, which both say its location
+  // is unknown. It gets its own row.
+  const isUnknown = x => !x.domain || x.domain === "(no url recorded)";
+  const sites = d.spread.domains.filter(x => !isUnknown(x));
+  const named = sites.filter(x => x.occurrences > 1 || x.domain === d.site);
+  const tail = sites.filter(x => !named.includes(x));
   const max = Math.max(...d.spread.domains.map(x => x.share), 0.01);
   const bar = (label, share, count, tip, bold) => {
     const row = document.createElement("div");
@@ -1860,6 +1867,11 @@ function caseStudyCards(main, d){
       tail.reduce((a, x) => a + x.share, 0), tail.length,
       `<b>${tail.length} sites</b> each holding one drawn occurrence<br>${
         tail.slice(0, 12).map(x => esc(x.domain)).join("<br>")}${tail.length > 12 ? "<br>…" : ""}`);
+  if (unknownDomain)
+    bar("no readable URL", unknownDomain / d.spread.drawn, unknownDomain,
+      `<b>${num(unknownDomain)} drawn occurrence${unknownDomain === 1 ? "" : "s"}</b> whose document `
+      + `carried no usable URL — the corpus recorded none, or its metadata would not parse. Which `
+      + `site ${unknownDomain === 1 ? "it sits" : "they sit"} on is unknown, not elsewhere.`);
   const sn = document.createElement("p");
   sn.className = "note";
   // `on_subject_site` counts draws whose domain was readable and matched. A
