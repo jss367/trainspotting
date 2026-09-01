@@ -2298,7 +2298,7 @@ function budgetRows(m, sources, profiles, corpusSummaries){
   });
 }
 
-function budgetCard(m, rows){
+function tokenBudgetCard(m, rows){
   const sized = rows.filter(r => r.tokens);
   if (!sized.length) return null;
   const card = document.createElement("section");
@@ -3383,7 +3383,7 @@ async function renderModel(model, gen){
   }
   const sizes = budgetRows(m, sources, profiles,
     Object.fromEntries(corpusData.map(([s, d]) => [s.stage, d])));
-  for (const c of [budgetCard(m, sizes), fitCard(m, sizes), lengthCard(m, sizes)])
+  for (const c of [tokenBudgetCard(m, sizes), fitCard(m, sizes), lengthCard(m, sizes)])
     if (c) main.appendChild(c);
 
   const base = m.stages.filter(s => !s.hf_dataset);
