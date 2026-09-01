@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trainspotting import derive, languages, registry, rewards  # noqa: E402
+from trainspotting import budget, derive, languages, paths, registry, rewards  # noqa: E402
 
 # Bulk text the site fetches on demand: full training examples behind a prompt,
 # and sampled pretraining documents. Both are regenerable caches of upstream
@@ -69,6 +69,13 @@ if missing:
 
 copied, total = [], 0
 for f in sorted((ROOT / "results").glob("*.json")):
+    # A budget is derived below from the committed ask runs, never copied. A
+    # local `budget --json` leaves one in results/ — gitignored, so it is not
+    # part of what this repo publishes — and copying it here put its name in
+    # `copied` a second time when the derive loop wrote the real one, so the
+    # manifest listed it twice.
+    if ".budget-" in f.name:
+        continue
     if f.name.endswith(BULK):
         (out / f.name).write_text(json.dumps(json.loads(f.read_text()), separators=(",", ":")))
     else:
@@ -153,6 +160,51 @@ for ctx_file in sorted(out.glob("*.context.json")):
     write_derived(ctx_file.name.replace(".context.json", ".profile.json"), profile)
 
 total += sum((out / name).stat().st_size for name in derived)
+
+# Ordinary result files that results/ no longer has. The copy loop only ever
+# writes, so deleting a run — or moving it to another slug — used to leave its
+# old copy sitting here: dropped from the manifest, so the site stopped drawing
+# its card, but still the first thing `paths.find` returns to anything reading a
+# run back. The budgets derived below would then be rolled up over a
+# measurement whose card is no longer on the page.
+#
+# Bulk and derived files are exempt: those are gitignored under results/, so a
+# fresh clone has none of them there and this is their only copy.
+stale = [
+    f
+    for f in sorted(out.glob("*.json"))
+    # `derived` rather than a suffix list: this branch derives a `.profile.json`
+    # per context run as well as a `.corpus.json` per document sample, and a
+    # sweep that knew only the second deleted every profile it had just written.
+    if not (f.name.endswith(BULK) or f.name in set(derived))
+    and f.name not in set(copied)
+    and f.name not in {"registry.json", "language-names.json", "reward-kinds.json", "manifest.json"}
+    and not f.name.startswith(tuple(f"{n}.budget-" for n in registry.targets()))
+]
+for f in stale:
+    f.unlink()
+if stale:
+    print(f"removed {len(stale)} stale site file(s) results/ no longer has: "
+          + ", ".join(f.name for f in stale))
+
+# Every question asked of a target gets its budget rolled up here, from whatever
+# stages were committed. A question asked of only the post-training half still
+# gets a card — with the corpora shown as unmeasured, which is the finding.
+# Budgets are rebuilt from scratch every run, so drop the previous set first:
+# they are derived, not copied (the loop above skips them), so nothing here is
+# lost. A slug that no longer has any ask run loses its budget file too, and the
+# loop below only writes the ones it can still build.
+for f in out.glob("*.budget-*.json"):
+    f.unlink()
+for name in registry.targets():
+    for slug in paths.runs(name, "ask"):
+        est = budget.estimate(name, slug)
+        if not any(st.get("measured") for st in est["stages"]):
+            continue
+        out_name = f"{name}.budget-{slug}.json"
+        (out / out_name).write_text(json.dumps(est, separators=(",", ":")))
+        total += (out / out_name).stat().st_size
+        copied.append(out_name)
 
 # The manifest is what this run copied, plus the bulk files already sitting in
 # docs/data. Those are gitignored under results/, so a fresh checkout copies none

@@ -14,31 +14,16 @@ Records are keyed by the same prompt text the classifier saw, so the site can
 join them onto committed label and ask results without re-running any model.
 """
 
-import hashlib
-
-from trainspotting import rewards
+from trainspotting import rewards, search
 
 MAX_TEXT = 4000  # per field; the full row stays one click away on HuggingFace
 KEY_CHARS = 400  # prompt prefix that joins a context record to a labeled prompt
 
 
 def _text(value) -> dict:
-    """A text field plus its true length, so truncation is visible and lengths stay honest.
-
-    A field cut for display also carries a digest of the whole thing. Two turns
-    of equal length whose first MAX_TEXT characters agree are indistinguishable
-    from the stored record otherwise, and `derive._shared_turns` reads exactly
-    that comparison to decide where a preference pair branches — two 4,001
-    character responses differing in their last character would scan as one
-    shared turn and the pair would come back with no target at all. The digest
-    is only on the fields that were actually cut, so it costs nothing on the
-    ones that were not.
-    """
+    """A text field plus its true length, so truncation is visible and lengths stay honest."""
     s = "" if value is None else str(value)
-    out = {"text": s[:MAX_TEXT], "chars": len(s)}
-    if len(s) > MAX_TEXT:
-        out["sha"] = hashlib.sha256(s.encode()).hexdigest()[:16]
-    return out
+    return {"text": s[:MAX_TEXT], "chars": len(s)}
 
 
 def _split_think(text: str) -> tuple[str | None, str]:
@@ -56,25 +41,111 @@ def _split_think(text: str) -> tuple[str | None, str]:
     return head.strip(), text[i + len("</think>") :].strip()
 
 
+# Output a message can carry beside its `content`. `search` reads these as part
+# of the turn; this record keeps none of them, so a turn holding any is not
+# stored whole however well its text matches.
+BESIDE_CONTENT = ("reasoning_content",) + search.STRUCTURED_TURN_FIELDS + search.INPUT_TURN_FIELDS
+
+
 def _turns(messages) -> list[dict]:
     out = []
     for m in messages or []:
-        if not (isinstance(m, dict) and m.get("content")):
+        if not isinstance(m, dict):
             continue
-        content = str(m["content"])
+        # `is not None` rather than truthiness: a falsy content that is not
+        # absent, `""` or a bare `0`, is still what the turn said.
+        raw_content = m.get("content")
+        content = "" if raw_content is None else str(raw_content)
+        omitted = [k for k in BESIDE_CONTENT if m.get(k)]
+        # Every message in the list is kept, including one that is nothing but a
+        # tool call and one that is empty. Both are turns in the sequence the
+        # model was scored on — a message with no content still contributes its
+        # role header and end-of-turn token — and `_shared_turns` branches at one
+        # that appears on a single side. Dropping either would close the gap it
+        # leaves: two completions differing only there would read as the same
+        # conversation, and the answers behind them as a shared opening. They are
+        # kept, empty, so the turn counts stay aligned and nothing about them is
+        # marked as stored whole.
         reasoning, answer = _split_think(content)
         turn = {"role": m.get("role", "?"), **_text(answer)}
         if reasoning:
             turn["reasoning"] = _text(reasoning)
-            # The split is for display: it drops the `<think>` tags and the
-            # whitespace around them, which the model read. Those characters
-            # are nobody's answer and nobody's reasoning, so they survive
-            # nowhere else — and `derive` measures a turn by summing the two
-            # halves, which then understates every reasoning turn. Keep the
-            # length of what was actually there.
+        if omitted:
+            turn["omitted"] = omitted
+        # Whether what is stored is the turn as it was written. Splitting a
+        # thinking span out drops the <think> markers and the whitespace around
+        # them, and long fields are cut, so a turn that went through either can no
+        # longer be compared byte for byte with the sequence the model was scored
+        # on. The absence of a reasoning field does not say this on its own: a
+        # turn whose thinking span was empty loses its markers and keeps no field
+        # to show it. Nor does `content` alone — a message can carry output beside
+        # it, a separate reasoning field or tool calls or a refusal, which
+        # `search` reads as part of the turn and this record does not keep.
+        # Anything claiming two turns are identical needs this, not a guess.
+        # Structured content — a list of parts, a dict — survives `str()` as a
+        # Python repr, which is a serialization of the turn and not the text the
+        # model was scored on, so only a string (or an absent content, faithfully
+        # empty) can be stored as written.
+        stored_as_written = raw_content is None or isinstance(raw_content, str)
+        if stored_as_written and turn["text"] == content and not omitted:
+            turn["raw"] = True
+        elif stored_as_written:
+            # Not stored as written, so the halves above no longer add up to
+            # what the model read: the `<think>` markers and the whitespace
+            # around them are gone, and a long field is cut. `derive` measures
+            # a turn by summing those halves and would understate it — by 0.04%
+            # of the Think SFT characters and 0.16% of the DPO ones, measured.
+            # `raw` says whether that happened; this says by how much. Keyed off
+            # the same flag rather than off a non-empty reasoning field, because
+            # an empty thinking span loses its markers and keeps no field to
+            # show it — a 125-character turn opening `<think>\n\n</think>` was
+            # measured as 106.
             turn["chars_raw"] = len(content)
         out.append(turn)
     return out
+
+
+def _turn_key(turn: dict) -> tuple:
+    """A stored turn reduced to what makes it the same turn as another.
+
+    `text` is cut at MAX_TEXT and `chars` is not, so two different turns that
+    agree on their first 4,000 characters still differ here.
+    """
+    reasoning = turn.get("reasoning") or {}
+    return (
+        turn.get("role"),
+        turn.get("text"),
+        turn.get("chars"),
+        reasoning.get("text"),
+        reasoning.get("chars"),
+    )
+
+
+def branch_point(chosen: list[dict], rejected: list[dict]) -> int:
+    """How many leading turns of a stored pair are shared history.
+
+    A multi-turn pair branches somewhere and shares everything before it,
+    assistant turns included. Those shared turns are the conversation the pair
+    is judged in, not either candidate answer, so splitting the pair by role
+    puts earlier assistant turns on both sides — text neither completion is
+    being preferred for. `search` draws the same line on raw rows
+    (`search._shared_turns`); this is it for the records `context` stores.
+
+    The last turn of each side is its candidate answer by definition and is
+    never shared however far the two lists agree, so a pair whose completions
+    are identical branches at the final turn rather than having no completions
+    at all.
+
+    12 of the 300 sampled Dolci-Instruct-DPO pairs are multi-turn, and counting
+    their shared history on both sides inflates the stage's fit characters by
+    5.9%. The think mixes are single-turn throughout, so nothing there moves.
+    """
+    n = 0
+    for a, b in zip(chosen or [], rejected or []):
+        if _turn_key(a) != _turn_key(b):
+            break
+        n += 1
+    return min(n, max(0, len(chosen or []) - 1), max(0, len(rejected or []) - 1))
 
 
 def _meta(row: dict, keys: list[str]) -> dict:
