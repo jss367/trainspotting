@@ -507,3 +507,56 @@ def test_a_run_that_straddled_a_republish_cannot_be_joined():
             assert "matching_tokens" not in out
     finally:
         b.load = saved
+
+
+def test_an_unusable_stage_does_not_withhold_the_total_from_the_rest():
+    """A run that measured nothing should not veto the ones that did.
+
+    `_post_training_stage` records the question and classifier it was invoked
+    with before returning `measured: False`, so selecting stages by the presence
+    of a question let a stage contributing no rate decide that the instruments
+    were mixed — and withhold the pipeline total from the stages that worked.
+    """
+    stages = [
+        {"family": "post-training", "measured": True, "question": "Q?",
+         "classifier": "c", "system_sha": "s"},
+        # Same slug, different wording, but it labeled nothing.
+        {"family": "post-training", "measured": False, "unusable": "the ask run labeled nothing",
+         "question": "A DIFFERENT WORDING?", "classifier": "c", "system_sha": "s"},
+    ]
+    rated = [s for s in stages if s.get("measured") and s.get("question")]
+    assert budget.mixing(rated)["mixed"] is False
+    # And the old selection would have called it mixed, which is the bug.
+    assert budget.mixing([s for s in stages if s.get("question")])["mixed"] is True
+
+
+def test_a_sources_run_that_straddled_a_republish_cannot_size_the_stage():
+    """`cmd_sources` reads /statistics and /info as two requests.
+
+    It stamps `revision_moved_to` when the tree changed between them, because
+    the row count may then describe a different tree than the frequencies. Its
+    starting revision matching the sample's says nothing about which tree it
+    ended on.
+    """
+    import trainspotting.budget as b
+
+    files = {
+        "m.sft.ask-q.json": {"question": "Q?", "revision": "a" * 40, "classifier": "c",
+                             "records": [{"row": 0, "prompt": "p", "match": True}]},
+        "m.sft.context.json": {"revision": "a" * 40,
+                               "records": [{"row": 0, "key": "p", "kind": "sft",
+                                            "turns": [{"role": "assistant", "text": "x", "chars": 10}]}]},
+        "m.sources.json": {"sft": {"total": 100, "revision": "a" * 40, "dataset": "x/y",
+                                   "revision_moved_to": "b" * 40}},
+    }
+    saved = b.load
+    b.load = lambda name: files.get(name)
+    try:
+        out = b._post_training_stage(
+            "m", {"stage": "sft", "name": "SFT", "hf_dataset": "x/y", "kind": "sft"}, "q"
+        )
+    finally:
+        b.load = saved
+    assert out["measured"] is True and out["rate"] == 1.0
+    assert "size_tokens" not in out
+    assert any("straddled a republish while it counted" in n for n in out["notes"])

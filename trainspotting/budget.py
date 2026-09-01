@@ -383,11 +383,25 @@ def _post_training_stage(target_name: str, stage: dict, slug: str) -> dict:
     # the stage unsized rather than unmeasured.
     src_rev, src_dataset = source.get("revision"), source.get("dataset")
     sample_rev = ctx_rev or ask_rev
-    stale_source = bool(rows is not None and (
+    # `cmd_sources` reads /statistics and /info as two requests and stamps
+    # `revision_moved_to` when the tree changed between them, because the row
+    # count may then describe a different tree than the frequencies. A count
+    # that ambiguous cannot size anything, and its starting revision matching
+    # the sample's says nothing about which tree it ended on.
+    src_straddled = bool(rows is not None and source.get("revision_moved_to"))
+    stale_source = src_straddled or bool(rows is not None and (
         (src_rev and sample_rev and src_rev != sample_rev)
         or (src_dataset and src_dataset != stage["hf_dataset"])
     ))
-    if stale_source:
+    if src_straddled:
+        rows = None
+        out["notes"].append(
+            "stage size unknown — the `sources` run straddled a republish while it"
+            " counted, so its row total is ambiguous; re-run"
+            f" `trainspotting sources {target_name} --json`. The rate below is a"
+            " share and is unaffected."
+        )
+    elif stale_source:
         rows = None
         out["notes"].append(
             f"stage size unknown — the `sources` run describes"
@@ -620,9 +634,15 @@ def estimate(target_name: str, slug: str) -> dict:
     for stage in registry.post_training_stages(target):
         stages.append(_post_training_stage(target_name, stage, slug))
 
-    measured = [s for s in stages if s.get("question")]
-    question = measured[0]["question"] if measured else None
-    mix = mixing(measured)
+    # Only stages that produced a rate. A stage whose ask run labeled nothing,
+    # or whose rows joined to no example, still records the question and
+    # classifier it was invoked with — and letting that decide the mixing
+    # would withhold the total from the stages that did measure something,
+    # on the word of one that measured nothing.
+    rated = [s for s in stages if s.get("measured") and s.get("question")]
+    asked = rated or [s for s in stages if s.get("question")]
+    question = asked[0]["question"] if asked else None
+    mix = mixing(rated)
     variants, judges = mix["question_variants"], mix["classifiers"]
     rubric_conflict, mixed = mix["rubric_conflict"], mix["mixed"]
     return {

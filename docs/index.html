@@ -1132,13 +1132,24 @@ async function budgetCard(main, model, slug){
   if (partial){
     // The single most misleading thing this page could do is show a pipeline
     // total that quietly leaves out 5.93T tokens of pretraining.
+    //
+    // "Never asked" and "asked, and nothing usable came back" are different
+    // facts, and the row above already prints `unusable` for the second. Saying
+    // "never asked" about those too contradicts the same card two lines up, and
+    // tells someone to run a question they have already run.
     const missing = est.stages.filter(st => !st.measured);
-    const unasked = missing.reduce((a, st) => a + (st.size_tokens || 0), 0);
-    notes.push(`${missing.map(st => st.stage).join(", ")} ${missing.length > 1 ? "were" : "was"} never asked `
-      + `this question, so ${tokens(unasked)} of the ${tokens(all.size_tokens)} fit tokens above `
-      + `— ${shareText(unasked / all.size_tokens)} of the pipeline — are unmeasured. The share is still `
+    const unasked = missing.filter(st => !st.unusable);
+    const unusable = missing.filter(st => st.unusable);
+    const missingTokens = missing.reduce((a, st) => a + (st.size_tokens || 0), 0);
+    const said = [];
+    if (unasked.length)
+      said.push(`${unasked.map(st => st.stage).join(", ")} ${unasked.length > 1 ? "were" : "was"} never asked this question`);
+    if (unusable.length)
+      said.push(`${unusable.map(st => st.stage).join(", ")} ${unusable.length > 1 ? "were" : "was"} asked but produced nothing usable (see the row above)`);
+    notes.push(`${said.join("; ")}, so ${tokens(missingTokens)} of the ${tokens(all.size_tokens)} fit tokens above `
+      + `— ${shareText(missingTokens / all.size_tokens)} of the pipeline — are unmeasured. The share is still `
       + `over the whole pipeline, which makes it a lower bound: only ${tokens(all.measured_size_tokens)} `
-      + `of it was looked at, and asking the rest can only add matches.`);
+      + `of it was looked at, and measuring the rest can only add matches.`);
   }
   if (all.floor.length){
     notes.push(`${all.floor.join(", ")} sized at one reference rollout per prompt — a floor. `

@@ -1404,12 +1404,17 @@ def _report_questions(target_name: str, target: dict) -> None:
             # slug is not a question — see `_warn_mixed_questions` — and
             # printing one question over every stage's rate attributes the
             # others' measurements to words they were never scored against.
-            groups: dict[str, list[str]] = {}
+            # Keyed on the classifier as well as the wording, as the site's ask
+            # cards are: the same words put to two judges are two measurements,
+            # and a block that lists both rates under one heading names neither.
+            groups: dict[tuple, list[str]] = {}
             for st in sorted(stages, key=lambda x: order.index(x) if x in order else 99):
                 if data[st]:
-                    groups.setdefault(data[st]["question"], []).append(st)
-            for question, group in groups.items():
+                    groups.setdefault((data[st]["question"], data[st].get("classifier")), []).append(st)
+            for (question, classifier), group in groups.items():
                 print(f"> {question}\n")
+                if classifier:
+                    print(f"judged by {classifier}\n")
                 for st in group:
                     d = data[st]
                     records = d["records"]
@@ -1423,9 +1428,13 @@ def _report_questions(target_name: str, target: dict) -> None:
                     )
                 print()
             if len(groups) > 1:
+                differ = "wording" if len({q for q, _ in groups}) > 1 else "classifier"
+                if len({q for q, _ in groups}) > 1 and len({c for _, c in groups}) > 1:
+                    differ = "wording and classifier"
                 print(
-                    f"({len(groups)} wordings share the slug {slug!r}; the rates above"
-                    " are grouped under the words each stage was actually scored against.)\n"
+                    f"({len(groups)} instruments share the slug {slug!r}, differing by"
+                    f" {differ}; the rates above are grouped under the one each stage was"
+                    " actually scored by.)\n"
                 )
 
     if stances:
