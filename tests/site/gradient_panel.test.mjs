@@ -304,6 +304,18 @@ ok(oneSidedOut.includes("Only the chosen response carries a thinking span"),
 ok(!oneSidedOut.includes("Both responses carry a thinking span"),
   "and the both-sided sentence does not appear");
 
+// A matched span holds each side's own text, so its two lengths can differ; the
+// legend must not print the chosen side's number as though it covered both.
+const WIDE = WS_A.replace(/ /g, "  ");   // same words, wider gaps: a longer span
+const wsPair = {prompt_full: {text: "q", chars: 1}, row: 13, meta: {},
+  chosen: {model: "big", turns: [convo[0], anyTurn("assistant", WS_A + "alpha")]},
+  rejected: {model: "small", turns: [convo[0], anyTurn("assistant", WIDE + "beta")]}};
+const wsLegend = P.gradientSection(wsPair, 1).replace(/\s+/g, " ");
+ok(/matched later <em>\d+ \/ \d+ ch<\/em>/.test(wsLegend),
+  "a matched span of differing length reports both sides' counts");
+ok(!/matched later <em>\d+ ch<\/em>/.test(wsLegend),
+  "and does not report one as though it covered both");
+
 // --------------------------------------------------- against the real rows ---
 const dataDir = path.join(ROOT, "docs", "data");
 const files = fs.readdirSync(dataDir).filter(f => f.includes(".dpo.context."));

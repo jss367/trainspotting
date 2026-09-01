@@ -923,12 +923,24 @@ function diffPanel(ops){
     </div>`;
   }).join("");
 
+  // A matched span keeps each side's own text, so the same words can come to a
+  // different length on each — 166 of the 900 committed rows have one. One
+  // number would have to be the chosen side's, silently, so both are shown
+  // wherever they disagree.
   const legend = [
-    ...KINDS.map(kind => ({...kind, n: opChars(ops, kind.t, "a")})),
-    {k: "only chosen", c: "var(--series-1)", n: opChars(ops, "chosen", "a")},
-    {k: "only rejected", c: "var(--neg)", n: opChars(ops, "rejected", "b")},
-  ].filter(x => x.n > 0).map(x => `<span class="k"${x.why ? ` data-tip="${escAttr(x.why)}"` : ""}>
-      <i style="background:${x.c}"></i>${esc(x.k)} <em>${num(x.n)} ch</em></span>`).join("");
+    ...KINDS.map(kind => ({...kind, a: opChars(ops, kind.t, "a"), b: opChars(ops, kind.t, "b")})),
+    {k: "only chosen", c: "var(--series-1)", a: opChars(ops, "chosen", "a"), b: null},
+    {k: "only rejected", c: "var(--neg)", a: null, b: opChars(ops, "rejected", "b")},
+  ].filter(x => (x.a || 0) + (x.b || 0) > 0).map(x => {
+    const split = x.a != null && x.b != null && x.a !== x.b;
+    const count = split ? `${num(x.a)} / ${num(x.b)} ch` : `${num(x.a != null ? x.a : x.b)} ch`;
+    const tip = split
+      ? `chosen / rejected — the same words, stored with different whitespace on each side.
+         ${x.why || ""}`
+      : x.why;
+    return `<span class="k"${tip ? ` data-tip="${escAttr(tip)}"` : ""}>
+      <i style="background:${x.c}"></i>${esc(x.k)} <em>${count}</em></span>`;
+  }).join("");
 
   return `<div class="legend" style="margin-bottom:8px">${legend}</div>
     ${bars}
