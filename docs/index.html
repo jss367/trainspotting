@@ -384,11 +384,29 @@
     font-size: 12px; margin: 16px 0 6px; font-weight: 600; color: var(--text-primary);
   }
   .grad > h4:first-child { margin-top: 0; }
-  .formula {
-    font: 12px/1.8 ui-monospace, Menlo, monospace; color: var(--text-primary);
-    background: var(--track); border-radius: 6px; padding: 10px 12px; margin: 6px 0 10px;
-    white-space: pre; overflow-x: auto;
+  /* the objective, hand-set rather than left as monospace: serif italic for
+     variables, upright for function names, and the two sides of the pair keep
+     the colors they have in the response text */
+  .eqs {
+    display: grid; grid-template-columns: auto auto 1fr; gap: 6px 10px;
+    align-items: baseline;
+    font: 15px/1.9 "STIX Two Math", "Latin Modern Math", Cambria, Georgia, serif;
+    color: var(--text-primary);
+    background: var(--track); border-radius: 6px; padding: 12px 14px; margin: 6px 0 10px;
+    overflow-x: auto;
   }
+  .eqs .lhs { font-style: italic; text-align: right; }
+  .eqs .rel, .eqs .brk { color: var(--text-secondary); }
+  .eqs .rhs { white-space: nowrap; }
+  .eqs i { font-style: italic; }
+  .eqs sub { font-size: 0.66em; font-style: normal; vertical-align: -0.28em; }
+  .eqs .fn { font-style: normal; padding-right: 0.12em; }
+  .eqs .brk { font-size: 1.5em; line-height: 0; vertical-align: -0.14em; }
+  .eqs .par { font-size: 1.18em; line-height: 0; vertical-align: -0.06em; }
+  .eqs .grad-op { padding-right: 0.08em; }
+  .eqs .tag { font: 500 0.76em/1 system-ui, -apple-system, sans-serif; }
+  .eqs .tag.up { color: var(--series-1); }
+  .eqs .tag.down { color: var(--neg); }
   /* the two responses: shared opening dimmed, later overlap marked as matched
      wording rather than cancellation, text unique to one side highlighted */
   .ctxtext .pre { color: var(--muted); }
@@ -1113,9 +1131,11 @@ function gradientSection(rec, shared = 0){
   return `<div class="grad" id="gradpanel" hidden>
     <h4>the update</h4>
     ${flow}
-    <div class="formula">margin = β · [ (log π(chosen) − log π_ref(chosen)) − (log π(rejected) − log π_ref(rejected)) ]
-loss   = − log σ(margin)
-update ∝ σ(−margin) · [ ∇ log π(chosen) − ∇ log π(rejected) ]</div>
+    <div class="eqs">
+      <span class="lhs">margin</span><span class="rel">=</span><span class="rhs"><i>β</i> <span class="brk">[</span> <span class="par">(</span><span class="fn">log</span><i>π</i>(<span class="tag up">chosen</span>) − <span class="fn">log</span><i>π</i><sub>ref</sub>(<span class="tag up">chosen</span>)<span class="par">)</span> − <span class="par">(</span><span class="fn">log</span><i>π</i>(<span class="tag down">rejected</span>) − <span class="fn">log</span><i>π</i><sub>ref</sub>(<span class="tag down">rejected</span>)<span class="par">)</span> <span class="brk">]</span></span>
+      <span class="lhs">loss</span><span class="rel">=</span><span class="rhs">−<span class="fn">log</span><i>σ</i>(<i>margin</i>)</span>
+      <span class="lhs">update</span><span class="rel">∝</span><span class="rhs"><i>σ</i>(−<i>margin</i>) <span class="brk">[</span> <span class="grad-op">∇</span><span class="fn">log</span><i>π</i>(<span class="tag up">chosen</span>) − <span class="grad-op">∇</span><span class="fn">log</span><i>π</i>(<span class="tag down">rejected</span>) <span class="brk">]</span></span>
+    </div>
     <p class="kv">Two copies of the model are involved: the one being trained (π) and a frozen copy of the
       SFT checkpoint it started from (π_ref). At the first step the two are identical, so the margin is zero
       and every pair contributes the same loss, log 2. Training drives the margin positive.</p>
