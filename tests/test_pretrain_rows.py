@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from trainspotting import classify, cli, hf, pretrain, registry
+from trainspotting import classify, cli, hf, paths, pretrain, registry
 
 
 def test_a_stage_declares_its_route_and_shards_is_the_default():
@@ -174,7 +174,8 @@ def test_a_rows_sample_does_not_collapse_to_one_effective_observation(tmp_path, 
     them carried the same empty `shard`. Thirty pages that mostly agree are worth
     far more than one observation, and the file has to say so."""
     monkeypatch.setattr(cli, "RESULTS", tmp_path)
-    monkeypatch.setattr(cli, "SITE_DATA", tmp_path)
+    monkeypatch.setattr(paths, "RESULTS", tmp_path)
+    monkeypatch.setattr(paths, "SITE_DATA", tmp_path)
     # Thirty pages of ten, the shape a 300-document draw actually has. Matches
     # are spread across pages rather than aligned with them, which is what a
     # shuffled corpus looks like and where the design effect should land near 1.
@@ -224,7 +225,8 @@ def test_a_shard_sample_still_clusters_by_shard_without_a_cluster_field(tmp_path
     """The committed Olmo samples predate `cluster`, and the interval they show
     on the site must not move. `shard` is the fallback, so it does not."""
     monkeypatch.setattr(cli, "RESULTS", tmp_path)
-    monkeypatch.setattr(cli, "SITE_DATA", tmp_path)
+    monkeypatch.setattr(paths, "RESULTS", tmp_path)
+    monkeypatch.setattr(paths, "SITE_DATA", tmp_path)
     records = [
         {
             "id": f"d{s}-{i}",
@@ -297,7 +299,8 @@ def test_a_base_only_model_has_no_post_training_stages():
 def test_ask_without_pretrain_on_a_base_model_says_what_to_pass():
     """It would otherwise exit on "has no post-training stages", which is true
     and useless: the corpus it can score is the whole reason to ask."""
-    args = type("A", (), {"target": "pythia-12b-deduped", "question": "q", "slug": None, "pretrain": False})()
+    args = type("A", (), {"target": "pythia-12b-deduped", "question": "q", "slug": None,
+                          "pretrain": False, "pretrain_only": False, "stage": None})()
     with pytest.raises(SystemExit, match="--pretrain"):
         cli.cmd_ask(args)
 

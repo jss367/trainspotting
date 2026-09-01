@@ -186,6 +186,7 @@ def classify_prompts(
     question: str | None = None,
     system: str | None = None,
     max_chars: int = extract.MAX_CLASSIFY_CHARS,
+    valid: list[str] | None = None,
 ) -> tuple[list[str | None], dict[str, int]]:
     """Return one label (or None) per prompt in order, plus why any are missing.
 
@@ -203,11 +204,16 @@ def classify_prompts(
     is how pretraining documents get judged as documents rather than as requests.
     `max_chars` is how much of each input the model sees; corpus documents need
     far more of it than prompts do, so callers raise it and shrink the batch.
+
+    `valid` overrides the answer set. Anything outside it is dropped rather than
+    recorded, so a rubric with three answers has to say so here — otherwise the
+    parser silently discards every one of them and the run reports a sample it
+    never labeled.
     """
     if not prompts:
         return [], {}  # nothing to ask about; don't demand a key to say so
     system = build_system(question, system)
-    valid = ["yes", "no"] if question else LABELS
+    valid = valid or (["yes", "no"] if question else LABELS)
     client = anthropic.Anthropic()
     batches = [
         (start, prompts[start : start + batch_size])
