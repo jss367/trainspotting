@@ -192,7 +192,18 @@ def normalize(doc: dict) -> dict:
     deep = inner.get("metadata") if isinstance(inner.get("metadata"), dict) else {}
     attrs = inner.get("attributes") if isinstance(inner.get("attributes"), dict) else {}
 
-    url = deep.get("url") or (inner.get("id") if str(inner.get("id", "")).startswith("http") else None)
+    # Every nesting a subset is known to use, in the order `doc_provenance`
+    # reads them — that parser exists because these shapes disagree, and a URL
+    # this one fails to find is a document that falls into "(no url recorded)"
+    # and drops out of `domain_shares`, which is what the study's headline
+    # "0 of 60 are on the blog" is computed over.
+    url = (
+        inner.get("url")
+        or inner.get("WARC-Target-URI")
+        or deep.get("url")
+        or deep.get("WARC-Target-URI")
+        or (inner.get("id") if str(inner.get("id", "")).startswith("http") else None)
+    )
     # Fold `www.` here rather than at each call site. The subsets disagree —
     # CCNet's recorded `source_domain` keeps the prefix, a domain parsed out of
     # a URL may not — and left alone that splits one site across two rows of

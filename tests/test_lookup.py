@@ -176,3 +176,31 @@ def test_the_same_document_drawn_twice_is_counted_once(monkeypatch):
 
     assert len(out["documents"]) == 1
     assert out["documents"][0]["occurrences_drawn"] == 2
+
+
+@pytest.mark.parametrize(
+    ("meta", "where"),
+    [
+        ({"metadata": {"url": "http://example.com/a"}}, "inner url"),
+        ({"metadata": {"WARC-Target-URI": "http://example.com/a"}}, "inner WARC-Target-URI"),
+        ({"metadata": {"metadata": {"url": "http://example.com/a"}}}, "deep url"),
+        ({"metadata": {"metadata": {"WARC-Target-URI": "http://example.com/a"}}}, "deep WARC-Target-URI"),
+        ({"metadata": {"id": "http://example.com/a"}}, "an id that is a URL"),
+    ],
+    ids=lambda v: v if isinstance(v, str) else "",
+)
+def test_a_url_is_found_wherever_the_subset_put_it(meta, where):
+    """The subsets disagree about where provenance lives, which is why
+    `infinigram.doc_provenance` reads five places. A URL missed here costs the
+    document its domain, and `domain_shares` — which the study's headline share
+    is computed over — files it under nothing."""
+    rec = lookup.normalize({"doc_ix": 1, "spans": [["t", None]], "metadata": json.dumps(meta)})
+
+    assert rec["url"] == "http://example.com/a", f"missed the URL in {where}"
+    assert rec["domain"] == "example.com"
+
+
+def test_a_document_with_no_url_anywhere_reports_none():
+    rec = lookup.normalize({"doc_ix": 1, "spans": [["t", None]], "metadata": json.dumps({"metadata": {}})})
+
+    assert rec["url"] is None and rec["domain"] is None
