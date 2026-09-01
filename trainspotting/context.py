@@ -54,7 +54,8 @@ def _turns(messages) -> list[dict]:
             continue
         # `is not None` rather than truthiness: a falsy content that is not
         # absent, `""` or a bare `0`, is still what the turn said.
-        content = "" if m.get("content") is None else str(m["content"])
+        raw_content = m.get("content")
+        content = "" if raw_content is None else str(raw_content)
         omitted = [k for k in BESIDE_CONTENT if m.get(k)]
         # Every message in the list is kept, including one that is nothing but a
         # tool call and one that is empty. Both are turns in the sequence the
@@ -81,7 +82,12 @@ def _turns(messages) -> list[dict]:
         # it, a separate reasoning field or tool calls or a refusal, which
         # `search` reads as part of the turn and this record does not keep.
         # Anything claiming two turns are identical needs this, not a guess.
-        if turn["text"] == content and not omitted:
+        # Structured content — a list of parts, a dict — survives `str()` as a
+        # Python repr, which is a serialization of the turn and not the text the
+        # model was scored on, so only a string (or an absent content, faithfully
+        # empty) can be stored as written.
+        stored_as_written = raw_content is None or isinstance(raw_content, str)
+        if stored_as_written and turn["text"] == content and not omitted:
             turn["raw"] = True
         out.append(turn)
     return out

@@ -117,3 +117,20 @@ def test_omitted_names_what_was_left_out():
     t = turn({"role": "assistant", "content": "the answer", "refusal": "no"})
     assert t["omitted"] == ["refusal"]
     assert "raw" not in t
+
+
+def test_structured_content_is_not_raw():
+    """`str()` of a list of content parts is a Python repr — a serialization of
+    the turn, not the text the model was scored on."""
+    for content in (
+        [{"type": "text", "text": "the answer"}],
+        {"type": "text", "text": "the answer"},
+        ["the answer"],
+    ):
+        t = turn({"role": "assistant", "content": content})
+        assert "raw" not in t, f"{content!r} left the turn marked raw"
+        assert t["text"] == str(content)
+
+
+def test_a_string_content_is_still_raw():
+    assert turn({"role": "assistant", "content": "the answer"})["raw"] is True
