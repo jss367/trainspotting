@@ -221,6 +221,11 @@ __marimo__/
 # `trainspotting context`. The committed copy the site reads lives in docs/data/.
 results/*.context.json
 results/*.docs.json
+# `trainspotting budget --json`. Derived arithmetic over the committed ask runs
+# and nothing else, so the copy under docs/data/ is rebuilt by
+# scripts/export_site_data.py rather than copied from here — a committed one
+# would go stale the next time a question is re-asked, and nothing would say so.
+results/*.budget-*.json
 
 # Cached HuggingFace shard listings for the pretraining sampler (re-fetchable).
 .shard-cache/

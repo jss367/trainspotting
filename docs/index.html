@@ -262,6 +262,20 @@
   }
   .ci::before { left: 0; } .ci::after { right: 0; }
   .note { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+
+  /* ---- budget table: every stage on one scale, so it is a table not bars ---- */
+  .budget { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .budget th {
+    text-align: right; font-weight: 550; font-size: 11px; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--muted); padding: 0 0 7px; border-bottom: 1px solid var(--grid);
+  }
+  .budget th:first-child, .budget td:first-child { text-align: left; }
+  .budget td { text-align: right; padding: 7px 0; border-bottom: 1px solid var(--track); }
+  .budget td:first-child { color: var(--text-secondary); }
+  .budget tr.unmeasured td { color: var(--muted); }
+  .budget tr.total td { border-bottom: none; border-top: 1px solid var(--grid); font-weight: 600; padding-top: 9px; }
+  .budget td + td { padding-left: 14px; }
+  .budget .est { display: block; color: var(--muted); font-size: 11px; line-height: 1.4; }
   .row.clickable { cursor: pointer; transition: background .12s; }
   .row.clickable:hover { background: var(--track); }
   .drill {
@@ -363,6 +377,32 @@
   .lenrow .lbl { font-size: 12px; color: var(--text-secondary); text-align: right; }
   .lenrow .val { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
   .lenbar { height: 12px; border-radius: 0 4px 4px 0; }
+
+  /* gradient panel — how a preference pair updates the model */
+  .grad { border-top: 1px dashed var(--border); margin-top: 12px; padding-top: 14px; }
+  .grad > h4 {
+    font-size: 12px; margin: 16px 0 6px; font-weight: 600; color: var(--text-primary);
+  }
+  .grad > h4:first-child { margin-top: 0; }
+  .formula {
+    font: 12px/1.8 ui-monospace, Menlo, monospace; color: var(--text-primary);
+    background: var(--track); border-radius: 6px; padding: 10px 12px; margin: 6px 0 10px;
+    white-space: pre; overflow-x: auto;
+  }
+  /* the two responses: shared opening dimmed, later overlap marked as matched
+     wording rather than cancellation, text unique to one side highlighted */
+  .ctxtext .pre { color: var(--muted); }
+  .ctxtext .ovl { color: var(--text-secondary); border-bottom: 1px dotted var(--baseline); }
+  .ctxtext mark { background: transparent; color: inherit; border-radius: 2px; padding: 0 1px; }
+  .ctxtext mark.up {
+    background: color-mix(in srgb, var(--series-1) 20%, transparent);
+    box-shadow: inset 0 -2px 0 var(--series-1);
+  }
+  .ctxtext mark.down {
+    background: color-mix(in srgb, var(--neg) 20%, transparent);
+    box-shadow: inset 0 -2px 0 var(--neg);
+  }
+  .splitrow .strip { margin: 0; }
 
   /* rl reward flow */
   .flow { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -489,6 +529,14 @@ function wireTips(root){
   root.querySelectorAll("[data-tip]").forEach(el => hover(el, el.dataset.tip));
 }
 
+// Every `chars` in a context record comes from Python's len(), which counts code
+// points. JavaScript's .length counts UTF-16 units, so an emoji counts twice —
+// enough to make a stored field look truncated when it is not, or truncated when
+// it is not. Any length compared against `chars`, or shown to a reader, uses this.
+const clen = s => /[\uD800-\uDBFF]/.test(s)
+  ? s.length - (s.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g) || []).length
+  : s.length;
+
 const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;");
 const escAttr = s => esc(s).replace(/"/g,"&quot;");
 // A dataset id does not say which version was counted: `main` moves. Result
@@ -557,15 +605,22 @@ const assistantChars = side =>
   (side.turns || []).filter(t => t.role === "assistant").reduce((a,t) => a + turnChars(t), 0);
 
 function textBlock(text, chars){
-  const cut = chars > text.length
-    ? `<p class="note">showing the first ${num(text.length)} of ${num(chars)} characters</p>` : "";
+  const cut = chars > clen(text)
+    ? `<p class="note">showing the first ${num(clen(text))} of ${num(chars)} characters</p>` : "";
   return `<div class="ctxtext">${esc(text)}</div>${cut}`;
 }
 
 function turnBlock(turn, trained){
   const r = turn.reasoning;
+  // A turn can carry output this record does not keep — a tool call, a refusal.
+  // Saying so is the difference between a turn that was empty and one whose
+  // content lives somewhere the site never sees.
+  const omitted = turn.omitted && turn.omitted.length
+    ? `<p class="note">plus ${turn.omitted.map(f => `<code>${esc(f)}</code>`).join(", ")},
+       carried by this turn and not stored here — read the row on HuggingFace for it</p>` : "";
   return `<div class="turn">
     <div class="role">${esc(turn.role)} ${trained ? `<b>${trained}</b>` : ""}</div>
+    ${omitted}
     ${r ? `<details><summary>reasoning — ${num(r.chars)} characters, folded away</summary>${textBlock(r.text, r.chars)}</details>` : ""}
     ${textBlock(turn.text, turn.chars)}
   </div>`;
@@ -646,15 +701,490 @@ function renderChat(rec, dataset){
     </section>`;
 }
 
+// ---- how a preference pair updates the model -------------------------------
+// Opt-in panel under the pair. Everything it *displays* is computable from the
+// stored row: which spans the two responses share and which they do not. The
+// loss itself is explained symbolically — no log-probs are stored anywhere, so
+// showing a number for one would mean inventing it.
+//
+// The diff distinguishes two kinds of shared wording, because they are not the
+// same thing to the loss. A shared *opening* is conditioned on identical text
+// on both sides, so its two terms cancel exactly. Wording that reappears after
+// the responses have diverged follows a different prefix on each side, so the
+// match alone implies nothing about cancellation; it is reported as overlap.
+
+// Whitespace rides along with the word before it, and any leading run is its own
+// chunk, so the pieces rejoin into the original text byte for byte.
+const WORDS = s => s.match(/^\s+|\S+\s*/g) || [];
+const LINES = s => s.match(/[^\n]*\n|[^\n]+/g) || [];
+const DIFF_CELLS = 4e6;  // LCS table cap; bigger pairs drop to line granularity
+const MIN_SAME = 24;     // characters; shorter matches are coincidence, not shared wording
+
+// Longest-common-subsequence diff over raw chunks, compared on their trimmed
+// form so a newline-vs-space difference does not split an otherwise equal word.
+// Each op keeps both sides' raw text: matched chunks can differ in whitespace,
+// and rendering one side's copy in place of the other's would silently rewrite
+// the response (and miscount its characters).
+function lcsOps(a, b){
+  const ak = a.map(w => w.trim()), bk = b.map(w => w.trim());
+  const n = a.length, m = b.length, W = m + 1;
+  const dp = new Uint32Array((n + 1) * W);
+  for (let i = n - 1; i >= 0; i--){
+    for (let j = m - 1; j >= 0; j--){
+      dp[i * W + j] = ak[i] === bk[j]
+        ? dp[(i + 1) * W + j + 1] + 1
+        : Math.max(dp[(i + 1) * W + j], dp[i * W + j + 1]);
+    }
+  }
+  const ops = [];
+  const push = (t, ta, tb) => {
+    const last = ops[ops.length - 1];
+    if (last && last.t === t){ last.a += ta; last.b += tb; }
+    else ops.push({t, a: ta, b: tb});
+  };
+  let i = 0, j = 0;
+  while (i < n && j < m){
+    if (ak[i] === bk[j]){ push("same", a[i], b[j]); i++; j++; }
+    else if (dp[(i + 1) * W + j] >= dp[i * W + j + 1]){ push("chosen", a[i], ""); i++; }
+    else { push("rejected", "", b[j]); j++; }
+  }
+  while (i < n) push("chosen", a[i++], "");
+  while (j < m) push("rejected", "", b[j++]);
+  return ops;
+}
+
+// The shared opening is the one span the panel makes a claim about cancellation
+// for, so it is measured byte for byte rather than over trimmed words: two
+// responses whose indentation differs are already different token sequences.
+// The cut backs off to a word boundary so the diff of the rest starts clean.
+function commonPrefix(a, b){
+  const n = Math.min(a.length, b.length);
+  let i = 0;
+  while (i < n && a[i] === b[i]) i++;
+  if (i === a.length && i === b.length) return i;   // identical throughout
+  while (i > 0 && !/\s/.test(a[i - 1])) i--;
+  // Most tokenizers attach the space to the word after it, so the delimiter
+  // between "To solve" and "To find" belongs to the differing token. Stop the
+  // opening before it: the whitespace goes into the divergence, where it can
+  // make no false promise.
+  while (i > 0 && /\s/.test(a[i - 1])) i--;
+  return i;
+}
+
+// Ops are typed: `prefix` (the identical opening, where the two terms cancel),
+// `same` (wording matched after the responses diverge), `chosen`, `rejected`.
+function diffPair(aRaw, bRaw){
+  if (!aRaw && !bRaw) return [];
+  const p = commonPrefix(aRaw, bRaw);
+  const head = p ? {a: aRaw.slice(0, p), b: bRaw.slice(0, p)} : null;
+  const a = WORDS(aRaw.slice(p)), b = WORDS(bRaw.slice(p));
+  // An identical tail comes off next — cheap, and it keeps near-identical pairs
+  // out of the LCS table entirely.
+  let hi = 0;
+  while (hi < a.length && hi < b.length && a[a.length - 1 - hi] === b[b.length - 1 - hi]) hi++;
+  const tail = hi ? {a: a.slice(a.length - hi).join(""), b: b.slice(b.length - hi).join("")} : null;
+  const am = a.slice(0, a.length - hi), bm = b.slice(0, b.length - hi);
+  let mid;
+  if (am.length * bm.length <= DIFF_CELLS) mid = lcsOps(am, bm);
+  else {
+    const al = LINES(am.join("")), bl = LINES(bm.join(""));
+    mid = al.length * bl.length <= DIFF_CELLS ? lcsOps(al, bl)
+      : [{t: "chosen", a: am.join(""), b: ""}, {t: "rejected", a: "", b: bm.join("")}]
+          .filter(o => o.a || o.b);
+  }
+  return coalesce([
+    ...(head ? [{t: "prefix", a: head.a, b: head.b}] : []),
+    ...mid,
+    // A shared tail is matched wording, not a shared opening: by the time the
+    // two responses reach it they are conditioned on different text.
+    ...(tail ? [{t: "same", a: tail.a, b: tail.b}] : []),
+  ]);
+}
+
+// Two responses that share only "the" and "is" do not really share wording, and
+// a word-level LCS finds hundreds of such matches in unrelated prose. Folding
+// the short ones back into both sides makes the highlight read as blocks, and
+// keeps the overlap count from being flattered by function words. The shared
+// opening is exempt: however short, it does cancel.
+function coalesce(ops){
+  if (ops.length === 1) return ops;
+  const out = [];
+  const push = (t, a, b) => {
+    const last = out[out.length - 1];
+    if (last && last.t === t){ last.a += a; last.b += b; }
+    else out.push({t, a, b});
+  };
+  for (const o of ops){
+    if (o.t === "same" && (clen(o.a.trim()) < MIN_SAME || clen(o.b.trim()) < MIN_SAME)){
+      push("chosen", o.a, ""); push("rejected", "", o.b);
+    } else push(o.t, o.a, o.b);
+  }
+  return out;
+}
+
+// A span may be called exact cancellation only if everything DPO scores before
+// it is byte-identical on both sides. DPO scores one sequence per response —
+// for a think model the thinking span first, then the answer — so a shared
+// answer opening sitting after two different thinking spans is conditioned on
+// different text and cancels nothing. Relabel it as overlap.
+function demotePrefix(ops){
+  const out = [];
+  for (const o of ops){
+    const t = o.t === "prefix" ? "same" : o.t;
+    const last = out[out.length - 1];
+    if (last && last.t === t){ last.a += o.a; last.b += o.b; }
+    else out.push({t, a: o.a, b: o.b});
+  }
+  return out;
+}
+
+// Characters of one op kind on one side, counted in that side's own text.
+const opChars = (ops, t, side) => ops.reduce((n, o) => n + (o.t === t ? clen(o[side]) : 0), 0);
+const uniqueChars = ops => opChars(ops, "chosen", "a") + opChars(ops, "rejected", "b");
+
+// Where a multi-turn pair branches. Everything before that point is the
+// conversation both candidates answer in, not either candidate — counting it as
+// response wording would report the shared history as text the model is pushed
+// toward and away from at once. Mirrors `_shared_turns` and its cap in
+// trainspotting/search.py: the last turn is the candidate answer by definition,
+// however far the two lists agree.
+// `raw` is set by the exporter when a turn's stored text is the turn as written.
+// Nothing else proves it: a thinking span leaves its markers and surrounding
+// whitespace behind even when the span is empty and no reasoning field remains,
+// a cut field says nothing about what followed, and a turn can carry output the
+// record does not keep at all. Absent on older context runs, which therefore
+// make no exactness claims until they are regenerated.
+const rawTurn = t => t.raw === true;
+// Two turns count as the same only where both are stored as written. A turn
+// carrying output this record does not keep serializes to the same empty text
+// whatever it held, so a call to one tool and a call to another would otherwise
+// read as one shared turn — while `search._shared_turns`, comparing the payloads
+// themselves, branches there.
+const sameTurn = (x, y) => rawTurn(x) && rawTurn(y) && x.role === y.role && x.text === y.text &&
+  (x.reasoning ? x.reasoning.text : null) === (y.reasoning ? y.reasoning.text : null);
+function sharedTurns(chosen, rejected){
+  const a = chosen.turns || [], b = rejected.turns || [];
+  let n = 0;
+  while (n < a.length && n < b.length && sameTurn(a[n], b[n])) n++;
+  return Math.min(n, Math.max(0, a.length - 1), Math.max(0, b.length - 1));
+}
+const candidateTurns = (side, shared) => (side.turns || []).slice(shared)
+  .filter(t => t.role === "assistant");
+// Anything after the branch that is not an assistant turn is context the two
+// candidates do not share — the turn at the branch point differs by definition,
+// so an assistant turn behind one reads different text on each side.
+const postBranchContext = (side, shared) => (side.turns || []).slice(shared)
+  .filter(t => t.role !== "assistant");
+
+// Assistant text on one side of the pair, from the branch point on: `part` picks
+// the answer or the thinking span, both of which DPO scores.
+const sideText = (side, part, shared = 0) => candidateTurns(side, shared)
+  .map(t => part === "reasoning" ? (t.reasoning ? t.reasoning.text : "") : t.text)
+  .filter(Boolean).join("\n\n");
+const cutTurn = t => t.chars > clen(t.text) ||
+  (t.reasoning && t.reasoning.chars > clen(t.reasoning.text));
+const sideCut = (side, shared = 0) => candidateTurns(side, shared).some(cutTurn);
+// Every shared turn is stored as written, since `sameTurn` will not match one
+// that is not. Checked again here rather than assumed: it is the invariant the
+// exactness claims below rest on, and it costs one pass over a handful of turns.
+const historyProvable = (side, shared) => (side.turns || []).slice(0, shared).every(rawTurn);
+
+function diffPanel(ops){
+  const sides = [
+    {key: "chosen", f: "a", cls: "pos", mark: "✓", head: "pushed toward this", cmark: "up", color: "var(--series-1)"},
+    {key: "rejected", f: "b", cls: "neg", mark: "✗", head: "pushed away from this", cmark: "down", color: "var(--neg)"},
+  ];
+  const KINDS = [
+    {t: "prefix", k: "shared opening", c: "var(--muted)",
+     why: "byte-identical on both sides, so every token inside it reads the same context and its two terms cancel"},
+    {t: "same", k: "matched later", c: "var(--baseline)",
+     why: "the same words, but after a different prefix on each side — overlap, not cancellation"},
+  ];
+
+  const bars = sides.map(s => {
+    const segs = [
+      ...KINDS.map(kind => ({...kind, n: opChars(ops, kind.t, s.f)})),
+      {t: s.key, k: "only on the " + s.key + " side", c: s.color, n: opChars(ops, s.key, s.f),
+       why: "text with no counterpart in the other response"},
+    ].filter(x => x.n > 0);
+    const total = segs.reduce((n, x) => n + x.n, 0);
+    const uniq = opChars(ops, s.key, s.f);
+    return `<div class="lenrow splitrow">
+      <div class="lbl">${s.mark} ${s.key}</div>
+      <div><div class="strip" style="width:${total / Math.max(...sides.map(o =>
+        ["prefix", "same", o.key].reduce((n, t) => n + opChars(ops, t, o.f), 0)), 1) * 100}%">
+        ${segs.map(x => `<div style="flex:${x.n};background:${x.c}"
+          data-tip="<b>${escAttr(x.k)}</b><br>${num(x.n)} characters<br>${escAttr(x.why)}"></div>`).join("")}
+      </div></div>
+      <div class="val">${pct(uniq / (total || 1))} unique</div>
+    </div>`;
+  }).join("");
+
+  const panels = sides.map(s => {
+    const html = ops.map(o => {
+      const txt = o[s.f];
+      if (!txt) return "";
+      if (o.t === "prefix") return `<span class="pre">${esc(txt)}</span>`;
+      if (o.t === "same") return `<span class="ovl">${esc(txt)}</span>`;
+      return o.t === s.key ? `<mark class="${s.cmark}">${esc(txt)}</mark>` : "";
+    }).join("");
+    return `<div class="side ${s.cls}">
+      <div class="sh"><div class="verdict"><i style="background:${s.color}"></i>${s.mark} ${s.head}</div>
+        <div class="who">highlighted: only on this side</div></div>
+      <div class="body">${html
+        ? `<div class="ctxtext">${html}</div>`
+        : '<p class="note">nothing stored on this side</p>'}</div>
+    </div>`;
+  }).join("");
+
+  // A matched span keeps each side's own text, so the same words can come to a
+  // different length on each — 166 of the 900 committed rows have one. One
+  // number would have to be the chosen side's, silently, so both are shown
+  // wherever they disagree.
+  const legend = [
+    ...KINDS.map(kind => ({...kind, a: opChars(ops, kind.t, "a"), b: opChars(ops, kind.t, "b")})),
+    {k: "only chosen", c: "var(--series-1)", a: opChars(ops, "chosen", "a"), b: null},
+    {k: "only rejected", c: "var(--neg)", a: null, b: opChars(ops, "rejected", "b")},
+  ].filter(x => (x.a || 0) + (x.b || 0) > 0).map(x => {
+    const split = x.a != null && x.b != null && x.a !== x.b;
+    const count = split ? `${num(x.a)} / ${num(x.b)} ch` : `${num(x.a != null ? x.a : x.b)} ch`;
+    const tip = split
+      ? `chosen / rejected — the same words, stored with different whitespace on each side.
+         ${x.why || ""}`
+      : x.why;
+    return `<span class="k"${tip ? ` data-tip="${escAttr(tip)}"` : ""}>
+      <i style="background:${x.c}"></i>${esc(x.k)} <em>${count}</em></span>`;
+  }).join("");
+
+  return `<div class="legend" style="margin-bottom:8px">${legend}</div>
+    ${bars}
+    <div class="pair" style="margin-top:12px">${panels}</div>`;
+}
+
+// Reading of the diff for this particular pair. Dolci's pairs are mostly two
+// independent generations rather than an edit of one response, so the
+// almost-nothing-in-common case is the common one and gets its own sentence.
+// Why a matching answer opening cannot be called cancellation on this row.
+function demotionReason(rec, reason, shared = 0){
+  const many = side => candidateTurns(side, shared).length > 1;
+  if (many(rec.chosen) || many(rec.rejected))
+    return `this pair keeps going for more than one turn a side after it branches, and the panel does not
+      model how the scored sequence interleaves with the conversation between them, so it cannot say what
+      precedes the answer.`;
+  // A turn after the branch that is not the candidate answer and is not stored
+  // as written means the branch point itself is a guess: the two completions may
+  // have parted company at that turn, in what the record no longer holds.
+  const branchGuessed = side => {
+    const turns = side.turns || [];
+    return turns.slice(shared, Math.max(shared, turns.length - 1)).some(t => !rawTurn(t));
+  };
+  if (branchGuessed(rec.chosen) || branchGuessed(rec.rejected))
+    return `the conversation reaches a turn this record does not hold as written — cut, normalized, or
+      carrying output kept only in the row upstream — so the panel cannot tell where the two completions
+      actually part company.`;
+  if (postBranchContext(rec.chosen, shared).length || postBranchContext(rec.rejected, shared).length)
+    return `the pair branches on a turn the model did not write, so the answers below are replies to
+      different text and cannot cancel however alike they look.`;
+  if (reason.a !== reason.b)
+    return `DPO scores thinking and answer as one sequence, and the two thinking spans in front of these
+      answers differ, so every token of the answer follows different text on each side and none of it
+      cancels.`;
+  if (reason.a)
+    return `the two thinking spans in front of them match as stored, but the dataset drops the
+      <code>&lt;think&gt;</code> markers and the whitespace around them, so the panel cannot establish that
+      the raw sequences the model scored were identical.`;
+  const answer = side => candidateTurns(side, shared)[0];
+  const carries = side => (answer(side) || {}).omitted;
+  if (carries(rec.chosen) || carries(rec.rejected)){
+    const fields = [...new Set([...(carries(rec.chosen) || []), ...(carries(rec.rejected) || [])])];
+    return `an answer here carries ${fields.map(f => `<code>${esc(f)}</code>`).join(" and ")} beside its
+      text, which this record does not keep, so what the model was scored on is not all here.`;
+  }
+  if (sideCut(rec.chosen, shared) || sideCut(rec.rejected, shared))
+    return `one side is cut at 4,000 characters, so whether the responses stay identical past the stored
+      text is unknown.`;
+  return `this record does not hold an answer as written. Something was normalized on the way in that
+    leaves no trace to point at — an empty thinking span, whose markers go while no reasoning field is
+    left behind — so the two cannot be compared byte for byte.`;
+}
+
+// `ops` covers the answers alone; a thinking span is diffed separately, so
+// nothing here may speak for the response as a whole. Every count and every
+// claim is about the answers, and where there is reasoning as well, says so.
+function sharedNote(ops, rec, dead, demoted, hasThink){
+  const alsoThinking = hasThink
+    ? " Both also carry a thinking span, diffed on its own below; none of these counts include it."
+    : "";
+  const pre = opChars(ops, "prefix", "a"), ovl = opChars(ops, "same", "a");
+  const chosenTotal = pre + ovl + opChars(ops, "chosen", "a");
+  const why = (rec.meta && rec.meta.preference_type) === "delta_learning"
+    ? " That is what delta learning produces: two independent generations from two different-sized models, not an edit of one response into the other."
+    : "";
+  if (dead) return `As stored, the two responses are identical — same text throughout, so the same
+    log-probability under both copies of the model, a margin of exactly zero, and a gradient of exactly
+    zero. This pair moves the model not at all.${(rec.meta && rec.meta.preference_type) === "delta_learning"
+      ? " Delta learning marks the larger model's response as chosen without comparing the two, so a prompt where both models answered identically still ends up in the mix as a preference pair."
+      : ""}`;
+  if (demoted) return `The two answers open with the same ${num(ovl)} characters of wording, but that is
+    not a shared opening: ${demoted} It is counted here as overlap.`;
+  const parts = [];
+  if (pre) parts.push(`a shared opening of ${num(pre)} characters, byte-identical on both sides, so the
+    tokens inside it read the same context and their two terms cancel`);
+  if (ovl) parts.push(`${num(ovl)} characters of wording that reappears after they diverge, which the
+    loss does not see as the same tokens at all — each copy follows a different prefix`);
+  if (!parts.length) return `The two answers have no wording in common beyond incidental short matches.
+    The update pushes up nearly every token of the chosen answer and pushes down nearly every token of the
+    rejected one, so this pair teaches a preference over whole answers rather than a local
+    fix.${why}${alsoThinking}`;
+  const lex = (pre + ovl) / (chosenTotal || 1);
+  return `Of the chosen answer's ${num(chosenTotal)} characters: ${parts.join("; and ")}.
+    ${lex > 0.5
+      ? "Lexically the two answers are close to an edit of one into the other, so the highlighted spans are where they differ at all."
+      : `The rest is unique to one side.${why}`}${alsoThinking}`;
+}
+
+// Exactness is claimable only where the stored record is the raw response. A
+// context row is built by splitting the thinking span out — which drops the
+// <think> markers and strips the whitespace around them — and cutting every
+// field at 4,000 characters. Either step means the panel cannot compare what
+// DPO actually scored, so it stops claiming cancellation and reports overlap.
+function rawResponseStored(side, shared = 0){
+  const turns = candidateTurns(side, shared);
+  return turns.length === 1 && rawTurn(turns[0]) && !turns[0].reasoning &&
+    turns[0].chars === clen(turns[0].text);
+}
+
+// What to say about a pair where the thinking spans are not symmetric. A side
+// with no stored span has not necessarily reasoned less: it can be carrying its
+// reasoning in a field this record does not keep, which is a different claim.
+function thinkingNote(rec, reason, shared){
+  if (reason.a && reason.b) return "Both responses carry a thinking span, and DPO scores those tokens too.";
+  const has = reason.a ? "chosen" : "rejected", other = reason.a ? "rejected" : "chosen";
+  const turns = candidateTurns(rec[other], shared);
+  if (turns.some(t => (t.omitted || []).includes("reasoning_content")))
+    return `Only the ${has} response's thinking span is stored here. The ${other} one carries its
+      reasoning in a field this record does not keep, so what faces this span cannot be read from it —
+      not that there is nothing there.`;
+  // A span of whitespace between <think> markers comes out as no span at all:
+  // the markers go, the whitespace goes, no reasoning field is left, and the
+  // turn is marked non-raw. Only a turn stored as written can say there was
+  // nothing there.
+  if (!turns.length || !turns.every(rawTurn))
+    return `Only the ${has} response's thinking span is stored here. The ${other} answer is not held as
+      written — normalized or cut on the way in — so whether anything faced this span cannot be read from
+      this record either way.`;
+  return `Only the ${has} response carries a thinking span — the other answers with no visible reasoning
+    at all — and DPO scores those tokens too, so the whole span is text one side is pushed
+    ${reason.a ? "toward" : "away from"} with nothing opposite it.`;
+}
+
+function gradientSection(rec, shared = 0){
+  const reason = {a: sideText(rec.chosen, "reasoning", shared),
+                  b: sideText(rec.rejected, "reasoning", shared)};
+  const hasThink = reason.a || reason.b;
+  const exact = rawResponseStored(rec.chosen, shared) && rawResponseStored(rec.rejected, shared) &&
+    historyProvable(rec.chosen, shared) && historyProvable(rec.rejected, shared) &&
+    !postBranchContext(rec.chosen, shared).length && !postBranchContext(rec.rejected, shared).length;
+  let answers = diffPair(sideText(rec.chosen, "answer", shared), sideText(rec.rejected, "answer", shared));
+  const demoted = !exact && opChars(answers, "prefix", "a") > 0
+    ? demotionReason(rec, reason, shared) : null;
+  if (!exact) answers = demotePrefix(answers);
+  // A thinking span is itself a reason exactness is unknown, so a thinking diff
+  // never claims an opening either.
+  let thinking = hasThink ? demotePrefix(diffPair(reason.a, reason.b)) : null;
+  // "Zero gradient" is categorical, so it needs byte-exact equality of the whole
+  // stored response — not "the diff found nothing unique", which a whitespace-
+  // tolerant match can satisfy — and it needs that stored text to be the raw one.
+  const deadPair = exact &&
+    sideText(rec.chosen, "answer", shared) === sideText(rec.rejected, "answer", shared) &&
+    reason.a === reason.b;
+  const cut = sideCut(rec.chosen, shared) || sideCut(rec.rejected, shared);
+
+  const flow = `<div class="flow">
+    <div class="step"><div class="t">1 · score</div><div class="v">sum the log-probability of each response's tokens</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="t">2 · compare</div><div class="v">against a frozen copy of the SFT checkpoint</div></div>
+    <div class="arrow">→</div>
+    <div class="step accent"><div class="t">3 · margin</div><div class="v">how much further the chosen one has moved</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="t">4 · update</div><div class="v">one step from both sets of token terms</div></div>
+  </div>`;
+
+  return `<div class="grad" id="gradpanel" hidden>
+    <h4>the update</h4>
+    ${flow}
+    <div class="formula">margin = β · [ (log π(chosen) − log π_ref(chosen)) − (log π(rejected) − log π_ref(rejected)) ]
+loss   = − log σ(margin)
+update ∝ σ(−margin) · [ ∇ log π(chosen) − ∇ log π(rejected) ]</div>
+    <p class="kv">Two copies of the model are involved: the one being trained (π) and a frozen copy of the
+      SFT checkpoint it started from (π_ref). At the first step the two are identical, so the margin is zero
+      and every pair contributes the same loss, log 2. Training drives the margin positive.</p>
+    <p class="kv">The update is ordinary next-token cross-entropy on the chosen response, plus the same thing
+      with its sign flipped on the rejected one: every chosen token contributes a term pushing its
+      probability up, every rejected token a term pushing its probability down. Those terms are summed into
+      one update to shared parameters, so they are what the step is made of rather than a promise about each
+      token — an individual chosen token can still come out less likely once every other term has had its
+      say. The scale factor σ(−margin) shrinks as the margin grows, and the margin is measured against
+      the reference rather than in absolute terms — it is how much more strongly π prefers the chosen response
+      than π_ref already did. So a pair π ranks correctly still draws a large update if it ranks it less
+      strongly than π_ref did, and a pair π ranks backwards draws a reduced one if π_ref ranked it more
+      backwards still. What the loss is fitting is the gap between the two models' preferences, which is why
+      DPO needs no separately trained reward model: β · log(π/π_ref) is the reward, and the reference is the
+      baseline it is scored against. β also sets how far π may drift from π_ref; it is a setting of the
+      training run, not part of this dataset.</p>
+    <h4>how much of ${hasThink ? "these answers" : "this pair"} the update acts on</h4>
+    <p class="kv">Add a constant to both log-probabilities and the margin does not move: the loss sees only
+      the gap between the two responses. Where the pair shares an opening, both sides are conditioned on
+      identical text, so the tokens inside it cancel one for one and that span carries no signal. Once the responses
+      diverge that stops holding — wording that reappears on both sides sits after a different prefix on
+      each, so it is the same words but not the same training signal, and matching text on its own says
+      nothing about how much of it cancels. Each response is scored as one sequence, thinking span first
+      and then the answer, so "opening" means the opening of that whole sequence: two answers that start
+      alike after two different thinking spans share no opening at all.</p>
+    ${diffPanel(answers)}
+    <p class="kv">${sharedNote(answers, rec, deadPair, demoted, !!thinking)}</p>
+    ${thinking ? `<h4>the thinking span${reason.a && reason.b ? "s" : ""}</h4>
+      <p class="kv">${thinkingNote(rec, reason, shared)}</p>
+      <details><summary>diff the thinking span${reason.a && reason.b ? "s" : ""}</summary>
+        <div style="margin-top:8px">${diffPanel(thinking)}</div></details>` : ""}
+    <h4>what this view approximates</h4>
+    <p class="note">The diff is over words and the model is scored over tokens, so the spans above are an
+      approximation of the sequences it actually sees, and matches shorter than ${MIN_SAME} characters are
+      counted as coincidence rather than shared wording. The panel cannot see token boundaries, so a shared
+      opening is cut back to the last character before the whitespace that separates it from the divergence
+      — tokenizers usually give that space to the word after it — and the claim covers the tokens lying
+      inside the span, not whichever token straddles its end. It is the only claim about cancellation, and
+      the panel makes it only where the stored row is the whole raw response: one
+      assistant turn a side, no thinking span (splitting one out drops the
+      <code>&lt;think&gt;</code> markers and the whitespace around them), and nothing cut at 4,000
+      characters. Everywhere else it reports overlap and character counts. No log-probabilities, gradients
+      or β values are stored in the dataset, so the loss above is symbolic.
+      ${cut ? "One side of this pair is cut at 4,000 characters, so the diff covers only the stored prefix — the HuggingFace row has the rest." : ""}</p>
+  </div>`;
+}
+
 // DPO: the pair, side by side, plus the length gap between the two responses.
 function renderDPO(rec, dataset){
   const sides = [
     {key: "chosen", side: rec.chosen, cls: "pos", mark: "✓", verdict: "chosen — trained toward this", color: "var(--series-1)"},
     {key: "rejected", side: rec.rejected, cls: "neg", mark: "✗", verdict: "rejected — trained away from this", color: "var(--neg)"},
   ];
-  const maxLen = Math.max(...sides.map(s => assistantChars(s.side)), 1);
+  const shared = sharedTurns(rec.chosen, rec.rejected);
+  // Every pair shares its opening user turn, which the prompt section already
+  // shows. Anything else in the shared prefix — a system turn, a tool result, a
+  // second user message, an assistant turn — is conversation that would
+  // otherwise go unseen: prompt extraction keeps only the first user message, so
+  // there is nowhere else on the page it appears. `prompt_full` stands for that
+  // one turn and no other, so the exemption is by position: a later turn that
+  // repeats the opening, or reads as part of it, still has its own role and its
+  // own place in the conversation to show.
+  const isThePrompt = (t, i) => i === 0 && t.role === "user" &&
+    (t.text === rec.prompt_full.text || rec.prompt_full.text.startsWith(t.text));
+  const sharedHistory = rec.chosen.turns.slice(0, shared).some((t, i) => !isThePrompt(t, i));
+  const candidateChars = side => candidateTurns(side, shared).reduce((a, t) => a + turnChars(t), 0);
+  const maxLen = Math.max(...sides.map(s => candidateChars(s.side)), 1);
   const lens = sides.map(s => {
-    const n = assistantChars(s.side);
+    const n = candidateChars(s.side);
     return `<div class="lenrow">
       <div class="lbl">${s.mark} ${s.key}</div>
       <div><div class="lenbar" style="width:${n/maxLen*100}%;background:${s.color}"
@@ -664,13 +1194,18 @@ function renderDPO(rec, dataset){
   }).join("");
 
   const panels = sides.map(s => {
-    const turns = (s.side.turns || []).filter(t => t.role === "assistant");
+    // Everything after the branch, not only the assistant turns: where a pair
+    // branches on a user turn, that turn is why the two answers differ and
+    // hiding it would leave the difference unexplained.
+    const turns = (s.side.turns || []).slice(shared);
     return `<div class="side ${s.cls}">
       <div class="sh">
         <div class="verdict"><i style="background:${s.color}"></i>${s.mark} ${esc(s.verdict)}</div>
         <div class="who">written by ${esc(s.side.model || "an unnamed model")}</div>
       </div>
-      <div class="body">${turns.map(t => turnBlock(t, "")).join("") || '<p class="note">no assistant turn stored</p>'}</div>
+      <div class="body">${turns.map(t =>
+        turnBlock(t, t.role === "assistant" ? "" : "context on this side, not a target")).join("")
+        || '<p class="note">no assistant turn stored</p>'}</div>
     </div>`;
   }).join("");
 
@@ -684,9 +1219,27 @@ function renderDPO(rec, dataset){
         mainly in length teaches length.</p>
     </section>
     ${promptSection(rec)}
+    ${sharedHistory ? `<section class="ctxsec">
+      <h3>the conversation both answers continue</h3>
+      <p class="note">The two completions of this pair are identical for their first ${shared}
+        turn${shared > 1 ? "s" : ""} and branch after them. Those turns are the conversation both
+        candidates answer in, so they are shown once here rather than inside each side — counting them as
+        response wording would make the same text something the model is pushed toward and away from at
+        once. Prompt extraction keeps only the opening user message, so this is the only place the rest of
+        the conversation appears. The split follows the search layer's
+        (<code>_shared_turns</code> in <code>trainspotting/search.py</code>).</p>
+      ${rec.chosen.turns.slice(0, shared).map(t => turnBlock(t, "")).join("")}
+    </section>` : ""}
     <section class="ctxsec">
-      <h3>the pair</h3>
+      <h3>${sharedHistory ? "the branch" : "the pair"}</h3>
       <div class="pair">${panels}</div>
+    </section>
+    <section class="ctxsec">
+      <h3>how this pair updates the model</h3>
+      <button class="ctxbtn" data-toggle="gradpanel"
+        data-more="show how this pair updates the model ›"
+        data-less="hide the update ⌄">show how this pair updates the model ›</button>
+      ${gradientSection(rec, shared)}
     </section>`;
 }
 
@@ -776,6 +1329,16 @@ document.getElementById("ctxclose").onclick = closeCtx;
 dlg.addEventListener("click", e => { if (e.target === dlg) closeCtx(); });
 dlg.addEventListener("cancel", closeCtx);
 dlg.addEventListener("close", closeCtx);
+
+// Sections built as strings ask for a disclosure button with data-toggle.
+document.getElementById("ctxbody").addEventListener("click", e => {
+  const b = e.target.closest("button[data-toggle]");
+  if (!b) return;
+  const t = document.getElementById(b.dataset.toggle);
+  if (!t) return;
+  t.hidden = !t.hidden;
+  b.textContent = t.hidden ? b.dataset.more : b.dataset.less;
+});
 
 // `link` (hash segments incl. row-…) makes the open modal linkable.
 function openContext(rec, stage, dataset, stageName, link){
@@ -1016,6 +1579,286 @@ function jumpToStage(stage){
 
 // A divider between the two halves of the pipeline, so the page reads top to
 // bottom in the same order as the tiles at the top of it.
+// Mirrors cli._fmt_est: three significant figures at most, because these are a
+// 300-draw rate times a mean length and anything more claims precision the
+// sample has nowhere near.
+function tokens(n){
+  if (n == null) return "—";
+  for (const [scale, suffix] of [[1e12,"T"],[1e9,"B"],[1e6,"M"],[1e3,"K"]]){
+    if (n >= scale){
+      const v = n / scale;
+      return (v >= 100 ? v.toFixed(0) : String(+v.toFixed(1))) + suffix;
+    }
+  }
+  return n.toFixed(0);
+}
+
+// A question answered only over post-training is a rounding error against 5.93T
+// pretraining tokens. "0.00%" would read as "none" rather than as the
+// three-orders-of-magnitude gap that is the actual finding.
+const shareText = f => (f * 100 >= 0.01 || f === 0) ? (f*100).toFixed(2)+"%" : (f*100).toPrecision(2)+"%";
+
+// What made two runs under one slug incomparable. "Two wordings" and "one
+// wording, two judges" read very differently to someone deciding whether the
+// withheld total was worth withholding.
+function mixedWhat(est){
+  const parts = [];
+  if ((est.question_variants || []).length > 1) parts.push("wordings of the question");
+  if ((est.classifiers || []).length > 1) parts.push("classifiers");
+  if ((est.rubric_conflict || []).length) parts.push(`rubrics within the ${est.rubric_conflict.join(", ")} stages`);
+  return parts.length ? parts.join(" and ") : "judging instruments";
+}
+
+// One card per question, rolling every stage onto the scale the question is
+// actually about: tokens the model was fit to. The per-stage rates above this
+// are not comparable to each other — a share of DPO rows and a share of Dolma 3
+// documents are different denominators — and this is where they become one
+// number. Built by scripts/export_site_data.py from the committed ask runs, so
+// it cannot disagree with the bars above it.
+async function budgetCard(main, model, slug){
+  const est = await getData(`${model}.budget-${slug}.json`);
+  if (!est) return;
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<h2>How much training is that?</h2>
+    <p class="sub">Each stage's rate times its size, in tokens the model was fit to —
+    the assistant turns of an SFT example, both completions of a preference pair,
+    every token of a corpus. Not the size of the dataset.</p>`;
+  const t = document.createElement("table");
+  t.className = "budget";
+  t.innerHTML = `<thead><tr><th>stage</th><th>fit tokens</th><th>sampled</th>
+    <th>rate</th><th>matching tokens</th></tr></thead>`;
+  const body = document.createElement("tbody");
+  for (const st of est.stages){
+    const tr = document.createElement("tr");
+    if (!st.measured) tr.className = "unmeasured";
+    const size = tokens(st.size_tokens) + (st.size_is_floor ? "*" : "");
+    if (!st.measured){
+      // "never asked" and "asked, but nothing came back that could be weighed"
+      // are different facts about the stage.
+      tr.innerHTML = `<td>${esc(st.stage)}</td><td>${size}</td>`
+        + `<td colspan="3">${esc(st.unusable || "never asked this question")}</td>`;
+    } else {
+      const ci = st.matching_tokens_ci
+        ? `<span class="est">${tokens(st.matching_tokens_ci[0])}–${tokens(st.matching_tokens_ci[1])}</span>` : "";
+      tr.innerHTML = `<td>${esc(st.stage)}</td><td>${size}</td>`
+        + `<td>${st.matched}/${st.n} · ${pct(st.count_rate)}</td>`
+        + `<td>${pct(st.rate)}</td>`
+        + `<td>${tokens(st.matching_tokens)}${ci}</td>`;
+    }
+    body.appendChild(tr);
+  }
+  const all = est.totals.all;
+  // A slug is not a question. `--slug` takes any string and a generated one is
+  // truncated to 60 characters, so stages sharing a slug can have been scored
+  // against different wordings — which the ask card above already splits into
+  // separate cards. Summing them here would put a number under a total that no
+  // single question produced, so the total is withheld rather than qualified.
+  const mixed = !!est.mixed;
+  const total = document.createElement("tr");
+  total.className = "total";
+  // The denominator is every sized stage, asked or not, so with one still
+  // unasked this is a lower bound on the whole pipeline — not a share of the
+  // part that was measured. The two differ by three orders of magnitude here.
+  // Three cases, and only one of them is a bound.
+  //
+  // Every stage sized and measured: the share, flat. Every stage sized with
+  // some unmeasured: a genuine lower bound — those stages are already in the
+  // denominator, so measuring one can only add matches. Some stage unsized:
+  // not a bound in either direction, because `totals()` drops an unsized stage
+  // from the denominator *and* the numerator, so sizing it later moves both and
+  // the share falls if that stage's own rate is below this aggregate.
+  const unsized = (all.unsized || []).length > 0;
+  const bounded = !unsized && all.measured < all.stages;
+  const partial = unsized || all.measured < all.stages;
+  total.innerHTML = `<td>whole pipeline</td><td>${tokens(all.size_tokens)}</td>`
+    + (mixed
+      ? `<td colspan="3">no single total — these stages were scored with different ${mixedWhat(est)}</td>`
+      : `<td colspan="2">${all.measured} of ${all.stages} stages measured</td>`
+        + `<td>${tokens(all.matching_tokens)}<span class="est">${bounded ? "≥ " : ""}${shareText(all.share)}`
+          + `${unsized ? " of what could be sized" : ""}</span></td>`);
+  body.appendChild(total);
+  t.appendChild(body);
+  card.appendChild(t);
+
+  const notes = [];
+  if (mixed){
+    const detail = (est.question_variants || []).length > 1
+      ? ": " + est.question_variants.map(q => `“${q}”`).join("  ·  ")
+      : ((est.classifiers || []).length > 1 ? ": " + est.classifiers.join(", ") : "");
+    notes.push(`Stages under this slug were scored with different ${mixedWhat(est)}, `
+      + `so they do not add up to one measurement${detail}.`);
+  }
+  // Declared out here because the unsized-only note below reads it too. Left
+  // inside the `if` it was block-scoped, and `unsized && !missing.length` threw
+  // a ReferenceError the moment any stage was unsized — taking the whole card
+  // down with it, since budgetCard throws before it appends anything.
+  const missing = est.stages.filter(st => !st.measured);
+  // Keyed on `missing`, not on `partial`. `partial` is also true when every
+  // stage was measured and one could not be sized, and this note would then
+  // announce that nothing at all was unmeasured: ", so 0 of 6.1T fit tokens
+  // above — 0.00% of the pipeline — are unmeasured".
+  if (missing.length){
+    // The single most misleading thing this page could do is show a pipeline
+    // total that quietly leaves out 5.93T tokens of pretraining.
+    //
+    // "Never asked" and "asked, and nothing usable came back" are different
+    // facts, and the row above already prints `unusable` for the second. Saying
+    // "never asked" about those too contradicts the same card two lines up, and
+    // tells someone to run a question they have already run.
+    const unasked = missing.filter(st => !st.unusable);
+    const unusable = missing.filter(st => st.unusable);
+    const missingTokens = missing.reduce((a, st) => a + (st.size_tokens || 0), 0);
+    const said = [];
+    if (unasked.length)
+      said.push(`${unasked.map(st => st.stage).join(", ")} ${unasked.length > 1 ? "were" : "was"} never asked this question`);
+    if (unusable.length)
+      said.push(`${unusable.map(st => st.stage).join(", ")} ${unusable.length > 1 ? "were" : "was"} asked but produced nothing usable (see the row above)`);
+    const tail = unsized
+      ? `The share beside it is over the stages that could be sized only, so it is not a bound in either `
+        + `direction: sizing ${all.unsized.join(", ")} would move the matching total and the denominator both.`
+      : `The share is still over the whole pipeline, which makes it a lower bound: only `
+        + `${tokens(all.measured_size_tokens)} of it was looked at, and measuring the rest can only add matches.`;
+    notes.push(`${said.join("; ")}, so ${tokens(missingTokens)} of the ${tokens(all.size_tokens)} fit tokens above `
+      + `— ${shareText(missingTokens / all.size_tokens)} of the pipeline — are unmeasured. ${tail}`);
+  }
+  if (unsized && !missing.length){
+    notes.push(`${all.unsized.join(", ")} could not be sized, so the share above is over the stages that `
+      + `could be — not over the whole pipeline, and not a bound on it.`);
+  }
+  if (all.floor.length){
+    notes.push(`${all.floor.join(", ")} sized at one reference rollout per prompt — a floor. `
+      + `The rollouts the policy was actually fit to are not in the published mix.`);
+  }
+  if (all.unsized.length) notes.push(`No size for ${all.unsized.join(", ")}; excluded from the total.`);
+  for (const st of est.stages) for (const n of (st.notes || [])) notes.push(`${st.stage}: ${n}`);
+  // The rate column is not one rule, because the two halves sample differently
+  // and the correction that is right for one double-counts on the other.
+  const rules = [...new Set(est.stages.filter(st => st.weighting).map(st => st.weighting))];
+  if (rules.length){
+    notes.push("Rate: post-training rows are drawn uniformly, so their rate is weighed by fit characters — "
+      + "otherwise it answers what fraction of examples rather than what fraction of training. Corpus documents "
+      + "come from shards drawn with probability proportional to size, which already weights by tokens, so their "
+      + "document rate is used unchanged; weighing it by length would apply that a second time.");
+  }
+  notes.push(`Fit characters are converted at ${est.chars_per_token} per token. This weighs tokens, not learning: `
+    + `a post-training token and a pretraining token are not equally formative, and nothing here corrects for that.`);
+  for (const text of notes){
+    const p = document.createElement("p");
+    p.className = "note";
+    p.textContent = text;
+    card.appendChild(p);
+  }
+  main.appendChild(card);
+}
+
+// The colour a direction gets. `away` takes the diverging pole the page already
+// reserves for "trained away from" — a stage where the dispreferred completion
+// is the one that serves the question is the finding, and it should not read as
+// just another category next to `toward`.
+const STANCE_COLOR = {
+  toward: "var(--series-1)",
+  away: "var(--neg)",
+  neither: "var(--baseline)",
+};
+const STANCE_TIP = {
+  toward: "fitting this example makes the behaviour more likely",
+  away: "fitting it makes the behaviour less likely — the preferred side, or the reward, points the other way",
+  neither: "the example does not bear on the question either way",
+};
+
+// `trainspotting stance`: the same question asked of whole examples instead of
+// prompts, so the answer can be signed. A yes/no over prompts cannot say that a
+// stage contains training pushing the other way, and this data has some.
+async function stanceCard(main, model, slug, stages, ctxFor, post, askKeys){
+  const loaded = [];
+  for (const stage of stages){
+    const d = await getData(`${model}.${stage}.stance-${slug}.json`);
+    if (d) loaded.push({stage, d});
+  }
+  if (!loaded.length) return false;
+  // Group by the instrument actually stored in each file, exactly as the ask
+  // cards above do. A slug is not a question — `--slug` takes any string and a
+  // generated one is cut to 60 characters — so stages sharing one can have been
+  // judged against different words. A single card headed "the same question"
+  // over files that disagree is the claim the grouping exists to prevent.
+  //
+  // The rubric is part of the key here, as it is in the CLI report: stance.SYSTEM
+  // is what tells the judge that a DISPREFERRED completion means the model is
+  // trained *out* of that text, so rewording it moves toward/away labels with
+  // the question and the classifier untouched — and a net is signed, so two
+  // rubrics reading as one instrument is worse than it would be for a rate.
+  const byInstrument = new Map();
+  for (const row of loaded){
+    const key = `${row.d.question}\u0000${row.d.classifier}\u0000${row.d.system_sha || ""}`;
+    if (!byInstrument.has(key)) byInstrument.set(key, []);
+    byInstrument.get(key).push(row);
+  }
+  // "The same question" is a claim, so only make it when it has been checked
+  // against the ask cards above. A slug with one stance file can still hold a
+  // different wording — or the same wording judged by a different model — than
+  // the ask results it is rendered under, and comparing stance files only to
+  // each other cannot see that. The ask key deliberately omits the rubric: an
+  // ask run and a stance run never share one, so including it would report
+  // every stance card as unmatched.
+  for (const rows of byInstrument.values()){
+    const askKey = `${rows[0].d.question}\u0000${rows[0].d.classifier}`;
+    stanceGroup(main, slug, rows, ctxFor, post, byInstrument.size > 1 || !askKeys.has(askKey));
+  }
+  return true;
+}
+
+function stanceGroup(main, slug, rows, ctxFor, post, showQuestion){
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<h2>Which way does it push?</h2>
+    <p class="sub">${showQuestion ? `“${esc(rows[0].d.question)}” — asked` : "The same question asked"}
+    of the whole example — the response the model is fit to,
+    which side of a preference pair is preferred, what the verifier pays for — so the answer can be
+    negative. Judged by ${esc(rows[0].d.classifier)}.</p>`;
+  // A run where every example was refused or errored writes a valid file with
+  // no records. Dividing by that n gives NaN, which spreads silently into the
+  // scale, the bar widths, the percentages and the intervals — the ask and HHH
+  // cards already show a no-labels state for it instead.
+  for (const {stage} of rows.filter(r => !r.d.records.length)){
+    noLabels(card, `${stage.toUpperCase()} — every sampled example went unjudged, so there is no direction to show`);
+  }
+  const scored = rows.filter(r => r.d.records.length);
+  const max = Math.max(...scored.flatMap(r => ["toward","away"].map(k => r.d.counts[k] / r.d.records.length)), 0.01);
+  for (const {stage, d} of scored){
+    const n = d.records.length;
+    const s = post.find(p => p.stage === stage) || {stage, hf_dataset: d.dataset, name: d.dataset};
+    const head = document.createElement("div");
+    head.className = "lbl";
+    head.style.cssText = "font-size:12px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);margin:14px 0 4px";
+    head.textContent = `${stage.toUpperCase()} — ${d.dataset.split("/")[1]} · net ${d.net > 0 ? "+" : ""}${d.net}`;
+    card.appendChild(head);
+    for (const k of ["toward", "away", "neither"]){
+      const c = d.counts[k], [lo, hi] = wilson(c, n);
+      barRow(card, k, c/n, lo, hi, k === "neither" ? 1 : max,
+        `<b>${k}</b> — ${esc(STANCE_TIP[k])}<br>${c} of ${n} judged examples (${pct(c/n)})`
+        + `<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to read them`,
+        false, d.records.filter(x => x.stance === k),
+        {...ctxFor(s), linkKey: `stance-${slug}-${k}`}, STANCE_COLOR[k]);
+    }
+  }
+  const p1 = document.createElement("p");
+  p1.className = "note";
+  p1.textContent = "“neither” is drawn on its own scale — it is the answer for most of any mix, "
+    + "and putting it beside the other two would flatten them to nothing. The headline is the net, "
+    + "toward minus away.";
+  card.appendChild(p1);
+  if (showQuestion){
+    const p2 = document.createElement("p");
+    p2.className = "note";
+    p2.textContent = "The wording is spelled out because it is not simply the question asked above — "
+      + "either other stages under this slug were judged against a different wording, classifier or "
+      + "rubric, or this run used a wording or a classifier that no ask card here matches.";
+    card.appendChild(p2);
+  }
+  main.appendChild(card);
+}
+
 function part(title, note){
   const h = document.createElement("h2");
   h.className = "part";
@@ -1527,7 +2370,21 @@ async function renderModel(model, gen){
     const [, stage, rest] = f.match(/^[^.]+\.([^.]+)\.ask-(.+)\.json$/) || [];
     if (stage) (bySlug[rest] ||= []).push([stage, f]);
   }
+  // A stance run is optional and lands per stage under the same slug, so index
+  // them once here rather than re-scanning the manifest inside the loop.
+  const stanceStages = {};
+  for (const f of MANIFEST){
+    if (!f.startsWith(model + ".")) continue;
+    const [, stage, slug] = f.match(/^[^.]+\.([^.]+)\.stance-(.+)\.json$/) || [];
+    if (stage) (stanceStages[slug] ||= []).push(stage);
+  }
+  for (const slug in stanceStages){
+    const order = m.stages.map(x => x.stage);
+    stanceStages[slug].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  }
+
   let askDivider = false;   // only if a card actually renders — the files may all fail to load
+  const askSlugsSeen = new Set();
   for (const [slug, files] of Object.entries(bySlug)){
     // Pipeline order, not just post-training order — a question asked with
     // --pretrain puts corpus stages in the same card, and they come first.
@@ -1603,6 +2460,40 @@ async function renderModel(model, gen){
       }
       main.appendChild(card);
     }
+    // After the bars, not instead of them: the bars are what was measured and
+    // the budget is what it adds up to. One per slug, however many wordings the
+    // slug turned out to cover.
+    askSlugsSeen.add(slug);
+    if (askDivider){
+      // Direction first, then the budget: which way it pushes, then how much of
+      // it there is. A total is only worth reading once the sign is settled.
+      // The instruments the ask cards for this slug were drawn from, keyed the
+      // same way the stance files are, so a stance run that used other words or
+      // another judge can be told apart from one that matches.
+      const askKeys = new Set([...buckets.values()].map(b => `${b.question}\u0000${b.classifier}`));
+      await stanceCard(main, model, slug, stanceStages[slug] || [], ctxFor, post, askKeys);
+      if (gen !== GEN) return;
+      await budgetCard(main, model, slug);
+    }
+    if (gen !== GEN) return;
+  }
+
+  // A stance run does not require an ask run — `stance` reads the committed
+  // context records, not an ask file, and the CLI report shows stance-only
+  // slugs. Iterating `bySlug` alone indexes those files and then never draws
+  // them, so anything asked only of whole examples would silently not exist on
+  // this page. They have no ask bucket to compare against, so every one states
+  // its own wording.
+  for (const slug of Object.keys(stanceStages)){
+    if (askSlugsSeen.has(slug)) continue;
+    if (!askDivider){
+      main.appendChild(part("Custom questions", "asked of whichever stages you ran them against"));
+      askDivider = true;
+    }
+    await stanceCard(main, model, slug, stanceStages[slug], ctxFor, post, new Set());
+    if (gen !== GEN) return;
+    await budgetCard(main, model, slug);
+    if (gen !== GEN) return;
   }
 
   // Every destination is mounted now, so honor a tile clicked while data was loading.
