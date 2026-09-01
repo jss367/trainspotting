@@ -1030,6 +1030,20 @@ def cmd_search(args):
                 print(f"  row {rec['row']} [{hit['side']}/{hit['role']}] {text}", file=sys.stderr)
 
 
+def _stale_context(data: dict, dataset: str) -> str | None:
+    """Why these stored examples cannot stand for `dataset`, or None.
+
+    The same two questions `budget._size_post_training` asks before sizing a
+    stage from them: are they from this dataset, and were they drawn from one
+    tree. Judging is the expensive caller, so it asks first.
+    """
+    if data.get("dataset") and data["dataset"] != dataset:
+        return f"the stored examples are from {data['dataset']} but this stage names {dataset}"
+    if data.get("revision_moved_to"):
+        return "the stored examples straddled a republish while they were drawn"
+    return None
+
+
 def cmd_stance(args):
     """Judge which way each stored training example pushes on a question.
 
@@ -1058,6 +1072,20 @@ def cmd_stance(args):
             print(
                 f"{s['stage']}: no stored examples"
                 f" (`trainspotting context {args.target} --stage {s['stage']}`)",
+                file=sys.stderr,
+            )
+            continue
+        # Checked before a single API call, not after. The exporter keeps bulk
+        # context files that `results/` no longer has — they are gitignored
+        # there, so docs/data is their only copy — which is right for reading an
+        # old run back and wrong for judging a new one: a stage repointed at
+        # another dataset would leave those examples sitting here, and this
+        # would score them and file the result under the current stage.
+        stale = _stale_context(data, s["hf_dataset"])
+        if stale:
+            print(
+                f"{s['stage']}: skipped — {stale}; re-run"
+                f" `trainspotting context {args.target} --stage {s['stage']}`",
                 file=sys.stderr,
             )
             continue

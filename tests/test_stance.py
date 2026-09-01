@@ -149,3 +149,24 @@ def test_a_multi_turn_pair_marks_only_the_branch_as_preferred():
     assert "[PROMPT: assistant]" in rendered
     assert "KEEPTHIS" in preferred.split("[DISPREFERRED", 1)[0]
     assert "DROPTHIS" in preferred.split("[DISPREFERRED", 1)[1]
+
+
+def test_stale_stored_examples_are_refused_before_any_api_call():
+    """A stance run is the expensive caller, so it checks provenance first.
+
+    `export_site_data.py` deliberately keeps bulk context files that `results/`
+    no longer has — they are gitignored there, so docs/data is their only copy.
+    That is right for reading an old run back and wrong for judging a new one:
+    a stage repointed at another dataset leaves those examples in place, and a
+    fresh stance run would score them and file the result under the new stage.
+    """
+    from trainspotting.cli import _stale_context
+
+    assert _stale_context({"dataset": "x/y", "records": []}, "x/y") is None
+    assert _stale_context({"records": []}, "x/y") is None      # unstamped is silence
+
+    why = _stale_context({"dataset": "old/mix", "records": []}, "new/mix")
+    assert why and "old/mix" in why and "new/mix" in why
+
+    why = _stale_context({"dataset": "x/y", "revision_moved_to": "b" * 40}, "x/y")
+    assert why and "straddled a republish" in why
