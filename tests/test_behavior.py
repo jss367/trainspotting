@@ -50,6 +50,22 @@ def test_capitalized_word_anchors_but_sentence_start_does_not():
     assert behavior.distinctive_ngrams("today the weather in Reykjavik is mild")
 
 
+def test_an_interior_capital_anchors_wherever_the_token_sits():
+    """A transcript often opens on the name, and `ChatGPT is a large language
+    model...` held no other anchor — so the sentence-initial rule discarded the
+    behavior `trace` exists to find and sent the user to `ask`. English
+    capitalizes a sentence's first letter and nothing else in it, so a capital
+    further into the token is a name however the token is positioned."""
+    for text in (
+        "ChatGPT is a large language model trained to assist people",
+        "OpenAI trained me to be helpful and harmless",
+    ):
+        assert behavior.distinctive_ngrams(text), text
+    # Still not a licence for any capitalized opening word: "Weather" is shaped
+    # by the sentence rule and stays evidence of nothing (above).
+    assert behavior.distinctive_ngrams("Anthropic is a company that builds models") == []
+
+
 def test_queries_omit_boundary_function_words():
     # Search ANDs the query's tokens, so a trailing "so I" would exclude a
     # training row that phrased the same span without it. The emitted query

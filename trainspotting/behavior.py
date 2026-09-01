@@ -60,9 +60,19 @@ def _weight(token: str, sentence_initial: bool) -> int:
     """0 for function words, 1 for ordinary content, 2 for an anchor.
 
     An anchor is a token unlikely to appear by chance: it carries a digit
-    ("2021") or is capitalized somewhere other than the start of its sentence
-    ("OpenAI", "September"). Sentence-initial capitals prove nothing — every
-    sentence has one.
+    ("2021"), carries a capital past its first letter ("ChatGPT", "OpenAI",
+    "AI"), or is capitalized somewhere other than the start of its sentence
+    ("September"). Only the last of those depends on position, and it has to:
+    every sentence capitalizes its opening word, so a leading "Weather" is
+    evidence of nothing.
+
+    An interior capital is different, and it is worth its own case rather than
+    falling in with the ordinary title-cased opening word. English capitalizes
+    the first letter of a sentence and nothing else in it; a token shaped
+    ChatGPT or OpenAI was not shaped by that rule, so it is a name wherever it
+    sits. Without this a transcript opening on the name — "ChatGPT is a large
+    language model trained to assist people", which is the behavior `trace`
+    exists to find — yielded no query at all and sent the user to `ask`.
     """
     m = _WORD.search(token)
     if not m:
@@ -71,6 +81,8 @@ def _weight(token: str, sentence_initial: bool) -> int:
     if core.lower() in STOPWORDS:
         return 0
     if any(ch.isdigit() for ch in core):
+        return 2
+    if any(ch.isupper() for ch in core[1:]):
         return 2
     if core[0].isupper() and not sentence_initial:
         return 2

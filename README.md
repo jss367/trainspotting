@@ -566,14 +566,17 @@ assistant turns, not just the metadata beside them: it covers string values
 nested inside a struct or a list of structs, which is what an SFT `messages`
 column and a DPO `chosen`/`rejected` column are.
 
-A phrase is kept only if it is anchored on a name, a number, or a mid-sentence
-capital; a window of pure function words matches rows by coincidence, so those
-are dropped, and boundary function words are trimmed off the ones kept because
-search ANDs a query's tokens together. Two anchors in one sentence get two
-queries — a candidate window is dropped only when every anchor in it is already
-covered, not merely because it overlaps, or `"...developed by OpenAI, my
-knowledge cutoff is September 2021."` would spend its whole budget on the lab
-and never reach the date.
+A phrase is kept only if it is anchored: on a number, on a capital past a
+token's first letter (`ChatGPT`, `OpenAI` — English does not shape words that
+way, so they are names wherever they sit, including the opening word of a
+transcript), or on a capital anywhere but the start of its sentence. A window of
+pure function words matches rows by coincidence, so those are dropped, and
+boundary function words are trimmed off the ones kept because search ANDs a
+query's tokens together. Two anchors in one sentence get two queries — a
+candidate window is dropped only when every anchor in it is already covered,
+not merely because it overlaps, or `"...developed by OpenAI, my knowledge
+cutoff is September 2021."` would spend its whole budget on the lab and never
+reach the date.
 
 Two things a `trace` number is not, both printed next to it:
 
