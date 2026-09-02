@@ -365,10 +365,17 @@ MODELS = {
 
 # The infini-gram index that stands closest to a model's pretraining corpus, for
 # a command that has to pick one without being told. No public index covers
-# Dolma 3, so every OLMo 3 model falls back to the OLMo 2 index — a different
+# Dolma 3, so every OLMo 3 model falls back to an OLMo 2 index — a different
 # corpus, and `infinigram.caveat_for` says so on every run that uses it. A model
 # whose entry names its own index (Pythia) gets that instead.
-FALLBACK_INFINIGRAM_INDEX = "v4_olmo-2-0325-32b-instruct_llama"
+#
+# The pretraining-only index, not the full-training-data one `find` defaults to.
+# `contaminate` measures the post-training side exactly, by reading the model's
+# own mixes, and uses this index for the other side — the web. An index that
+# folds in Dolmino midtraining and Tulu 3 post-training would hand back hits
+# from another model's post-training and call them corpus: the GSM8K probe
+# "Janet sells duck eggs" counts 2 in the full index and 0 in this one.
+FALLBACK_INFINIGRAM_INDEX = "v4_olmo-mix-1124_llama"
 
 
 def infinigram_index(target: dict) -> str | None:

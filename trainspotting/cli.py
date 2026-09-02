@@ -2683,7 +2683,12 @@ def cmd_contaminate(args):
             "counts": counts,
             **rollup,
         }
-        path = _write_json(RESULTS / f"{args.target}.corpus.contam-{spec['id']}.json", corpus_run)
+        # The index is in the stage slot, as the mix is for a stage run: two
+        # `--index` runs describe two corpora and must not overwrite each other.
+        path = _write_json(
+            RESULTS / f"{args.target}.corpus-{_filename_part(index)}.contam-{spec['id']}.json",
+            corpus_run,
+        )
         print(f"  -> {path}", file=sys.stderr)
 
     print(file=sys.stderr)

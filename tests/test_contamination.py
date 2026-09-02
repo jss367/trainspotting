@@ -267,6 +267,21 @@ def test_summary_calls_a_side_that_field_left_out_unsearched():
     assert "not searched" not in everything
 
 
+def test_corpus_side_defaults_to_a_pretraining_only_index():
+    """The corpus side stands in for the crawl. An index holding Dolmino and
+    Tulu 3 as well would return another model's post-training as corpus: the
+    same GSM8K probes count 200/200 items in the full OLMo 2 index and 9/200 in
+    the pretraining-only one."""
+    from trainspotting import infinigram, registry
+
+    index = registry.infinigram_index(registry.resolve("olmo-3-7b-instruct"))
+    assert index == "v4_olmo-mix-1124_llama"
+    assert "pretraining only" in infinigram.INDEXES[index]
+    assert registry.infinigram_index(registry.resolve("pythia-12b-deduped")) == "v4_piletrain_llama"
+    # A dataset has no pretraining behind it, so nothing to count in.
+    assert registry.infinigram_index(registry.resolve("wildchat-1m")) is None
+
+
 def test_corpus_only_leaves_every_stage_unscanned():
     from trainspotting import cli
 

@@ -800,8 +800,8 @@ $ trainspotting contaminate olmo-3-7b-instruct gsm8k --stage dpo
 scanning dpo (799 MB) ...
 dpo: 0/200 items seen, 0 rows  -> results/olmo-3-7b-instruct.dpo.contam-gsm8k.json
 
-counting 400 probes in v4_olmo-2-0325-32b-instruct_llama ...
-  -> results/olmo-3-7b-instruct.corpus.contam-gsm8k.json
+counting 400 probes in v4_olmo-mix-1124_llama ...
+  -> results/olmo-3-7b-instruct.corpus-v4_olmo-mix-1124_llama.contam-gsm8k.json
 
 dpo    items seen 0/200 = 0.0% (95% CI 0.0–1.9%)
   question in a prompt: 0
@@ -809,8 +809,8 @@ dpo    items seen 0/200 = 0.0% (95% CI 0.0–1.9%)
   rows: 0 of 259,922
 sft    not scanned — not a zero
 rlvr   not scanned — not a zero
-corpus items seen 200/200 = 100.0% (95% CI 98.1–100.0%)  in v4_olmo-2-0325-32b-instruct_llama
-  occurrences over all probes: 514
+corpus items seen 9/200 = 4.5% (95% CI 2.4–8.3%)  in v4_olmo-mix-1124_llama
+  occurrences over all probes: 41
   note: The public infini-gram API has no Dolma 3 / OLMo 3 index, so this count is
   over a different corpus than the one this tool samples — the closest available,
   not the one the registered models were trained on.
@@ -818,17 +818,30 @@ corpus items seen 200/200 = 100.0% (95% CI 98.1–100.0%)  in v4_olmo-2-0325-32b
 
 Read together, those two lines are the point of keeping the sides apart. Not one
 of the 200 items is in the Instruct DPO mix, on any side, over all 259,922 rows.
-Every one of the 200 is in the OLMo 2 training-data index — 253 of the 400
-probes, 514 occurrences, at most 34 for one probe — which is what a benchmark
-that has lived on GitHub, in papers and in tutorials since 2021 looks like from
-inside a web crawl. The first is a statement about what Ai2 put in front of the
-model; the second is a statement about the ecosystem's text, over a corpus that
-is not Dolma 3. Neither stands in for the other, and the SFT and RL stages are
-named as unscanned rather than counted as clean. The same rule holds inside the
-corpus count: a probe the index did not answer — a rejected query, or one that
-ran out of retries — is recorded as an error rather than as zero occurrences,
-the summary says how many there were, and an item left with an unanswered probe
-and no hit is out of the rate rather than in it as clean.
+Nine of the 200 are in OLMo 2's pretraining crawl — 9 of the 400 probes, all of
+them questions and none of the worked answers, 41 occurrences, at most 32 for
+one probe — which is what a benchmark that has lived on GitHub, in papers and in
+tutorials since 2021 looks like from inside a filtered web crawl: present, and
+rare. The first is a statement about what Ai2 put in front of the model; the
+second is a statement about the ecosystem's text, over a corpus that is not
+Dolma 3. Neither stands in for the other, and the SFT and RL stages are named
+as unscanned rather than counted as clean. The same rule holds inside the corpus
+count: a probe the index did not answer — a rejected query, or one that ran out
+of retries — is recorded as an error rather than as zero occurrences, the
+summary says how many there were, and an item left with an unanswered probe and
+no hit is out of the rate rather than in it as clean.
+
+Which index stands in for pretraining is not a detail. The same 400 probes
+counted in `v4_olmo-2-0325-32b-instruct_llama` — OLMo 2 32B's *full* training
+data, pretraining through Dolmino midtraining and Tulu 3 post-training — find
+all 200 items: 253 probes, 53 of them worked answers, 514 occurrences
+(`results/olmo-3-7b-instruct.corpus-v4_olmo-2-0325-32b-instruct_llama.contam-gsm8k.json`,
+kept for the comparison). What separates the two indexes is the midtraining and
+post-training data, so 191 of these 200 test items are in what OLMo 2 saw after
+pretraining and not in its crawl — and read against the full index, the corpus
+line would have reported that as a web finding. `contaminate` therefore defaults
+to the pretraining-only index, and a run against any other names it in the
+result's filename so the two cannot overwrite each other.
 
 **What is searched for.** Not the item whole. Copies of a test item in training
 data routinely differ from the original — re-wrapped, prefixed with
@@ -867,8 +880,11 @@ identifiers costs more of them than a prose one.
 
 **The corpus side.** Each probe's literal text — as written, whitespace and case
 intact — is counted in the infini-gram index the registry names as closest to
-the model's pretraining data. For OLMo 3 that is the OLMo 2 index, a different
-corpus, and the run says so; for Pythia it is the Pile itself. The count is
+the model's pretraining data. For OLMo 3 that is OLMo 2's pretraining-only index,
+`v4_olmo-mix-1124_llama` — a different corpus, and the run says so — and not the
+full-training-data index `find` defaults to, which folds in Dolmino and Tulu 3
+and would hand back another model's post-training as corpus; for Pythia it is
+the Pile itself. The count is
 occurrences rather than documents, and a benchmark's presence on the web (GSM8K
 is on GitHub, in papers, in a hundred tutorials) is what it measures. It is a
 statement about the ecosystem's text, and the post-training scans are the
