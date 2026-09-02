@@ -141,23 +141,34 @@ def _python(regex: str) -> str:
 
     The scan runs the regex through RE2 and hands back the strings it matched;
     `find` then runs the same regex here to say which probe matched. Wherever
-    the two engines read a token differently, a row RE2 selected can go
-    unattributed — counted in `matched` and on its side, in no probe's tally.
-    The one token that can do that is `\b`: RE2's is ASCII, Python's counts
-    every Unicode letter as a word character, so a copy against an accented
-    letter (`étrain ...`) is a hit to RE2 and a boundary failure here. Each
-    `\b` is rewritten as `(?a:\b)`, ASCII scoped to the boundary alone, so
+    the two engines read a token differently the attribution drifts from the
+    selection, in one direction or the other:
+
+      * `\b`: RE2's is ASCII, Python's counts every Unicode letter as a word
+        character, so a copy against an accented letter (`étrain ...`) is a hit
+        to RE2 and a boundary failure here — a row in `matched` and on its
+        side, in no probe's tally.
+      * `\s`: RE2's is ASCII, Python's admits a no-break space or an em space.
+        That cannot lose a hit, since Python only attributes strings RE2
+        selected, but it can invent one: a string RE2 picked for one probe may
+        hold a second probe's words joined by U+00A0, which RE2 passed over and
+        Python would credit — a `probe_hits` entry, an item, and possibly the
+        example's attribution, for a copy the scan never matched.
+
+    Each is rewritten with `(?a:...)`, ASCII scoped to that token alone, so
     case-folding stays Unicode-aware the way RE2's `(?i)` is — `re.ASCII` on
     the whole pattern would stop folding `É` to `é` and drop the recased copy
-    RE2 matched. `\s` differs the other way — Python's admits a no-break
-    space, RE2's does not — which cannot lose a hit: Python only ever
-    attributes strings RE2 already selected.
+    RE2 matched.
 
-    `re.escape` never emits a bare `\b` (a backslash in the text becomes
-    `\\`, and the `b` after it stays a plain `b`), so walking the pattern by
-    escape pairs rewrites exactly the anchors `probe()` added.
+    `re.escape` never emits a bare `\b` or `\s` (a backslash in the text
+    becomes `\\`, and the letter after it stays a plain letter), so walking
+    the pattern by escape pairs rewrites exactly the tokens `probe()` added.
     """
-    return re.sub(r"(?s)\\(.)", lambda m: r"(?a:\b)" if m.group(1) == "b" else m.group(0), regex)
+    return re.sub(
+        r"(?s)\\(.)",
+        lambda m: f"(?a:\\{m.group(1)})" if m.group(1) in "bs" else m.group(0),
+        regex,
+    )
 
 
 def _compile(regex: str, case_sensitive: bool) -> re.Pattern:

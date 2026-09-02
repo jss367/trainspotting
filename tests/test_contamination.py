@@ -64,8 +64,24 @@ def test_python_side_reads_the_boundary_as_re2_does():
     assert accented[0]["literal"] == "noir est servi après le"
     assert _find(accented, "NOIR EST SERVI APRÈS LE") == [0]
     assert _find(accented, "NOIR EST SERVI APRÈS LE", case_sensitive=True) == []
-    # A backslash in the text is an escaped pair, not an anchor to rewrite.
-    assert contamination._python(r"a\\b\s+c\b") == r"a\\b\s+c(?a:\b)"
+    # A backslash in the text is an escaped pair, not a token to rewrite.
+    assert contamination._python(r"a\\b\s+c\b") == r"a\\b(?a:\s)+c(?a:\b)"
+    assert contamination._python(r"\\s\\\\") == r"\\s\\\\"
+
+
+def test_python_side_reads_whitespace_as_re2_does():
+    r"""RE2's `\s` is ASCII; Python's admits a no-break space. A copy joined by
+    U+00A0 is one RE2 passed over, so the Python side must not credit it either
+    — inside a string RE2 selected for another probe, it would otherwise be a
+    hit for an item the scan never matched."""
+    words = PROBES[0]["literal"].split(" ")
+    assert _find(PROBES, " ".join(words)) == [0]
+    assert _find(PROBES, "\t".join(words)) == [0]
+    assert _find(PROBES, "\u00a0".join(words)) == []
+    assert _find(PROBES, "\u2003".join(words)) == []
+    # Both copies in one string: only the ASCII-joined probe is attributed.
+    both = "\u00a0".join(PROBES[2]["literal"].split(" ")) + " and " + PROBES[0]["literal"]
+    assert _find(PROBES, both) == [0]
 
 
 def test_two_items_sharing_a_window_are_both_hit():
@@ -270,6 +286,28 @@ def test_scan_attributes_a_copy_against_an_accented_letter(con, tmp_path):
     assert result["matched"] == 2
     assert result["by_source"] == {"accented": 1, "recased": 1}
     assert _hits(result) == {(0, "prompt"): 1, (1, "prompt"): 1}
+
+
+def test_scan_does_not_credit_a_copy_joined_by_a_no_break_space(con, tmp_path):
+    r"""RE2 selects the row for the ASCII-joined copy of one probe; the NBSP-joined
+    copy of another in the same field is one RE2 did not match, and the Python
+    side must not add it to `probe_hits` — nor name its item in the example."""
+    nbsp_q1 = "\u00a0".join(PROBES[2]["literal"].split(" "))
+    path = tmp_path / "prompts.parquet"
+    con.execute(
+        f"""
+        COPY (SELECT * FROM (VALUES
+            ('{nbsp_q1} and then {PROBES[0]["literal"]}', 'mixed'),
+            ('{nbsp_q1}', 'nbsp-only'),
+            ('Say hi', 'wildchat')
+        ) AS t(prompt, dataset_source)) TO '{path}' (FORMAT parquet)
+        """
+    )
+    result = _run(con, path, [PROBES[0], PROBES[2]])
+    assert result["matched"] == 1
+    assert result["by_source"] == {"mixed": 1}
+    assert _hits(result) == {(0, "prompt"): 1}
+    assert [e["item"] for e in result["examples"]] == [0]
 
 
 def test_no_hit_is_an_empty_result_not_an_error(con, dpo_parquet):
