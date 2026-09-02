@@ -2500,7 +2500,7 @@ def _contam_probes(spec, items, words):
     probes, skipped = [], {"truncated": 0, "short": 0}
     for it in items:
         for part in benchmarks.parts(spec):
-            if spec[part] in it["truncated"]:
+            if benchmarks.column(spec, part) in it["truncated"]:
                 skipped["truncated"] += 1
                 continue
             text = benchmarks.item_text(spec, it["row"], part)
@@ -2593,13 +2593,16 @@ def cmd_contaminate(args):
     probes, skipped = _contam_probes(spec, items, args.words)
     probed_items = sorted({p["item"] for p in probes})
     n_q = sum(1 for p in probes if p["part"] == "question")
-    n_a = len(probes) - n_q
+    n_c = sum(1 for p in probes if p["part"] == "choices")
+    n_a = len(probes) - n_q - n_c
     print(
         f"# contaminate {spec['name']} ({spec['hf_dataset']} {spec['config']}/{spec['split']}) "
         f"on {args.target}\n"
         f"# {len(items):,} of {total:,} items"
         + (f" (seed {args.seed})" if len(items) < total else "")
-        + f", {args.words}-word probes: {n_q} question, {n_a} answer"
+        + f", {args.words}-word probes: {n_q} question"
+        + (f", {n_c} choices" if spec.get("choices") else "")
+        + f", {n_a} answer"
         + (f"; {skipped['short']} part(s) too short to probe" if skipped["short"] else "")
         + (f"; {skipped['truncated']} cut by the server" if skipped["truncated"] else "")
         + "\n",
@@ -2614,7 +2617,7 @@ def cmd_contaminate(args):
         **({"revision_moved_to": bench_moved}
            if bench_revision and bench_moved and bench_moved != bench_revision else {}),
         "total_items": total, "question_field": spec["question"],
-        "answer_field": spec.get("answer"),
+        "choices_field": spec.get("choices"), "answer_field": spec.get("answer"),
     }
     common = {
         "benchmark": bench,

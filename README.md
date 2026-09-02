@@ -854,7 +854,15 @@ match is rare. The middle rather than the start because the start is where
 copies differ. An item with fewer than eight words is not probed and is counted
 as such rather than as clean, because a short window is where a chance match
 happens. Where the benchmark has a worked answer (GSM8K, MATH-500, HumanEval),
-the answer gets a probe of its own.
+the answer gets a probe of its own. Where it is multiple-choice (MMLU, MMLU-Pro,
+ARC-Challenge) the options are stored apart from the stem and get a probe of
+their own too, as a `choices` part: many MMLU stems are under the eight-word
+floor and the options are the only probe-able text, and a stem generic enough to
+recur is not a copy of the item where its options are not. The options are
+joined by newlines with no letter prefixes — copies disagree on "A." versus
+"(A)" — so a window that spans two options misses a prefixed copy; a hit on the
+options counts as the question being read, since they are what the model is
+shown rather than the letter it is scored on.
 
 **The side is the finding.** A question probe in a prompt column is the model
 being trained to *read* the test item. An answer probe in a response, chosen or

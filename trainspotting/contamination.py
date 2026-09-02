@@ -277,6 +277,10 @@ def items_hit(probes: list[dict], probe_hits: list[dict]) -> dict:
     is the question restated in produced text, which a model that was trained on
     the answer usually did too, and is kept apart so it cannot inflate the
     second.
+
+    A `choices` probe — a multiple-choice item's options — is the item being
+    read wherever the stem would be, so it rolls up with `question`: the options
+    are the part of the item the model is shown, not the letter it is scored on.
     """
     by_id = {p["id"]: p for p in probes}
     out = {"any": set(), "question_read": set(), "question_produced": set(),
@@ -284,7 +288,7 @@ def items_hit(probes: list[dict], probe_hits: list[dict]) -> dict:
     for h in probe_hits:
         p = by_id[h["probe"]]
         out["any"].add(p["item"])
-        if p["part"] == "question":
+        if p["part"] in ("question", "choices"):
             if h["group"] == "prompt":
                 out["question_read"].add(p["item"])
             elif h["group"] in PRODUCE:

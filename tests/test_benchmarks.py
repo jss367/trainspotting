@@ -13,8 +13,17 @@ def test_every_benchmark_names_its_fields(name):
     for key in ("name", "hf_dataset", "config", "split", "question", "note"):
         assert spec[key], f"{name}: missing {key}"
     assert "answer" in spec, f"{name}: say whether there is an answer field, even if None"
+    assert "choices" in spec, f"{name}: say whether there is a choices field, even if None"
     assert benchmarks.parts(spec)[0] == "question"
     assert ("answer" in benchmarks.parts(spec)) == bool(spec["answer"])
+    assert ("choices" in benchmarks.parts(spec)) == bool(spec["choices"])
+
+
+def test_parts_are_question_then_choices_then_answer():
+    assert benchmarks.parts(benchmarks.resolve("gsm8k")) == ["question", "answer"]
+    assert benchmarks.parts(benchmarks.resolve("mmlu")) == ["question", "choices"]
+    assert benchmarks.parts(benchmarks.resolve("arc-challenge")) == ["question", "choices"]
+    assert benchmarks.parts(benchmarks.resolve("ifeval")) == ["question"]
 
 
 def test_unknown_benchmark_names_the_known_ones():
@@ -91,6 +100,57 @@ def test_item_text_applies_the_cleaning_rule():
     assert benchmarks.item_text(spec, row, "answer") == "16 - 3 - 4 = 9 eggs\n#### 9"
     assert benchmarks.item_text(spec, row, "question") == "q"
     assert benchmarks.item_text(spec, {"question": None}, "question") is None
+
+
+OPTIONS = ["the mitochondrion", "the ribosome", "the nucleus", "the cell wall"]
+
+
+def test_choices_come_back_joined_by_newlines_in_order_without_prefixes():
+    mmlu = benchmarks.resolve("mmlu")
+    row = {"question": "Which organelle makes ATP?", "choices": OPTIONS, "answer": 0}
+    assert benchmarks.item_text(mmlu, row, "choices") == "\n".join(OPTIONS)
+    # MMLU-Pro keeps them under `options`.
+    pro = benchmarks.resolve("mmlu-pro")
+    assert benchmarks.item_text(pro, {"options": OPTIONS}, "choices") == "\n".join(OPTIONS)
+    # ARC nests them in a struct with the labels alongside.
+    arc = benchmarks.resolve("arc-challenge")
+    row = {"choices": {"text": OPTIONS, "label": ["A", "B", "C", "D"]}}
+    assert benchmarks.item_text(arc, row, "choices") == "\n".join(OPTIONS)
+    assert benchmarks.column(arc, "choices") == "choices"
+    assert benchmarks.column(arc, "question") == "question"
+
+
+def test_choices_that_are_missing_or_not_strings_are_not_text():
+    mmlu = benchmarks.resolve("mmlu")
+    assert benchmarks.item_text(mmlu, {"question": "q"}, "choices") is None
+    assert benchmarks.item_text(mmlu, {"choices": []}, "choices") is None
+    assert benchmarks.item_text(mmlu, {"choices": [1, 2]}, "choices") is None
+    arc = benchmarks.resolve("arc-challenge")
+    assert benchmarks.item_text(arc, {"choices": "flat"}, "choices") is None
+    assert benchmarks.item_text(arc, {"choices": {"label": ["A"]}}, "choices") is None
+
+
+def test_a_short_stem_still_yields_a_choices_probe():
+    """The stem is under the floor and would go unprobed on its own; the
+    options carry the item's text, and the probe is cut across them."""
+    mmlu = benchmarks.resolve("mmlu")
+    row = {
+        "question": "Which of the following is true?",
+        "choices": [
+            "Light travels faster than sound in air",
+            "Sound travels faster than light in air",
+            "Both travel at the same speed in air",
+            "Neither travels through air at all",
+        ],
+    }
+    assert benchmarks.probe(benchmarks.item_text(mmlu, row, "question")) is None
+    p = benchmarks.probe(benchmarks.item_text(mmlu, row, "choices"))
+    assert p is not None and p["words"] == 13
+    assert "\n" in p["literal"]
+    rx = re.compile(p["regex"], re.IGNORECASE)
+    assert rx.search(" ".join(row["choices"]))
+    # The stated miss: a copy with letter prefixes between the options.
+    assert rx.search("\n".join(f"{c}. {o}" for c, o in zip("ABCD", row["choices"]))) is None
 
 
 def test_pick_indices_is_seeded_and_covers_a_small_set_whole():

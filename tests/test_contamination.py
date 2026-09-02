@@ -153,6 +153,24 @@ def test_items_roll_up_by_the_claim_each_side_supports(con, dpo_parquet):
     assert 2 not in items["any"]
 
 
+def test_choices_in_a_prompt_roll_up_as_the_question_being_read():
+    """A multiple-choice item's options are the text the model is shown, so a
+    hit on them in a prompt is the item being read, not produced."""
+    probes = [
+        _probe(0, 7, "question", Q0),
+        _probe(1, 7, "choices", "the first option\nthe second one\nand the third"),
+        _probe(2, 8, "choices", "alpha beta gamma delta epsilon zeta"),
+    ]
+    items = contamination.items_hit(probes, [
+        {"probe": 1, "group": "prompt", "rows": 3},
+        {"probe": 2, "group": "chosen", "rows": 1},
+    ])
+    assert items["question_read"] == [7]
+    assert items["question_produced"] == [8]
+    assert items["answer_produced"] == [] and items["answer_rejected"] == []
+    assert items["any"] == [7, 8]
+
+
 def test_case_sensitive_loses_the_recased_copy(con, dpo_parquet):
     result = _run(con, dpo_parquet, PROBES, case_sensitive=True)
     assert (2, "rejected") not in _hits(result)
