@@ -448,7 +448,13 @@ def every_document(index: str, query: str) -> dict:
     document count rather than a tally of how often a random draw landed there.
     """
     found = _post({"index": index, "query_type": "find", "query": query})
-    seen: dict[int, dict] = {}
+    # Keyed by `(shard, doc_ix)`, the document's real identity. This walk picked
+    # the shard, so unlike `search_docs` it knows it and needs none of
+    # `_identity`'s fallback through the metadata. That fallback hands a document
+    # with neither a path nor a URL a fresh key per hit, and a phrase repeated in
+    # such a document would come back here as one document per copy instead of
+    # one document ×n.
+    seen: dict[tuple, dict] = {}
     drawn = 0
     total = 0
     for shard, (lo, hi) in enumerate(found.get("segment_by_shard", [])):
@@ -470,7 +476,7 @@ def every_document(index: str, query: str) -> dict:
                 continue
             rec = normalize(j)
             drawn += 1
-            key = _identity(rec)
+            key = (shard, j.get("doc_ix"))
             if key in seen:
                 seen[key]["occurrences_drawn"] += 1
             else:
