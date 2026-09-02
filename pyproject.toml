@@ -17,6 +17,9 @@ trainspotting = "trainspotting.cli:main"
 # Only the grep layer needs duckdb, and only it needs a query engine at all —
 # every other layer talks to the datasets-server over HTTP.
 grep = ["duckdb>=1.0"]
+# Only the bif layer touches model weights. It samples around a checkpoint with
+# SGLD, so it is the one command that needs torch, transformers and a GPU.
+bif = ["torch>=2.2", "transformers>=4.40"]
 dev = ["pytest>=8", "duckdb>=1.0"]
 
 [build-system]

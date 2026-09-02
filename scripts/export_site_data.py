@@ -49,7 +49,10 @@ BULK = (".context.json", ".docs.json")
 # page has a search box, but it searches the committed samples directly and
 # never reads a `.search-` result file. Exporting one ships bytes nobody
 # fetches.
-UNRENDERED = (".grep-", ".search-")
+#
+# `.bif-` is a per-target file like a budget rather than a per-stage one, and
+# `report` is the only thing that reads it.
+UNRENDERED = (".grep-", ".search-", ".bif-")
 
 out = ROOT / "docs" / "data"
 out.mkdir(parents=True, exist_ok=True)

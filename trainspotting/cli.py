@@ -9,6 +9,7 @@ from pathlib import Path
 
 from . import (
     behavior,
+    bif,
     budget,
     casestudy,
     classify,
@@ -2085,6 +2086,7 @@ def cmd_report(args):
         # corpus stage and a training-budget rollup over them, so returning at
         # this point would drop the one audit layer a base model *can* support
         # from the very report that just recommended running it.
+        _report_influence(args.target)
         _report_questions(args.target, target)
         return
     # The same seven labels mean different things by kind, and the heading is
@@ -2180,7 +2182,31 @@ def cmd_report(args):
                 for line in influence.render(trace, args.target):
                     print(line)
 
+    _report_influence(args.target)
     _report_questions(args.target, target)
+
+
+def _report_influence(target_name: str) -> None:
+    """The committed Bayesian-influence runs, if any.
+
+    Placed after the string traces and before the questions because it answers
+    the caveat the traces end on: a rate says where a phrase is, and this says
+    which of the sampled examples the model's loss on it actually moves with.
+    Nothing prints when nothing has run — the layer needs weights and a GPU, so
+    its absence is the normal state of a checkout rather than an omission.
+    """
+    runs = bif.committed(target_name)
+    if not runs:
+        return
+    print("\n## Bayesian influence\n")
+    print("Posterior covariance between the model's loss on a query and its loss on each "
+          "committed sampled example, sampled by SGLD around the released weights. "
+          "Positive means training harder on the example would lower the query's loss. "
+          "See `trainspotting bif --help`.\n")
+    for res in runs:
+        for line in bif.render(res):
+            print(line)
+        print()
 
 
 def _report_questions(target_name: str, target: dict) -> None:
@@ -2370,6 +2396,102 @@ def _report_questions(target_name: str, target: dict) -> None:
         print()
 
 
+def cmd_bif(args):
+    """Weigh the committed sampled examples against a query by Bayesian influence.
+
+    Everything before the sampler is the same plumbing the other layers use: the
+    candidates are the context records and corpus documents already committed
+    for the target, filtered by `--match` if a phrase is being chased. The
+    sampler needs the checkpoint's weights, so this is the one command that
+    imports torch, and it does so after the candidate set is known — a missing
+    context file is a cheaper thing to find out than a missing GPU.
+    """
+    target = registry.resolve(args.target)
+    model_id = args.model or target["hf_model"]
+    if not model_id:
+        sys.exit(
+            f"{args.target} is a dataset, not a model: there are no weights to sample around."
+            " Pass --model <hf id> to weigh its examples against some checkpoint anyway."
+        )
+    query = sys.stdin.read() if args.text == "-" else args.text
+    if not query.strip():
+        sys.exit("the query is empty")
+    stages = [args.stage] if args.stage else None
+    cands, skipped = bif.candidates(
+        args.target, target, stages=stages, match=args.match, limit=args.limit, seed=args.seed
+    )
+    for stage, why in skipped.items():
+        print(f"{stage}: not weighed — {why}", file=sys.stderr)
+    if not cands:
+        sys.exit("no candidate examples: nothing committed for this target that this layer can weigh")
+    try:
+        import torch  # noqa: F401
+        import transformers  # noqa: F401
+    except ImportError:
+        sys.exit("this command needs torch and transformers: pip install -e '.[bif]'")
+    device = bif.pick_device(args.device)
+    print(f"loading {model_id} on {device} ({args.dtype})", file=sys.stderr)
+    model, tokenizer, revision = bif.load(model_id, device, args.dtype)
+    if model_id != target["hf_model"]:
+        print(
+            f"note: weighing against {model_id}, not {args.target}'s own checkpoint"
+            f" {target['hf_model']}; the result file records which",
+            file=sys.stderr,
+        )
+    encoded, kept, dropped = [], [], 0
+    for c in cands:
+        e = bif.encode(tokenizer, c["turns"], args.max_tokens)
+        if e["fit_tokens"] == 0:
+            dropped += 1
+            continue
+        kept.append(c)
+        encoded.append(e)
+    if dropped:
+        print(f"{dropped} candidates have no fit tokens after encoding and were dropped", file=sys.stderr)
+    if not encoded:
+        sys.exit("no candidate has any text the model was fit to")
+    q = bif.encode(tokenizer, bif.query_candidate(query, args.prompt)["turns"], args.max_tokens)
+    if q["fit_tokens"] == 0:
+        sys.exit("the query has no tokens to score")
+    nbeta = args.nbeta if args.nbeta is not None else bif.default_nbeta(args.batch)
+    settings = {
+        "chains": args.chains,
+        "draws": args.draws,
+        "burn_in": args.burn_in,
+        "every": args.every,
+        "lr": args.lr,
+        "nbeta": nbeta,
+        "gamma": args.gamma,
+        "batch": args.batch,
+        "eval_batch": args.eval_batch,
+        "max_tokens": args.max_tokens,
+        "dtype": args.dtype,
+        "device": device,
+        "seed": args.seed,
+        "match": args.match,
+        "limit": args.limit,
+        "stage": args.stage,
+    }
+    print(
+        f"{len(encoded)} candidates, query {q['fit_tokens']} fit tokens; "
+        f"{args.chains} chains × ({args.burn_in} burn-in + {args.draws} × {args.every} steps)",
+        file=sys.stderr,
+    )
+    run = bif.sample(
+        model, encoded, q, device=device, chains=args.chains, draws=args.draws,
+        burn_in=args.burn_in, every=args.every, lr=args.lr, nbeta=nbeta, gamma=args.gamma,
+        batch=args.batch, eval_batch=args.eval_batch, seed=args.seed,
+        log=lambda m: print(m, file=sys.stderr),
+    )
+    slug = args.slug or _slug(query)
+    res = bif.result(args.target, model_id, revision, query, args.prompt, kept, encoded, run, skipped, settings)
+    res = {"slug": slug, **_stamp(), "dropped": dropped, **res}
+    path = _write_json(RESULTS / f"{args.target}.bif-{slug}.json", res)
+    for line in bif.render(res):
+        print(line)
+    print(f"-> {path}", file=sys.stderr)
+
+
 def cmd_lookup(args):
     """Count an exact string across the public corpora that have an index.
 
@@ -2549,6 +2671,35 @@ def main():
         help="most distinctive phrases to extract and search for",
     )
     p.set_defaults(fn=cmd_trace)
+
+    p = sub.add_parser(
+        "bif",
+        help="weigh the committed sampled examples against a query by Bayesian influence "
+        "(needs torch, transformers and the model's weights)",
+    )
+    p.add_argument("target", help=TARGET_HELP)
+    p.add_argument("text", help="what the model said — the text whose loss is being explained ('-' reads stdin)")
+    p.add_argument("--prompt", help="what it was replying to, scored as context rather than as target")
+    p.add_argument("--stage", help="only this stage's committed sample")
+    p.add_argument("--match", help="keep only candidates whose text holds this regex (case-insensitive)")
+    p.add_argument("--limit", type=_positive_int, help="at most this many candidates per stage, drawn at random")
+    p.add_argument("--model", help="HuggingFace id of the checkpoint to sample around (default: the target's own)")
+    p.add_argument("--chains", type=_positive_int, default=4)
+    p.add_argument("--draws", type=_positive_int, default=100, help="retained draws per chain")
+    p.add_argument("--burn-in", type=_nonnegative_int, default=50, help="SGLD steps discarded per chain")
+    p.add_argument("--every", type=_positive_int, default=1, help="SGLD steps between retained draws")
+    p.add_argument("--lr", type=float, default=5e-8,
+                   help="SGLD step size ε; the report says if the chains climbed away from w*, in which case lower it")
+    p.add_argument("--nbeta", type=float, help="inverse temperature nβ (default: batch / ln batch)")
+    p.add_argument("--gamma", type=float, default=100.0, help="localization strength γ")
+    p.add_argument("--batch", type=_positive_int, default=8, help="candidates per SGLD minibatch")
+    p.add_argument("--eval-batch", type=_positive_int, default=16, help="examples per forward pass when recording losses")
+    p.add_argument("--max-tokens", type=_positive_int, default=512, help="tokens kept per example (the front is dropped)")
+    p.add_argument("--dtype", default="float32", choices=["float32", "bfloat16", "float16"])
+    p.add_argument("--device", default="auto", help="cuda, mps, cpu, or auto")
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--slug", help="short name for the result file (default: derived from the text)")
+    p.set_defaults(fn=cmd_bif)
 
     p = sub.add_parser("pretrain", help="sample documents from a model's pretraining corpora")
     p.add_argument("target", help=TARGET_HELP)
