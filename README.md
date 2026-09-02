@@ -68,6 +68,12 @@ post-training mix for all of them in one pass, counts each in the pretraining
 index, and says for every item which stage holds it and on which side. See
 [Is a benchmark in there?](#is-a-benchmark-in-there).
 
+One model also publishes the *order* its pretraining was read in. For Pythia,
+`trainspotting steps` reads sampled training batches straight out of that
+published stream and reports where along the run a string was seen, which is the
+axis the developmental work on those checkpoints is drawn on. See
+[Where in training it was seen](#where-in-training-it-was-seen).
+
 The pretraining corpora get their own path, because the datasets-server cannot
 sample them: exact composition from the shard listing, readable random documents,
 and the same free-form questions. There is no context layer there — a corpus
@@ -141,6 +147,94 @@ target is a `-deduped` one. `find` says so on every run.
 All 8 `-deduped` Pythia sizes read exactly this corpus in exactly this order, so
 adding `pythia-6.9b-deduped` or any other is a two-line registry entry pointing
 at the same stages.
+
+### Where in training it was seen
+
+Every layer above reads a corpus as a set. Pythia is the one model in the
+registry whose *order* is also public: EleutherAI released the deduplicated Pile
+as GPT-NeoX tokenized and shuffled it, in the sequence the optimizer took it —
+`EleutherAI/pile-deduped-pythia-preshuffled`, 143,000 steps of 1,024 sequences
+of 2,049 token ids, 600 GB in 21 shards. Step *s* is a fixed 4.2 MB byte range
+of that stream, so "when did the model see this string" is a range request
+rather than a download:
+
+```bash
+trainspotting steps pythia-12b-deduped "OpenAI" --case-sensitive
+```
+
+draws one step from each of 64 equal slices of the run, fetches each step's
+batch, decodes it with the run's tokenizer, and counts the sequences holding the
+pattern. It prints the rate along the run, the same rate over eight stretches of
+it, and what that rate says the model had seen by each saved checkpoint:
+
+```
+# steps 'OpenAI' — 64 sampled of 143,000 steps, 269 MB to read from EleutherAI/pile-deduped-pythia-preshuffled at 4647773
+
+pretrain: 4/65,536 sequences hold it = 0.006% (95% CI 0.002–0.016%), 8 occurrences, 64 sampled steps
+  by stretch of the run (8 slices of 143,000 steps):
+          0–17,874       0/  8,192 =  0.000%  (0.000–0.047%)  8 step(s)
+     17,875–35,749       1/  8,192 =  0.012%  (0.002–0.069%)  8 step(s)
+     35,750–53,624       1/  8,192 =  0.012%  (0.002–0.069%)  8 step(s)
+     53,625–71,499       0/  8,192 =  0.000%  (0.000–0.047%)  8 step(s)
+     71,500–89,374       1/  8,192 =  0.012%  (0.002–0.069%)  8 step(s)
+     89,375–107,249      0/  8,192 =  0.000%  (0.000–0.047%)  8 step(s)
+    107,250–125,124      1/  8,192 =  0.012%  (0.002–0.069%)  8 step(s)
+    125,125–142,999      0/  8,192 =  0.000%  (0.000–0.047%)  8 step(s)
+  from about step 98,706 the run is re-reading the corpus (~207B tokens against a 300B budget)
+  expected sequences holding it, seen by checkpoint (if the rate holds along the run):
+    step   1,000   ~   62   (24–161)
+    step  10,000   ~  625   (243–1.6K)
+    step  50,000   ~ 3.1K   (1.2K–8K)
+    step 100,000   ~ 6.2K   (2.4K–16.1K)
+    step 143,000   ~ 8.9K   (3.5K–23K)
+  step 23,237 seq 583: …page in other languages: Russian It’s been nearly two years since researchers from Google, Stanford, UC Berkeley, and OpenAI released th…
+```
+
+The result file (`results/pythia-12b-deduped.pretrain.steps-<slug>.json`)
+carries the per-step counts, the rate over each stretch, the expected exposure at
+all 154 checkpoints, the immutable dataset and tokenizer revisions, and up to 20
+snippets with the step and sequence they were read from. `--at 1000 --at 2000`
+also reads those exact steps, so the batches around a particular checkpoint can
+be inspected directly; because those steps were selected rather than sampled,
+they stay out of the rate, interval, slices, and exposure estimates. `--sample`
+changes how many steps are drawn; `--regex` and `--case-sensitive` work as they
+do in `grep` and produce distinct result filenames.
+
+The reason to want this axis is the work that has been done on it. Timaeus's
+developmental interpretability results on Pythia — stagewise structure in the
+loss landscape, and influence functions that show a training example's pull on a
+behaviour peaking at transitions and sometimes changing sign — are all drawn
+against the step number. A corpus rate cannot be put on that axis; this can. What
+it puts there is an *exposure*: expected sequences holding the string that the
+model had seen by step *k*, with its interval. Whether that exposure had any
+effect at *k*, and in which direction, is the model-side question those methods
+answer and this tool does not.
+
+What it can and cannot see:
+
+- **The unit is a training sequence, not a document.** Documents are
+  concatenated with no separator — there is no end-of-text token anywhere in
+  these batches; one document's last sentence runs straight into the next one's
+  title — and cut into 2,049-token sequences. One sequence can hold the ends of
+  several documents, and a string that falls across a sequence boundary is
+  missed.
+- **It is a sample, so it is a curve with an interval, not a census.** Every
+  sequence of a sampled step is read, so the interval is clustered by step (the
+  same design-effect correction the pretraining sampler uses, with the step as
+  the cluster). A string the 64 steps never land on gets an upper bound at every
+  checkpoint and no first-seen step; finding the exact steps a rare string
+  appears at would mean scanning the 600 GB.
+- **The exposure line is straight by assumption.** It is the sampled rate times
+  the sequences seen, which is only right if the rate holds across the steps not
+  read. The per-stretch rates are the check: a shuffled order should show the
+  same rate in every stretch. The one place a difference is expected is the
+  tail — the deduplicated Pile is about 207B tokens against a 300B budget, so
+  from roughly step 98,700 the run is on its second pass over documents it has
+  already seen, and the command marks where that begins.
+
+`steps` exits with a message for every other target. Ai2 publishes Dolma 3 as a
+corpus, not as the sequence of batches a run took through it, so for Olmo the
+question has no data behind it.
 
 ## Install
 
@@ -1586,6 +1680,14 @@ against the shipped `docs/data/search-index.json` when a checkout has one.
 checks each saved Parquet schema against the current one. That is the canary for
 an upstream schema change, which otherwise shows up only as a sampling run that
 quietly labels nothing, or a string search that quietly counts less.
+
+`steps` is pinned where it would fail silently: the shard layout has to close
+exactly over 143,000 steps or every offset is an address into the wrong text, a
+step straddling a shard seam has to come back as two contiguous ranges, the draw
+has to put one step in each slice of the run, and the interval has to widen when
+the matches sit in two steps rather than sixteen. `--live` fetches step 0 and
+checks its first sequence still decodes to the same sentence, which is what a
+republished stream with a different cut would move.
 
 The budget arithmetic is pinned per kind — what counts as a fit token for an
 SFT example, a preference pair, an RL row that ships no generation — along with

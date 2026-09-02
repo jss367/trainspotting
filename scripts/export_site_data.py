@@ -51,7 +51,10 @@ BULK = (".context.json", ".docs.json")
 # fetches.
 # `.contam-` for the same reason: the benchmark contamination check writes one
 # file per stage and one for the corpus, and the page has no card for them yet.
-UNRENDERED = (".grep-", ".search-", ".contam-")
+#
+# `.steps-` is a per-training-step count over Pythia's published batch order; the
+# page has no card for it yet either.
+UNRENDERED = (".grep-", ".search-", ".contam-", ".steps-")
 
 out = ROOT / "docs" / "data"
 out.mkdir(parents=True, exist_ok=True)

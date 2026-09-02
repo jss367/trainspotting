@@ -33,6 +33,7 @@ COMMANDS = [
     ("case-study", "cmd_case_study", ["case-study"]),
     ("classify", "cmd_classify", ["classify", "olmo-3-7b-instruct"]),
     ("contaminate", "cmd_contaminate", ["contaminate", "olmo-3-7b-instruct", "gsm8k"]),
+    ("steps", "cmd_steps", ["steps", "pythia-12b-deduped", "a string"]),
 ]
 
 
