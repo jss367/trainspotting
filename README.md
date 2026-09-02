@@ -161,9 +161,9 @@ pattern. It prints the rate along the run, the same rate over eight stretches of
 it, and what that rate says the model had seen by each saved checkpoint:
 
 ```
-# steps 'OpenAI' — 64 of 143,000 steps, 269 MB to read from EleutherAI/pile-deduped-pythia-preshuffled at 4647773
+# steps 'OpenAI' — 64 sampled of 143,000 steps, 269 MB to read from EleutherAI/pile-deduped-pythia-preshuffled at 4647773
 
-pretrain: 4/65,536 sequences hold it = 0.006% (95% CI 0.002–0.016%), 8 occurrences, 64 steps read
+pretrain: 4/65,536 sequences hold it = 0.006% (95% CI 0.002–0.016%), 8 occurrences, 64 sampled steps
   by stretch of the run (8 slices of 143,000 steps):
           0–17,874       0/  8,192 =  0.000%  (0.000–0.047%)  8 step(s)
      17,875–35,749       1/  8,192 =  0.012%  (0.002–0.069%)  8 step(s)
@@ -185,10 +185,13 @@ pretrain: 4/65,536 sequences hold it = 0.006% (95% CI 0.002–0.016%), 8 occurre
 
 The result file (`results/pythia-12b-deduped.pretrain.steps-<slug>.json`)
 carries the per-step counts, the rate over each stretch, the expected exposure at
-all 154 checkpoints, and up to 20 snippets with the step and sequence they were
-read from. `--at 1000 --at 2000` adds exact steps to the draw, so the batches
-around a particular checkpoint can be read directly; `--sample` changes how many
-steps are drawn; `--regex` and `--case-sensitive` work as they do in `grep`.
+all 154 checkpoints, the immutable dataset and tokenizer revisions, and up to 20
+snippets with the step and sequence they were read from. `--at 1000 --at 2000`
+also reads those exact steps, so the batches around a particular checkpoint can
+be inspected directly; because those steps were selected rather than sampled,
+they stay out of the rate, interval, slices, and exposure estimates. `--sample`
+changes how many steps are drawn; `--regex` and `--case-sensitive` work as they
+do in `grep` and produce distinct result filenames.
 
 The reason to want this axis is the work that has been done on it. Timaeus's
 developmental interpretability results on Pythia — stagewise structure in the

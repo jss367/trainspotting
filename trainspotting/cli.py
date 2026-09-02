@@ -534,15 +534,17 @@ def _slug(text: str) -> str:
     return slug
 
 
-def _pattern_slug(pattern: str, case_sensitive: bool = False) -> str:
-    """The same name for a regex, which cannot afford the readable reduction.
+def _pattern_slug(
+    pattern: str, case_sensitive: bool = False, regex: bool = False
+) -> str:
+    """A stable name for a pattern and the modes that change what it matches.
 
     Punctuation in a regex is syntax, not spelling: `a.b` and `a+b` match
-    different text, and so does `a b` with one space or two. Case matters the
-    same way — the same pattern run with and without `--case-sensitive` is two
-    different searches. So a pattern keeps the plain slug only when it already
-    *is* that slug and the search was case-insensitive; anything else carries a
-    hash of the pattern and the mode it ran in. Pass `--slug` for a readable
+    different text, and so does `a b` with one space or two. Case and literal
+    versus regex mode matter the same way: the same text under either pair of
+    modes is a different search. A literal keeps the plain slug only when it
+    already *is* that slug and the search was case-insensitive; anything else
+    carries a hash of the pattern and its mode. Pass `--slug` for a readable
     name.
     """
     base = re.sub(r"[^a-z0-9]+", "-", pattern.lower()).strip("-")
@@ -550,10 +552,17 @@ def _pattern_slug(pattern: str, case_sensitive: bool = False) -> str:
     # is not a name, and a 300-character literal is its own slug but not a
     # basename any filesystem will take — which would spend the whole sampling
     # run and then fail on the write.
-    if base and pattern == base and len(base) <= MAX_SLUG_CHARS and not case_sensitive:
+    if (
+        base
+        and pattern == base
+        and len(base) <= MAX_SLUG_CHARS
+        and not case_sensitive
+        and not regex
+    ):
         return base
+    mode = f"{'cs' if case_sensitive else 'ci'}{'-regex' if regex else ''}"
     digest = hashlib.sha1(
-        f"{pattern}\n{'cs' if case_sensitive else 'ci'}".encode()
+        f"{pattern}\n{mode}".encode()
     ).hexdigest()[:8]
     if not base:
         return f"pattern-{digest}"
@@ -1129,15 +1138,25 @@ def cmd_steps(args):
     s, order = found
     steps.check_layout(order)
     try:
+        # `--at` is purposive: it adds a batch for inspection, not another
+        # random draw. Keep the probability sample separate so a checkpoint
+        # selected precisely because it looks unusual cannot tilt the corpus
+        # rate, its interval, or every checkpoint exposure estimate.
+        sampled_steps = steps.draw_steps(order["steps"], args.sample, args.seed)
         picks = steps.draw_steps(order["steps"], args.sample, args.seed, args.at or ())
     except ValueError as e:
         sys.exit(str(e))
     rx = steps.compile_pattern(args.pattern, args.regex, args.case_sensitive)
     revision = pretrain.resolve_revision(order["dataset"])
-    decode = steps.decoder(order)
+    tokenizer_revision = steps.resolve_tokenizer_revision(order["tokenizer"])
+    decode = steps.decoder(order, tokenizer_revision)
     to_read = steps.step_bytes(order) * len(picks)
+    explicit = len(picks) - len(sampled_steps)
+    read_description = f"{len(sampled_steps)} sampled"
+    if explicit:
+        read_description += f" + {explicit} explicit"
     print(
-        f"# steps {args.pattern!r} — {len(picks)} of {order['steps']:,} steps, "
+        f"# steps {args.pattern!r} — {read_description} of {order['steps']:,} steps, "
         f"{_fmt_bytes(to_read)} to read from {order['dataset']} at {revision[:7]}",
         file=sys.stderr,
     )
@@ -1150,8 +1169,12 @@ def cmd_steps(args):
     )
     print(file=sys.stderr)
 
-    summary = steps.summarize(per_step)
-    slices = steps.by_slice(per_step, order["steps"], args.slices, deff=summary["design_effect"])
+    sampled_set = set(sampled_steps)
+    estimate_steps = [count for count in per_step if count["step"] in sampled_set]
+    summary = steps.summarize(estimate_steps)
+    slices = steps.by_slice(
+        estimate_steps, order["steps"], args.slices, deff=summary["design_effect"]
+    )
     exposure = steps.exposure(summary, order["checkpoints"], order["sequences_per_step"])
     second = steps.second_pass_step(order)
 
@@ -1159,7 +1182,7 @@ def cmd_steps(args):
     print(
         f"{s['stage']}: {k:,}/{n:,} sequences hold it = {k / n * 100 if n else 0:.3f}%"
         f" (95% CI {summary['lo'] * 100:.3f}–{summary['hi'] * 100:.3f}%),"
-        f" {summary['occurrences']:,} occurrences, {len(per_step)} steps read",
+        f" {summary['occurrences']:,} occurrences, {len(estimate_steps)} sampled steps",
         file=sys.stderr,
     )
     print(f"  by stretch of the run ({args.slices} slices of {order['steps']:,} steps):", file=sys.stderr)
@@ -1192,7 +1215,11 @@ def cmd_steps(args):
         flat = " ".join(ex["snippet"].split())
         print(f"  step {ex['step']:,} seq {ex['sequence']}: …{flat}…", file=sys.stderr)
 
-    slug = _filename_part(args.slug) if args.slug else _pattern_slug(args.pattern, args.case_sensitive)
+    slug = (
+        _filename_part(args.slug)
+        if args.slug
+        else _pattern_slug(args.pattern, args.case_sensitive, regex=args.regex)
+    )
     payload = {
         "dataset": order["dataset"],
         "stage": s["stage"],
@@ -1203,10 +1230,11 @@ def cmd_steps(args):
         "case_sensitive": args.case_sensitive,
         **_stamp(order["dataset"], revision=revision),
         "tokenizer": order["tokenizer"],
+        "tokenizer_revision": tokenizer_revision,
         "steps_total": order["steps"],
         "sequence_tokens": order["sequence_tokens"],
         "sequences_per_step": order["sequences_per_step"],
-        "sample": len(picks),
+        "sample": len(sampled_steps),
         "seed": args.seed,
         "at": sorted(set(args.at or [])),
         "bytes_read": to_read,

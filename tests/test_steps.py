@@ -9,6 +9,7 @@ the published layout; the one `--live` test pins the layout against the hub.
 
 import array
 import re
+from types import SimpleNamespace
 
 import pytest
 
@@ -234,6 +235,102 @@ def test_the_scan_walks_steps_in_order_with_a_fake_fetch(monkeypatch):
     assert ex[0]["step"] == 900
 
 
+def test_explicit_steps_are_read_but_do_not_enter_population_estimates(
+    monkeypatch, tmp_path
+):
+    """A checkpoint named with --at has a different inclusion probability from
+    the stratified draw. It is evidence for inspection, never another sample."""
+    captured = {}
+    args = SimpleNamespace(
+        target="pythia-12b-deduped",
+        pattern="needle",
+        sample=2,
+        seed=0,
+        at=[10],
+        regex=False,
+        case_sensitive=False,
+        examples=0,
+        slices=2,
+        slug=None,
+    )
+    monkeypatch.setattr(steps, "draw_steps", lambda total, n, seed, at=(): [1, 2, *at])
+    monkeypatch.setattr(steps, "decoder", lambda order, revision: lambda rows: rows)
+    monkeypatch.setattr(steps, "resolve_tokenizer_revision", lambda repo: "token-rev")
+    monkeypatch.setattr(cli.pretrain, "resolve_revision", lambda dataset: "data-rev")
+    monkeypatch.setattr(
+        steps,
+        "scan",
+        lambda *a, **k: (
+            _per_step([(1, 0), (2, 0), (10, 1024)]),
+            [],
+        ),
+    )
+
+    def write(path, payload):
+        captured.update(payload)
+        return tmp_path / path.name
+
+    monkeypatch.setattr(cli, "_write_json", write)
+    cli.cmd_steps(args)
+
+    assert captured["sample"] == 2
+    assert captured["at"] == [10]
+    assert captured["steps"] == 2
+    assert captured["matched"] == 0
+    assert len(captured["per_step"]) == 3
+    assert captured["tokenizer_revision"] == "token-rev"
+
+
+def test_tokenizer_is_fetched_and_cached_by_immutable_revision(monkeypatch, tmp_path):
+    calls = []
+
+    class Response:
+        content = b'{"version":"1.0"}'
+
+    def get(url, **kwargs):
+        calls.append(url)
+        return Response()
+
+    class Tokenizer:
+        @classmethod
+        def from_file(cls, path):
+            calls.append(path)
+            return cls()
+
+        def decode_batch(self, seqs, skip_special_tokens):
+            return ["decoded"]
+
+    monkeypatch.setattr(steps.pretrain, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(steps.pretrain, "_get", get)
+    monkeypatch.setitem(__import__("sys").modules, "tokenizers", SimpleNamespace(Tokenizer=Tokenizer))
+
+    decode = steps.decoder(ORDER, "abc123")
+    assert decode([[1]]) == ["decoded"]
+    assert "/resolve/abc123/tokenizer.json" in calls[0]
+    assert "@abc123.json" in calls[1]
+
+    steps.decoder(ORDER, "abc123")
+    assert sum("/resolve/abc123/tokenizer.json" in call for call in calls) == 1
+
+
+def test_tokenizer_revision_resolves_from_the_model_repository(monkeypatch):
+    seen = {}
+
+    class Response:
+        def json(self):
+            return {"sha": "abc123"}
+
+    def get(url, **kwargs):
+        seen["url"] = url
+        seen["headers"] = kwargs["headers"]
+        return Response()
+
+    monkeypatch.setattr(steps.pretrain, "_get", get)
+    assert steps.resolve_tokenizer_revision("org/model") == "abc123"
+    assert seen["url"] == "https://huggingface.co/api/models/org/model/revision/main"
+    assert seen["headers"] is steps.hf.HEADERS
+
+
 @pytest.mark.live
 def test_step_zero_still_decodes_to_the_same_text():
     """The layout, pinned against the hub: if the repo were republished with a
@@ -242,5 +339,6 @@ def test_step_zero_still_decodes_to_the_same_text():
 
     revision = pretrain.resolve_revision(ORDER["dataset"])
     tokens = steps.fetch_step(ORDER, 0, revision)
-    first = steps.decoder(ORDER)(steps.sequences(tokens, ORDER)[:1])[0]
+    tokenizer_revision = steps.resolve_tokenizer_revision(ORDER["tokenizer"])
+    first = steps.decoder(ORDER, tokenizer_revision)(steps.sequences(tokens, ORDER)[:1])[0]
     assert "Belle whispered" in first

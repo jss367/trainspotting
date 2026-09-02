@@ -52,6 +52,9 @@ SNIPPET_CHARS = 120
 # turning a run into a burst the hub rate-limits.
 WORKERS = 4
 
+TOKENIZER_API = "https://huggingface.co/api/models/{repo}/revision/{revision}"
+TOKENIZER_RESOLVE = "https://huggingface.co/{repo}/resolve/{revision}/tokenizer.json"
+
 CAVEAT = (
     "The unit is a 2,049-token training sequence, not a document. Documents are "
     "concatenated with no separator and cut into sequences, so one sequence can "
@@ -322,7 +325,13 @@ def second_pass_step(order: dict) -> int | None:
     return step if step < order["steps"] else None
 
 
-def decoder(order: dict):
+def resolve_tokenizer_revision(repo: str, revision: str = "main") -> str:
+    """The immutable model-repository commit holding ``tokenizer.json``."""
+    url = TOKENIZER_API.format(repo=repo, revision=revision)
+    return pretrain._get(url, headers=hf.HEADERS).json()["sha"]
+
+
+def decoder(order: dict, revision: str):
     """Token ids -> text, with the tokenizer the batches were encoded with.
 
     The tokenizer file is fetched once into the shard cache. `tokenizers` is an
@@ -338,9 +347,14 @@ def decoder(order: dict):
             "pip install -e '.[steps]')"
         )
     repo = order["tokenizer"]
-    path = pretrain.CACHE_DIR / f"tokenizer__{repo.replace('/', '__')}.json"
+    path = pretrain.CACHE_DIR / (
+        f"tokenizer__{repo.replace('/', '__')}@{revision}.json"
+    )
     if not path.exists():
-        r = pretrain._get(f"https://huggingface.co/{repo}/resolve/main/tokenizer.json", headers=hf.HEADERS)
+        r = pretrain._get(
+            TOKENIZER_RESOLVE.format(repo=repo, revision=revision),
+            headers=hf.HEADERS,
+        )
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(r.content)
     tok = Tokenizer.from_file(str(path))
