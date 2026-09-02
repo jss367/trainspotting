@@ -149,6 +149,18 @@ def test_a_chat_template_renders_the_turns_and_fits_the_assistant_span_only():
     assert bytes(i for i, lab in zip(e["ids"], e["labels"]) if lab != -100).decode() == "yo</>"
 
 
+def test_a_system_turn_before_the_user_keeps_the_template_rendering():
+    # Each prefix rendering has to start with the one before it. A generation
+    # prompt after the system turn would put the assistant header ahead of the
+    # user turn and break that, sending the example to the role fallback.
+    turns = [{"role": "system", "text": "be"}, {"role": "user", "text": "hi"},
+             {"role": "assistant", "text": "yo"}]
+    spans = bif.pieces(ChatTok(), turns)
+    assert spans == [("<s><system>be</>", False), ("<user>hi</><assistant>", False), ("yo</>", True)]
+    e = bif.encode(ChatTok(), turns, max_tokens=100)
+    assert bytes(i for i, lab in zip(e["ids"], e["labels"]) if lab != -100).decode() == "yo</>"
+
+
 def test_a_template_that_cannot_render_falls_back_to_roles():
     turns = [{"role": "user", "text": "hi"}, {"role": "assistant", "text": "yo"}]
     assert bif.pieces(BrokenChatTok(), turns) == bif.pieces(Tok(), turns)

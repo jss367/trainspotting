@@ -230,7 +230,12 @@ def pieces(tokenizer, turns: list[dict]) -> list[tuple[str, bool]]:
                 if k == 0:
                     rendered.append("")
                     continue
-                add_prompt = turns[k - 1]["role"] != "assistant"
+                # The generation prompt is the assistant header, so it belongs
+                # only where an assistant turn comes next. Added after a system
+                # turn that a user turn follows, it would sit before the user
+                # text, the longer rendering would no longer start with the
+                # shorter one, and the whole example would fall back to roles.
+                add_prompt = k < len(turns) and turns[k]["role"] == "assistant"
                 rendered.append(tokenizer.apply_chat_template(
                     msgs, tokenize=False, add_generation_prompt=add_prompt
                 ))
