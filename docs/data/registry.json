@@ -472,7 +472,8 @@
         "composition_scope": "EleutherAI published this breakdown for the Pile as assembled, before deduplication. Dedup removed about 30% of the bytes and did not remove them evenly, so these are the shares of the corpus this one was derived from, not of the corpus sampled below.",
         "hf_dataset": null
       }
-    ]
+    ],
+    "infinigram_index": "v4_piletrain_llama"
   },
   "wildchat-1m": {
     "target": "wildchat-1m",
