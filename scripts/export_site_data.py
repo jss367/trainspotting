@@ -49,12 +49,14 @@ BULK = (".context.json", ".docs.json")
 # page has a search box, but it searches the committed samples directly and
 # never reads a `.search-` result file. Exporting one ships bytes nobody
 # fetches.
+# `.contam-` for the same reason: the benchmark contamination check writes one
+# file per stage and one for the corpus, and the page has no card for them yet.
 #
 # `.bif-` is a per-target file like a budget rather than a per-stage one, and
 # `report` is the only thing that reads it. `.steps-` is a per-training-step
 # count over Pythia's published batch order; the page has no card for it yet
 # either.
-UNRENDERED = (".grep-", ".search-", ".bif-", ".steps-")
+UNRENDERED = (".grep-", ".search-", ".contam-", ".bif-", ".steps-")
 
 out = ROOT / "docs" / "data"
 out.mkdir(parents=True, exist_ok=True)

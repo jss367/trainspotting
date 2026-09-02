@@ -641,7 +641,8 @@
         },
         "hf_dataset": null
       }
-    ]
+    ],
+    "infinigram_index": "v4_piletrain_llama"
   },
   "wildchat-1m": {
     "target": "wildchat-1m",

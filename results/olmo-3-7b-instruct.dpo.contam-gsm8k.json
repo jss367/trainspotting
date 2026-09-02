@@ -1,0 +1,3469 @@
+{
+  "dataset": "allenai/Dolci-Instruct-DPO",
+  "stage": "dpo",
+  "benchmark": {
+    "id": "gsm8k",
+    "name": "GSM8K",
+    "hf_dataset": "openai/gsm8k",
+    "config": "main",
+    "split": "test",
+    "revision": "740312add88f781978c0658806c59bc2815b9866",
+    "total_items": 1319,
+    "question_field": "question",
+    "answer_field": "answer"
+  },
+  "items_requested": 200,
+  "seed": 0,
+  "words": 13,
+  "items_probed": [
+    2,
+    25,
+    27,
+    28,
+    33,
+    44,
+    46,
+    54,
+    67,
+    74,
+    79,
+    80,
+    82,
+    92,
+    93,
+    118,
+    125,
+    127,
+    128,
+    141,
+    143,
+    147,
+    151,
+    161,
+    164,
+    168,
+    183,
+    186,
+    187,
+    191,
+    194,
+    202,
+    206,
+    207,
+    223,
+    236,
+    237,
+    239,
+    240,
+    245,
+    253,
+    254,
+    255,
+    266,
+    276,
+    285,
+    286,
+    291,
+    299,
+    300,
+    306,
+    314,
+    324,
+    331,
+    346,
+    349,
+    358,
+    369,
+    376,
+    378,
+    382,
+    386,
+    387,
+    389,
+    391,
+    398,
+    408,
+    416,
+    418,
+    431,
+    440,
+    447,
+    448,
+    451,
+    452,
+    454,
+    482,
+    488,
+    491,
+    495,
+    497,
+    499,
+    513,
+    530,
+    532,
+    533,
+    555,
+    563,
+    564,
+    575,
+    577,
+    589,
+    594,
+    596,
+    616,
+    617,
+    621,
+    635,
+    637,
+    647,
+    649,
+    655,
+    664,
+    666,
+    676,
+    681,
+    682,
+    686,
+    687,
+    701,
+    717,
+    721,
+    724,
+    731,
+    733,
+    734,
+    758,
+    761,
+    788,
+    795,
+    801,
+    816,
+    829,
+    839,
+    858,
+    861,
+    871,
+    872,
+    889,
+    893,
+    905,
+    906,
+    911,
+    917,
+    922,
+    937,
+    956,
+    963,
+    965,
+    966,
+    975,
+    976,
+    981,
+    986,
+    995,
+    996,
+    1002,
+    1008,
+    1010,
+    1031,
+    1033,
+    1040,
+    1041,
+    1047,
+    1067,
+    1068,
+    1074,
+    1084,
+    1090,
+    1094,
+    1106,
+    1107,
+    1112,
+    1114,
+    1120,
+    1121,
+    1123,
+    1128,
+    1131,
+    1146,
+    1148,
+    1162,
+    1165,
+    1166,
+    1175,
+    1178,
+    1179,
+    1187,
+    1194,
+    1202,
+    1203,
+    1207,
+    1221,
+    1222,
+    1232,
+    1233,
+    1235,
+    1240,
+    1241,
+    1251,
+    1253,
+    1254,
+    1266,
+    1270,
+    1280,
+    1290,
+    1298,
+    1300,
+    1311,
+    1313
+  ],
+  "skipped": {
+    "truncated": 0,
+    "short": 0
+  },
+  "case_sensitive": false,
+  "probes": [
+    {
+      "id": 0,
+      "item": 2,
+      "part": "question",
+      "literal": "for $80,000 and then puts in $50,000 in repairs.  This increased the value",
+      "regex": "for\\s+\\$80,000\\s+and\\s+then\\s+puts\\s+in\\s+\\$50,000\\s+in\\s+repairs\\.\\s+This\\s+increased\\s+the\\s+value",
+      "words": 13
+    },
+    {
+      "id": 1,
+      "item": 2,
+      "part": "answer",
+      "literal": "increased the value of the house by 80,000*1.5=120,000\nSo the new value of",
+      "regex": "increased\\s+the\\s+value\\s+of\\s+the\\s+house\\s+by\\s+80,000\\*1\\.5=120,000\\s+So\\s+the\\s+new\\s+value\\s+of",
+      "words": 13
+    },
+    {
+      "id": 2,
+      "item": 25,
+      "part": "question",
+      "literal": "4 apples that cost $1.50 each, and some boxes of pizza. Marie paid",
+      "regex": "4\\s+apples\\s+that\\s+cost\\s+\\$1\\.50\\s+each,\\s+and\\s+some\\s+boxes\\s+of\\s+pizza\\.\\s+Marie\\s+paid",
+      "words": 13
+    },
+    {
+      "id": 3,
+      "item": 25,
+      "part": "answer",
+      "literal": "the chicken meal, milk, and apples is $12 + $15 + $6 =",
+      "regex": "the\\s+chicken\\s+meal,\\s+milk,\\s+and\\s+apples\\s+is\\s+\\$12\\s+\\+\\s+\\$15\\s+\\+\\s+\\$6\\s+=",
+      "words": 13
+    },
+    {
+      "id": 4,
+      "item": 27,
+      "part": "question",
+      "literal": "cream with 15 servings of ice cream per carton at a cost of",
+      "regex": "cream\\s+with\\s+15\\s+servings\\s+of\\s+ice\\s+cream\\s+per\\s+carton\\s+at\\s+a\\s+cost\\s+of",
+      "words": 13
+    },
+    {
+      "id": 5,
+      "item": 27,
+      "part": "answer",
+      "literal": "days she will need 60/15 = 4 containers of ice cream\nIf each",
+      "regex": "days\\s+she\\s+will\\s+need\\s+60/15\\s+=\\s+4\\s+containers\\s+of\\s+ice\\s+cream\\s+If\\s+each",
+      "words": 13
+    },
+    {
+      "id": 6,
+      "item": 28,
+      "part": "question",
+      "literal": "20 miles. His second stop was 15 miles before the end of the",
+      "regex": "20\\s+miles\\.\\s+His\\s+second\\s+stop\\s+was\\s+15\\s+miles\\s+before\\s+the\\s+end\\s+of\\s+the",
+      "words": 13
+    },
+    {
+      "id": 7,
+      "item": 28,
+      "part": "answer",
+      "literal": "not counting the distance between stops.\nHenry traveled 60 miles - 35 miles",
+      "regex": "not\\s+counting\\s+the\\s+distance\\s+between\\s+stops\\.\\s+Henry\\s+traveled\\s+60\\s+miles\\s+\\-\\s+35\\s+miles",
+      "words": 13
+    },
+    {
+      "id": 8,
+      "item": 33,
+      "part": "question",
+      "literal": "coins. There are 30 more gold coins than silver coins. How many gold",
+      "regex": "coins\\.\\s+There\\s+are\\s+30\\s+more\\s+gold\\s+coins\\s+than\\s+silver\\s+coins\\.\\s+How\\s+many\\s+gold",
+      "words": 13
+    },
+    {
+      "id": 9,
+      "item": 33,
+      "part": "answer",
+      "literal": "silver coins Gretchen has\nGretchen has x+30 gold coins.\nx+x+30=110\n2*x=80\nx=40\nGretchen",
+      "regex": "silver\\s+coins\\s+Gretchen\\s+has\\s+Gretchen\\s+has\\s+x\\+30\\s+gold\\s+coins\\.\\s+x\\+x\\+30=110\\s+2\\*x=80\\s+x=40\\s+Gretchen",
+      "words": 13
+    },
+    {
+      "id": 10,
+      "item": 44,
+      "part": "question",
+      "literal": "One pound of beeswax and the wicks cost $10.00 in supplies.   If he",
+      "regex": "One\\s+pound\\s+of\\s+beeswax\\s+and\\s+the\\s+wicks\\s+cost\\s+\\$10\\.00\\s+in\\s+supplies\\.\\s+If\\s+he",
+      "words": 13
+    },
+    {
+      "id": 11,
+      "item": 44,
+      "part": "answer",
+      "literal": "pounds so his supplies will cost 10*2 = $20.00\nHe wants to sell",
+      "regex": "pounds\\s+so\\s+his\\s+supplies\\s+will\\s+cost\\s+10\\*2\\s+=\\s+\\$20\\.00\\s+He\\s+wants\\s+to\\s+sell",
+      "words": 13
+    },
+    {
+      "id": 12,
+      "item": 46,
+      "part": "question",
+      "literal": "and purchased a package of Post-it notes;  At work, she placed a single",
+      "regex": "and\\s+purchased\\s+a\\s+package\\s+of\\s+Post\\-it\\s+notes;\\s+At\\s+work,\\s+she\\s+placed\\s+a\\s+single",
+      "words": 13
+    },
+    {
+      "id": 13,
+      "item": 46,
+      "part": "answer",
+      "literal": "when she left the store was 80+x.\nAnd if she used 220 Post-it",
+      "regex": "when\\s+she\\s+left\\s+the\\s+store\\s+was\\s+80\\+x\\.\\s+And\\s+if\\s+she\\s+used\\s+220\\s+Post\\-it",
+      "words": 13
+    },
+    {
+      "id": 14,
+      "item": 54,
+      "part": "question",
+      "literal": "house cats have just had kittens. She says that Patchy, the first cat,",
+      "regex": "house\\s+cats\\s+have\\s+just\\s+had\\s+kittens\\.\\s+She\\s+says\\s+that\\s+Patchy,\\s+the\\s+first\\s+cat,",
+      "words": 13
+    },
+    {
+      "id": 15,
+      "item": 54,
+      "part": "answer",
+      "literal": "cats have 21 +12 = 33 kittens.\nCombining the adopted kittens with those",
+      "regex": "cats\\s+have\\s+21\\s+\\+12\\s+=\\s+33\\s+kittens\\.\\s+Combining\\s+the\\s+adopted\\s+kittens\\s+with\\s+those",
+      "words": 13
+    },
+    {
+      "id": 16,
+      "item": 67,
+      "part": "question",
+      "literal": "175 diamonds, 35 fewer rubies than diamonds, and twice the number of emeralds",
+      "regex": "175\\s+diamonds,\\s+35\\s+fewer\\s+rubies\\s+than\\s+diamonds,\\s+and\\s+twice\\s+the\\s+number\\s+of\\s+emeralds",
+      "words": 13
+    },
+    {
+      "id": 17,
+      "item": 67,
+      "part": "answer",
+      "literal": "x 2 = 280 emeralds in the treasure chest.\nSo, the total number",
+      "regex": "x\\s+2\\s+=\\s+280\\s+emeralds\\s+in\\s+the\\s+treasure\\s+chest\\.\\s+So,\\s+the\\s+total\\s+number",
+      "words": 13
+    },
+    {
+      "id": 18,
+      "item": 74,
+      "part": "question",
+      "literal": "and begonias for $2.12 per pot. Artie has no change today, so he",
+      "regex": "and\\s+begonias\\s+for\\s+\\$2\\.12\\s+per\\s+pot\\.\\s+Artie\\s+has\\s+no\\s+change\\s+today,\\s+so\\s+he",
+      "words": 13
+    },
+    {
+      "id": 19,
+      "item": 74,
+      "part": "answer",
+      "literal": "round his begonias down from $2.12 to $2, since the number following the",
+      "regex": "round\\s+his\\s+begonias\\s+down\\s+from\\s+\\$2\\.12\\s+to\\s+\\$2,\\s+since\\s+the\\s+number\\s+following\\s+the",
+      "words": 13
+    },
+    {
+      "id": 20,
+      "item": 79,
+      "part": "question",
+      "literal": "the groomer, which costs $100.  The groomer offers him a 30% discount for",
+      "regex": "the\\s+groomer,\\s+which\\s+costs\\s+\\$100\\.\\s+The\\s+groomer\\s+offers\\s+him\\s+a\\s+30%\\s+discount\\s+for",
+      "words": 13
+    },
+    {
+      "id": 21,
+      "item": 79,
+      "part": "answer",
+      "literal": "The groomer gave a 100*.3=$30 discount\nSo the grooming cost 100-30=$70\n#### 70",
+      "regex": "The\\s+groomer\\s+gave\\s+a\\s+100\\*\\.3=\\$30\\s+discount\\s+So\\s+the\\s+grooming\\s+cost\\s+100\\-30=\\$70\\s+\\#\\#\\#\\#\\s+70",
+      "words": 13
+    },
+    {
+      "id": 22,
+      "item": 80,
+      "part": "question",
+      "literal": "the 24 liters of water. Then a boy got 6 liters of water.",
+      "regex": "the\\s+24\\s+liters\\s+of\\s+water\\.\\s+Then\\s+a\\s+boy\\s+got\\s+6\\s+liters\\s+of\\s+water\\.",
+      "words": 13
+    },
+    {
+      "id": 23,
+      "item": 80,
+      "part": "answer",
+      "literal": "= 8 liters.\nThus, a total of 8 + 6 = 14 liters",
+      "regex": "=\\s+8\\s+liters\\.\\s+Thus,\\s+a\\s+total\\s+of\\s+8\\s+\\+\\s+6\\s+=\\s+14\\s+liters",
+      "words": 13
+    },
+    {
+      "id": 24,
+      "item": 82,
+      "part": "question",
+      "literal": "Alex weighs 2 pounds less than 4 times what Grace weighs. What are",
+      "regex": "Alex\\s+weighs\\s+2\\s+pounds\\s+less\\s+than\\s+4\\s+times\\s+what\\s+Grace\\s+weighs\\.\\s+What\\s+are",
+      "words": 13
+    },
+    {
+      "id": 25,
+      "item": 82,
+      "part": "answer",
+      "literal": "weighs 125*4-2 = 498.\nTheir combined weights are 125+498 = 623 pounds.\n####",
+      "regex": "weighs\\s+125\\*4\\-2\\s+=\\s+498\\.\\s+Their\\s+combined\\s+weights\\s+are\\s+125\\+498\\s+=\\s+623\\s+pounds\\.\\s+\\#\\#\\#\\#",
+      "words": 13
+    },
+    {
+      "id": 26,
+      "item": 92,
+      "part": "question",
+      "literal": "5 years older than Jackson and 2 years younger than Corey. If James",
+      "regex": "5\\s+years\\s+older\\s+than\\s+Jackson\\s+and\\s+2\\s+years\\s+younger\\s+than\\s+Corey\\.\\s+If\\s+James",
+      "words": 13
+    },
+    {
+      "id": 27,
+      "item": 92,
+      "part": "answer",
+      "literal": "2 years younger than Corey so is 11 - 2 = 9 years",
+      "regex": "2\\s+years\\s+younger\\s+than\\s+Corey\\s+so\\s+is\\s+11\\s+\\-\\s+2\\s+=\\s+9\\s+years",
+      "words": 13
+    },
+    {
+      "id": 28,
+      "item": 93,
+      "part": "question",
+      "literal": "But Gerald changed his diet, which improved his speed by 10%.  If Lee",
+      "regex": "But\\s+Gerald\\s+changed\\s+his\\s+diet,\\s+which\\s+improved\\s+his\\s+speed\\s+by\\s+10%\\.\\s+If\\s+Lee",
+      "words": 13
+    },
+    {
+      "id": 29,
+      "item": 93,
+      "part": "answer",
+      "literal": "the 400-meter hurdles, then Gerald initially would run the 400-meter hurdles in 38+2=40",
+      "regex": "the\\s+400\\-meter\\s+hurdles,\\s+then\\s+Gerald\\s+initially\\s+would\\s+run\\s+the\\s+400\\-meter\\s+hurdles\\s+in\\s+38\\+2=40",
+      "words": 13
+    },
+    {
+      "id": 30,
+      "item": 118,
+      "part": "question",
+      "literal": "day, more containers were brought in, and the total number of vehicles at",
+      "regex": "day,\\s+more\\s+containers\\s+were\\s+brought\\s+in,\\s+and\\s+the\\s+total\\s+number\\s+of\\s+vehicles\\s+at",
+      "words": 13
+    },
+    {
+      "id": 31,
+      "item": 118,
+      "part": "answer",
+      "literal": "the number of vehicles imported through the port is 30-10 = 20 vehicles",
+      "regex": "the\\s+number\\s+of\\s+vehicles\\s+imported\\s+through\\s+the\\s+port\\s+is\\s+30\\-10\\s+=\\s+20\\s+vehicles",
+      "words": 13
+    },
+    {
+      "id": 32,
+      "item": 125,
+      "part": "question",
+      "literal": "a package of 5 new spoons and gave them to Julia.  While Julia",
+      "regex": "a\\s+package\\s+of\\s+5\\s+new\\s+spoons\\s+and\\s+gave\\s+them\\s+to\\s+Julia\\.\\s+While\\s+Julia",
+      "words": 13
+    },
+    {
+      "id": 33,
+      "item": 125,
+      "part": "answer",
+      "literal": "her husband was 12+3=15 spoons.\nSince the husband bought a package of five",
+      "regex": "her\\s+husband\\s+was\\s+12\\+3=15\\s+spoons\\.\\s+Since\\s+the\\s+husband\\s+bought\\s+a\\s+package\\s+of\\s+five",
+      "words": 13
+    },
+    {
+      "id": 34,
+      "item": 127,
+      "part": "question",
+      "literal": "made 20 more friends than Lily. If Lily made 50 friends, how many",
+      "regex": "made\\s+20\\s+more\\s+friends\\s+than\\s+Lily\\.\\s+If\\s+Lily\\s+made\\s+50\\s+friends,\\s+how\\s+many",
+      "words": 13
+    },
+    {
+      "id": 35,
+      "item": 127,
+      "part": "answer",
+      "literal": "Amy made 50+20 =70 friends.\nTogether, they made 70+50 = 120 friends at",
+      "regex": "Amy\\s+made\\s+50\\+20\\s+=70\\s+friends\\.\\s+Together,\\s+they\\s+made\\s+70\\+50\\s+=\\s+120\\s+friends\\s+at",
+      "words": 13
+    },
+    {
+      "id": 36,
+      "item": 128,
+      "part": "question",
+      "literal": "5 less than what a watermelon cost. Dillon is sent to the store",
+      "regex": "5\\s+less\\s+than\\s+what\\s+a\\s+watermelon\\s+cost\\.\\s+Dillon\\s+is\\s+sent\\s+to\\s+the\\s+store",
+      "words": 13
+    },
+    {
+      "id": 37,
+      "item": 128,
+      "part": "answer",
+      "literal": "45 * 4 = $180.\nHe also purchases peppers at a total price",
+      "regex": "45\\s+\\*\\s+4\\s+=\\s+\\$180\\.\\s+He\\s+also\\s+purchases\\s+peppers\\s+at\\s+a\\s+total\\s+price",
+      "words": 13
+    },
+    {
+      "id": 38,
+      "item": 141,
+      "part": "question",
+      "literal": "twice as many worker bees as baby bees, and there are twice as",
+      "regex": "twice\\s+as\\s+many\\s+worker\\s+bees\\s+as\\s+baby\\s+bees,\\s+and\\s+there\\s+are\\s+twice\\s+as",
+      "words": 13
+    },
+    {
+      "id": 39,
+      "item": 141,
+      "part": "answer",
+      "literal": "the number of queens\nBabies:2x\nWorkers:2(2x)=4x\nTotal:x+2x+4x=700\n7x=700\nx=100 queen bees\nWorkers:4(100)=400 worker",
+      "regex": "the\\s+number\\s+of\\s+queens\\s+Babies:2x\\s+Workers:2\\(2x\\)=4x\\s+Total:x\\+2x\\+4x=700\\s+7x=700\\s+x=100\\s+queen\\s+bees\\s+Workers:4\\(100\\)=400\\s+worker",
+      "words": 13
+    },
+    {
+      "id": 40,
+      "item": 143,
+      "part": "question",
+      "literal": "3 dollars, cups for 3 dollars, and roach traps for 4 dollars.  If",
+      "regex": "3\\s+dollars,\\s+cups\\s+for\\s+3\\s+dollars,\\s+and\\s+roach\\s+traps\\s+for\\s+4\\s+dollars\\.\\s+If",
+      "words": 13
+    },
+    {
+      "id": 41,
+      "item": 143,
+      "part": "answer",
+      "literal": "comes out to 3+3+4=$10\nTax on the nonfood stuff comes out to 10*.1=$1",
+      "regex": "comes\\s+out\\s+to\\s+3\\+3\\+4=\\$10\\s+Tax\\s+on\\s+the\\s+nonfood\\s+stuff\\s+comes\\s+out\\s+to\\s+10\\*\\.1=\\$1",
+      "words": 13
+    },
+    {
+      "id": 42,
+      "item": 147,
+      "part": "question",
+      "literal": "times as many bees as she saw first leave the hive fly from",
+      "regex": "times\\s+as\\s+many\\s+bees\\s+as\\s+she\\s+saw\\s+first\\s+leave\\s+the\\s+hive\\s+fly\\s+from",
+      "words": 13
+    },
+    {
+      "id": 43,
+      "item": 147,
+      "part": "answer",
+      "literal": "hive in the next 6 hours, 30 x 2 = 60 bees that",
+      "regex": "hive\\s+in\\s+the\\s+next\\s+6\\s+hours,\\s+30\\s+x\\s+2\\s+=\\s+60\\s+bees\\s+that",
+      "words": 13
+    },
+    {
+      "id": 44,
+      "item": 151,
+      "part": "question",
+      "literal": "inflate. On the first day, 5 people on bicycles came by to get",
+      "regex": "inflate\\.\\s+On\\s+the\\s+first\\s+day,\\s+5\\s+people\\s+on\\s+bicycles\\s+came\\s+by\\s+to\\s+get",
+      "words": 13
+    },
+    {
+      "id": 45,
+      "item": 151,
+      "part": "answer",
+      "literal": "There was one unicycle tire to fill up because 1 times 1 equals",
+      "regex": "There\\s+was\\s+one\\s+unicycle\\s+tire\\s+to\\s+fill\\s+up\\s+because\\s+1\\s+times\\s+1\\s+equals",
+      "words": 13
+    },
+    {
+      "id": 46,
+      "item": 161,
+      "part": "question",
+      "literal": "3 clownfish. While Locsin caught 5 fewer starfish than Anakin, 3 fewer sea",
+      "regex": "3\\s+clownfish\\.\\s+While\\s+Locsin\\s+caught\\s+5\\s+fewer\\s+starfish\\s+than\\s+Anakin,\\s+3\\s+fewer\\s+sea",
+      "words": 13
+    },
+    {
+      "id": 47,
+      "item": 161,
+      "part": "answer",
+      "literal": "3 = 9 seahorses\nLocsin caught 3 + 2 = 5 clownfish.\nSo,",
+      "regex": "3\\s+=\\s+9\\s+seahorses\\s+Locsin\\s+caught\\s+3\\s+\\+\\s+2\\s+=\\s+5\\s+clownfish\\.\\s+So,",
+      "words": 13
+    },
+    {
+      "id": 48,
+      "item": 164,
+      "part": "question",
+      "literal": "herself, she'll be able to do 3 fewer hours of freelance work, losing",
+      "regex": "herself,\\s+she'll\\s+be\\s+able\\s+to\\s+do\\s+3\\s+fewer\\s+hours\\s+of\\s+freelance\\s+work,\\s+losing",
+      "words": 13
+    },
+    {
+      "id": 49,
+      "item": 164,
+      "part": "answer",
+      "literal": "$35/hour * 3 hours = $105\nThen subtract the accountant's charge to find",
+      "regex": "\\$35/hour\\s+\\*\\s+3\\s+hours\\s+=\\s+\\$105\\s+Then\\s+subtract\\s+the\\s+accountant's\\s+charge\\s+to\\s+find",
+      "words": 13
+    },
+    {
+      "id": 50,
+      "item": 168,
+      "part": "question",
+      "literal": "more than twice the money Ethel has. If Ethal has $8, how much",
+      "regex": "more\\s+than\\s+twice\\s+the\\s+money\\s+Ethel\\s+has\\.\\s+If\\s+Ethal\\s+has\\s+\\$8,\\s+how\\s+much",
+      "words": 13
+    },
+    {
+      "id": 51,
+      "item": 168,
+      "part": "answer",
+      "literal": "$16 more than Ethel.\nIf Jimmy has $2 more than twice the money",
+      "regex": "\\$16\\s+more\\s+than\\s+Ethel\\.\\s+If\\s+Jimmy\\s+has\\s+\\$2\\s+more\\s+than\\s+twice\\s+the\\s+money",
+      "words": 13
+    },
+    {
+      "id": 52,
+      "item": 183,
+      "part": "question",
+      "literal": "and each of their members will run their 400 meter leg in precisely",
+      "regex": "and\\s+each\\s+of\\s+their\\s+members\\s+will\\s+run\\s+their\\s+400\\s+meter\\s+leg\\s+in\\s+precisely",
+      "words": 13
+    },
+    {
+      "id": 53,
+      "item": 183,
+      "part": "answer",
+      "literal": "then the third will take 57 - 3 = 54 seconds, and the",
+      "regex": "then\\s+the\\s+third\\s+will\\s+take\\s+57\\s+\\-\\s+3\\s+=\\s+54\\s+seconds,\\s+and\\s+the",
+      "words": 13
+    },
+    {
+      "id": 54,
+      "item": 186,
+      "part": "question",
+      "literal": "alone and each hamster is given 5 pieces of straw. There is also",
+      "regex": "alone\\s+and\\s+each\\s+hamster\\s+is\\s+given\\s+5\\s+pieces\\s+of\\s+straw\\.\\s+There\\s+is\\s+also",
+      "words": 13
+    },
+    {
+      "id": 55,
+      "item": 186,
+      "part": "answer",
+      "literal": "rats, the rats have a total of 160 used pieces of straw \u2013",
+      "regex": "rats,\\s+the\\s+rats\\s+have\\s+a\\s+total\\s+of\\s+160\\s+used\\s+pieces\\s+of\\s+straw\\s+\u2013",
+      "words": 13
+    },
+    {
+      "id": 56,
+      "item": 187,
+      "part": "question",
+      "literal": "monthly interest of 2%. If Mandy was able to pay it after 3",
+      "regex": "monthly\\s+interest\\s+of\\s+2%\\.\\s+If\\s+Mandy\\s+was\\s+able\\s+to\\s+pay\\s+it\\s+after\\s+3",
+      "words": 13
+    },
+    {
+      "id": 57,
+      "item": 187,
+      "part": "answer",
+      "literal": "the total interest amount to $2 x 3 = $6.\nTherefore, Mandy should",
+      "regex": "the\\s+total\\s+interest\\s+amount\\s+to\\s+\\$2\\s+x\\s+3\\s+=\\s+\\$6\\.\\s+Therefore,\\s+Mandy\\s+should",
+      "words": 13
+    },
+    {
+      "id": 58,
+      "item": 191,
+      "part": "question",
+      "literal": "each week to survive. If there is a flock of ten ducks, how",
+      "regex": "each\\s+week\\s+to\\s+survive\\.\\s+If\\s+there\\s+is\\s+a\\s+flock\\s+of\\s+ten\\s+ducks,\\s+how",
+      "words": 13
+    },
+    {
+      "id": 59,
+      "item": 191,
+      "part": "answer",
+      "literal": "because 10 x 3.5 = 35\nThey need 5 pounds per day because",
+      "regex": "because\\s+10\\s+x\\s+3\\.5\\s+=\\s+35\\s+They\\s+need\\s+5\\s+pounds\\s+per\\s+day\\s+because",
+      "words": 13
+    },
+    {
+      "id": 60,
+      "item": 194,
+      "part": "question",
+      "literal": "them in 5 different colors and prepared $20 for this purchase. One crayon",
+      "regex": "them\\s+in\\s+5\\s+different\\s+colors\\s+and\\s+prepared\\s+\\$20\\s+for\\s+this\\s+purchase\\.\\s+One\\s+crayon",
+      "words": 13
+    },
+    {
+      "id": 61,
+      "item": 194,
+      "part": "answer",
+      "literal": "$10 for the crayons she wants.\nIf she pays $20, she will get",
+      "regex": "\\$10\\s+for\\s+the\\s+crayons\\s+she\\s+wants\\.\\s+If\\s+she\\s+pays\\s+\\$20,\\s+she\\s+will\\s+get",
+      "words": 13
+    },
+    {
+      "id": 62,
+      "item": 202,
+      "part": "question",
+      "literal": "of grapes per year, and each ton of grapes makes 2 barrels of",
+      "regex": "of\\s+grapes\\s+per\\s+year,\\s+and\\s+each\\s+ton\\s+of\\s+grapes\\s+makes\\s+2\\s+barrels\\s+of",
+      "words": 13
+    },
+    {
+      "id": 63,
+      "item": 202,
+      "part": "answer",
+      "literal": "10*5=50 tons of grapes per year.\nIf each ton of grapes makes 2",
+      "regex": "10\\*5=50\\s+tons\\s+of\\s+grapes\\s+per\\s+year\\.\\s+If\\s+each\\s+ton\\s+of\\s+grapes\\s+makes\\s+2",
+      "words": 13
+    },
+    {
+      "id": 64,
+      "item": 206,
+      "part": "question",
+      "literal": "for four weeks, and then he decided, to ride the bike only 2",
+      "regex": "for\\s+four\\s+weeks,\\s+and\\s+then\\s+he\\s+decided,\\s+to\\s+ride\\s+the\\s+bike\\s+only\\s+2",
+      "words": 13
+    },
+    {
+      "id": 65,
+      "item": 206,
+      "part": "answer",
+      "literal": "500 kilometers.\nAfter that, he made 2 * 60 = 120 kilometers a",
+      "regex": "500\\s+kilometers\\.\\s+After\\s+that,\\s+he\\s+made\\s+2\\s+\\*\\s+60\\s+=\\s+120\\s+kilometers\\s+a",
+      "words": 13
+    },
+    {
+      "id": 66,
+      "item": 207,
+      "part": "question",
+      "literal": "Each chocolate bar weighs twice as much as each candied apple. If each",
+      "regex": "Each\\s+chocolate\\s+bar\\s+weighs\\s+twice\\s+as\\s+much\\s+as\\s+each\\s+candied\\s+apple\\.\\s+If\\s+each",
+      "words": 13
+    },
+    {
+      "id": 67,
+      "item": 207,
+      "part": "answer",
+      "literal": "chocolate bars weigh 40*25=1000 grams in total.\nThe candied apples weigh 20*80=1600 grams",
+      "regex": "chocolate\\s+bars\\s+weigh\\s+40\\*25=1000\\s+grams\\s+in\\s+total\\.\\s+The\\s+candied\\s+apples\\s+weigh\\s+20\\*80=1600\\s+grams",
+      "words": 13
+    },
+    {
+      "id": 68,
+      "item": 223,
+      "part": "question",
+      "literal": "spends a third of that amount on advertising for another year.\u00a0 What's the",
+      "regex": "spends\\s+a\\s+third\\s+of\\s+that\\s+amount\\s+on\\s+advertising\\s+for\\s+another\\s+year\\.\\s+What's\\s+the",
+      "words": 13
+    },
+    {
+      "id": 69,
+      "item": 223,
+      "part": "answer",
+      "literal": "advertisement in the second year.\nThe total on advertisement for the two years",
+      "regex": "advertisement\\s+in\\s+the\\s+second\\s+year\\.\\s+The\\s+total\\s+on\\s+advertisement\\s+for\\s+the\\s+two\\s+years",
+      "words": 13
+    },
+    {
+      "id": 70,
+      "item": 236,
+      "part": "question",
+      "literal": "pens to make one full pen. If he buys 25 pens and then",
+      "regex": "pens\\s+to\\s+make\\s+one\\s+full\\s+pen\\.\\s+If\\s+he\\s+buys\\s+25\\s+pens\\s+and\\s+then",
+      "words": 13
+    },
+    {
+      "id": 71,
+      "item": 236,
+      "part": "answer",
+      "literal": "1 pen when the ink in the re-made pens runs low because 5",
+      "regex": "1\\s+pen\\s+when\\s+the\\s+ink\\s+in\\s+the\\s+re\\-made\\s+pens\\s+runs\\s+low\\s+because\\s+5",
+      "words": 13
+    },
+    {
+      "id": 72,
+      "item": 237,
+      "part": "question",
+      "literal": "$10 to it.  He then invested this sum of money, which tripled in",
+      "regex": "\\$10\\s+to\\s+it\\.\\s+He\\s+then\\s+invested\\s+this\\s+sum\\s+of\\s+money,\\s+which\\s+tripled\\s+in",
+      "words": 13
+    },
+    {
+      "id": 73,
+      "item": 237,
+      "part": "answer",
+      "literal": "total of 20+10=30 dollars invested\nJohnny tripled this amount of money over the",
+      "regex": "total\\s+of\\s+20\\+10=30\\s+dollars\\s+invested\\s+Johnny\\s+tripled\\s+this\\s+amount\\s+of\\s+money\\s+over\\s+the",
+      "words": 13
+    },
+    {
+      "id": 74,
+      "item": 239,
+      "part": "question",
+      "literal": "meeting 30% of the students went out of the building through exit A,",
+      "regex": "meeting\\s+30%\\s+of\\s+the\\s+students\\s+went\\s+out\\s+of\\s+the\\s+building\\s+through\\s+exit\\s+A,",
+      "words": 13
+    },
+    {
+      "id": 75,
+      "item": 239,
+      "part": "answer",
+      "literal": "3/5 of the students used exit B, a total of 3/5*700 = 420",
+      "regex": "3/5\\s+of\\s+the\\s+students\\s+used\\s+exit\\s+B,\\s+a\\s+total\\s+of\\s+3/5\\*700\\s+=\\s+420",
+      "words": 13
+    },
+    {
+      "id": 76,
+      "item": 240,
+      "part": "question",
+      "literal": "has twice as many candies as Robert. If John has 54 candies, how",
+      "regex": "has\\s+twice\\s+as\\s+many\\s+candies\\s+as\\s+Robert\\.\\s+If\\s+John\\s+has\\s+54\\s+candies,\\s+how",
+      "words": 13
+    },
+    {
+      "id": 77,
+      "item": 240,
+      "part": "answer",
+      "literal": "27 candies.\nJames has 27+6 = 33 candies.\nJohn has 54-33= 21 more",
+      "regex": "27\\s+candies\\.\\s+James\\s+has\\s+27\\+6\\s+=\\s+33\\s+candies\\.\\s+John\\s+has\\s+54\\-33=\\s+21\\s+more",
+      "words": 13
+    },
+    {
+      "id": 78,
+      "item": 245,
+      "part": "question",
+      "literal": "snails in the two aquariums is twice the amount of fish in both",
+      "regex": "snails\\s+in\\s+the\\s+two\\s+aquariums\\s+is\\s+twice\\s+the\\s+amount\\s+of\\s+fish\\s+in\\s+both",
+      "words": 13
+    },
+    {
+      "id": 79,
+      "item": 245,
+      "part": "answer",
+      "literal": "4 = 28 snails.\nThere are 28/2 = 14 fish in both aquariums.",
+      "regex": "4\\s+=\\s+28\\s+snails\\.\\s+There\\s+are\\s+28/2\\s+=\\s+14\\s+fish\\s+in\\s+both\\s+aquariums\\.",
+      "words": 13
+    },
+    {
+      "id": 80,
+      "item": 253,
+      "part": "question",
+      "literal": "the elevator up to the floor that's equal to 4 times his starting",
+      "regex": "the\\s+elevator\\s+up\\s+to\\s+the\\s+floor\\s+that's\\s+equal\\s+to\\s+4\\s+times\\s+his\\s+starting",
+      "words": 13
+    },
+    {
+      "id": 81,
+      "item": 253,
+      "part": "answer",
+      "literal": "* 4 = 12\nThen add six to find the ending floor Bill",
+      "regex": "\\*\\s+4\\s+=\\s+12\\s+Then\\s+add\\s+six\\s+to\\s+find\\s+the\\s+ending\\s+floor\\s+Bill",
+      "words": 13
+    },
+    {
+      "id": 82,
+      "item": 254,
+      "part": "question",
+      "literal": "times.  Anne went down the slide 30% less than Mitchel and Robert went",
+      "regex": "times\\.\\s+Anne\\s+went\\s+down\\s+the\\s+slide\\s+30%\\s+less\\s+than\\s+Mitchel\\s+and\\s+Robert\\s+went",
+      "words": 13
+    },
+    {
+      "id": 83,
+      "item": 254,
+      "part": "answer",
+      "literal": "down 9 times less than him for a total of 30-9 = 21",
+      "regex": "down\\s+9\\s+times\\s+less\\s+than\\s+him\\s+for\\s+a\\s+total\\s+of\\s+30\\-9\\s+=\\s+21",
+      "words": 13
+    },
+    {
+      "id": 84,
+      "item": 255,
+      "part": "question",
+      "literal": "divides them equally, putting an equal number of the new cows into each",
+      "regex": "divides\\s+them\\s+equally,\\s+putting\\s+an\\s+equal\\s+number\\s+of\\s+the\\s+new\\s+cows\\s+into\\s+each",
+      "words": 13
+    },
+    {
+      "id": 85,
+      "item": 255,
+      "part": "answer",
+      "literal": "eight of the stalls.\nSince each stall had 20 cows before Mr. Sylas",
+      "regex": "eight\\s+of\\s+the\\s+stalls\\.\\s+Since\\s+each\\s+stall\\s+had\\s+20\\s+cows\\s+before\\s+Mr\\.\\s+Sylas",
+      "words": 13
+    },
+    {
+      "id": 86,
+      "item": 266,
+      "part": "question",
+      "literal": "paid a brokerage fee that is 5% of the selling price. If he",
+      "regex": "paid\\s+a\\s+brokerage\\s+fee\\s+that\\s+is\\s+5%\\s+of\\s+the\\s+selling\\s+price\\.\\s+If\\s+he",
+      "words": 13
+    },
+    {
+      "id": 87,
+      "item": 266,
+      "part": "answer",
+      "literal": "So, Mr. Tan paid a total of $12 000 + $20 000 +",
+      "regex": "So,\\s+Mr\\.\\s+Tan\\s+paid\\s+a\\s+total\\s+of\\s+\\$12\\s+000\\s+\\+\\s+\\$20\\s+000\\s+\\+",
+      "words": 13
+    },
+    {
+      "id": 88,
+      "item": 276,
+      "part": "question",
+      "literal": "had the letter B, 5/8 of the rest had the letter C on",
+      "regex": "had\\s+the\\s+letter\\s+B,\\s+5/8\\s+of\\s+the\\s+rest\\s+had\\s+the\\s+letter\\s+C\\s+on",
+      "words": 13
+    },
+    {
+      "id": 89,
+      "item": 276,
+      "part": "answer",
+      "literal": "the remaining cards, the number that did not have the letter B on",
+      "regex": "the\\s+remaining\\s+cards,\\s+the\\s+number\\s+that\\s+did\\s+not\\s+have\\s+the\\s+letter\\s+B\\s+on",
+      "words": 13
+    },
+    {
+      "id": 90,
+      "item": 285,
+      "part": "question",
+      "literal": "years old and her brother is twice her age, how old will her",
+      "regex": "years\\s+old\\s+and\\s+her\\s+brother\\s+is\\s+twice\\s+her\\s+age,\\s+how\\s+old\\s+will\\s+her",
+      "words": 13
+    },
+    {
+      "id": 91,
+      "item": 285,
+      "part": "answer",
+      "literal": "years old now.\nThis means, in 3 years, her brother will be 18",
+      "regex": "years\\s+old\\s+now\\.\\s+This\\s+means,\\s+in\\s+3\\s+years,\\s+her\\s+brother\\s+will\\s+be\\s+18",
+      "words": 13
+    },
+    {
+      "id": 92,
+      "item": 286,
+      "part": "question",
+      "literal": "2 dimes. If she buys a can of pop for 55 cents, how",
+      "regex": "2\\s+dimes\\.\\s+If\\s+she\\s+buys\\s+a\\s+can\\s+of\\s+pop\\s+for\\s+55\\s+cents,\\s+how",
+      "words": 13
+    },
+    {
+      "id": 93,
+      "item": 286,
+      "part": "answer",
+      "literal": "20 cents\nKelly has a total of 125 + 20 = 145 cents",
+      "regex": "20\\s+cents\\s+Kelly\\s+has\\s+a\\s+total\\s+of\\s+125\\s+\\+\\s+20\\s+=\\s+145\\s+cents",
+      "words": 13
+    },
+    {
+      "id": 94,
+      "item": 291,
+      "part": "question",
+      "literal": "contains 5 chocolate bars. If each adult gets 6 chocolate bars and the",
+      "regex": "contains\\s+5\\s+chocolate\\s+bars\\.\\s+If\\s+each\\s+adult\\s+gets\\s+6\\s+chocolate\\s+bars\\s+and\\s+the",
+      "words": 13
+    },
+    {
+      "id": 95,
+      "item": 291,
+      "part": "answer",
+      "literal": "4 adults will get 6*4 = 24 bars in total\nThere are now",
+      "regex": "4\\s+adults\\s+will\\s+get\\s+6\\*4\\s+=\\s+24\\s+bars\\s+in\\s+total\\s+There\\s+are\\s+now",
+      "words": 13
+    },
+    {
+      "id": 96,
+      "item": 299,
+      "part": "question",
+      "literal": "day.  He goes to work 5 days a week for 50 weeks a",
+      "regex": "day\\.\\s+He\\s+goes\\s+to\\s+work\\s+5\\s+days\\s+a\\s+week\\s+for\\s+50\\s+weeks\\s+a",
+      "words": 13
+    },
+    {
+      "id": 97,
+      "item": 299,
+      "part": "answer",
+      "literal": "300*2=$600 per week\nThat means he pays $600*50=$30000 a year for miles driven",
+      "regex": "300\\*2=\\$600\\s+per\\s+week\\s+That\\s+means\\s+he\\s+pays\\s+\\$600\\*50=\\$30000\\s+a\\s+year\\s+for\\s+miles\\s+driven",
+      "words": 13
+    },
+    {
+      "id": 98,
+      "item": 300,
+      "part": "question",
+      "literal": "Sunday combined. On Sunday he exercised for 23 minutes. On Monday he exercised",
+      "regex": "Sunday\\s+combined\\.\\s+On\\s+Sunday\\s+he\\s+exercised\\s+for\\s+23\\s+minutes\\.\\s+On\\s+Monday\\s+he\\s+exercised",
+      "words": 13
+    },
+    {
+      "id": 99,
+      "item": 300,
+      "part": "answer",
+      "literal": "minutes because 23 + 16 = 39\nOn Tuesday he has to exercise",
+      "regex": "minutes\\s+because\\s+23\\s+\\+\\s+16\\s+=\\s+39\\s+On\\s+Tuesday\\s+he\\s+has\\s+to\\s+exercise",
+      "words": 13
+    },
+    {
+      "id": 100,
+      "item": 306,
+      "part": "question",
+      "literal": "sold in the morning and half of what is left is sold equally",
+      "regex": "sold\\s+in\\s+the\\s+morning\\s+and\\s+half\\s+of\\s+what\\s+is\\s+left\\s+is\\s+sold\\s+equally",
+      "words": 13
+    },
+    {
+      "id": 101,
+      "item": 306,
+      "part": "answer",
+      "literal": "- 40 = 20 loaves of bread are sold in the afternoon and",
+      "regex": "\\-\\s+40\\s+=\\s+20\\s+loaves\\s+of\\s+bread\\s+are\\s+sold\\s+in\\s+the\\s+afternoon\\s+and",
+      "words": 13
+    },
+    {
+      "id": 102,
+      "item": 314,
+      "part": "question",
+      "literal": "there is on the defense. There is half the number of players on",
+      "regex": "there\\s+is\\s+on\\s+the\\s+defense\\.\\s+There\\s+is\\s+half\\s+the\\s+number\\s+of\\s+players\\s+on",
+      "words": 13
+    },
+    {
+      "id": 103,
+      "item": 314,
+      "part": "answer",
+      "literal": "the number of players on the defense\nOffense:2x\nSpecial Teams:(1/2)x\nTotal:x+2x+(1/2)x=105\n(7/2)x=105\nx=105(2/7)=30",
+      "regex": "the\\s+number\\s+of\\s+players\\s+on\\s+the\\s+defense\\s+Offense:2x\\s+Special\\s+Teams:\\(1/2\\)x\\s+Total:x\\+2x\\+\\(1/2\\)x=105\\s+\\(7/2\\)x=105\\s+x=105\\(2/7\\)=30",
+      "words": 13
+    },
+    {
+      "id": 104,
+      "item": 324,
+      "part": "question",
+      "literal": "2 old records for 1 new one. 5 people come in with old",
+      "regex": "2\\s+old\\s+records\\s+for\\s+1\\s+new\\s+one\\.\\s+5\\s+people\\s+come\\s+in\\s+with\\s+old",
+      "words": 13
+    },
+    {
+      "id": 105,
+      "item": 324,
+      "part": "answer",
+      "literal": "old records and leave with 7 new records, 7 new records x 2",
+      "regex": "old\\s+records\\s+and\\s+leave\\s+with\\s+7\\s+new\\s+records,\\s+7\\s+new\\s+records\\s+x\\s+2",
+      "words": 13
+    },
+    {
+      "id": 106,
+      "item": 331,
+      "part": "question",
+      "literal": "a year and is in a state that charges $6,000 in property tax",
+      "regex": "a\\s+year\\s+and\\s+is\\s+in\\s+a\\s+state\\s+that\\s+charges\\s+\\$6,000\\s+in\\s+property\\s+tax",
+      "words": 13
+    },
+    {
+      "id": 107,
+      "item": 331,
+      "part": "answer",
+      "literal": "gross income at Job B: $42,000 - $6,000 = $36,000\nNow multiply Nick's",
+      "regex": "gross\\s+income\\s+at\\s+Job\\s+B:\\s+\\$42,000\\s+\\-\\s+\\$6,000\\s+=\\s+\\$36,000\\s+Now\\s+multiply\\s+Nick's",
+      "words": 13
+    },
+    {
+      "id": 108,
+      "item": 346,
+      "part": "question",
+      "literal": "in her son's lunch box 5 days a week.  Her husband eats 1",
+      "regex": "in\\s+her\\s+son's\\s+lunch\\s+box\\s+5\\s+days\\s+a\\s+week\\.\\s+Her\\s+husband\\s+eats\\s+1",
+      "words": 13
+    },
+    {
+      "id": 109,
+      "item": 346,
+      "part": "answer",
+      "literal": "day for 7 days so he eats 1*7 = 7 cookies\nThere are",
+      "regex": "day\\s+for\\s+7\\s+days\\s+so\\s+he\\s+eats\\s+1\\*7\\s+=\\s+7\\s+cookies\\s+There\\s+are",
+      "words": 13
+    },
+    {
+      "id": 110,
+      "item": 349,
+      "part": "question",
+      "literal": "week. Treats cost $20 per month. Medicine costs $100 per month. How much",
+      "regex": "week\\.\\s+Treats\\s+cost\\s+\\$20\\s+per\\s+month\\.\\s+Medicine\\s+costs\\s+\\$100\\s+per\\s+month\\.\\s+How\\s+much",
+      "words": 13
+    },
+    {
+      "id": 111,
+      "item": 349,
+      "part": "answer",
+      "literal": "per month.\nShe spends $100+$20+$100=$220 on her dog per month.\nShe will spend",
+      "regex": "per\\s+month\\.\\s+She\\s+spends\\s+\\$100\\+\\$20\\+\\$100=\\$220\\s+on\\s+her\\s+dog\\s+per\\s+month\\.\\s+She\\s+will\\s+spend",
+      "words": 13
+    },
+    {
+      "id": 112,
+      "item": 358,
+      "part": "question",
+      "literal": "25 cents each every day and saves the change in her piggy bank.",
+      "regex": "25\\s+cents\\s+each\\s+every\\s+day\\s+and\\s+saves\\s+the\\s+change\\s+in\\s+her\\s+piggy\\s+bank\\.",
+      "words": 13
+    },
+    {
+      "id": 113,
+      "item": 358,
+      "part": "answer",
+      "literal": "$1 she spends $1 everyday.\nHer savings everyday is $5 - $1 =",
+      "regex": "\\$1\\s+she\\s+spends\\s+\\$1\\s+everyday\\.\\s+Her\\s+savings\\s+everyday\\s+is\\s+\\$5\\s+\\-\\s+\\$1\\s+=",
+      "words": 13
+    },
+    {
+      "id": 114,
+      "item": 369,
+      "part": "question",
+      "literal": "20% cost per frame.  2 of the seniors will also receive pins that",
+      "regex": "20%\\s+cost\\s+per\\s+frame\\.\\s+2\\s+of\\s+the\\s+seniors\\s+will\\s+also\\s+receive\\s+pins\\s+that",
+      "words": 13
+    },
+    {
+      "id": 115,
+      "item": 369,
+      "part": "answer",
+      "literal": "* $5 = $10.\nThe number of seniors receiving cords is 1/4 *",
+      "regex": "\\*\\s+\\$5\\s+=\\s+\\$10\\.\\s+The\\s+number\\s+of\\s+seniors\\s+receiving\\s+cords\\s+is\\s+1/4\\s+\\*",
+      "words": 13
+    },
+    {
+      "id": 116,
+      "item": 376,
+      "part": "question",
+      "literal": "the class likes blue. One-fourth of the remaining likes green and the rest",
+      "regex": "the\\s+class\\s+likes\\s+blue\\.\\s+One\\-fourth\\s+of\\s+the\\s+remaining\\s+likes\\s+green\\s+and\\s+the\\s+rest",
+      "words": 13
+    },
+    {
+      "id": 117,
+      "item": 376,
+      "part": "answer",
+      "literal": "20 = 20 pupils who like either green or yellow.\nHence, 20/4 =",
+      "regex": "20\\s+=\\s+20\\s+pupils\\s+who\\s+like\\s+either\\s+green\\s+or\\s+yellow\\.\\s+Hence,\\s+20/4\\s+=",
+      "words": 13
+    },
+    {
+      "id": 118,
+      "item": 378,
+      "part": "question",
+      "literal": "socks. There are 50 socks that need washing. If she washes 10 pairs",
+      "regex": "socks\\.\\s+There\\s+are\\s+50\\s+socks\\s+that\\s+need\\s+washing\\.\\s+If\\s+she\\s+washes\\s+10\\s+pairs",
+      "words": 13
+    },
+    {
+      "id": 119,
+      "item": 378,
+      "part": "answer",
+      "literal": "This means she has washed a total of 20 paired socks + 15",
+      "regex": "This\\s+means\\s+she\\s+has\\s+washed\\s+a\\s+total\\s+of\\s+20\\s+paired\\s+socks\\s+\\+\\s+15",
+      "words": 13
+    },
+    {
+      "id": 120,
+      "item": 382,
+      "part": "question",
+      "literal": "friend Anna who has twice as many silver pesos as he has and",
+      "regex": "friend\\s+Anna\\s+who\\s+has\\s+twice\\s+as\\s+many\\s+silver\\s+pesos\\s+as\\s+he\\s+has\\s+and",
+      "words": 13
+    },
+    {
+      "id": 121,
+      "item": 382,
+      "part": "answer",
+      "literal": "has 80 + 40 =120 gold pesos.\nThe total number of pesos that",
+      "regex": "has\\s+80\\s+\\+\\s+40\\s+=120\\s+gold\\s+pesos\\.\\s+The\\s+total\\s+number\\s+of\\s+pesos\\s+that",
+      "words": 13
+    },
+    {
+      "id": 122,
+      "item": 386,
+      "part": "question",
+      "literal": "in his math class.  His math grade is calculated by the average of",
+      "regex": "in\\s+his\\s+math\\s+class\\.\\s+His\\s+math\\s+grade\\s+is\\s+calculated\\s+by\\s+the\\s+average\\s+of",
+      "words": 13
+    },
+    {
+      "id": 123,
+      "item": 386,
+      "part": "answer",
+      "literal": "that's 65+94+81+86+74 = 400\nHis math grade is calculated by the average test",
+      "regex": "that's\\s+65\\+94\\+81\\+86\\+74\\s+=\\s+400\\s+His\\s+math\\s+grade\\s+is\\s+calculated\\s+by\\s+the\\s+average\\s+test",
+      "words": 13
+    },
+    {
+      "id": 124,
+      "item": 387,
+      "part": "question",
+      "literal": "costs $2 and a pencil costs $3. How much do 6 erasers and",
+      "regex": "costs\\s+\\$2\\s+and\\s+a\\s+pencil\\s+costs\\s+\\$3\\.\\s+How\\s+much\\s+do\\s+6\\s+erasers\\s+and",
+      "words": 13
+    },
+    {
+      "id": 125,
+      "item": 387,
+      "part": "answer",
+      "literal": "Eight pencils cost $3/pencil x 8 pencils = $24.\nSo, 6 erasers and",
+      "regex": "Eight\\s+pencils\\s+cost\\s+\\$3/pencil\\s+x\\s+8\\s+pencils\\s+=\\s+\\$24\\.\\s+So,\\s+6\\s+erasers\\s+and",
+      "words": 13
+    },
+    {
+      "id": 126,
+      "item": 389,
+      "part": "question",
+      "literal": "You can also buy a ride bracelet for $30 which gives you 9",
+      "regex": "You\\s+can\\s+also\\s+buy\\s+a\\s+ride\\s+bracelet\\s+for\\s+\\$30\\s+which\\s+gives\\s+you\\s+9",
+      "words": 13
+    },
+    {
+      "id": 127,
+      "item": 389,
+      "part": "answer",
+      "literal": "9 rides cost $4 x 9 = $36.\nBy bathing the ride bracelet,",
+      "regex": "9\\s+rides\\s+cost\\s+\\$4\\s+x\\s+9\\s+=\\s+\\$36\\.\\s+By\\s+bathing\\s+the\\s+ride\\s+bracelet,",
+      "words": 13
+    },
+    {
+      "id": 128,
+      "item": 391,
+      "part": "question",
+      "literal": "is 5:6. If the total number of popsicles they have together is 165,",
+      "regex": "is\\s+5:6\\.\\s+If\\s+the\\s+total\\s+number\\s+of\\s+popsicles\\s+they\\s+have\\s+together\\s+is\\s+165,",
+      "words": 13
+    },
+    {
+      "id": 129,
+      "item": 391,
+      "part": "answer",
+      "literal": "5/11 of the total number of popsicles they have together, she has 5/11*165",
+      "regex": "5/11\\s+of\\s+the\\s+total\\s+number\\s+of\\s+popsicles\\s+they\\s+have\\s+together,\\s+she\\s+has\\s+5/11\\*165",
+      "words": 13
+    },
+    {
+      "id": 130,
+      "item": 398,
+      "part": "question",
+      "literal": "many millipedes as spiders, and a number of stink bugs equal to twice",
+      "regex": "many\\s+millipedes\\s+as\\s+spiders,\\s+and\\s+a\\s+number\\s+of\\s+stink\\s+bugs\\s+equal\\s+to\\s+twice",
+      "words": 13
+    },
+    {
+      "id": 131,
+      "item": 398,
+      "part": "answer",
+      "literal": "subtract 12 to find the number of stink bugs: 60 bugs - 12",
+      "regex": "subtract\\s+12\\s+to\\s+find\\s+the\\s+number\\s+of\\s+stink\\s+bugs:\\s+60\\s+bugs\\s+\\-\\s+12",
+      "words": 13
+    },
+    {
+      "id": 132,
+      "item": 408,
+      "part": "question",
+      "literal": "per minute. He has to be at the airport in 60 minutes and",
+      "regex": "per\\s+minute\\.\\s+He\\s+has\\s+to\\s+be\\s+at\\s+the\\s+airport\\s+in\\s+60\\s+minutes\\s+and",
+      "words": 13
+    },
+    {
+      "id": 133,
+      "item": 408,
+      "part": "answer",
+      "literal": "because 45 / 1.5 = 30\nHe will arrive at the airport 40",
+      "regex": "because\\s+45\\s+/\\s+1\\.5\\s+=\\s+30\\s+He\\s+will\\s+arrive\\s+at\\s+the\\s+airport\\s+40",
+      "words": 13
+    },
+    {
+      "id": 134,
+      "item": 416,
+      "part": "question",
+      "literal": "180 heads and 304 bumps. How many dromedaries are there if camels have",
+      "regex": "180\\s+heads\\s+and\\s+304\\s+bumps\\.\\s+How\\s+many\\s+dromedaries\\s+are\\s+there\\s+if\\s+camels\\s+have",
+      "words": 13
+    },
+    {
+      "id": 135,
+      "item": 416,
+      "part": "answer",
+      "literal": "each dromedary has one hump so in total there are 2x + 180",
+      "regex": "each\\s+dromedary\\s+has\\s+one\\s+hump\\s+so\\s+in\\s+total\\s+there\\s+are\\s+2x\\s+\\+\\s+180",
+      "words": 13
+    },
+    {
+      "id": 136,
+      "item": 418,
+      "part": "question",
+      "literal": "locker is 1/4 as big as Zack's locker. If Peter's locker is 5",
+      "regex": "locker\\s+is\\s+1/4\\s+as\\s+big\\s+as\\s+Zack's\\s+locker\\.\\s+If\\s+Peter's\\s+locker\\s+is\\s+5",
+      "words": 13
+    },
+    {
+      "id": 137,
+      "item": 418,
+      "part": "answer",
+      "literal": "Zack's locker is 5*4=20 cubic inches.\nTimothy's locker is 20*2=40 cubic inches.\n####",
+      "regex": "Zack's\\s+locker\\s+is\\s+5\\*4=20\\s+cubic\\s+inches\\.\\s+Timothy's\\s+locker\\s+is\\s+20\\*2=40\\s+cubic\\s+inches\\.\\s+\\#\\#\\#\\#",
+      "words": 13
+    },
+    {
+      "id": 138,
+      "item": 431,
+      "part": "question",
+      "literal": "that costs $2. She has saved $2 from her allowance, and her mother",
+      "regex": "that\\s+costs\\s+\\$2\\.\\s+She\\s+has\\s+saved\\s+\\$2\\s+from\\s+her\\s+allowance,\\s+and\\s+her\\s+mother",
+      "words": 13
+    },
+    {
+      "id": 139,
+      "item": 431,
+      "part": "answer",
+      "literal": "+ $2 = $19.\nThe total amount of money from the allowance and",
+      "regex": "\\+\\s+\\$2\\s+=\\s+\\$19\\.\\s+The\\s+total\\s+amount\\s+of\\s+money\\s+from\\s+the\\s+allowance\\s+and",
+      "words": 13
+    },
+    {
+      "id": 140,
+      "item": 440,
+      "part": "question",
+      "literal": "360 square feet. If the length of his room is 3 yards, what",
+      "regex": "360\\s+square\\s+feet\\.\\s+If\\s+the\\s+length\\s+of\\s+his\\s+room\\s+is\\s+3\\s+yards,\\s+what",
+      "words": 13
+    },
+    {
+      "id": 141,
+      "item": 440,
+      "part": "answer",
+      "literal": "= 9 feet.\nThe width of the room is 360 square feet /",
+      "regex": "=\\s+9\\s+feet\\.\\s+The\\s+width\\s+of\\s+the\\s+room\\s+is\\s+360\\s+square\\s+feet\\s+/",
+      "words": 13
+    },
+    {
+      "id": 142,
+      "item": 447,
+      "part": "question",
+      "literal": "Scrabble. He scores 26 points. Then Marcy, who has 225 points, scores 10",
+      "regex": "Scrabble\\.\\s+He\\s+scores\\s+26\\s+points\\.\\s+Then\\s+Marcy,\\s+who\\s+has\\s+225\\s+points,\\s+scores\\s+10",
+      "words": 13
+    },
+    {
+      "id": 143,
+      "item": 447,
+      "part": "answer",
+      "literal": "Joey now has 214+26=240.\nMarcy now has 225+10=235.\nAnd 240-235=5.\n#### 5",
+      "regex": "Joey\\s+now\\s+has\\s+214\\+26=240\\.\\s+Marcy\\s+now\\s+has\\s+225\\+10=235\\.\\s+And\\s+240\\-235=5\\.\\s+\\#\\#\\#\\#\\s+5",
+      "words": 12
+    },
+    {
+      "id": 144,
+      "item": 448,
+      "part": "question",
+      "literal": "a flash sale on Monday, and the rest were sold to a department",
+      "regex": "a\\s+flash\\s+sale\\s+on\\s+Monday,\\s+and\\s+the\\s+rest\\s+were\\s+sold\\s+to\\s+a\\s+department",
+      "words": 13
+    },
+    {
+      "id": 145,
+      "item": 448,
+      "part": "answer",
+      "literal": "At the department store he made 31 \u00d7 $25 = $775 throughout the",
+      "regex": "At\\s+the\\s+department\\s+store\\s+he\\s+made\\s+31\\s+\u00d7\\s+\\$25\\s+=\\s+\\$775\\s+throughout\\s+the",
+      "words": 13
+    },
+    {
+      "id": 146,
+      "item": 451,
+      "part": "question",
+      "literal": "later, the cost of filling each balloon was increased by $20. How much",
+      "regex": "later,\\s+the\\s+cost\\s+of\\s+filling\\s+each\\s+balloon\\s+was\\s+increased\\s+by\\s+\\$20\\.\\s+How\\s+much",
+      "words": 13
+    },
+    {
+      "id": 147,
+      "item": 451,
+      "part": "answer",
+      "literal": "Two days later, the cost of filling each balloon was increased by $20",
+      "regex": "Two\\s+days\\s+later,\\s+the\\s+cost\\s+of\\s+filling\\s+each\\s+balloon\\s+was\\s+increased\\s+by\\s+\\$20",
+      "words": 13
+    },
+    {
+      "id": 148,
+      "item": 452,
+      "part": "question",
+      "literal": "60 mph for 2 hours, and then 30 mph for 1 hour. What",
+      "regex": "60\\s+mph\\s+for\\s+2\\s+hours,\\s+and\\s+then\\s+30\\s+mph\\s+for\\s+1\\s+hour\\.\\s+What",
+      "words": 13
+    },
+    {
+      "id": 149,
+      "item": 452,
+      "part": "answer",
+      "literal": "120+30=150 miles.\nLet S be the average speed, M be the number of",
+      "regex": "120\\+30=150\\s+miles\\.\\s+Let\\s+S\\s+be\\s+the\\s+average\\s+speed,\\s+M\\s+be\\s+the\\s+number\\s+of",
+      "words": 13
+    },
+    {
+      "id": 150,
+      "item": 454,
+      "part": "question",
+      "literal": "neighbor Nancy each eat 4 apples a day. How many apples do they",
+      "regex": "neighbor\\s+Nancy\\s+each\\s+eat\\s+4\\s+apples\\s+a\\s+day\\.\\s+How\\s+many\\s+apples\\s+do\\s+they",
+      "words": 13
+    },
+    {
+      "id": 151,
+      "item": 454,
+      "part": "answer",
+      "literal": "eat 4 + 1 = 5 apples.\nIn 30 days, they eat 30",
+      "regex": "eat\\s+4\\s+\\+\\s+1\\s+=\\s+5\\s+apples\\.\\s+In\\s+30\\s+days,\\s+they\\s+eat\\s+30",
+      "words": 13
+    },
+    {
+      "id": 152,
+      "item": 482,
+      "part": "question",
+      "literal": "to raise $200 for the two of them. By 3 pm, Keegan had",
+      "regex": "to\\s+raise\\s+\\$200\\s+for\\s+the\\s+two\\s+of\\s+them\\.\\s+By\\s+3\\s+pm,\\s+Keegan\\s+had",
+      "words": 13
+    },
+    {
+      "id": 153,
+      "item": 482,
+      "part": "answer",
+      "literal": "83 plus 91 equals 174.\nThey need to raise $26 more because 200",
+      "regex": "83\\s+plus\\s+91\\s+equals\\s+174\\.\\s+They\\s+need\\s+to\\s+raise\\s+\\$26\\s+more\\s+because\\s+200",
+      "words": 13
+    },
+    {
+      "id": 154,
+      "item": 488,
+      "part": "question",
+      "literal": "of Jana's puppies are Pomeranians. One third of the Pomeranians are girls. How",
+      "regex": "of\\s+Jana's\\s+puppies\\s+are\\s+Pomeranians\\.\\s+One\\s+third\\s+of\\s+the\\s+Pomeranians\\s+are\\s+girls\\.\\s+How",
+      "words": 13
+    },
+    {
+      "id": 155,
+      "item": 488,
+      "part": "answer",
+      "literal": "Jana has 27/3*2=18 Pomeranians.\nJana has 18/3=6 girl Pomeranians.\n#### 6",
+      "regex": "Jana\\s+has\\s+27/3\\*2=18\\s+Pomeranians\\.\\s+Jana\\s+has\\s+18/3=6\\s+girl\\s+Pomeranians\\.\\s+\\#\\#\\#\\#\\s+6",
+      "words": 11
+    },
+    {
+      "id": 156,
+      "item": 491,
+      "part": "question",
+      "literal": "hold 24 eggs. If he has 64 eggs and 2 trays, how many",
+      "regex": "hold\\s+24\\s+eggs\\.\\s+If\\s+he\\s+has\\s+64\\s+eggs\\s+and\\s+2\\s+trays,\\s+how\\s+many",
+      "words": 13
+    },
+    {
+      "id": 157,
+      "item": 491,
+      "part": "answer",
+      "literal": "2 = 48.\nTherefore, there are 64 - 48 = 16 eggs that",
+      "regex": "2\\s+=\\s+48\\.\\s+Therefore,\\s+there\\s+are\\s+64\\s+\\-\\s+48\\s+=\\s+16\\s+eggs\\s+that",
+      "words": 13
+    },
+    {
+      "id": 158,
+      "item": 495,
+      "part": "question",
+      "literal": "her to get up and walk for 5 minutes every hour she\u2019s at",
+      "regex": "her\\s+to\\s+get\\s+up\\s+and\\s+walk\\s+for\\s+5\\s+minutes\\s+every\\s+hour\\s+she\u2019s\\s+at",
+      "words": 13
+    },
+    {
+      "id": 159,
+      "item": 495,
+      "part": "answer",
+      "literal": "a total of 8*5 = 40 minutes of walking\nIf she walks 40",
+      "regex": "a\\s+total\\s+of\\s+8\\*5\\s+=\\s+40\\s+minutes\\s+of\\s+walking\\s+If\\s+she\\s+walks\\s+40",
+      "words": 13
+    },
+    {
+      "id": 160,
+      "item": 497,
+      "part": "question",
+      "literal": "that for 14 days. Each morning ride cost him about $6, and each",
+      "regex": "that\\s+for\\s+14\\s+days\\.\\s+Each\\s+morning\\s+ride\\s+cost\\s+him\\s+about\\s+\\$6,\\s+and\\s+each",
+      "words": 13
+    },
+    {
+      "id": 161,
+      "item": 497,
+      "part": "answer",
+      "literal": "on the other hand, was a cost of 14 * 2 = $28.",
+      "regex": "on\\s+the\\s+other\\s+hand,\\s+was\\s+a\\s+cost\\s+of\\s+14\\s+\\*\\s+2\\s+=\\s+\\$28\\.",
+      "words": 13
+    },
+    {
+      "id": 162,
+      "item": 499,
+      "part": "question",
+      "literal": "person who attends.  However, the first venue does not include food, which Mark",
+      "regex": "person\\s+who\\s+attends\\.\\s+However,\\s+the\\s+first\\s+venue\\s+does\\s+not\\s+include\\s+food,\\s+which\\s+Mark",
+      "words": 13
+    },
+    {
+      "id": 163,
+      "item": 499,
+      "part": "answer",
+      "literal": "that makes these two costs equal. Setting these two expressions equal to each",
+      "regex": "that\\s+makes\\s+these\\s+two\\s+costs\\s+equal\\.\\s+Setting\\s+these\\s+two\\s+expressions\\s+equal\\s+to\\s+each",
+      "words": 13
+    },
+    {
+      "id": 164,
+      "item": 513,
+      "part": "question",
+      "literal": "of it on clothes and then 25% of the remaining money on CDs.",
+      "regex": "of\\s+it\\s+on\\s+clothes\\s+and\\s+then\\s+25%\\s+of\\s+the\\s+remaining\\s+money\\s+on\\s+CDs\\.",
+      "words": 13
+    },
+    {
+      "id": 165,
+      "item": 513,
+      "part": "answer",
+      "literal": "$500 - $100 = $400 left.\nShe spend $400 * 0.25 = $100",
+      "regex": "\\$500\\s+\\-\\s+\\$100\\s+=\\s+\\$400\\s+left\\.\\s+She\\s+spend\\s+\\$400\\s+\\*\\s+0\\.25\\s+=\\s+\\$100",
+      "words": 13
+    },
+    {
+      "id": 166,
+      "item": 530,
+      "part": "question",
+      "literal": "At one point, he spent 5 hours each for two consecutive weeks. Another",
+      "regex": "At\\s+one\\s+point,\\s+he\\s+spent\\s+5\\s+hours\\s+each\\s+for\\s+two\\s+consecutive\\s+weeks\\.\\s+Another",
+      "words": 13
+    },
+    {
+      "id": 167,
+      "item": 530,
+      "part": "answer",
+      "literal": "3 weeks have been accounted for\nHe tracked 8 weeks so there are",
+      "regex": "3\\s+weeks\\s+have\\s+been\\s+accounted\\s+for\\s+He\\s+tracked\\s+8\\s+weeks\\s+so\\s+there\\s+are",
+      "words": 13
+    },
+    {
+      "id": 168,
+      "item": 532,
+      "part": "question",
+      "literal": "years his cousin will be 5 years younger than twice his age.  How",
+      "regex": "years\\s+his\\s+cousin\\s+will\\s+be\\s+5\\s+years\\s+younger\\s+than\\s+twice\\s+his\\s+age\\.\\s+How",
+      "words": 13
+    },
+    {
+      "id": 169,
+      "item": 532,
+      "part": "answer",
+      "literal": "old\nSo in 8 years, his cousin will be 30*2-5=55\nSo his cousin",
+      "regex": "old\\s+So\\s+in\\s+8\\s+years,\\s+his\\s+cousin\\s+will\\s+be\\s+30\\*2\\-5=55\\s+So\\s+his\\s+cousin",
+      "words": 13
+    },
+    {
+      "id": 170,
+      "item": 533,
+      "part": "question",
+      "literal": "$2,400. He paid $400 less for the printer than the computer. If the",
+      "regex": "\\$2,400\\.\\s+He\\s+paid\\s+\\$400\\s+less\\s+for\\s+the\\s+printer\\s+than\\s+the\\s+computer\\.\\s+If\\s+the",
+      "words": 13
+    },
+    {
+      "id": 171,
+      "item": 533,
+      "part": "answer",
+      "literal": "for the printer.\nHe paid 2400-1100-700=600 dollars for the monitors.\nEach monitor costs",
+      "regex": "for\\s+the\\s+printer\\.\\s+He\\s+paid\\s+2400\\-1100\\-700=600\\s+dollars\\s+for\\s+the\\s+monitors\\.\\s+Each\\s+monitor\\s+costs",
+      "words": 13
+    },
+    {
+      "id": 172,
+      "item": 555,
+      "part": "question",
+      "literal": "hour and works 5 hours a day for 4 days a week.  If",
+      "regex": "hour\\s+and\\s+works\\s+5\\s+hours\\s+a\\s+day\\s+for\\s+4\\s+days\\s+a\\s+week\\.\\s+If",
+      "words": 13
+    },
+    {
+      "id": 173,
+      "item": 555,
+      "part": "answer",
+      "literal": "he gets paid 10*4=$40 a week.\nThat means it would take 80/40=2 weeks",
+      "regex": "he\\s+gets\\s+paid\\s+10\\*4=\\$40\\s+a\\s+week\\.\\s+That\\s+means\\s+it\\s+would\\s+take\\s+80/40=2\\s+weeks",
+      "words": 13
+    },
+    {
+      "id": 174,
+      "item": 563,
+      "part": "question",
+      "literal": "of them is 12 and the other is 4 years younger.  A pack",
+      "regex": "of\\s+them\\s+is\\s+12\\s+and\\s+the\\s+other\\s+is\\s+4\\s+years\\s+younger\\.\\s+A\\s+pack",
+      "words": 13
+    },
+    {
+      "id": 175,
+      "item": 563,
+      "part": "answer",
+      "literal": "he needs 12+8=20 candles\nThat means he needs 20/5=4 packs of candles\nThe",
+      "regex": "he\\s+needs\\s+12\\+8=20\\s+candles\\s+That\\s+means\\s+he\\s+needs\\s+20/5=4\\s+packs\\s+of\\s+candles\\s+The",
+      "words": 13
+    },
+    {
+      "id": 176,
+      "item": 564,
+      "part": "question",
+      "literal": "In the second week, she read a total of 100 pages. If she",
+      "regex": "In\\s+the\\s+second\\s+week,\\s+she\\s+read\\s+a\\s+total\\s+of\\s+100\\s+pages\\.\\s+If\\s+she",
+      "words": 13
+    },
+    {
+      "id": 177,
+      "item": 564,
+      "part": "answer",
+      "literal": "night in the first week.\nIn the first week, she reads a total",
+      "regex": "night\\s+in\\s+the\\s+first\\s+week\\.\\s+In\\s+the\\s+first\\s+week,\\s+she\\s+reads\\s+a\\s+total",
+      "words": 13
+    },
+    {
+      "id": 178,
+      "item": 575,
+      "part": "question",
+      "literal": "took the crayons home and decided to make crayon muffins by melting 8",
+      "regex": "took\\s+the\\s+crayons\\s+home\\s+and\\s+decided\\s+to\\s+make\\s+crayon\\s+muffins\\s+by\\s+melting\\s+8",
+      "words": 13
+    },
+    {
+      "id": 179,
+      "item": 575,
+      "part": "answer",
+      "literal": "crayons and she has 192 crayons so she can make 192/8 = 24",
+      "regex": "crayons\\s+and\\s+she\\s+has\\s+192\\s+crayons\\s+so\\s+she\\s+can\\s+make\\s+192/8\\s+=\\s+24",
+      "words": 13
+    },
+    {
+      "id": 180,
+      "item": 577,
+      "part": "question",
+      "literal": "total of 50 birds. On day three he saw none. On days four",
+      "regex": "total\\s+of\\s+50\\s+birds\\.\\s+On\\s+day\\s+three\\s+he\\s+saw\\s+none\\.\\s+On\\s+days\\s+four",
+      "words": 13
+    },
+    {
+      "id": 181,
+      "item": 577,
+      "part": "answer",
+      "literal": "four to seven, he saw 120+20+90=230 birds.\nFor the whole week he saw",
+      "regex": "four\\s+to\\s+seven,\\s+he\\s+saw\\s+120\\+20\\+90=230\\s+birds\\.\\s+For\\s+the\\s+whole\\s+week\\s+he\\s+saw",
+      "words": 13
+    },
+    {
+      "id": 182,
+      "item": 589,
+      "part": "question",
+      "literal": "donuts every day for breakfast, he'll gain 1.75 pounds/week. What will be the",
+      "regex": "donuts\\s+every\\s+day\\s+for\\s+breakfast,\\s+he'll\\s+gain\\s+1\\.75\\s+pounds/week\\.\\s+What\\s+will\\s+be\\s+the",
+      "words": 13
+    },
+    {
+      "id": 183,
+      "item": 589,
+      "part": "answer",
+      "literal": "3 pounds/week\nThen multiply the weight gain per week by the number of",
+      "regex": "3\\s+pounds/week\\s+Then\\s+multiply\\s+the\\s+weight\\s+gain\\s+per\\s+week\\s+by\\s+the\\s+number\\s+of",
+      "words": 13
+    },
+    {
+      "id": 184,
+      "item": 594,
+      "part": "question",
+      "literal": "3 grams of protein.  If John eats 200 grams of mushrooms every day",
+      "regex": "3\\s+grams\\s+of\\s+protein\\.\\s+If\\s+John\\s+eats\\s+200\\s+grams\\s+of\\s+mushrooms\\s+every\\s+day",
+      "words": 13
+    },
+    {
+      "id": 185,
+      "item": 594,
+      "part": "answer",
+      "literal": "that means he gets 2*3=6 grams of protein per day\nSo he gets",
+      "regex": "that\\s+means\\s+he\\s+gets\\s+2\\*3=6\\s+grams\\s+of\\s+protein\\s+per\\s+day\\s+So\\s+he\\s+gets",
+      "words": 13
+    },
+    {
+      "id": 186,
+      "item": 596,
+      "part": "question",
+      "literal": "made of porcelain. That feature costs an extra $500. He\u2019s already put down",
+      "regex": "made\\s+of\\s+porcelain\\.\\s+That\\s+feature\\s+costs\\s+an\\s+extra\\s+\\$500\\.\\s+He\u2019s\\s+already\\s+put\\s+down",
+      "words": 13
+    },
+    {
+      "id": 187,
+      "item": 596,
+      "part": "answer",
+      "literal": "= $4500.\nSubtracting the deposit, George needs to pay a total of $4500",
+      "regex": "=\\s+\\$4500\\.\\s+Subtracting\\s+the\\s+deposit,\\s+George\\s+needs\\s+to\\s+pay\\s+a\\s+total\\s+of\\s+\\$4500",
+      "words": 13
+    },
+    {
+      "id": 188,
+      "item": 616,
+      "part": "question",
+      "literal": "3 inches tall. It doubled in height the second week. It grew another",
+      "regex": "3\\s+inches\\s+tall\\.\\s+It\\s+doubled\\s+in\\s+height\\s+the\\s+second\\s+week\\.\\s+It\\s+grew\\s+another",
+      "words": 13
+    },
+    {
+      "id": 189,
+      "item": 616,
+      "part": "answer",
+      "literal": "it was 2 * 3 inches = 6 inches tall.\nAfter the third",
+      "regex": "it\\s+was\\s+2\\s+\\*\\s+3\\s+inches\\s+=\\s+6\\s+inches\\s+tall\\.\\s+After\\s+the\\s+third",
+      "words": 13
+    },
+    {
+      "id": 190,
+      "item": 617,
+      "part": "question",
+      "literal": "works 10 hours a day. His friend Bill gives him a bull that",
+      "regex": "works\\s+10\\s+hours\\s+a\\s+day\\.\\s+His\\s+friend\\s+Bill\\s+gives\\s+him\\s+a\\s+bull\\s+that",
+      "words": 13
+    },
+    {
+      "id": 191,
+      "item": 617,
+      "part": "answer",
+      "literal": "150kg of meat.\nIt will take Bill 750 / 150 = 5 days",
+      "regex": "150kg\\s+of\\s+meat\\.\\s+It\\s+will\\s+take\\s+Bill\\s+750\\s+/\\s+150\\s+=\\s+5\\s+days",
+      "words": 13
+    },
+    {
+      "id": 192,
+      "item": 621,
+      "part": "question",
+      "literal": "therapy for 6 weeks.  Each week he went twice for 2 hours at",
+      "regex": "therapy\\s+for\\s+6\\s+weeks\\.\\s+Each\\s+week\\s+he\\s+went\\s+twice\\s+for\\s+2\\s+hours\\s+at",
+      "words": 13
+    },
+    {
+      "id": 193,
+      "item": 621,
+      "part": "answer",
+      "literal": "2*2=4 hours of physical therapy\nSo it cost 4*125=$500 per week\nThis means",
+      "regex": "2\\*2=4\\s+hours\\s+of\\s+physical\\s+therapy\\s+So\\s+it\\s+cost\\s+4\\*125=\\$500\\s+per\\s+week\\s+This\\s+means",
+      "words": 13
+    },
+    {
+      "id": 194,
+      "item": 635,
+      "part": "question",
+      "literal": "costing more than $10 per class, then they won't sign him up again.",
+      "regex": "costing\\s+more\\s+than\\s+\\$10\\s+per\\s+class,\\s+then\\s+they\\s+won't\\s+sign\\s+him\\s+up\\s+again\\.",
+      "words": 13
+    },
+    {
+      "id": 195,
+      "item": 635,
+      "part": "answer",
+      "literal": "classes, because 60 / 6 = 10\nHe can skip 4 class because",
+      "regex": "classes,\\s+because\\s+60\\s+/\\s+6\\s+=\\s+10\\s+He\\s+can\\s+skip\\s+4\\s+class\\s+because",
+      "words": 13
+    },
+    {
+      "id": 196,
+      "item": 637,
+      "part": "question",
+      "literal": "4 miles. Reggie ran 5 times what Paisley ran and 3 miles farther",
+      "regex": "4\\s+miles\\.\\s+Reggie\\s+ran\\s+5\\s+times\\s+what\\s+Paisley\\s+ran\\s+and\\s+3\\s+miles\\s+farther",
+      "words": 13
+    },
+    {
+      "id": 197,
+      "item": 637,
+      "part": "answer",
+      "literal": "= 20 miles\nLynn ran 3 miles less than Reggie = 20 -",
+      "regex": "=\\s+20\\s+miles\\s+Lynn\\s+ran\\s+3\\s+miles\\s+less\\s+than\\s+Reggie\\s+=\\s+20\\s+\\-",
+      "words": 13
+    },
+    {
+      "id": 198,
+      "item": 647,
+      "part": "question",
+      "literal": "and half that fast through clay. If he has to dig through 24",
+      "regex": "and\\s+half\\s+that\\s+fast\\s+through\\s+clay\\.\\s+If\\s+he\\s+has\\s+to\\s+dig\\s+through\\s+24",
+      "words": 13
+    },
+    {
+      "id": 199,
+      "item": 647,
+      "part": "answer",
+      "literal": "hours\nThen find how long he spends digging through soil in total: 24",
+      "regex": "hours\\s+Then\\s+find\\s+how\\s+long\\s+he\\s+spends\\s+digging\\s+through\\s+soil\\s+in\\s+total:\\s+24",
+      "words": 13
+    },
+    {
+      "id": 200,
+      "item": 649,
+      "part": "question",
+      "literal": "weeks later, the number of likes was 70 times as many as the",
+      "regex": "weeks\\s+later,\\s+the\\s+number\\s+of\\s+likes\\s+was\\s+70\\s+times\\s+as\\s+many\\s+as\\s+the",
+      "words": 13
+    },
+    {
+      "id": 201,
+      "item": 649,
+      "part": "answer",
+      "literal": "photo after three more weeks.\nThe total number of likes in the four",
+      "regex": "photo\\s+after\\s+three\\s+more\\s+weeks\\.\\s+The\\s+total\\s+number\\s+of\\s+likes\\s+in\\s+the\\s+four",
+      "words": 13
+    },
+    {
+      "id": 202,
+      "item": 655,
+      "part": "question",
+      "literal": "15-page research paper. She already finished writing 1/3 of the paper. How many",
+      "regex": "15\\-page\\s+research\\s+paper\\.\\s+She\\s+already\\s+finished\\s+writing\\s+1/3\\s+of\\s+the\\s+paper\\.\\s+How\\s+many",
+      "words": 13
+    },
+    {
+      "id": 203,
+      "item": 655,
+      "part": "answer",
+      "literal": "is 15 pages x 1/3 = 5 pages.\nSo, she still needs to",
+      "regex": "is\\s+15\\s+pages\\s+x\\s+1/3\\s+=\\s+5\\s+pages\\.\\s+So,\\s+she\\s+still\\s+needs\\s+to",
+      "words": 13
+    },
+    {
+      "id": 204,
+      "item": 664,
+      "part": "question",
+      "literal": "for 2 hours each time for 6 weeks.  If he learns a new",
+      "regex": "for\\s+2\\s+hours\\s+each\\s+time\\s+for\\s+6\\s+weeks\\.\\s+If\\s+he\\s+learns\\s+a\\s+new",
+      "words": 13
+    },
+    {
+      "id": 205,
+      "item": 664,
+      "part": "answer",
+      "literal": "4*2=8 hours per week\nSo he takes classes for 8*6=48 hours\nThat means",
+      "regex": "4\\*2=8\\s+hours\\s+per\\s+week\\s+So\\s+he\\s+takes\\s+classes\\s+for\\s+8\\*6=48\\s+hours\\s+That\\s+means",
+      "words": 13
+    },
+    {
+      "id": 206,
+      "item": 666,
+      "part": "question",
+      "literal": "much money as Aurelia. If Arelia has $120, how much would each have",
+      "regex": "much\\s+money\\s+as\\s+Aurelia\\.\\s+If\\s+Arelia\\s+has\\s+\\$120,\\s+how\\s+much\\s+would\\s+each\\s+have",
+      "words": 13
+    },
+    {
+      "id": 207,
+      "item": 666,
+      "part": "answer",
+      "literal": "$210\nRayna has $60 more than Kassidy, and since Kassidy has $90, Rayna",
+      "regex": "\\$210\\s+Rayna\\s+has\\s+\\$60\\s+more\\s+than\\s+Kassidy,\\s+and\\s+since\\s+Kassidy\\s+has\\s+\\$90,\\s+Rayna",
+      "words": 13
+    },
+    {
+      "id": 208,
+      "item": 676,
+      "part": "question",
+      "literal": "of 2/5 of the total amount, Frances invested 2/3 of the remaining amount.",
+      "regex": "of\\s+2/5\\s+of\\s+the\\s+total\\s+amount,\\s+Frances\\s+invested\\s+2/3\\s+of\\s+the\\s+remaining\\s+amount\\.",
+      "words": 13
+    },
+    {
+      "id": 209,
+      "item": 676,
+      "part": "answer",
+      "literal": "= $720\nFrances invested 2/3 * $720 = $480\nDylan's and Frances's total",
+      "regex": "=\\s+\\$720\\s+Frances\\s+invested\\s+2/3\\s+\\*\\s+\\$720\\s+=\\s+\\$480\\s+Dylan's\\s+and\\s+Frances's\\s+total",
+      "words": 13
+    },
+    {
+      "id": 210,
+      "item": 681,
+      "part": "question",
+      "literal": "cookies than the Cookie Monster, and Summer has 23 more cookies than Max.",
+      "regex": "cookies\\s+than\\s+the\\s+Cookie\\s+Monster,\\s+and\\s+Summer\\s+has\\s+23\\s+more\\s+cookies\\s+than\\s+Max\\.",
+      "words": 13
+    },
+    {
+      "id": 211,
+      "item": 681,
+      "part": "answer",
+      "literal": "total amount of cookies is 73-12 = 61.\nSummer\u2019s total cookie amount is",
+      "regex": "total\\s+amount\\s+of\\s+cookies\\s+is\\s+73\\-12\\s+=\\s+61\\.\\s+Summer\u2019s\\s+total\\s+cookie\\s+amount\\s+is",
+      "words": 13
+    },
+    {
+      "id": 212,
+      "item": 682,
+      "part": "question",
+      "literal": "original length. She also adds 20cm to the bottom of the dress with",
+      "regex": "original\\s+length\\.\\s+She\\s+also\\s+adds\\s+20cm\\s+to\\s+the\\s+bottom\\s+of\\s+the\\s+dress\\s+with",
+      "words": 13
+    },
+    {
+      "id": 213,
+      "item": 682,
+      "part": "answer",
+      "literal": "x cm in length.\nHalf the original length is x/2.\nAdding the original",
+      "regex": "x\\s+cm\\s+in\\s+length\\.\\s+Half\\s+the\\s+original\\s+length\\s+is\\s+x/2\\.\\s+Adding\\s+the\\s+original",
+      "words": 13
+    },
+    {
+      "id": 214,
+      "item": 686,
+      "part": "question",
+      "literal": "many. If the pair eat 10 of the cookies while they are cooling",
+      "regex": "many\\.\\s+If\\s+the\\s+pair\\s+eat\\s+10\\s+of\\s+the\\s+cookies\\s+while\\s+they\\s+are\\s+cooling",
+      "words": 13
+    },
+    {
+      "id": 215,
+      "item": 686,
+      "part": "answer",
+      "literal": "total of 30 + 60 = 90 cookies.\nAfter eating some of the",
+      "regex": "total\\s+of\\s+30\\s+\\+\\s+60\\s+=\\s+90\\s+cookies\\.\\s+After\\s+eating\\s+some\\s+of\\s+the",
+      "words": 13
+    },
+    {
+      "id": 216,
+      "item": 687,
+      "part": "question",
+      "literal": "triplets. One twin is 7 years older than one triplet. If their combined",
+      "regex": "triplets\\.\\s+One\\s+twin\\s+is\\s+7\\s+years\\s+older\\s+than\\s+one\\s+triplet\\.\\s+If\\s+their\\s+combined",
+      "words": 13
+    },
+    {
+      "id": 217,
+      "item": 687,
+      "part": "answer",
+      "literal": "(T + 7) + 3T = 44\n2T + 14 + 3T =",
+      "regex": "\\(T\\s+\\+\\s+7\\)\\s+\\+\\s+3T\\s+=\\s+44\\s+2T\\s+\\+\\s+14\\s+\\+\\s+3T\\s+=",
+      "words": 13
+    },
+    {
+      "id": 218,
+      "item": 701,
+      "part": "question",
+      "literal": "buy enough drinks and snacks to fill the seats. Each seat has enough",
+      "regex": "buy\\s+enough\\s+drinks\\s+and\\s+snacks\\s+to\\s+fill\\s+the\\s+seats\\.\\s+Each\\s+seat\\s+has\\s+enough",
+      "words": 13
+    },
+    {
+      "id": 219,
+      "item": 701,
+      "part": "answer",
+      "literal": "seats can hold 3 snacks * 20 seats = 60 snacks.\nSo in",
+      "regex": "seats\\s+can\\s+hold\\s+3\\s+snacks\\s+\\*\\s+20\\s+seats\\s+=\\s+60\\s+snacks\\.\\s+So\\s+in",
+      "words": 13
+    },
+    {
+      "id": 220,
+      "item": 717,
+      "part": "question",
+      "literal": "eraser cost $0.25. If you bought 6 pencils and 8 erasers and paid",
+      "regex": "eraser\\s+cost\\s+\\$0\\.25\\.\\s+If\\s+you\\s+bought\\s+6\\s+pencils\\s+and\\s+8\\s+erasers\\s+and\\s+paid",
+      "words": 13
+    },
+    {
+      "id": 221,
+      "item": 717,
+      "part": "answer",
+      "literal": "8 x $0.25 = $2.\nThus, you spent $3 + $2 = $5.",
+      "regex": "8\\s+x\\s+\\$0\\.25\\s+=\\s+\\$2\\.\\s+Thus,\\s+you\\s+spent\\s+\\$3\\s+\\+\\s+\\$2\\s+=\\s+\\$5\\.",
+      "words": 13
+    },
+    {
+      "id": 222,
+      "item": 721,
+      "part": "question",
+      "literal": "taps per minute.  When she raised her arms, her tap rate slowed down",
+      "regex": "taps\\s+per\\s+minute\\.\\s+When\\s+she\\s+raised\\s+her\\s+arms,\\s+her\\s+tap\\s+rate\\s+slowed\\s+down",
+      "words": 13
+    },
+    {
+      "id": 223,
+      "item": 721,
+      "part": "answer",
+      "literal": "foot tapped 3*300=900 times.\nWith hands not raised, her left foot tapped 3*250=750",
+      "regex": "foot\\s+tapped\\s+3\\*300=900\\s+times\\.\\s+With\\s+hands\\s+not\\s+raised,\\s+her\\s+left\\s+foot\\s+tapped\\s+3\\*250=750",
+      "words": 13
+    },
+    {
+      "id": 224,
+      "item": 724,
+      "part": "question",
+      "literal": "pizza had 12 slices. Bryce and two friends ate 2/3 of their pizzas.",
+      "regex": "pizza\\s+had\\s+12\\s+slices\\.\\s+Bryce\\s+and\\s+two\\s+friends\\s+ate\\s+2/3\\s+of\\s+their\\s+pizzas\\.",
+      "words": 13
+    },
+    {
+      "id": 225,
+      "item": 724,
+      "part": "answer",
+      "literal": "of pizza.\n\u00be of a pizza with 12 slices would be the same",
+      "regex": "of\\s+pizza\\.\\s+\u00be\\s+of\\s+a\\s+pizza\\s+with\\s+12\\s+slices\\s+would\\s+be\\s+the\\s+same",
+      "words": 13
+    },
+    {
+      "id": 226,
+      "item": 731,
+      "part": "question",
+      "literal": "sleeves in a box.  If 9 kids want 2 smores apiece and 6",
+      "regex": "sleeves\\s+in\\s+a\\s+box\\.\\s+If\\s+9\\s+kids\\s+want\\s+2\\s+smores\\s+apiece\\s+and\\s+6",
+      "words": 13
+    },
+    {
+      "id": 227,
+      "item": 731,
+      "part": "answer",
+      "literal": "will eat 1 smore a piece so they will eat 6*1 = 6",
+      "regex": "will\\s+eat\\s+1\\s+smore\\s+a\\s+piece\\s+so\\s+they\\s+will\\s+eat\\s+6\\*1\\s+=\\s+6",
+      "words": 13
+    },
+    {
+      "id": 228,
+      "item": 733,
+      "part": "question",
+      "literal": "Greg found $20. To be fair to his siblings, he decided to split",
+      "regex": "Greg\\s+found\\s+\\$20\\.\\s+To\\s+be\\s+fair\\s+to\\s+his\\s+siblings,\\s+he\\s+decided\\s+to\\s+split",
+      "words": 13
+    },
+    {
+      "id": 229,
+      "item": 733,
+      "part": "answer",
+      "literal": "person = 4 people.\nThe 20 dollars were divided equally, so each of",
+      "regex": "person\\s+=\\s+4\\s+people\\.\\s+The\\s+20\\s+dollars\\s+were\\s+divided\\s+equally,\\s+so\\s+each\\s+of",
+      "words": 13
+    },
+    {
+      "id": 230,
+      "item": 734,
+      "part": "question",
+      "literal": "3 pounds.  Her history book weighs twice as much as her English book.",
+      "regex": "3\\s+pounds\\.\\s+Her\\s+history\\s+book\\s+weighs\\s+twice\\s+as\\s+much\\s+as\\s+her\\s+English\\s+book\\.",
+      "words": 13
+    },
+    {
+      "id": 231,
+      "item": 734,
+      "part": "answer",
+      "literal": "the amount of her 3 pound English book so it weighs 2*3 =",
+      "regex": "the\\s+amount\\s+of\\s+her\\s+3\\s+pound\\s+English\\s+book\\s+so\\s+it\\s+weighs\\s+2\\*3\\s+=",
+      "words": 13
+    },
+    {
+      "id": 232,
+      "item": 758,
+      "part": "question",
+      "literal": "a 5% discount. If it is marked $140, how much will you pay",
+      "regex": "a\\s+5%\\s+discount\\.\\s+If\\s+it\\s+is\\s+marked\\s+\\$140,\\s+how\\s+much\\s+will\\s+you\\s+pay",
+      "words": 13
+    },
+    {
+      "id": 233,
+      "item": 758,
+      "part": "answer",
+      "literal": "x 5/100 = $7.\nHence, you will pay $140 - $7 = $133",
+      "regex": "x\\s+5/100\\s+=\\s+\\$7\\.\\s+Hence,\\s+you\\s+will\\s+pay\\s+\\$140\\s+\\-\\s+\\$7\\s+=\\s+\\$133",
+      "words": 13
+    },
+    {
+      "id": 234,
+      "item": 761,
+      "part": "question",
+      "literal": "Pomeranians. One third of the Pomeranians are girls. If there are 6 Pomeranian",
+      "regex": "Pomeranians\\.\\s+One\\s+third\\s+of\\s+the\\s+Pomeranians\\s+are\\s+girls\\.\\s+If\\s+there\\s+are\\s+6\\s+Pomeranian",
+      "words": 13
+    },
+    {
+      "id": 235,
+      "item": 761,
+      "part": "answer",
+      "literal": "Jana has 6*3=18 Pomeranians.\nJana has 18/2*3=27 puppies.\n#### 27",
+      "regex": "Jana\\s+has\\s+6\\*3=18\\s+Pomeranians\\.\\s+Jana\\s+has\\s+18/2\\*3=27\\s+puppies\\.\\s+\\#\\#\\#\\#\\s+27",
+      "words": 10
+    },
+    {
+      "id": 236,
+      "item": 788,
+      "part": "question",
+      "literal": "the school, which has decided to cover half the cost of the trip.",
+      "regex": "the\\s+school,\\s+which\\s+has\\s+decided\\s+to\\s+cover\\s+half\\s+the\\s+cost\\s+of\\s+the\\s+trip\\.",
+      "words": 13
+    },
+    {
+      "id": 237,
+      "item": 788,
+      "part": "answer",
+      "literal": "In total John has covered 150 + 50 = $200 for his trip",
+      "regex": "In\\s+total\\s+John\\s+has\\s+covered\\s+150\\s+\\+\\s+50\\s+=\\s+\\$200\\s+for\\s+his\\s+trip",
+      "words": 13
+    },
+    {
+      "id": 238,
+      "item": 795,
+      "part": "question",
+      "literal": "his favorite jeans were advertised 25% off.  The original price of the jeans",
+      "regex": "his\\s+favorite\\s+jeans\\s+were\\s+advertised\\s+25%\\s+off\\.\\s+The\\s+original\\s+price\\s+of\\s+the\\s+jeans",
+      "words": 13
+    },
+    {
+      "id": 239,
+      "item": 795,
+      "part": "answer",
+      "literal": "cost of the jeans and subtract the discount so 40-10 = $30.00\nMike",
+      "regex": "cost\\s+of\\s+the\\s+jeans\\s+and\\s+subtract\\s+the\\s+discount\\s+so\\s+40\\-10\\s+=\\s+\\$30\\.00\\s+Mike",
+      "words": 13
+    },
+    {
+      "id": 240,
+      "item": 801,
+      "part": "question",
+      "literal": "2 trees. The school has 40 classes with an average of 25 students",
+      "regex": "2\\s+trees\\.\\s+The\\s+school\\s+has\\s+40\\s+classes\\s+with\\s+an\\s+average\\s+of\\s+25\\s+students",
+      "words": 13
+    },
+    {
+      "id": 241,
+      "item": 801,
+      "part": "answer",
+      "literal": "1 = 1000 trees are planted per student.\nWith 2 trees planted per",
+      "regex": "1\\s+=\\s+1000\\s+trees\\s+are\\s+planted\\s+per\\s+student\\.\\s+With\\s+2\\s+trees\\s+planted\\s+per",
+      "words": 13
+    },
+    {
+      "id": 242,
+      "item": 816,
+      "part": "question",
+      "literal": "and buys 3 goats for $500 each and 2 cows for $1500 each.",
+      "regex": "and\\s+buys\\s+3\\s+goats\\s+for\\s+\\$500\\s+each\\s+and\\s+2\\s+cows\\s+for\\s+\\$1500\\s+each\\.",
+      "words": 13
+    },
+    {
+      "id": 243,
+      "item": 816,
+      "part": "answer",
+      "literal": "goats cost 3*500=$1500\nThe cows cost 2*1500=$3000\nSo in total he spends 1500+3000=$4500",
+      "regex": "goats\\s+cost\\s+3\\*500=\\$1500\\s+The\\s+cows\\s+cost\\s+2\\*1500=\\$3000\\s+So\\s+in\\s+total\\s+he\\s+spends\\s+1500\\+3000=\\$4500",
+      "words": 13
+    },
+    {
+      "id": 244,
+      "item": 829,
+      "part": "question",
+      "literal": "The second week, Boris only produces half as much as the first week.",
+      "regex": "The\\s+second\\s+week,\\s+Boris\\s+only\\s+produces\\s+half\\s+as\\s+much\\s+as\\s+the\\s+first\\s+week\\.",
+      "words": 13
+    },
+    {
+      "id": 245,
+      "item": 829,
+      "part": "answer",
+      "literal": "= 24,000 bars of chocolate.\nIn the first three weeks, Boris produces 8,000+4,000+24,000",
+      "regex": "=\\s+24,000\\s+bars\\s+of\\s+chocolate\\.\\s+In\\s+the\\s+first\\s+three\\s+weeks,\\s+Boris\\s+produces\\s+8,000\\+4,000\\+24,000",
+      "words": 13
+    },
+    {
+      "id": 246,
+      "item": 839,
+      "part": "question",
+      "literal": "a cow. Since he has 3 cows, how many more cows does he",
+      "regex": "a\\s+cow\\.\\s+Since\\s+he\\s+has\\s+3\\s+cows,\\s+how\\s+many\\s+more\\s+cows\\s+does\\s+he",
+      "words": 13
+    },
+    {
+      "id": 247,
+      "item": 839,
+      "part": "answer",
+      "literal": "a day.\nHe should extract 25-15=10 liters more in a day.\nFor that,",
+      "regex": "a\\s+day\\.\\s+He\\s+should\\s+extract\\s+25\\-15=10\\s+liters\\s+more\\s+in\\s+a\\s+day\\.\\s+For\\s+that,",
+      "words": 13
+    },
+    {
+      "id": 248,
+      "item": 858,
+      "part": "question",
+      "literal": "people. Every day, each infected person infects six others. How many people are",
+      "regex": "people\\.\\s+Every\\s+day,\\s+each\\s+infected\\s+person\\s+infects\\s+six\\s+others\\.\\s+How\\s+many\\s+people\\s+are",
+      "words": 13
+    },
+    {
+      "id": 249,
+      "item": 858,
+      "part": "answer",
+      "literal": "day, 70 * 6 = 420 more people are infected.\nThere are 70",
+      "regex": "day,\\s+70\\s+\\*\\s+6\\s+=\\s+420\\s+more\\s+people\\s+are\\s+infected\\.\\s+There\\s+are\\s+70",
+      "words": 13
+    },
+    {
+      "id": 250,
+      "item": 861,
+      "part": "question",
+      "literal": "Claire.  Wendy earns three times the amount of badges as Claire in the",
+      "regex": "Claire\\.\\s+Wendy\\s+earns\\s+three\\s+times\\s+the\\s+amount\\s+of\\s+badges\\s+as\\s+Claire\\s+in\\s+the",
+      "words": 13
+    },
+    {
+      "id": 251,
+      "item": 861,
+      "part": "answer",
+      "literal": "12/2 = 6 badges\nWendy earns 3 times the amount of badges compared",
+      "regex": "12/2\\s+=\\s+6\\s+badges\\s+Wendy\\s+earns\\s+3\\s+times\\s+the\\s+amount\\s+of\\s+badges\\s+compared",
+      "words": 13
+    },
+    {
+      "id": 252,
+      "item": 871,
+      "part": "question",
+      "literal": "the first day, 10 pieces on the second day, and 7/13 of the",
+      "regex": "the\\s+first\\s+day,\\s+10\\s+pieces\\s+on\\s+the\\s+second\\s+day,\\s+and\\s+7/13\\s+of\\s+the",
+      "words": 13
+    },
+    {
+      "id": 253,
+      "item": 871,
+      "part": "answer",
+      "literal": "34 pieces\nThe number of pieces of pizza remaining is 60-34 = 26",
+      "regex": "34\\s+pieces\\s+The\\s+number\\s+of\\s+pieces\\s+of\\s+pizza\\s+remaining\\s+is\\s+60\\-34\\s+=\\s+26",
+      "words": 13
+    },
+    {
+      "id": 254,
+      "item": 872,
+      "part": "question",
+      "literal": "of water cost $8. If David wants to buy 3 bottles of soda",
+      "regex": "of\\s+water\\s+cost\\s+\\$8\\.\\s+If\\s+David\\s+wants\\s+to\\s+buy\\s+3\\s+bottles\\s+of\\s+soda",
+      "words": 13
+    },
+    {
+      "id": 255,
+      "item": 872,
+      "part": "answer",
+      "literal": "of water costs $8.00/4 = $2.00.\nTwo bottles of water cost $2.00x 2",
+      "regex": "of\\s+water\\s+costs\\s+\\$8\\.00/4\\s+=\\s+\\$2\\.00\\.\\s+Two\\s+bottles\\s+of\\s+water\\s+cost\\s+\\$2\\.00x\\s+2",
+      "words": 13
+    },
+    {
+      "id": 256,
+      "item": 889,
+      "part": "question",
+      "literal": "balcony.  If the orchids have 5 petals and daisies have 10 petals, how",
+      "regex": "balcony\\.\\s+If\\s+the\\s+orchids\\s+have\\s+5\\s+petals\\s+and\\s+daisies\\s+have\\s+10\\s+petals,\\s+how",
+      "words": 13
+    },
+    {
+      "id": 257,
+      "item": 889,
+      "part": "answer",
+      "literal": "The number of petals on daisies is 4 x 10 = 40.\nDaisy",
+      "regex": "The\\s+number\\s+of\\s+petals\\s+on\\s+daisies\\s+is\\s+4\\s+x\\s+10\\s+=\\s+40\\.\\s+Daisy",
+      "words": 13
+    },
+    {
+      "id": 258,
+      "item": 893,
+      "part": "question",
+      "literal": "days a week.  He used to make $10 an hour but they raised",
+      "regex": "days\\s+a\\s+week\\.\\s+He\\s+used\\s+to\\s+make\\s+\\$10\\s+an\\s+hour\\s+but\\s+they\\s+raised",
+      "words": 13
+    },
+    {
+      "id": 259,
+      "item": 893,
+      "part": "answer",
+      "literal": "a week\nHe gets paid 10+2=$12 an hour\nSo he now gets 40*12=$480",
+      "regex": "a\\s+week\\s+He\\s+gets\\s+paid\\s+10\\+2=\\$12\\s+an\\s+hour\\s+So\\s+he\\s+now\\s+gets\\s+40\\*12=\\$480",
+      "words": 13
+    },
+    {
+      "id": 260,
+      "item": 905,
+      "part": "question",
+      "literal": "less than he sleeps and he walks his dog for an hour each",
+      "regex": "less\\s+than\\s+he\\s+sleeps\\s+and\\s+he\\s+walks\\s+his\\s+dog\\s+for\\s+an\\s+hour\\s+each",
+      "words": 13
+    },
+    {
+      "id": 261,
+      "item": 905,
+      "part": "answer",
+      "literal": "hours and walks his dog for 1 hour for a total of 10+8+1",
+      "regex": "hours\\s+and\\s+walks\\s+his\\s+dog\\s+for\\s+1\\s+hour\\s+for\\s+a\\s+total\\s+of\\s+10\\+8\\+1",
+      "words": 13
+    },
+    {
+      "id": 262,
+      "item": 906,
+      "part": "question",
+      "literal": "If he uses 3 blue shoeboxes and 1/3 red of his shoeboxes to",
+      "regex": "If\\s+he\\s+uses\\s+3\\s+blue\\s+shoeboxes\\s+and\\s+1/3\\s+red\\s+of\\s+his\\s+shoeboxes\\s+to",
+      "words": 13
+    },
+    {
+      "id": 263,
+      "item": 906,
+      "part": "answer",
+      "literal": "of the red shoeboxes, a total of 1/3*9=3 red shoe boxes.\nTim remains",
+      "regex": "of\\s+the\\s+red\\s+shoeboxes,\\s+a\\s+total\\s+of\\s+1/3\\*9=3\\s+red\\s+shoe\\s+boxes\\.\\s+Tim\\s+remains",
+      "words": 13
+    },
+    {
+      "id": 264,
+      "item": 911,
+      "part": "question",
+      "literal": "for every package he completes. If he completes 10 less than 50 packages",
+      "regex": "for\\s+every\\s+package\\s+he\\s+completes\\.\\s+If\\s+he\\s+completes\\s+10\\s+less\\s+than\\s+50\\s+packages",
+      "words": 13
+    },
+    {
+      "id": 265,
+      "item": 911,
+      "part": "answer",
+      "literal": "completed package. if he completes 40 packages per hour he earns 40*$0.20=$8 per",
+      "regex": "completed\\s+package\\.\\s+if\\s+he\\s+completes\\s+40\\s+packages\\s+per\\s+hour\\s+he\\s+earns\\s+40\\*\\$0\\.20=\\$8\\s+per",
+      "words": 13
+    },
+    {
+      "id": 266,
+      "item": 917,
+      "part": "question",
+      "literal": "and 6 oranges at the grocery store. Lola ate 2 pieces of the",
+      "regex": "and\\s+6\\s+oranges\\s+at\\s+the\\s+grocery\\s+store\\.\\s+Lola\\s+ate\\s+2\\s+pieces\\s+of\\s+the",
+      "words": 13
+    },
+    {
+      "id": 267,
+      "item": 917,
+      "part": "answer",
+      "literal": "pieces of fruit.\nAfter Lola ate 2 pieces of fruit there are 14",
+      "regex": "pieces\\s+of\\s+fruit\\.\\s+After\\s+Lola\\s+ate\\s+2\\s+pieces\\s+of\\s+fruit\\s+there\\s+are\\s+14",
+      "words": 13
+    },
+    {
+      "id": 268,
+      "item": 922,
+      "part": "question",
+      "literal": "turned 5 years old, every month she collects one shell. By her 10th",
+      "regex": "turned\\s+5\\s+years\\s+old,\\s+every\\s+month\\s+she\\s+collects\\s+one\\s+shell\\.\\s+By\\s+her\\s+10th",
+      "words": 13
+    },
+    {
+      "id": 269,
+      "item": 922,
+      "part": "answer",
+      "literal": "to her 10th birthday, 10 - 5 = 5 years have passed.\nDuring",
+      "regex": "to\\s+her\\s+10th\\s+birthday,\\s+10\\s+\\-\\s+5\\s+=\\s+5\\s+years\\s+have\\s+passed\\.\\s+During",
+      "words": 13
+    },
+    {
+      "id": 270,
+      "item": 937,
+      "part": "question",
+      "literal": "needs 3 pounds less than twice the amount each goat needs. If there",
+      "regex": "needs\\s+3\\s+pounds\\s+less\\s+than\\s+twice\\s+the\\s+amount\\s+each\\s+goat\\s+needs\\.\\s+If\\s+there",
+      "words": 13
+    },
+    {
+      "id": 271,
+      "item": 937,
+      "part": "answer",
+      "literal": "12 sheep = 84 pounds\nNow figure out how much hay total the",
+      "regex": "12\\s+sheep\\s+=\\s+84\\s+pounds\\s+Now\\s+figure\\s+out\\s+how\\s+much\\s+hay\\s+total\\s+the",
+      "words": 13
+    },
+    {
+      "id": 272,
+      "item": 956,
+      "part": "question",
+      "literal": "of the remainder are to family. One-third of the other emails are to",
+      "regex": "of\\s+the\\s+remainder\\s+are\\s+to\\s+family\\.\\s+One\\-third\\s+of\\s+the\\s+other\\s+emails\\s+are\\s+to",
+      "words": 13
+    },
+    {
+      "id": 273,
+      "item": 956,
+      "part": "answer",
+      "literal": "There are 9 - 6 = 3 emails remaining.\nOf the remaining 3,",
+      "regex": "There\\s+are\\s+9\\s+\\-\\s+6\\s+=\\s+3\\s+emails\\s+remaining\\.\\s+Of\\s+the\\s+remaining\\s+3,",
+      "words": 13
+    },
+    {
+      "id": 274,
+      "item": 963,
+      "part": "question",
+      "literal": "339 Pokemon.  Alex has caught 5 more than Stan, and Stan has caught",
+      "regex": "339\\s+Pokemon\\.\\s+Alex\\s+has\\s+caught\\s+5\\s+more\\s+than\\s+Stan,\\s+and\\s+Stan\\s+has\\s+caught",
+      "words": 13
+    },
+    {
+      "id": 275,
+      "item": 963,
+      "part": "answer",
+      "literal": "of Pokemon Adelwolfe caught\nStan: 4x-13\nAlex: 5+(4x-13)=4x-8\nTotal: x+4x-13+4x-8=339\n9x-21=339\n9x=360\nx=40",
+      "regex": "of\\s+Pokemon\\s+Adelwolfe\\s+caught\\s+Stan:\\s+4x\\-13\\s+Alex:\\s+5\\+\\(4x\\-13\\)=4x\\-8\\s+Total:\\s+x\\+4x\\-13\\+4x\\-8=339\\s+9x\\-21=339\\s+9x=360\\s+x=40",
+      "words": 13
+    },
+    {
+      "id": 276,
+      "item": 965,
+      "part": "question",
+      "literal": "bird turns direction and flies towards the north for 2 hours are a",
+      "regex": "bird\\s+turns\\s+direction\\s+and\\s+flies\\s+towards\\s+the\\s+north\\s+for\\s+2\\s+hours\\s+are\\s+a",
+      "words": 13
+    },
+    {
+      "id": 277,
+      "item": 965,
+      "part": "answer",
+      "literal": "hour, the bird travels 2*18=36 miles in a northerly direction.\nAnd flying for",
+      "regex": "hour,\\s+the\\s+bird\\s+travels\\s+2\\*18=36\\s+miles\\s+in\\s+a\\s+northerly\\s+direction\\.\\s+And\\s+flying\\s+for",
+      "words": 13
+    },
+    {
+      "id": 278,
+      "item": 966,
+      "part": "question",
+      "literal": "a dozen brownies.  When she arrived home, her friends were there to throw",
+      "regex": "a\\s+dozen\\s+brownies\\.\\s+When\\s+she\\s+arrived\\s+home,\\s+her\\s+friends\\s+were\\s+there\\s+to\\s+throw",
+      "words": 13
+    },
+    {
+      "id": 279,
+      "item": 966,
+      "part": "answer",
+      "literal": "had 2.5 dozen left from the party so 1+2.5 = 3.5 dozen brownies",
+      "regex": "had\\s+2\\.5\\s+dozen\\s+left\\s+from\\s+the\\s+party\\s+so\\s+1\\+2\\.5\\s+=\\s+3\\.5\\s+dozen\\s+brownies",
+      "words": 13
+    },
+    {
+      "id": 280,
+      "item": 975,
+      "part": "question",
+      "literal": "60 cherries. If Robert has 30 cherries, and has 10 more than Richard,",
+      "regex": "60\\s+cherries\\.\\s+If\\s+Robert\\s+has\\s+30\\s+cherries,\\s+and\\s+has\\s+10\\s+more\\s+than\\s+Richard,",
+      "words": 13
+    },
+    {
+      "id": 281,
+      "item": 975,
+      "part": "answer",
+      "literal": "30 - 10 = 20 cherries since Robert has 10 more cherries than",
+      "regex": "30\\s+\\-\\s+10\\s+=\\s+20\\s+cherries\\s+since\\s+Robert\\s+has\\s+10\\s+more\\s+cherries\\s+than",
+      "words": 13
+    },
+    {
+      "id": 282,
+      "item": 976,
+      "part": "question",
+      "literal": "on Sunday. On Sunday, he sold 5 more boxes of gingerbread than on",
+      "regex": "on\\s+Sunday\\.\\s+On\\s+Sunday,\\s+he\\s+sold\\s+5\\s+more\\s+boxes\\s+of\\s+gingerbread\\s+than\\s+on",
+      "words": 13
+    },
+    {
+      "id": 283,
+      "item": 976,
+      "part": "answer",
+      "literal": "sold 15 - 4 = 11 boxes of apple pie on Saturday.\nThe",
+      "regex": "sold\\s+15\\s+\\-\\s+4\\s+=\\s+11\\s+boxes\\s+of\\s+apple\\s+pie\\s+on\\s+Saturday\\.\\s+The",
+      "words": 13
+    },
+    {
+      "id": 284,
+      "item": 981,
+      "part": "question",
+      "literal": "amount on Friday and half the amount of his Friday's catch on Saturday.",
+      "regex": "amount\\s+on\\s+Friday\\s+and\\s+half\\s+the\\s+amount\\s+of\\s+his\\s+Friday's\\s+catch\\s+on\\s+Saturday\\.",
+      "words": 13
+    },
+    {
+      "id": 285,
+      "item": 981,
+      "part": "answer",
+      "literal": "pounds he caught on Friday so he caught 12/2 = 6 pounds\nIn",
+      "regex": "pounds\\s+he\\s+caught\\s+on\\s+Friday\\s+so\\s+he\\s+caught\\s+12/2\\s+=\\s+6\\s+pounds\\s+In",
+      "words": 13
+    },
+    {
+      "id": 286,
+      "item": 986,
+      "part": "question",
+      "literal": "petunias and 2 sweet potato vines.  The petunias cost $3.00 apiece and the",
+      "regex": "petunias\\s+and\\s+2\\s+sweet\\s+potato\\s+vines\\.\\s+The\\s+petunias\\s+cost\\s+\\$3\\.00\\s+apiece\\s+and\\s+the",
+      "words": 13
+    },
+    {
+      "id": 287,
+      "item": 986,
+      "part": "answer",
+      "literal": "$5.00\nFor 1 basket, the petunias will cost $9.00 and the sweet potato",
+      "regex": "\\$5\\.00\\s+For\\s+1\\s+basket,\\s+the\\s+petunias\\s+will\\s+cost\\s+\\$9\\.00\\s+and\\s+the\\s+sweet\\s+potato",
+      "words": 13
+    },
+    {
+      "id": 288,
+      "item": 995,
+      "part": "question",
+      "literal": "him $6 for this purpose, and his father gave him twice as much.",
+      "regex": "him\\s+\\$6\\s+for\\s+this\\s+purpose,\\s+and\\s+his\\s+father\\s+gave\\s+him\\s+twice\\s+as\\s+much\\.",
+      "words": 13
+    },
+    {
+      "id": 289,
+      "item": 995,
+      "part": "answer",
+      "literal": "So considering the price Adam needed to pay $30 - $12 - $6",
+      "regex": "So\\s+considering\\s+the\\s+price\\s+Adam\\s+needed\\s+to\\s+pay\\s+\\$30\\s+\\-\\s+\\$12\\s+\\-\\s+\\$6",
+      "words": 13
+    },
+    {
+      "id": 290,
+      "item": 996,
+      "part": "question",
+      "literal": "age of the group, and the total age of the children is 20.",
+      "regex": "age\\s+of\\s+the\\s+group,\\s+and\\s+the\\s+total\\s+age\\s+of\\s+the\\s+children\\s+is\\s+20\\.",
+      "words": 13
+    },
+    {
+      "id": 291,
+      "item": 996,
+      "part": "answer",
+      "literal": "average age, meaning Helene is 2 * 5 years = 10 years old.",
+      "regex": "average\\s+age,\\s+meaning\\s+Helene\\s+is\\s+2\\s+\\*\\s+5\\s+years\\s+=\\s+10\\s+years\\s+old\\.",
+      "words": 13
+    },
+    {
+      "id": 292,
+      "item": 1002,
+      "part": "question",
+      "literal": "a half boxes of chocolate bars, and Peter sold four and a half",
+      "regex": "a\\s+half\\s+boxes\\s+of\\s+chocolate\\s+bars,\\s+and\\s+Peter\\s+sold\\s+four\\s+and\\s+a\\s+half",
+      "words": 13
+    },
+    {
+      "id": 293,
+      "item": 1002,
+      "part": "answer",
+      "literal": "* B bars.\nTogether, they sold 3 1/2 * B + 4 1/2",
+      "regex": "\\*\\s+B\\s+bars\\.\\s+Together,\\s+they\\s+sold\\s+3\\s+1/2\\s+\\*\\s+B\\s+\\+\\s+4\\s+1/2",
+      "words": 13
+    },
+    {
+      "id": 294,
+      "item": 1008,
+      "part": "question",
+      "literal": "4 hours. Shandy traveled at 45 miles per hour for 10 hours. How",
+      "regex": "4\\s+hours\\.\\s+Shandy\\s+traveled\\s+at\\s+45\\s+miles\\s+per\\s+hour\\s+for\\s+10\\s+hours\\.\\s+How",
+      "words": 13
+    },
+    {
+      "id": 295,
+      "item": 1008,
+      "part": "answer",
+      "literal": "= 45 * 10 = 450 miles\n450 - 220 = 230 miles",
+      "regex": "=\\s+45\\s+\\*\\s+10\\s+=\\s+450\\s+miles\\s+450\\s+\\-\\s+220\\s+=\\s+230\\s+miles",
+      "words": 13
+    },
+    {
+      "id": 296,
+      "item": 1010,
+      "part": "question",
+      "literal": "laps than Bethany.  Shaelyn can run half as many laps as Trey.  Quinn",
+      "regex": "laps\\s+than\\s+Bethany\\.\\s+Shaelyn\\s+can\\s+run\\s+half\\s+as\\s+many\\s+laps\\s+as\\s+Trey\\.\\s+Quinn",
+      "words": 13
+    },
+    {
+      "id": 297,
+      "item": 1010,
+      "part": "answer",
+      "literal": "2 = 7 laps in one hour.\nQuinn can run 7 - 2",
+      "regex": "2\\s+=\\s+7\\s+laps\\s+in\\s+one\\s+hour\\.\\s+Quinn\\s+can\\s+run\\s+7\\s+\\-\\s+2",
+      "words": 13
+    },
+    {
+      "id": 298,
+      "item": 1031,
+      "part": "question",
+      "literal": "After accounting for 950 seats for graduates and 300 seats for faculty attending,",
+      "regex": "After\\s+accounting\\s+for\\s+950\\s+seats\\s+for\\s+graduates\\s+and\\s+300\\s+seats\\s+for\\s+faculty\\s+attending,",
+      "words": 13
+    },
+    {
+      "id": 299,
+      "item": 1031,
+      "part": "answer",
+      "literal": "Minus seats for faculty and graduates from total seats allowed. 6000 - 1250",
+      "regex": "Minus\\s+seats\\s+for\\s+faculty\\s+and\\s+graduates\\s+from\\s+total\\s+seats\\s+allowed\\.\\s+6000\\s+\\-\\s+1250",
+      "words": 13
+    },
+    {
+      "id": 300,
+      "item": 1033,
+      "part": "question",
+      "literal": "a court case. If Melissa is paid $15 per day but also has",
+      "regex": "a\\s+court\\s+case\\.\\s+If\\s+Melissa\\s+is\\s+paid\\s+\\$15\\s+per\\s+day\\s+but\\s+also\\s+has",
+      "words": 13
+    },
+    {
+      "id": 301,
+      "item": 1033,
+      "part": "answer",
+      "literal": "$3/day = $12/day\nThen divide this number by the number of hours Melissa",
+      "regex": "\\$3/day\\s+=\\s+\\$12/day\\s+Then\\s+divide\\s+this\\s+number\\s+by\\s+the\\s+number\\s+of\\s+hours\\s+Melissa",
+      "words": 13
+    },
+    {
+      "id": 302,
+      "item": 1040,
+      "part": "question",
+      "literal": "as many as Monday. On Wednesday they delivered 5 more than twice as",
+      "regex": "as\\s+many\\s+as\\s+Monday\\.\\s+On\\s+Wednesday\\s+they\\s+delivered\\s+5\\s+more\\s+than\\s+twice\\s+as",
+      "words": 13
+    },
+    {
+      "id": 303,
+      "item": 1040,
+      "part": "answer",
+      "literal": "2 * 102 + 5 = 209 letters\nTotal = 425 + 102",
+      "regex": "2\\s+\\*\\s+102\\s+\\+\\s+5\\s+=\\s+209\\s+letters\\s+Total\\s+=\\s+425\\s+\\+\\s+102",
+      "words": 13
+    },
+    {
+      "id": 304,
+      "item": 1041,
+      "part": "question",
+      "literal": "the chicken salad which is $6.50 per person and 6 people want the",
+      "regex": "the\\s+chicken\\s+salad\\s+which\\s+is\\s+\\$6\\.50\\s+per\\s+person\\s+and\\s+6\\s+people\\s+want\\s+the",
+      "words": 13
+    },
+    {
+      "id": 305,
+      "item": 1041,
+      "part": "answer",
+      "literal": "amount of people who want pasta salad by the cost per person, so",
+      "regex": "amount\\s+of\\s+people\\s+who\\s+want\\s+pasta\\s+salad\\s+by\\s+the\\s+cost\\s+per\\s+person,\\s+so",
+      "words": 13
+    },
+    {
+      "id": 306,
+      "item": 1047,
+      "part": "question",
+      "literal": "in the second set. In the third set, he retrieved half as many",
+      "regex": "in\\s+the\\s+second\\s+set\\.\\s+In\\s+the\\s+third\\s+set,\\s+he\\s+retrieved\\s+half\\s+as\\s+many",
+      "words": 13
+    },
+    {
+      "id": 307,
+      "item": 1047,
+      "part": "answer",
+      "literal": "+ 4 = 19 balls.\nThus, 5B = 19 - 4 = 15",
+      "regex": "\\+\\s+4\\s+=\\s+19\\s+balls\\.\\s+Thus,\\s+5B\\s+=\\s+19\\s+\\-\\s+4\\s+=\\s+15",
+      "words": 13
+    },
+    {
+      "id": 308,
+      "item": 1067,
+      "part": "question",
+      "literal": "small coupons and twice as many big coupons. If each small coupon costs",
+      "regex": "small\\s+coupons\\s+and\\s+twice\\s+as\\s+many\\s+big\\s+coupons\\.\\s+If\\s+each\\s+small\\s+coupon\\s+costs",
+      "words": 13
+    },
+    {
+      "id": 309,
+      "item": 1067,
+      "part": "answer",
+      "literal": "multiply the number of big coupons by the cost per big coupon to",
+      "regex": "multiply\\s+the\\s+number\\s+of\\s+big\\s+coupons\\s+by\\s+the\\s+cost\\s+per\\s+big\\s+coupon\\s+to",
+      "words": 13
+    },
+    {
+      "id": 310,
+      "item": 1068,
+      "part": "question",
+      "literal": "sub sandwiches. Then Mark ate 4 of Sidney's meatball sub sandwiches. So Sidney",
+      "regex": "sub\\s+sandwiches\\.\\s+Then\\s+Mark\\s+ate\\s+4\\s+of\\s+Sidney's\\s+meatball\\s+sub\\s+sandwiches\\.\\s+So\\s+Sidney",
+      "words": 13
+    },
+    {
+      "id": 311,
+      "item": 1068,
+      "part": "answer",
+      "literal": "Finally, after Sidney ordered three more sub sandwiches, there were a total of",
+      "regex": "Finally,\\s+after\\s+Sidney\\s+ordered\\s+three\\s+more\\s+sub\\s+sandwiches,\\s+there\\s+were\\s+a\\s+total\\s+of",
+      "words": 13
+    },
+    {
+      "id": 312,
+      "item": 1074,
+      "part": "question",
+      "literal": "and then started and finished another 500 piece puzzle within an hour.  How",
+      "regex": "and\\s+then\\s+started\\s+and\\s+finished\\s+another\\s+500\\s+piece\\s+puzzle\\s+within\\s+an\\s+hour\\.\\s+How",
+      "words": 13
+    },
+    {
+      "id": 313,
+      "item": 1074,
+      "part": "answer",
+      "literal": "500 pieces = 250 pieces.\nTeddy completed 250 pieces + 500 pieces =",
+      "regex": "500\\s+pieces\\s+=\\s+250\\s+pieces\\.\\s+Teddy\\s+completed\\s+250\\s+pieces\\s+\\+\\s+500\\s+pieces\\s+=",
+      "words": 13
+    },
+    {
+      "id": 314,
+      "item": 1084,
+      "part": "question",
+      "literal": "between them, and they agree to split it with Harry getting 60 feet",
+      "regex": "between\\s+them,\\s+and\\s+they\\s+agree\\s+to\\s+split\\s+it\\s+with\\s+Harry\\s+getting\\s+60\\s+feet",
+      "words": 13
+    },
+    {
+      "id": 315,
+      "item": 1084,
+      "part": "answer",
+      "literal": "= 100.\nSubstituting the first equation into the second equation, we get 2x+60=100",
+      "regex": "=\\s+100\\.\\s+Substituting\\s+the\\s+first\\s+equation\\s+into\\s+the\\s+second\\s+equation,\\s+we\\s+get\\s+2x\\+60=100",
+      "words": 13
+    },
+    {
+      "id": 316,
+      "item": 1090,
+      "part": "question",
+      "literal": "first child.  The third child is 5 inches shorter than the second child.",
+      "regex": "first\\s+child\\.\\s+The\\s+third\\s+child\\s+is\\s+5\\s+inches\\s+shorter\\s+than\\s+the\\s+second\\s+child\\.",
+      "words": 13
+    },
+    {
+      "id": 317,
+      "item": 1090,
+      "part": "answer",
+      "literal": "inches tall.\nThe third child is 5 inches shorter than the second child,",
+      "regex": "inches\\s+tall\\.\\s+The\\s+third\\s+child\\s+is\\s+5\\s+inches\\s+shorter\\s+than\\s+the\\s+second\\s+child,",
+      "words": 13
+    },
+    {
+      "id": 318,
+      "item": 1094,
+      "part": "question",
+      "literal": "and left. Ellen's brother stopped by and took 1 of the shaken sodas",
+      "regex": "and\\s+left\\.\\s+Ellen's\\s+brother\\s+stopped\\s+by\\s+and\\s+took\\s+1\\s+of\\s+the\\s+shaken\\s+sodas",
+      "words": 13
+    },
+    {
+      "id": 319,
+      "item": 1094,
+      "part": "answer",
+      "literal": "- 1 = 2 shaken sodas.\nNow add the number of shaken and",
+      "regex": "\\-\\s+1\\s+=\\s+2\\s+shaken\\s+sodas\\.\\s+Now\\s+add\\s+the\\s+number\\s+of\\s+shaken\\s+and",
+      "words": 13
+    },
+    {
+      "id": 320,
+      "item": 1106,
+      "part": "question",
+      "literal": "into 4 equal parts. Each of the cut parts must be divided into",
+      "regex": "into\\s+4\\s+equal\\s+parts\\.\\s+Each\\s+of\\s+the\\s+cut\\s+parts\\s+must\\s+be\\s+divided\\s+into",
+      "words": 13
+    },
+    {
+      "id": 321,
+      "item": 1106,
+      "part": "answer",
+      "literal": "/ 4 = 25 cm\nFrom each piece of 25 cm, he gets",
+      "regex": "/\\s+4\\s+=\\s+25\\s+cm\\s+From\\s+each\\s+piece\\s+of\\s+25\\s+cm,\\s+he\\s+gets",
+      "words": 13
+    },
+    {
+      "id": 322,
+      "item": 1107,
+      "part": "question",
+      "literal": "are in the school if 40% of a school population is made up",
+      "regex": "are\\s+in\\s+the\\s+school\\s+if\\s+40%\\s+of\\s+a\\s+school\\s+population\\s+is\\s+made\\s+up",
+      "words": 13
+    },
+    {
+      "id": 323,
+      "item": 1107,
+      "part": "answer",
+      "literal": "40% is equal to 240 students, then 1% is equal to 240/40 =",
+      "regex": "40%\\s+is\\s+equal\\s+to\\s+240\\s+students,\\s+then\\s+1%\\s+is\\s+equal\\s+to\\s+240/40\\s+=",
+      "words": 13
+    },
+    {
+      "id": 324,
+      "item": 1112,
+      "part": "question",
+      "literal": "of apples. Peter wants a quarter of that and Paul wants 1/3 of",
+      "regex": "of\\s+apples\\.\\s+Peter\\s+wants\\s+a\\s+quarter\\s+of\\s+that\\s+and\\s+Paul\\s+wants\\s+1/3\\s+of",
+      "words": 13
+    },
+    {
+      "id": 325,
+      "item": 1112,
+      "part": "answer",
+      "literal": "kg of apples.\nTogether, Peter and Paul want a total of 3 +",
+      "regex": "kg\\s+of\\s+apples\\.\\s+Together,\\s+Peter\\s+and\\s+Paul\\s+want\\s+a\\s+total\\s+of\\s+3\\s+\\+",
+      "words": 13
+    },
+    {
+      "id": 326,
+      "item": 1114,
+      "part": "question",
+      "literal": "his allowance and spent $5 on a comic book and $19 on a",
+      "regex": "his\\s+allowance\\s+and\\s+spent\\s+\\$5\\s+on\\s+a\\s+comic\\s+book\\s+and\\s+\\$19\\s+on\\s+a",
+      "words": 13
+    },
+    {
+      "id": 327,
+      "item": 1114,
+      "part": "answer",
+      "literal": "$32.\nRaymond then spent $5 + $19 = $24.\nRaymond now has $32",
+      "regex": "\\$32\\.\\s+Raymond\\s+then\\s+spent\\s+\\$5\\s+\\+\\s+\\$19\\s+=\\s+\\$24\\.\\s+Raymond\\s+now\\s+has\\s+\\$32",
+      "words": 13
+    },
+    {
+      "id": 328,
+      "item": 1120,
+      "part": "question",
+      "literal": "to drive there at a speed of 70 mph.  Considering the round trip,",
+      "regex": "to\\s+drive\\s+there\\s+at\\s+a\\s+speed\\s+of\\s+70\\s+mph\\.\\s+Considering\\s+the\\s+round\\s+trip,",
+      "words": 13
+    },
+    {
+      "id": 329,
+      "item": 1120,
+      "part": "answer",
+      "literal": "miles away\nSo he drives 140*2=280 miles a round trip\n280*2 = 560",
+      "regex": "miles\\s+away\\s+So\\s+he\\s+drives\\s+140\\*2=280\\s+miles\\s+a\\s+round\\s+trip\\s+280\\*2\\s+=\\s+560",
+      "words": 13
+    },
+    {
+      "id": 330,
+      "item": 1121,
+      "part": "question",
+      "literal": "far as Brian. If Sofie plans to walk 10 miles every day, how",
+      "regex": "far\\s+as\\s+Brian\\.\\s+If\\s+Sofie\\s+plans\\s+to\\s+walk\\s+10\\s+miles\\s+every\\s+day,\\s+how",
+      "words": 13
+    },
+    {
+      "id": 331,
+      "item": 1121,
+      "part": "answer",
+      "literal": "70 miles in seven days.\nSince Sofie is walking twice as far as",
+      "regex": "70\\s+miles\\s+in\\s+seven\\s+days\\.\\s+Since\\s+Sofie\\s+is\\s+walking\\s+twice\\s+as\\s+far\\s+as",
+      "words": 13
+    },
+    {
+      "id": 332,
+      "item": 1123,
+      "part": "question",
+      "literal": "another dog that is half the weight of Kory\u2019s dog. If Kory\u2019s dog",
+      "regex": "another\\s+dog\\s+that\\s+is\\s+half\\s+the\\s+weight\\s+of\\s+Kory\u2019s\\s+dog\\.\\s+If\\s+Kory\u2019s\\s+dog",
+      "words": 13
+    },
+    {
+      "id": 333,
+      "item": 1123,
+      "part": "answer",
+      "literal": "is 60 / 2 = 30 pounds\nThe total weight of Elijah and",
+      "regex": "is\\s+60\\s+/\\s+2\\s+=\\s+30\\s+pounds\\s+The\\s+total\\s+weight\\s+of\\s+Elijah\\s+and",
+      "words": 13
+    },
+    {
+      "id": 334,
+      "item": 1128,
+      "part": "question",
+      "literal": "old now. Two years ago, Liam\u2019s age was twice the age of Vince.",
+      "regex": "old\\s+now\\.\\s+Two\\s+years\\s+ago,\\s+Liam\u2019s\\s+age\\s+was\\s+twice\\s+the\\s+age\\s+of\\s+Vince\\.",
+      "words": 13
+    },
+    {
+      "id": 335,
+      "item": 1128,
+      "part": "answer",
+      "literal": "two years ago was 14/2 = 7 years old because Liam's age is",
+      "regex": "two\\s+years\\s+ago\\s+was\\s+14/2\\s+=\\s+7\\s+years\\s+old\\s+because\\s+Liam's\\s+age\\s+is",
+      "words": 13
+    },
+    {
+      "id": 336,
+      "item": 1131,
+      "part": "question",
+      "literal": "it. He cuts it into 4-foot logs.  From each of those logs, he",
+      "regex": "it\\.\\s+He\\s+cuts\\s+it\\s+into\\s+4\\-foot\\s+logs\\.\\s+From\\s+each\\s+of\\s+those\\s+logs,\\s+he",
+      "words": 13
+    },
+    {
+      "id": 337,
+      "item": 1131,
+      "part": "answer",
+      "literal": "the tree.\nThat means he can make 64/4=16 logs.\nThat gives him16*5=80 planks.",
+      "regex": "the\\s+tree\\.\\s+That\\s+means\\s+he\\s+can\\s+make\\s+64/4=16\\s+logs\\.\\s+That\\s+gives\\s+him16\\*5=80\\s+planks\\.",
+      "words": 13
+    },
+    {
+      "id": 338,
+      "item": 1146,
+      "part": "question",
+      "literal": "$5 each and sell them for $7 each. If he invests all his",
+      "regex": "\\$5\\s+each\\s+and\\s+sell\\s+them\\s+for\\s+\\$7\\s+each\\.\\s+If\\s+he\\s+invests\\s+all\\s+his",
+      "words": 13
+    },
+    {
+      "id": 339,
+      "item": 1146,
+      "part": "answer",
+      "literal": "because 20 x .6 = 12\nHe makes $84 selling these because 12",
+      "regex": "because\\s+20\\s+x\\s+\\.6\\s+=\\s+12\\s+He\\s+makes\\s+\\$84\\s+selling\\s+these\\s+because\\s+12",
+      "words": 13
+    },
+    {
+      "id": 340,
+      "item": 1148,
+      "part": "question",
+      "literal": "four children's Easter activity. Assuming each child gets the same number of eggs,",
+      "regex": "four\\s+children's\\s+Easter\\s+activity\\.\\s+Assuming\\s+each\\s+child\\s+gets\\s+the\\s+same\\s+number\\s+of\\s+eggs,",
+      "words": 13
+    },
+    {
+      "id": 341,
+      "item": 1148,
+      "part": "answer",
+      "literal": "Since all four children receive the same number of eggs, each child gets",
+      "regex": "Since\\s+all\\s+four\\s+children\\s+receive\\s+the\\s+same\\s+number\\s+of\\s+eggs,\\s+each\\s+child\\s+gets",
+      "words": 13
+    },
+    {
+      "id": 342,
+      "item": 1162,
+      "part": "question",
+      "literal": "less than half the age of Haley. If Haley is 26 years old,",
+      "regex": "less\\s+than\\s+half\\s+the\\s+age\\s+of\\s+Haley\\.\\s+If\\s+Haley\\s+is\\s+26\\s+years\\s+old,",
+      "words": 13
+    },
+    {
+      "id": 343,
+      "item": 1162,
+      "part": "answer",
+      "literal": "age is 26/2 = 13.\nSo Geb is 13 - 10 = 3",
+      "regex": "age\\s+is\\s+26/2\\s+=\\s+13\\.\\s+So\\s+Geb\\s+is\\s+13\\s+\\-\\s+10\\s+=\\s+3",
+      "words": 13
+    },
+    {
+      "id": 344,
+      "item": 1165,
+      "part": "question",
+      "literal": "bigger than the other two combined.  He collects garbage 3 times a week",
+      "regex": "bigger\\s+than\\s+the\\s+other\\s+two\\s+combined\\.\\s+He\\s+collects\\s+garbage\\s+3\\s+times\\s+a\\s+week",
+      "words": 13
+    },
+    {
+      "id": 345,
+      "item": 1165,
+      "part": "answer",
+      "literal": "So in total, it has 400+240=640 apartments\nSo he goes to 640+400=1040 apartments",
+      "regex": "So\\s+in\\s+total,\\s+it\\s+has\\s+400\\+240=640\\s+apartments\\s+So\\s+he\\s+goes\\s+to\\s+640\\+400=1040\\s+apartments",
+      "words": 13
+    },
+    {
+      "id": 346,
+      "item": 1166,
+      "part": "question",
+      "literal": "200 fruits less than a 10-year-old one. During the ninth year, the avocado",
+      "regex": "200\\s+fruits\\s+less\\s+than\\s+a\\s+10\\-year\\-old\\s+one\\.\\s+During\\s+the\\s+ninth\\s+year,\\s+the\\s+avocado",
+      "words": 13
+    },
+    {
+      "id": 347,
+      "item": 1166,
+      "part": "answer",
+      "literal": "20 = 1000 fruits\nAt 8 years, it produces 200 fewer fruits than",
+      "regex": "20\\s+=\\s+1000\\s+fruits\\s+At\\s+8\\s+years,\\s+it\\s+produces\\s+200\\s+fewer\\s+fruits\\s+than",
+      "words": 13
+    },
+    {
+      "id": 348,
+      "item": 1175,
+      "part": "question",
+      "literal": "second half, team A scores 1/4 of the number of goals scored by",
+      "regex": "second\\s+half,\\s+team\\s+A\\s+scores\\s+1/4\\s+of\\s+the\\s+number\\s+of\\s+goals\\s+scored\\s+by",
+      "words": 13
+    },
+    {
+      "id": 349,
+      "item": 1175,
+      "part": "answer",
+      "literal": "goals * 2 = 8 goals.\nTeam A 1/4 * 8 goals =",
+      "regex": "goals\\s+\\*\\s+2\\s+=\\s+8\\s+goals\\.\\s+Team\\s+A\\s+1/4\\s+\\*\\s+8\\s+goals\\s+=",
+      "words": 13
+    },
+    {
+      "id": 350,
+      "item": 1178,
+      "part": "question",
+      "literal": "while Johnny bought 2 more than thrice as many as Mike. How many",
+      "regex": "while\\s+Johnny\\s+bought\\s+2\\s+more\\s+than\\s+thrice\\s+as\\s+many\\s+as\\s+Mike\\.\\s+How\\s+many",
+      "words": 13
+    },
+    {
+      "id": 351,
+      "item": 1178,
+      "part": "answer",
+      "literal": "masks is 5 x 3 = 15.\nSo, Johnny bought 15 + 2",
+      "regex": "masks\\s+is\\s+5\\s+x\\s+3\\s+=\\s+15\\.\\s+So,\\s+Johnny\\s+bought\\s+15\\s+\\+\\s+2",
+      "words": 13
+    },
+    {
+      "id": 352,
+      "item": 1179,
+      "part": "question",
+      "literal": "4 of them and caps 7 more teeth than he drills. What percentage",
+      "regex": "4\\s+of\\s+them\\s+and\\s+caps\\s+7\\s+more\\s+teeth\\s+than\\s+he\\s+drills\\.\\s+What\\s+percentage",
+      "words": 13
+    },
+    {
+      "id": 353,
+      "item": 1179,
+      "part": "answer",
+      "literal": "11 teeth + 4 teeth = 15 teeth\nThen divide that number by",
+      "regex": "11\\s+teeth\\s+\\+\\s+4\\s+teeth\\s+=\\s+15\\s+teeth\\s+Then\\s+divide\\s+that\\s+number\\s+by",
+      "words": 13
+    },
+    {
+      "id": 354,
+      "item": 1187,
+      "part": "question",
+      "literal": "sister. He can build 20 snowballs in an hour, but 2 melt every",
+      "regex": "sister\\.\\s+He\\s+can\\s+build\\s+20\\s+snowballs\\s+in\\s+an\\s+hour,\\s+but\\s+2\\s+melt\\s+every",
+      "words": 13
+    },
+    {
+      "id": 355,
+      "item": 1187,
+      "part": "answer",
+      "literal": "This means that each hour, Jay ends up with 20 \u2013 8 =",
+      "regex": "This\\s+means\\s+that\\s+each\\s+hour,\\s+Jay\\s+ends\\s+up\\s+with\\s+20\\s+\u2013\\s+8\\s+=",
+      "words": 13
+    },
+    {
+      "id": 356,
+      "item": 1194,
+      "part": "question",
+      "literal": "blood. She also learned that a shark has three times as much blood",
+      "regex": "blood\\.\\s+She\\s+also\\s+learned\\s+that\\s+a\\s+shark\\s+has\\s+three\\s+times\\s+as\\s+much\\s+blood",
+      "words": 13
+    },
+    {
+      "id": 357,
+      "item": 1194,
+      "part": "answer",
+      "literal": "then a shark has 3*40 = 120 gallons of blood.\n10 sharks swimming",
+      "regex": "then\\s+a\\s+shark\\s+has\\s+3\\*40\\s+=\\s+120\\s+gallons\\s+of\\s+blood\\.\\s+10\\s+sharks\\s+swimming",
+      "words": 13
+    },
+    {
+      "id": 358,
+      "item": 1202,
+      "part": "question",
+      "literal": "six eyeshadow colors each. Her sister steals one of the palettes. Amy uses",
+      "regex": "six\\s+eyeshadow\\s+colors\\s+each\\.\\s+Her\\s+sister\\s+steals\\s+one\\s+of\\s+the\\s+palettes\\.\\s+Amy\\s+uses",
+      "words": 13
+    },
+    {
+      "id": 359,
+      "item": 1202,
+      "part": "answer",
+      "literal": "4 colors, leaving Amy with 26 - 4 = 22 colors.\nHalf the",
+      "regex": "4\\s+colors,\\s+leaving\\s+Amy\\s+with\\s+26\\s+\\-\\s+4\\s+=\\s+22\\s+colors\\.\\s+Half\\s+the",
+      "words": 13
+    },
+    {
+      "id": 360,
+      "item": 1203,
+      "part": "question",
+      "literal": "is. The floor to the ceiling on the first floor is thrice as",
+      "regex": "is\\.\\s+The\\s+floor\\s+to\\s+the\\s+ceiling\\s+on\\s+the\\s+first\\s+floor\\s+is\\s+thrice\\s+as",
+      "words": 13
+    },
+    {
+      "id": 361,
+      "item": 1203,
+      "part": "answer",
+      "literal": "on the first floor is 60 x 3 = 180 inches high.\nHence,",
+      "regex": "on\\s+the\\s+first\\s+floor\\s+is\\s+60\\s+x\\s+3\\s+=\\s+180\\s+inches\\s+high\\.\\s+Hence,",
+      "words": 13
+    },
+    {
+      "id": 362,
+      "item": 1207,
+      "part": "question",
+      "literal": "weighs 46 kilograms, and the last tuna he caught weighs 26 kilograms. If",
+      "regex": "weighs\\s+46\\s+kilograms,\\s+and\\s+the\\s+last\\s+tuna\\s+he\\s+caught\\s+weighs\\s+26\\s+kilograms\\.\\s+If",
+      "words": 13
+    },
+    {
+      "id": 363,
+      "item": 1207,
+      "part": "answer",
+      "literal": "second tuna.\nAnd he will earn 26 x $0.50 = $13 from the",
+      "regex": "second\\s+tuna\\.\\s+And\\s+he\\s+will\\s+earn\\s+26\\s+x\\s+\\$0\\.50\\s+=\\s+\\$13\\s+from\\s+the",
+      "words": 13
+    },
+    {
+      "id": 364,
+      "item": 1221,
+      "part": "question",
+      "literal": "every pound of ground beef he uses. He gets sixteen meatballs from each",
+      "regex": "every\\s+pound\\s+of\\s+ground\\s+beef\\s+he\\s+uses\\.\\s+He\\s+gets\\s+sixteen\\s+meatballs\\s+from\\s+each",
+      "words": 13
+    },
+    {
+      "id": 365,
+      "item": 1221,
+      "part": "answer",
+      "literal": "5 pounds of meat.\nAiden will need 5 * 2 = 10 tablespoons",
+      "regex": "5\\s+pounds\\s+of\\s+meat\\.\\s+Aiden\\s+will\\s+need\\s+5\\s+\\*\\s+2\\s+=\\s+10\\s+tablespoons",
+      "words": 13
+    },
+    {
+      "id": 366,
+      "item": 1222,
+      "part": "question",
+      "literal": "is 35 inches wide and Luke needs to buy fabric equal to 2",
+      "regex": "is\\s+35\\s+inches\\s+wide\\s+and\\s+Luke\\s+needs\\s+to\\s+buy\\s+fabric\\s+equal\\s+to\\s+2",
+      "words": 13
+    },
+    {
+      "id": 367,
+      "item": 1222,
+      "part": "answer",
+      "literal": "is 35 x 5 = 175 inches.\nLuke needs to buy 175 x",
+      "regex": "is\\s+35\\s+x\\s+5\\s+=\\s+175\\s+inches\\.\\s+Luke\\s+needs\\s+to\\s+buy\\s+175\\s+x",
+      "words": 13
+    },
+    {
+      "id": 368,
+      "item": 1232,
+      "part": "question",
+      "literal": "her friend some pomelos, Eve is left with 1/4 of the pomelos she",
+      "regex": "her\\s+friend\\s+some\\s+pomelos,\\s+Eve\\s+is\\s+left\\s+with\\s+1/4\\s+of\\s+the\\s+pomelos\\s+she",
+      "words": 13
+    },
+    {
+      "id": 369,
+      "item": 1232,
+      "part": "answer",
+      "literal": "5 pieces of pomelos.\nSo she gave away 20 - 5 = 15",
+      "regex": "5\\s+pieces\\s+of\\s+pomelos\\.\\s+So\\s+she\\s+gave\\s+away\\s+20\\s+\\-\\s+5\\s+=\\s+15",
+      "words": 13
+    },
+    {
+      "id": 370,
+      "item": 1233,
+      "part": "question",
+      "literal": "gave his sister 25% of the remaining number. If he then sold the",
+      "regex": "gave\\s+his\\s+sister\\s+25%\\s+of\\s+the\\s+remaining\\s+number\\.\\s+If\\s+he\\s+then\\s+sold\\s+the",
+      "words": 13
+    },
+    {
+      "id": 371,
+      "item": 1233,
+      "part": "answer",
+      "literal": "apples remaining was 60-24=36\nWalter gave 25/100*36=9 apples to his sister.\nHe remained",
+      "regex": "apples\\s+remaining\\s+was\\s+60\\-24=36\\s+Walter\\s+gave\\s+25/100\\*36=9\\s+apples\\s+to\\s+his\\s+sister\\.\\s+He\\s+remained",
+      "words": 13
+    },
+    {
+      "id": 372,
+      "item": 1235,
+      "part": "question",
+      "literal": "stops for gas, relaxation, etc.). If he goes on like this for 3",
+      "regex": "stops\\s+for\\s+gas,\\s+relaxation,\\s+etc\\.\\)\\.\\s+If\\s+he\\s+goes\\s+on\\s+like\\s+this\\s+for\\s+3",
+      "words": 13
+    },
+    {
+      "id": 373,
+      "item": 1235,
+      "part": "answer",
+      "literal": "of 3*24 = 72 hours\nAt a rate of 50km/hr he has covered",
+      "regex": "of\\s+3\\*24\\s+=\\s+72\\s+hours\\s+At\\s+a\\s+rate\\s+of\\s+50km/hr\\s+he\\s+has\\s+covered",
+      "words": 13
+    },
+    {
+      "id": 374,
+      "item": 1240,
+      "part": "question",
+      "literal": "shelf can hold twice as many books as a middle shelf. The top",
+      "regex": "shelf\\s+can\\s+hold\\s+twice\\s+as\\s+many\\s+books\\s+as\\s+a\\s+middle\\s+shelf\\.\\s+The\\s+top",
+      "words": 13
+    },
+    {
+      "id": 375,
+      "item": 1240,
+      "part": "answer",
+      "literal": "can hold 20 \u2013 5 = 15 books.\nEach bookcase can hold a",
+      "regex": "can\\s+hold\\s+20\\s+\u2013\\s+5\\s+=\\s+15\\s+books\\.\\s+Each\\s+bookcase\\s+can\\s+hold\\s+a",
+      "words": 13
+    },
+    {
+      "id": 376,
+      "item": 1241,
+      "part": "question",
+      "literal": "for $2.40 a dozen. She will sell it for $1 for 3 eggs.",
+      "regex": "for\\s+\\$2\\.40\\s+a\\s+dozen\\.\\s+She\\s+will\\s+sell\\s+it\\s+for\\s+\\$1\\s+for\\s+3\\s+eggs\\.",
+      "words": 13
+    },
+    {
+      "id": 377,
+      "item": 1241,
+      "part": "answer",
+      "literal": "are 60/3 = 20 sets of 3 eggs that Rose will sell.\nThus,",
+      "regex": "are\\s+60/3\\s+=\\s+20\\s+sets\\s+of\\s+3\\s+eggs\\s+that\\s+Rose\\s+will\\s+sell\\.\\s+Thus,",
+      "words": 13
+    },
+    {
+      "id": 378,
+      "item": 1251,
+      "part": "question",
+      "literal": "take twice that long.  The last 2 sides each take half as long",
+      "regex": "take\\s+twice\\s+that\\s+long\\.\\s+The\\s+last\\s+2\\s+sides\\s+each\\s+take\\s+half\\s+as\\s+long",
+      "words": 13
+    },
+    {
+      "id": 379,
+      "item": 1251,
+      "part": "answer",
+      "literal": "take 10*2=20 minutes together\nThe last 2 sides take 5/2=2.5 minutes\nSo they",
+      "regex": "take\\s+10\\*2=20\\s+minutes\\s+together\\s+The\\s+last\\s+2\\s+sides\\s+take\\s+5/2=2\\.5\\s+minutes\\s+So\\s+they",
+      "words": 13
+    },
+    {
+      "id": 380,
+      "item": 1253,
+      "part": "question",
+      "literal": "It takes him 15 minutes to deal with a call.  How many calls",
+      "regex": "It\\s+takes\\s+him\\s+15\\s+minutes\\s+to\\s+deal\\s+with\\s+a\\s+call\\.\\s+How\\s+many\\s+calls",
+      "words": 13
+    },
+    {
+      "id": 381,
+      "item": 1253,
+      "part": "answer",
+      "literal": "calls\nSo he deals with 360/15=24 calls a day\nSo he deals with",
+      "regex": "calls\\s+So\\s+he\\s+deals\\s+with\\s+360/15=24\\s+calls\\s+a\\s+day\\s+So\\s+he\\s+deals\\s+with",
+      "words": 13
+    },
+    {
+      "id": 382,
+      "item": 1254,
+      "part": "question",
+      "literal": "However, today she is using a new varnish and it takes 12 minutes",
+      "regex": "However,\\s+today\\s+she\\s+is\\s+using\\s+a\\s+new\\s+varnish\\s+and\\s+it\\s+takes\\s+12\\s+minutes",
+      "words": 13
+    },
+    {
+      "id": 383,
+      "item": 1254,
+      "part": "answer",
+      "literal": "minutes\nWith the new varnish, all 6 paintings would be dry in 12*6=72",
+      "regex": "minutes\\s+With\\s+the\\s+new\\s+varnish,\\s+all\\s+6\\s+paintings\\s+would\\s+be\\s+dry\\s+in\\s+12\\*6=72",
+      "words": 13
+    },
+    {
+      "id": 384,
+      "item": 1266,
+      "part": "question",
+      "literal": "5 kilograms of dog food and a bulldog consumes 3 kilograms of dog",
+      "regex": "5\\s+kilograms\\s+of\\s+dog\\s+food\\s+and\\s+a\\s+bulldog\\s+consumes\\s+3\\s+kilograms\\s+of\\s+dog",
+      "words": 13
+    },
+    {
+      "id": 385,
+      "item": 1266,
+      "part": "answer",
+      "literal": "dog food per day.\nThe dogs can consume a total of 15 +",
+      "regex": "dog\\s+food\\s+per\\s+day\\.\\s+The\\s+dogs\\s+can\\s+consume\\s+a\\s+total\\s+of\\s+15\\s+\\+",
+      "words": 13
+    },
+    {
+      "id": 386,
+      "item": 1270,
+      "part": "question",
+      "literal": "depreciated 30%.  The second year it depreciated another 30%.  The third year it",
+      "regex": "depreciated\\s+30%\\.\\s+The\\s+second\\s+year\\s+it\\s+depreciated\\s+another\\s+30%\\.\\s+The\\s+third\\s+year\\s+it",
+      "words": 13
+    },
+    {
+      "id": 387,
+      "item": 1270,
+      "part": "answer",
+      "literal": "After first year:9000(.30)=2700\n9000-2700=6300\nAfter second year:6300(.30)=1890\n6300-1890=4410\nAfter third year:4410(.20)=882\n4410-882=3528$\n####",
+      "regex": "After\\s+first\\s+year:9000\\(\\.30\\)=2700\\s+9000\\-2700=6300\\s+After\\s+second\\s+year:6300\\(\\.30\\)=1890\\s+6300\\-1890=4410\\s+After\\s+third\\s+year:4410\\(\\.20\\)=882\\s+4410\\-882=3528\\$\\s+\\#\\#\\#\\#",
+      "words": 13
+    },
+    {
+      "id": 388,
+      "item": 1280,
+      "part": "question",
+      "literal": "complete. Anna put together the same puzzle in 2 hours more than half",
+      "regex": "complete\\.\\s+Anna\\s+put\\s+together\\s+the\\s+same\\s+puzzle\\s+in\\s+2\\s+hours\\s+more\\s+than\\s+half",
+      "words": 13
+    },
+    {
+      "id": 389,
+      "item": 1280,
+      "part": "answer",
+      "literal": "Anna put together the same puzzle in 2 hours more than half the",
+      "regex": "Anna\\s+put\\s+together\\s+the\\s+same\\s+puzzle\\s+in\\s+2\\s+hours\\s+more\\s+than\\s+half\\s+the",
+      "words": 13
+    },
+    {
+      "id": 390,
+      "item": 1290,
+      "part": "question",
+      "literal": "seeds and a large sunflower has 50% more seeds than a small sunflower.",
+      "regex": "seeds\\s+and\\s+a\\s+large\\s+sunflower\\s+has\\s+50%\\s+more\\s+seeds\\s+than\\s+a\\s+small\\s+sunflower\\.",
+      "words": 13
+    },
+    {
+      "id": 391,
+      "item": 1290,
+      "part": "answer",
+      "literal": "more seeds than the small sunflower.\nThe large sunflower has 36 + 18",
+      "regex": "more\\s+seeds\\s+than\\s+the\\s+small\\s+sunflower\\.\\s+The\\s+large\\s+sunflower\\s+has\\s+36\\s+\\+\\s+18",
+      "words": 13
+    },
+    {
+      "id": 392,
+      "item": 1298,
+      "part": "question",
+      "literal": "it. The jar has 32 quarters, 95 dimes, 120 nickels, and 750 pennies.",
+      "regex": "it\\.\\s+The\\s+jar\\s+has\\s+32\\s+quarters,\\s+95\\s+dimes,\\s+120\\s+nickels,\\s+and\\s+750\\s+pennies\\.",
+      "words": 13
+    },
+    {
+      "id": 393,
+      "item": 1298,
+      "part": "answer",
+      "literal": "dimes.\nThere are 120/20 = 6 dollars in nickels.\nThere are 750/100 =",
+      "regex": "dimes\\.\\s+There\\s+are\\s+120/20\\s+=\\s+6\\s+dollars\\s+in\\s+nickels\\.\\s+There\\s+are\\s+750/100\\s+=",
+      "words": 13
+    },
+    {
+      "id": 394,
+      "item": 1300,
+      "part": "question",
+      "literal": "is open every day of the week except Sunday and Wednesday.  He gets",
+      "regex": "is\\s+open\\s+every\\s+day\\s+of\\s+the\\s+week\\s+except\\s+Sunday\\s+and\\s+Wednesday\\.\\s+He\\s+gets",
+      "words": 13
+    },
+    {
+      "id": 395,
+      "item": 1300,
+      "part": "answer",
+      "literal": "he serves 5*3=15 cars a week\nSo he makes 15*4=$60 a week\nSo",
+      "regex": "he\\s+serves\\s+5\\*3=15\\s+cars\\s+a\\s+week\\s+So\\s+he\\s+makes\\s+15\\*4=\\$60\\s+a\\s+week\\s+So",
+      "words": 13
+    },
+    {
+      "id": 396,
+      "item": 1311,
+      "part": "question",
+      "literal": "every foot of dock. Right now, there is 200 feet of dock, and",
+      "regex": "every\\s+foot\\s+of\\s+dock\\.\\s+Right\\s+now,\\s+there\\s+is\\s+200\\s+feet\\s+of\\s+dock,\\s+and",
+      "words": 13
+    },
+    {
+      "id": 397,
+      "item": 1311,
+      "part": "answer",
+      "literal": "feet of line.\nThe caretaker needs to buy 600-6 = 594 feet of",
+      "regex": "feet\\s+of\\s+line\\.\\s+The\\s+caretaker\\s+needs\\s+to\\s+buy\\s+600\\-6\\s+=\\s+594\\s+feet\\s+of",
+      "words": 13
+    },
+    {
+      "id": 398,
+      "item": 1313,
+      "part": "question",
+      "literal": "watermelons for $80. He sold all of them at a profit of 25%.",
+      "regex": "watermelons\\s+for\\s+\\$80\\.\\s+He\\s+sold\\s+all\\s+of\\s+them\\s+at\\s+a\\s+profit\\s+of\\s+25%\\.",
+      "words": 13
+    },
+    {
+      "id": 399,
+      "item": 1313,
+      "part": "answer",
+      "literal": "So, he was able to sell them all for $80 + $20 =",
+      "regex": "So,\\s+he\\s+was\\s+able\\s+to\\s+sell\\s+them\\s+all\\s+for\\s+\\$80\\s+\\+\\s+\\$20\\s+=",
+      "words": 13
+    }
+  ],
+  "has_answer_probes": true,
+  "fields": [
+    "prompt",
+    "chosen",
+    "rejected"
+  ],
+  "available_fields": [
+    "prompt",
+    "chosen",
+    "rejected"
+  ],
+  "source_column": "preference_type",
+  "generated": "2026-09-02T16:56:25+00:00",
+  "revision": "aed155cf32e809b590490b6c3577ee4b0d0a5019",
+  "parquet_revision": "45ed895db8f8eabcb2c9f6dd5bf93c5c27157d28",
+  "partial": false,
+  "shards": 4,
+  "bytes_read": 799243919,
+  "unsearched_columns": [],
+  "total_rows": 259922,
+  "rows_by_source": {
+    "llm_judged": 124980,
+    "delta_learning": 124942,
+    "multiturn_self_talk": 5000,
+    "multiturn_synthetic_context": 5000
+  },
+  "items": {
+    "any": [],
+    "question_read": [],
+    "question_produced": [],
+    "answer_produced": [],
+    "answer_rejected": []
+  },
+  "matched": 0,
+  "by_group": {
+    "prompt": 0,
+    "chosen": 0,
+    "rejected": 0
+  },
+  "by_source": {},
+  "probe_hits": [],
+  "examples": []
+}
