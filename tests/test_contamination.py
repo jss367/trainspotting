@@ -605,6 +605,33 @@ def test_summary_names_a_corpus_that_a_flag_skipped():
     assert "corpus" not in "\n".join(contamination.summary([run], None, []))
 
 
+def test_an_answer_in_a_verifier_reference_is_scored_not_produced():
+    """An RL row stores no completion; its `solution` or `ground_truth` is what
+    the verifier checks rollouts against. A benchmark answer found there is a
+    claim about the reward, and the summary says so on its own line."""
+    probes = [{"id": 0, "item": 0, "part": "answer", "regex": "x", "literal": "x"},
+              {"id": 1, "item": 1, "part": "answer", "regex": "y", "literal": "y"}]
+    hits = [{"probe": 0, "group": "reference", "rows": 3},
+            {"probe": 1, "group": "response", "rows": 1}]
+    items = contamination.items_hit(probes, hits)
+    assert items["answer_scored"] == [0] and items["answer_produced"] == [1]
+    rl = {
+        "stage": "rlvr", "items_probed": [0, 1], "has_answer_probes": True,
+        "fields": ["prompt", "reference", "rollout"],
+        "available_fields": ["prompt", "reference", "rollout"],
+        "items": {**items, "answer_produced": []},
+        "matched": 3, "total_rows": 100, "partial": False,
+    }
+    text = "\n".join(contamination.summary([rl], None, []))
+    assert "answer in a verifier reference: 1" in text
+    # No completion side in the mix, so no produced-text claim, true or false.
+    assert "answer in produced text" not in text
+    sft = {**rl, "stage": "sft", "fields": ["prompt", "response"],
+           "available_fields": ["prompt", "response"], "items": items}
+    text = "\n".join(contamination.summary([sft], None, []))
+    assert "answer in produced text: 1" in text and "verifier reference" not in text
+
+
 def test_summary_names_unscanned_stages_and_the_corpus_caveat():
     run = {
         "stage": "sft", "items_probed": [0, 1, 2], "has_answer_probes": True,

@@ -959,13 +959,15 @@ options counts as the question being read, since they are what the model is
 shown rather than the letter it is scored on.
 
 **The side is the finding.** A question probe in a prompt column is the model
-being trained to *read* the test item. An answer probe in a response, chosen or
-reference column is the model being trained to *produce* it, or the verifier
-scoring rollouts against it. The summary keeps those apart — "question in a
-prompt" and "answer in produced text" — and a question restated in produced text
-is its own line, so a model that echoes the question before answering cannot
-inflate the second count. A hit only in a rejected completion is reported as
-seen but neither read nor produced.
+being trained to *read* the test item. An answer probe in a response or chosen
+column is the model being trained to *produce* it. An answer probe in an RL
+row's reference is what the verifier scores rollouts against — a claim about
+the reward, which no completion need contain — so it gets its own line, "answer
+in a verifier reference", rather than counting as produced text. The summary
+keeps all of those apart, and a question restated in produced text is its own
+line too, so a model that echoes the question before answering cannot inflate
+the produced count. A hit only in a rejected completion is reported as seen but
+neither read nor produced.
 
 **One read per mix.** Two hundred items is up to four hundred probes, and a mix
 costs gigabytes to read, so the probes share a scan: they are searched as

@@ -54,6 +54,12 @@ SNIPPET_CONTEXT = 120
 # Which sides count as the model being trained to produce the text. The same
 # set `influence` ranks a stage's origin on.
 PRODUCE = ("response", "chosen", "reference")
+# The sides the model is *fit to*, as against `reference`, which a verifier scores
+# rollouts against and no completion need contain. `influence` ranks on PRODUCE
+# because a string the objective pushes toward is evidence either way; the
+# summary here makes a claim per side, and "trained to produce this" is only
+# true of these two.
+FIT = ("response", "chosen")
 
 
 def chunks(probes: list[dict], budget: int | None = None) -> list[list[dict]]:
@@ -316,10 +322,12 @@ def items_hit(probes: list[dict], probe_hits: list[dict]) -> dict:
 
     `any`: items with a hit anywhere. `question_read`: the question in a prompt
     column — trained to read it. `answer_produced`: the answer in a column the
-    model is fit to or scored against — trained to produce it. `question_produced`
-    is the question restated in produced text, which a model that was trained on
-    the answer usually did too, and is kept apart so it cannot inflate the
-    second.
+    model is fit to — trained to produce it. `answer_scored`: the answer in an RL
+    row's reference — what the verifier scores rollouts against, which no
+    completion need contain, so it is a claim about the reward and not about
+    text the model emitted. `question_produced` is the question restated in
+    produced or reference text, which a model that was trained on the answer
+    usually did too, and is kept apart so it cannot inflate the second.
 
     A `choices` probe — a multiple-choice item's options — is the item being
     read wherever the stem would be, so it rolls up with `question`: the options
@@ -327,7 +335,7 @@ def items_hit(probes: list[dict], probe_hits: list[dict]) -> dict:
     """
     by_id = {p["id"]: p for p in probes}
     out = {"any": set(), "question_read": set(), "question_produced": set(),
-           "answer_produced": set(), "answer_rejected": set()}
+           "answer_produced": set(), "answer_scored": set(), "answer_rejected": set()}
     for h in probe_hits:
         p = by_id[h["probe"]]
         out["any"].add(p["item"])
@@ -337,8 +345,10 @@ def items_hit(probes: list[dict], probe_hits: list[dict]) -> dict:
             elif h["group"] in PRODUCE:
                 out["question_produced"].add(p["item"])
         elif p["part"] == "answer":
-            if h["group"] in PRODUCE:
+            if h["group"] in FIT:
                 out["answer_produced"].add(p["item"])
+            elif h["group"] == "reference":
+                out["answer_scored"].add(p["item"])
             elif h["group"] == "rejected":
                 out["answer_rejected"].add(p["item"])
     return {k: sorted(v) for k, v in out.items()}
@@ -476,10 +486,23 @@ def summary(
             if searched(("prompt",)) else "  question in a prompt: not searched — not a zero"
         )
         if r["has_answer_probes"]:
-            parts.append(
-                f"  answer in produced text: {len(hit['answer_produced'])}"
-                if searched(PRODUCE) else "  answer in produced text: not searched — not a zero"
-            )
+            # Two claims, one per kind of side the mix has. An RL mix stores no
+            # completion, so it gets only the reference line; an SFT or DPO mix
+            # has no reference, so it gets only the produced one. A run from
+            # before `answer_scored` existed folded reference hits into
+            # `answer_produced`, and reads as it was written.
+            has = set(r.get("available_fields") or r.get("fields") or PRODUCE)
+            if has & set(FIT):
+                parts.append(
+                    f"  answer in produced text: {len(hit['answer_produced'])}"
+                    if searched(FIT) else "  answer in produced text: not searched — not a zero"
+                )
+            if "reference" in has:
+                parts.append(
+                    f"  answer in a verifier reference: {len(hit.get('answer_scored', []))}"
+                    if searched(("reference",))
+                    else "  answer in a verifier reference: not searched — not a zero"
+                )
             if hit["answer_rejected"]:
                 parts.append(f"  answer in a rejected completion only: "
                              f"{len(set(hit['answer_rejected']) - set(hit['answer_produced']))}")
