@@ -282,6 +282,28 @@ def test_corpus_side_defaults_to_a_pretraining_only_index():
     assert registry.infinigram_index(registry.resolve("wildchat-1m")) is None
 
 
+def test_a_run_with_no_side_left_to_measure_is_refused():
+    from types import SimpleNamespace
+
+    from trainspotting import cli
+
+    def args(**kw):
+        return SimpleNamespace(**{"target": "t", "corpus_only": False, "no_corpus": False, **kw})
+
+    # Something to measure: fine, whichever side it is.
+    assert cli._contam_refusal(args(), True, "v4_x") is None
+    assert cli._contam_refusal(args(corpus_only=True), True, "v4_x") is None
+    assert cli._contam_refusal(args(no_corpus=True), True, "v4_x") is None
+    assert cli._contam_refusal(args(), False, "v4_x") is None
+    assert cli._contam_refusal(args(), True, None) is None
+    # A dataset with --corpus-only, a base model with --no-corpus: nothing runs.
+    r = cli._contam_refusal(args(corpus_only=True), True, None)
+    assert r and "--corpus-only" in r and "no corpus index" in r
+    r = cli._contam_refusal(args(no_corpus=True), False, "v4_x")
+    assert r and "no post-training stages" in r and "--no-corpus" in r
+    assert cli._contam_refusal(args(), False, None)
+
+
 def test_corpus_only_leaves_every_stage_unscanned():
     from trainspotting import cli
 

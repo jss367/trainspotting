@@ -2494,6 +2494,32 @@ def _contam_unscanned(all_stages: list[dict], scanned: list[dict], corpus_only: 
     return [s["stage"] for s in all_stages if s not in scanned]
 
 
+def _contam_refusal(args, has_stages: bool, index: str | None) -> str | None:
+    """Why this run would measure nothing, or None when it would measure something.
+
+    Two sides, and each can be taken away by the target or by a flag: a dataset
+    has no corpus index — nothing was pretrained on it — and --corpus-only
+    removes its scan; a base model has no post-training stages and --no-corpus
+    removes its corpus side. Left alone, either combination fetched the
+    benchmark, wrote no result and exited 0: a successful run that made no
+    measurement. Decided before any row is fetched, so refusing costs nothing.
+    """
+    scan = has_stages and not args.corpus_only
+    count = bool(index) and not args.no_corpus
+    if scan or count:
+        return None
+    why = []
+    if not has_stages:
+        why.append(f"{args.target} has no post-training stages to scan")
+    elif args.corpus_only:
+        why.append("--corpus-only skips the post-training scans")
+    if not index:
+        why.append(f"{args.target} has no corpus index (nothing was pretrained on a dataset)")
+    elif args.no_corpus:
+        why.append("--no-corpus skips the corpus side")
+    return "nothing to measure: " + "; ".join(why)
+
+
 def cmd_contaminate(args):
     """Is a benchmark's test set in the training data, where, and on which side?
 
@@ -2509,6 +2535,11 @@ def cmd_contaminate(args):
         # The message names the known benchmarks; a traceback would bury it.
         sys.exit(e.args[0])
     target = registry.resolve(args.target)
+    all_stages = registry.post_training_stages(target)
+    index = args.index or registry.infinigram_index(target)
+    refusal = _contam_refusal(args, bool(all_stages), index)
+    if refusal:
+        sys.exit(refusal)
     # Resolved before the rows are read, so the stamp names the tree the items
     # were cut from rather than one published while the pages were fetched —
     # the same order every other row-drawing command here uses.
@@ -2565,7 +2596,6 @@ def cmd_contaminate(args):
     }
 
     # --- the post-training mixes, every row -------------------------------
-    all_stages = registry.post_training_stages(target)
     stages = all_stages
     if args.stage:
         stages = [s for s in stages if s["stage"] == args.stage]
@@ -2643,7 +2673,6 @@ def cmd_contaminate(args):
 
     # --- the corpus, by exact string ---------------------------------------
     corpus_run = None
-    index = args.index or registry.infinigram_index(target)
     if index and not args.no_corpus:
         caveat = infinigram.caveat_for(index)
         print(f"\ncounting {len(probes)} probes in {index} ...", file=sys.stderr)
