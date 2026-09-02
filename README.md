@@ -1384,9 +1384,11 @@ scales with how much a loss moves and a long high-entropy document moves more
 than a short answer whether or not it has anything to do with the query. The
 report prints the stages ranked by mean covariance, the examples at either end
 of the ranking, and two checks on the sampler that come free from the same
-draws: the local learning coefficient `nβ(E[L] - L(w*))`, which is negative when
-the chains sat below the loss at `w*` and so were not sampling the posterior
-they were asked to, and the drift of each chain's minibatch loss across its
+draws: the local learning coefficient `nβ(E[L] - L(w*))`, taken over the
+candidates the posterior was localized on (a rejected completion is scored but
+never fit, so it is not part of the loss the chains sampled), which is negative
+when the chains sat below the loss at `w*` and so were not sampling the
+posterior they were asked to, and the drift of each chain's minibatch loss across its
 retained steps, which catches the failure the coefficient alone does not — a
 chain climbing steadily away from `w*` has a positive coefficient and a doubled
 loss. A run at ten times the default step size did exactly that on Pythia-70m,

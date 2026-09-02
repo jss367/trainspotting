@@ -453,8 +453,11 @@ def sample(
     with torch.no_grad():
         for p, w in zip(params, origin):
             p.copy_(w)
+    # `localized` is the indices themselves, not only their count, because the
+    # learning coefficient has to be taken over the same loss the chains were
+    # localized on, and a candidate scored but never fit is not part of it.
     return {"at_origin": at_origin, "losses": losses, "trajectory": trajectory, "nbeta": nbeta,
-            "burn_in": burn_in, "localized_on": len(localize)}
+            "burn_in": burn_in, "localized": list(localize), "localized_on": len(localize)}
 
 
 # --- Statistics -----------------------------------------------------------------
@@ -550,9 +553,17 @@ def influence(losses: list[list[list[float]]]) -> list[dict]:
 
 
 def llc(run: dict) -> dict:
-    """The local learning coefficient nβ(E[L] - L(w*)) over the candidates, per
-    chain and pooled, as the check that the chains sampled a posterior around
-    w* rather than fell off it.
+    """The local learning coefficient nβ(E[L] - L(w*)) over the candidates the
+    posterior was localized on, per chain and pooled, as the check that the
+    chains sampled a posterior around w* rather than fell off it.
+
+    L here is the loss the chains were fit to — the mean over `localized`, the
+    candidates the minibatches were drawn from — and not over every candidate
+    scored. A DPO rejected completion is scored at every draw and never fit, and
+    its loss under the posterior has no reason to sit near its loss at w*; taking
+    it into E[L] would report a coefficient for a loss no chain sampled, and a
+    few rejected sides far from the origin could call the chains invalid, or
+    valid, on their own. `over` says how many candidates the coefficient covers.
 
     Beside it, the drift: how much each chain's minibatch loss rose between the
     first and last quarter of its retained steps. A positive coefficient alone
@@ -560,17 +571,23 @@ def llc(run: dict) -> dict:
     w* has one too, and the run at ten times the step size that motivated this
     check reported "sat near w*" while its loss doubled.
     """
-    base = _mean(run["at_origin"][1:])
+    # Column 0 of every draw is the query; candidate i is column i + 1. A run
+    # without `localized` (one written before it was recorded) was localized on
+    # every candidate.
+    localized = run.get("localized")
+    cols = [i + 1 for i in (localized if localized is not None else range(len(run["at_origin"]) - 1))]
+    base = _mean(run["at_origin"][i] for i in cols)
     per_chain = []
     for chain in run["losses"]:
-        expected = _mean(_mean(d[1:]) for d in chain)
+        expected = _mean(_mean(d[i] for i in cols) for d in chain)
         per_chain.append(run["nbeta"] * (expected - base))
     drift = []
     for traj in run.get("trajectory") or []:
         kept = traj[run.get("burn_in", 0):]
         q = max(1, len(kept) // 4)
         drift.append(_mean(kept[-q:]) - _mean(kept[:q]) if kept else 0.0)
-    return {"per_chain": per_chain, "mean": _mean(per_chain), "loss_at_origin": base, "drift": drift}
+    return {"per_chain": per_chain, "mean": _mean(per_chain), "loss_at_origin": base, "drift": drift,
+            "over": len(cols)}
 
 
 # A chain whose loss rose by more than this share of the loss at w* between its
@@ -585,6 +602,10 @@ def baseline(losses: list[list[list[float]]]) -> float:
     covariance carries a shared component with the query's. This is that
     component, and the per-example numbers are read against it: a candidate
     above the line pulls the query harder than the sample as a whole does.
+
+    Unlike `llc`, this is over every candidate scored, rejected sides included:
+    it is a control for the ranking, and the ranking holds the rejected sides,
+    so the line each is read against has to be the average of the same set.
     """
     covs = []
     for chain in losses:
@@ -752,7 +773,10 @@ def render(res: dict, top: int = 5) -> list[str]:
     else:
         drifted = ", ".join(f"{d:+.2f}" for d in drift) if drift else "n/a"
         verdict = f"the chains sat near w* (minibatch loss drift per chain: {drifted})"
-    lines.append(f"Local learning coefficient {lc['mean']:.1f} (per chain: {per}); {verdict}.")
+    over = lc.get("over")
+    scope = (f" over the {over} localized candidates" if over is not None and over < res["candidates"]
+             else "")
+    lines.append(f"Local learning coefficient {lc['mean']:.1f}{scope} (per chain: {per}); {verdict}.")
     lines.append("")
     lines.append("Positive covariance: training harder on the example would lower the query's loss, "
                  "so it pulls the model toward the query. On a DPO *rejected* side, which the objective "

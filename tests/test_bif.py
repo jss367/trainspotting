@@ -251,6 +251,23 @@ def test_a_lone_candidate_is_not_its_own_control():
     assert s["partial_control"] == "none"
 
 
+def test_llc_is_taken_over_the_localized_candidates_only():
+    # Candidate 0 is what the chains were fit to; candidate 1 is a rejected
+    # side, scored at every draw but never localized on, whose loss sits far
+    # above its loss at w*. It must not move the coefficient.
+    fit_only = {"at_origin": [0.5, 1.0], "losses": [chain([0.5, 0.5], [1.5, 1.5])], "nbeta": 4.0,
+                "localized": [0]}
+    with_rejected = {"at_origin": [0.5, 1.0, 1.0], "losses": [chain([0.5, 0.5], [1.5, 1.5], [40.0, 40.0])],
+                     "nbeta": 4.0, "localized": [0]}
+    assert bif.llc(with_rejected)["per_chain"] == pytest.approx(bif.llc(fit_only)["per_chain"])
+    assert bif.llc(with_rejected)["loss_at_origin"] == 1.0
+    assert bif.llc(with_rejected)["over"] == 1
+    # Without the indices recorded, every candidate counts, and the rejected
+    # side would have dominated.
+    legacy = bif.llc({k: v for k, v in with_rejected.items() if k != "localized"})
+    assert legacy["over"] == 2 and legacy["mean"] > 10 * bif.llc(fit_only)["mean"]
+
+
 def test_llc_is_positive_when_the_posterior_sits_above_the_loss_at_origin():
     run = {
         "at_origin": [0.5, 1.0, 2.0],
@@ -479,7 +496,7 @@ def test_sample_fits_only_the_localized_candidates_and_scores_them_all(monkeypat
         localize=[0, 2],
     )
     assert fitted and set(fitted) <= {id(chosen), id(doc)}
-    assert run["localized_on"] == 2
+    assert run["localized_on"] == 2 and run["localized"] == [0, 2]
     # The rejected side is still in every draw, so its covariance is reported.
     assert all(len(d) == 4 for c in run["losses"] for d in c)
     with pytest.raises(ValueError):
