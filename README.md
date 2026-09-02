@@ -1198,9 +1198,17 @@ sample of each pretraining corpus. An SFT example is fit on its assistant turns
 behind the rest of the conversation, rendered through the model's chat template
 so the tokens are the ones training saw. A DPO pair yields *two* candidates, its
 chosen and its rejected completion, because the objective pushes the model off
-the rejected text: a positive covariance on a rejected completion is evidence
-the pair taught the model away from the query, where the same number on the
-chosen side is evidence it taught it toward. A corpus document is all target.
+the rejected text. The posterior is localized on the text the model was fit
+*toward* — documents, SFT responses, chosen completions — and the rejected
+completions are scored at every draw but never drawn into an SGLD minibatch,
+since fitting the chain to them would localize it on the opposite of what
+training did (the result file's `localized_on` counts the fit side). Their
+covariance is still read: a positive covariance on a rejected completion is
+evidence the pair taught the model away from the query, where the same number
+on the chosen side is evidence it taught it toward. That is a reading of the
+loss covariance, not the influence function of the pairwise DPO objective,
+which would also need the reference model's log-ratio. A corpus document is all
+target.
 An RL row stores no response and is skipped, and the skip is printed with its
 reason, as is a stage with no committed sample. `--match` keeps only candidates
 whose text holds a regex, which is how a phrase `grep` found becomes the set of

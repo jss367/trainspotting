@@ -32,11 +32,18 @@ The per-example loss is the mean token loss over the text the example fits the
 model to, with the rest of the example as context and masked out of the loss:
 the assistant turns of an SFT example, the chosen completion of a DPO pair, the
 whole of a corpus document. A DPO pair yields two candidates, its chosen and its
-rejected side, because the two carry opposite signs in training — the objective
-pushes the model off the rejected text — so a positive covariance on a rejected
-completion is evidence that the pair taught the model *away* from the query,
-where the same number on the chosen side is evidence it taught the model toward
-it. An RL row stores no response and is skipped, and the skip is counted.
+rejected side, because the two carry opposite signs in training: the objective
+pushes the model off the rejected text. The posterior is localized on the text
+the model was fit *toward* — documents, SFT responses, chosen completions — and
+the rejected completions are scored at every draw but never put in a minibatch,
+since fitting the chain to them would localize it on the opposite of what
+training did. Their covariance with the query is still the number of interest:
+a positive covariance on a rejected completion is evidence that the pair taught
+the model *away* from the query, where the same number on the chosen side is
+evidence it taught the model toward it. This is a reading of the loss
+covariance, not the influence function of the pairwise DPO objective itself,
+which would need the reference model's log-ratio as well. An RL row stores no
+response and is skipped, and the skip is counted.
 
 The sampler is plain SGLD: w ← w - (ε/2)(nβ ∇L̂(w) + γ(w - w*)) + N(0, ε). Every
 chain starts at w*, discards a burn-in, then records the loss of the query and of
@@ -382,6 +389,7 @@ def sample(
     batch: int,
     eval_batch: int,
     seed: int,
+    localize: list[int] | None = None,
     log=None,
 ) -> dict:
     """Run the SGLD chains and record every loss they pass through.
@@ -390,9 +398,20 @@ def sample(
     per chain — `losses[chain][draw]` is `[query, cand_0, cand_1, ...]` — plus
     the minibatch loss at every step, and the losses at w* the chains started
     from. Everything downstream is arithmetic on that.
+
+    `localize` is the indices into `encoded` the minibatches are drawn from,
+    which is to say the data the posterior is localized on; every candidate is
+    scored whether or not it is in it. The default is all of them. The caller
+    leaves out what the model was trained *off* rather than toward — a DPO
+    rejected completion — so the chain is not fit to text training pushed away
+    from.
     """
     import torch
 
+    if localize is None:
+        localize = list(range(len(encoded)))
+    if not localize:
+        raise ValueError("nothing to localize the posterior on")
     params = [p for p in model.parameters() if p.requires_grad]
     origin = [p.detach().clone() for p in params]
     everything = [query, *encoded]
@@ -409,7 +428,7 @@ def sample(
         chain_losses: list[list[float]] = []
         chain_traj: list[float] = []
         for step in range(steps):
-            idx = [rng.randrange(len(encoded)) for _ in range(batch)]
+            idx = [rng.choice(localize) for _ in range(batch)]
             for p in params:
                 p.grad = None
             loss = _losses(model, [encoded[i] for i in idx], device).mean()
@@ -435,7 +454,7 @@ def sample(
         for p, w in zip(params, origin):
             p.copy_(w)
     return {"at_origin": at_origin, "losses": losses, "trajectory": trajectory, "nbeta": nbeta,
-            "burn_in": burn_in}
+            "burn_in": burn_in, "localized_on": len(localize)}
 
 
 # --- Statistics -----------------------------------------------------------------
@@ -636,6 +655,10 @@ def result(target_name, model_id, revision, query, prompt, cands, encoded, run, 
         "prompt": prompt,
         "settings": settings,
         "candidates": len(cands),
+        # How many of the candidates the SGLD minibatches were drawn from; the
+        # rest (DPO rejected completions) were scored at every draw but never
+        # fit to.
+        "localized_on": run.get("localized_on", len(cands)),
         "skipped": skipped,
         "llc": llc(run),
         "baseline_cov": common,
@@ -695,6 +718,13 @@ def render(res: dict, top: int = 5) -> list[str]:
         f"Checkpoint `{res['model']}`" + (f" at `{rev[:12]}`" if rev else "")
         + f"; {res['candidates']} candidate examples from the committed samples."
     )
+    localized = res.get("localized_on", res["candidates"])
+    if localized < res["candidates"]:
+        lines.append(
+            f"The posterior is localized on {localized} of them, the text the model was fit toward; "
+            f"the other {res['candidates'] - localized} are DPO rejected completions, scored at every "
+            f"draw but not trained on."
+        )
     if res.get("prompt"):
         lines.append(f"Query is the reply to: {_one_line(res['prompt'])[:120]!r}")
     s = res["settings"]
@@ -725,8 +755,9 @@ def render(res: dict, top: int = 5) -> list[str]:
     lines.append(f"Local learning coefficient {lc['mean']:.1f} (per chain: {per}); {verdict}.")
     lines.append("")
     lines.append("Positive covariance: training harder on the example would lower the query's loss, "
-                 "so it pulls the model toward the query. On a DPO *rejected* side the same sign is "
-                 "evidence the pair taught the model away from it.")
+                 "so it pulls the model toward the query. On a DPO *rejected* side, which the objective "
+                 "pushed the model off, the same sign reads as evidence the pair taught the model away "
+                 "from it.")
     if res.get("baseline_cov") is not None:
         lines.append(
             f"Every loss moves with the chain's excursion from w*, and the query covaries "

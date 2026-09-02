@@ -345,6 +345,7 @@ def test_result_ranks_records_and_carries_every_provenance_field():
     res = fake_result()
     assert res["model"] == "EleutherAI/pythia-70m-deduped"
     assert res["candidates"] == 2
+    assert res["localized_on"] == 2  # nothing rejected among documents
     ranked = sorted(res["records"], key=lambda r: r["rank"])
     assert [r["id"] for r in ranked] == ["row-1", "row-2"]
     assert ranked[0]["cov"] > ranked[1]["cov"]
@@ -370,6 +371,15 @@ def test_render_names_the_checkpoint_the_skip_and_the_ends_of_the_ranking():
     assert "row-1" in text and "row-2" in text
     assert "[truncated] [cut]" in text
     assert "not on the training set" in text
+
+
+def test_render_says_which_candidates_the_posterior_was_localized_on():
+    res = fake_result()
+    assert "scored at every draw but not trained on" not in "\n".join(bif.render(res))
+    res["localized_on"] = 1
+    text = "\n".join(bif.render(res))
+    assert "localized on 1 of them" in text
+    assert "the other 1 are DPO rejected completions, scored at every draw but not trained on" in text
 
 
 def test_render_says_so_when_one_candidate_has_no_control():
@@ -447,6 +457,36 @@ def test_sample_records_every_loss_and_puts_the_weights_back():
     stats = bif.influence(run["losses"])
     assert len(stats) == 3
     assert all(s["cov_stderr"] is not None for s in stats)
+
+
+def test_sample_fits_only_the_localized_candidates_and_scores_them_all(monkeypatch):
+    torch.manual_seed(0)
+    model = Toy()
+    chosen, rejected, doc = enc([1, 2, 3, 4], 1), enc([1, 2, 9, 9], 1), enc([5, 6, 7], 0)
+    fitted = []
+    real = bif._losses
+
+    def spy(model, chunk, device):
+        # A minibatch step runs with grad; every scoring pass is under no_grad.
+        if torch.is_grad_enabled():
+            fitted.extend(id(e) for e in chunk)
+        return real(model, chunk, device)
+
+    monkeypatch.setattr(bif, "_losses", spy)
+    run = bif.sample(
+        model, [chosen, rejected, doc], enc([3, 4], 0), device="cpu", chains=2, draws=3,
+        burn_in=1, every=1, lr=1e-3, nbeta=2.0, gamma=10.0, batch=2, eval_batch=4, seed=1,
+        localize=[0, 2],
+    )
+    assert fitted and set(fitted) <= {id(chosen), id(doc)}
+    assert run["localized_on"] == 2
+    # The rejected side is still in every draw, so its covariance is reported.
+    assert all(len(d) == 4 for c in run["losses"] for d in c)
+    with pytest.raises(ValueError):
+        bif.sample(
+            model, [chosen], enc([3, 4], 0), device="cpu", chains=1, draws=1, burn_in=0, every=1,
+            lr=1e-3, nbeta=2.0, gamma=10.0, batch=1, eval_batch=1, seed=1, localize=[],
+        )
 
 
 def test_batch_losses_are_per_example_means_over_fit_tokens_only():

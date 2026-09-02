@@ -2625,6 +2625,16 @@ def cmd_bif(args):
     q = bif.encode(tokenizer, bif.query_candidate(query, args.prompt)["turns"], args.max_tokens)
     if q["fit_tokens"] == 0:
         sys.exit("the query has no tokens to score")
+    # The posterior is localized on the text the model was fit *toward*. A DPO
+    # rejected completion is what the objective pushed the model off, so it is
+    # scored at every draw but never drawn into a minibatch: fitting the chain
+    # to it would localize the posterior on the opposite of what training did.
+    localize = [i for i, c in enumerate(kept) if c["side"] != "rejected"]
+    if not localize:
+        sys.exit(
+            "every candidate is a rejected completion, so there is no text the model was fit toward "
+            "to localize the posterior on; widen --match or add a stage"
+        )
     nbeta = args.nbeta if args.nbeta is not None else bif.default_nbeta(args.batch)
     settings = {
         "chains": args.chains,
@@ -2645,14 +2655,14 @@ def cmd_bif(args):
         "stage": args.stage,
     }
     print(
-        f"{len(encoded)} candidates, query {q['fit_tokens']} fit tokens; "
+        f"{len(encoded)} candidates ({len(localize)} localized on), query {q['fit_tokens']} fit tokens; "
         f"{args.chains} chains × ({args.burn_in} burn-in + {args.draws} × {args.every} steps)",
         file=sys.stderr,
     )
     run = bif.sample(
         model, encoded, q, device=device, chains=args.chains, draws=args.draws,
         burn_in=args.burn_in, every=args.every, lr=args.lr, nbeta=nbeta, gamma=args.gamma,
-        batch=args.batch, eval_batch=args.eval_batch, seed=args.seed,
+        batch=args.batch, eval_batch=args.eval_batch, seed=args.seed, localize=localize,
         log=lambda m: print(m, file=sys.stderr),
     )
     slug = args.slug or _slug(query)
