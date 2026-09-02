@@ -176,8 +176,16 @@ def probe(text: str, words: int = WORDS, min_words: int = MIN_WORDS) -> dict | N
     The middle rather than the start, because the start is where copies differ:
     a "Question:" prefix, a stripped title, a renumbered problem. An item with
     fewer than `min_words` words is not probed — a short window matches by
-    chance, and a chance match reads as contamination.
+    chance, and a chance match reads as contamination. For the same reason a
+    `words` below `min_words` is refused outright rather than cut: the floor
+    is on the window, and admitting the item only to cut a one-word probe
+    from it would defeat it.
     """
+    if words < min_words:
+        raise ValueError(
+            f"a probe needs at least {min_words} words, got {words}: a shorter "
+            "window matches by chance, and a chance match reads as contamination"
+        )
     spans = [(m.start(), m.end()) for m in _WORD.finditer(text)]
     if len(spans) < min_words:
         return None

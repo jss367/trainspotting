@@ -67,6 +67,20 @@ def _positive_int(value: str) -> int:
     return n
 
 
+def _probe_words(value: str) -> int:
+    """argparse type for `contaminate --words`. A probe shorter than
+    `benchmarks.MIN_WORDS` matches by chance — a one-word window is a common
+    word, and a chance match reads as contamination — so the floor `probe()`
+    applies to items applies to the window too."""
+    n = _positive_int(value)
+    if n < benchmarks.MIN_WORDS:
+        raise argparse.ArgumentTypeError(
+            f"a probe needs at least {benchmarks.MIN_WORDS} words, got {n}: a shorter "
+            "window matches by chance, and a chance match reads as contamination"
+        )
+    return n
+
+
 def _nonnegative_int(value: str) -> int:
     """argparse type for `--examples`. Zero is meaningful — count without keeping
     any evidence — but a negative limit reaches the example heap with nothing in
@@ -2944,8 +2958,9 @@ def main():
     p.add_argument("--items", type=_positive_int, default=200,
                    help="test items to probe; a seeded draw when the set is larger")
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--words", type=_positive_int, default=benchmarks.WORDS,
-                   help="consecutive words per probe, cut from the middle of the item")
+    p.add_argument("--words", type=_probe_words, default=benchmarks.WORDS,
+                   help="consecutive words per probe, cut from the middle of the item; "
+                        f"at least {benchmarks.MIN_WORDS}")
     p.add_argument(
         "--field",
         action="append",

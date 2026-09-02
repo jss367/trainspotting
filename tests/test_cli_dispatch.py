@@ -73,6 +73,23 @@ def test_an_unknown_target_still_exits_rather_than_reaching_the_handler():
     assert not called
 
 
+def test_a_probe_window_below_the_minimum_is_a_usage_error(monkeypatch):
+    """`--words 3` would have every item of eight-plus words probed by three
+    common words, which match everywhere. Argparse refuses it before the
+    handler, and the message says what the floor is."""
+    called = []
+    monkeypatch.setattr(cli, "cmd_contaminate", lambda args: called.append(args))
+    monkeypatch.setattr(
+        sys, "argv", ["trainspotting", "contaminate", "olmo-3-7b-instruct", "gsm8k", "--words", "3"]
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+
+    assert exc.value.code == 2  # argparse's usage-error exit
+    assert not called
+
+
 def test_the_targetless_commands_are_the_ones_this_expects():
     """A new command that takes no target has to be added to COMMANDS above, or
     it ships untested through the same hole this file exists to close."""

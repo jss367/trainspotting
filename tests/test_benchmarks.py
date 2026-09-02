@@ -74,6 +74,17 @@ def test_short_items_are_not_probed():
     assert benchmarks.probe("a b c d e f g", min_words=8) is None
 
 
+def test_a_window_below_the_minimum_is_refused_not_cut():
+    """`words=1` would admit every item of eight-plus words and cut one common
+    word from each, which matches everywhere; the floor is on the window."""
+    text = "a b c d e f g h i j k l m"
+    with pytest.raises(ValueError, match="at least 8 words"):
+        benchmarks.probe(text, words=1)
+    with pytest.raises(ValueError):
+        benchmarks.probe(text, words=7, min_words=8)
+    assert benchmarks.probe(text, words=8, min_words=8)["words"] == 8
+
+
 def test_item_text_applies_the_cleaning_rule():
     spec = benchmarks.resolve("gsm8k")
     row = {"question": "q", "answer": "16 - 3 - 4 = <<16-3-4=9>>9 eggs\n#### 9"}
