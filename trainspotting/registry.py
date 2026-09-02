@@ -22,6 +22,8 @@ blog; Pythia's from the Pythia paper (arXiv:2304.01373) and the Pile paper
 (arXiv:2101.00027).
 """
 
+from . import infinigram
+
 # Schema hints:
 #   prompt_path: how to pull the user prompt out of a row.
 #     "messages"        -> first role=="user" content in row["messages"]
@@ -389,8 +391,64 @@ MODELS = {
     "pythia-12b-deduped": {
         "hf_model": "EleutherAI/pythia-12b-deduped",
         "stages": PYTHIA_DEDUPED_STAGES,
+        # The one registered model whose pretraining corpus has a public
+        # infini-gram index. See `infinigram_index`.
+        "infinigram_index": "v4_piletrain_llama",
     },
 }
+
+# The infini-gram index that stands closest to a model's pretraining corpus, for
+# a command that has to pick one without being told. No public index covers
+# Dolma 3, so every OLMo 3 model falls back to an OLMo 2 index — a different
+# corpus, and `infinigram.caveat_for` says so on every run that uses it. A model
+# whose entry names its own index (Pythia) gets that instead.
+#
+# The pretraining-only index, not the full-training-data one `find` defaults to.
+# `contaminate` measures the post-training side exactly, by reading the model's
+# own mixes, and uses this index for the other side — the web. An index that
+# folds in Dolmino midtraining and Tulu 3 post-training would hand back hits
+# from another model's post-training and call them corpus: the GSM8K probe
+# "Janet sells duck eggs" counts 2 in the full index and 0 in this one.
+FALLBACK_INFINIGRAM_INDEX = "v4_olmo-mix-1124_llama"
+
+
+def infinigram_index(target: dict) -> str | None:
+    """The corpus index to search for a target, or None for a dataset.
+
+    A dataset has no pretraining behind it, so there is nothing to search: a
+    count over some corpus would describe a model nobody named.
+    """
+    if not target.get("is_model"):
+        return None
+    return target.get("infinigram_index", FALLBACK_INFINIGRAM_INDEX)
+
+
+def infinigram_caveat(target: dict, index: str) -> str | None:
+    """What a count in `index` does not say about `target`, or None.
+
+    `infinigram.caveat_for` knows each index on its own: the Pile index differs
+    from what `pythia-12b-deduped` saw by deduplication, the OLMo 2 indexes
+    stand in for a Dolma 3 nobody has indexed. Each is true only of the target
+    its index was chosen for. Read for an OLMo 3 model pointed at the Pile with
+    --index, the deduplication note is about Pythia and says nothing about the
+    thing that matters — OLMo 3 never trained on the Pile; read for Pythia
+    pointed at an OLMo index, the missing-Dolma-3 note is about OLMo. So the
+    caveat is decided from both. The target's own index — registered, or the
+    fallback for a model with none — keeps the caveat written for it. Any
+    other known index gets the plain statement that this target did not train
+    on it. An index this tool does not know is left uncharacterized, for the
+    reason `caveat_for` gives: it may be the real thing.
+    """
+    if index == infinigram_index(target):
+        return infinigram.caveat_for(index)
+    covers = infinigram.INDEXES.get(index)
+    if covers is None:
+        return None
+    return (
+        f"This index covers {covers}. {target['target']} was not trained on it, so a "
+        f"count here says whether the string is in that corpus, not whether this "
+        f"model saw it."
+    )
 
 # The shape of the training example a prompt was drawn from. It decides what
 # `context` stores behind the prompt and whether `classify` may read a label off

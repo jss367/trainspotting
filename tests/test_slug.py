@@ -87,3 +87,31 @@ def test_a_long_plain_pattern_is_still_a_filename():
 
     assert len(long_a) <= MAX_SLUG_CHARS + 9
     assert long_a != longer_a
+
+
+def test_a_contamination_run_at_the_defaults_is_named_for_its_benchmark():
+    """The committed runs keep their names, and a run whose settings cut
+    different probes or read a different side cannot write over them."""
+    from trainspotting.cli import CONTAM_DEFAULTS, _contam_slug
+
+    assert _contam_slug("gsm8k", dict(CONTAM_DEFAULTS)) == "gsm8k"
+
+    narrow = _contam_slug("gsm8k", {**CONTAM_DEFAULTS, "items": 20})
+    assert narrow.startswith("gsm8k-") and len(narrow) == len("gsm8k-") + 8
+    assert narrow == _contam_slug("gsm8k", {**CONTAM_DEFAULTS, "items": 20})  # stable
+    assert narrow != _contam_slug("gsm8k", {**CONTAM_DEFAULTS, "items": 21})
+    for change in ({"seed": 1}, {"words": 8}, {"field": ["prompt"]}, {"case_sensitive": True}):
+        assert _contam_slug("gsm8k", {**CONTAM_DEFAULTS, **change}) != "gsm8k", change
+        assert _contam_slug("gsm8k", {**CONTAM_DEFAULTS, **change}) != narrow, change
+
+
+def test_contamination_settings_do_not_depend_on_how_the_fields_were_spelt():
+    from types import SimpleNamespace
+
+    from trainspotting.cli import _contam_settings
+
+    def ns(field):
+        return SimpleNamespace(items=200, seed=0, words=13, field=field, case_sensitive=False)
+
+    assert _contam_settings(ns(["response", "prompt", "prompt"])) == _contam_settings(ns(["prompt", "response"]))
+    assert _contam_settings(ns(None))["field"] is None

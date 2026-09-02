@@ -61,6 +61,13 @@ trace` extracts the distinctive phrases from that text and ranks the
 post-training stages by how densely each contains them, so you find the stage
 without guessing a search string. See [Tracing a behavior](#tracing-a-behavior).
 
+The same layers answer a question people ask of every open model: is the
+benchmark it is scored on in the data it was trained on? `trainspotting
+contaminate` cuts a probe out of each test item, reads every row of each
+post-training mix for all of them in one pass, counts each in the pretraining
+index, and says for every item which stage holds it and on which side. See
+[Is a benchmark in there?](#is-a-benchmark-in-there).
+
 One model also publishes the *order* its pretraining was read in. For Pythia,
 `trainspotting steps` reads sampled training batches straight out of that
 published stream and reports where along the run a string was seen, which is the
@@ -302,6 +309,10 @@ trainspotting ask olmo-3-7b-think "..." --slug my-question --pretrain-only
 
 # Exact count of the rows of each mix containing a string (needs DuckDB)
 trainspotting grep olmo-3-7b-think "ChatGPT" --stage dpo
+
+# Is GSM8K's test set in the data? 200 items, every row of every mix, one read
+# per mix; then each probe counted in the closest public pretraining index
+trainspotting contaminate olmo-3-7b-think gsm8k
 
 # Exact occurrence count + example documents for a phrase, via infini-gram
 trainspotting find "the mitochondria is the powerhouse of the cell"
@@ -864,6 +875,149 @@ twelve; a string in none of them reads nothing at all. Trigrams rather than
 words because the page matches substrings: a word index has no entry for `GPT`
 inside `ChatGPT`, for `quation` inside `équation`, or for anything in a language
 that writes without spaces. `tests/test_searchindex.py` pins those cases.
+
+## Is a benchmark in there?
+
+`trainspotting contaminate <model> <benchmark>` asks whether the test items a
+model is scored on were also in what it was trained on — and, because the
+answer is a different finding on each side of an example, where and on which
+side.
+
+```
+$ trainspotting contaminate olmo-3-7b-instruct gsm8k --stage dpo
+# contaminate GSM8K (openai/gsm8k main/test) on olmo-3-7b-instruct
+# 200 of 1,319 items (seed 0), 13-word probes: 200 question, 200 answer
+
+# 1 stage(s), 799 MB to read
+- dpo      259,922 rows     799 MB  prompt/chosen/rejected  (allenai/Dolci-Instruct-DPO)
+
+scanning dpo (799 MB) ...
+dpo: 0/200 items seen, 0 rows  -> results/olmo-3-7b-instruct.dpo.contam-gsm8k.json
+
+counting 400 probes in v4_olmo-mix-1124_llama ...
+  -> results/olmo-3-7b-instruct.corpus-v4_olmo-mix-1124_llama.contam-gsm8k.json
+
+dpo    items seen 0/200 = 0.0% (95% CI 0.0–1.9%)
+  question in a prompt: 0
+  answer in produced text: 0
+  rows: 0 of 259,922
+sft    not scanned — not a zero
+rlvr   not scanned — not a zero
+corpus items seen 9/200 = 4.5% (95% CI 2.4–8.3%)  in v4_olmo-mix-1124_llama
+  occurrences over all probes: 41
+  note: The public infini-gram API has no Dolma 3 / OLMo 3 index, so this count is
+  over a different corpus than the one this tool samples — the closest available,
+  not the one the registered models were trained on.
+```
+
+Read together, those two lines are the point of keeping the sides apart. Not one
+of the 200 items is in the Instruct DPO mix, on any side, over all 259,922 rows.
+Nine of the 200 are in OLMo 2's pretraining crawl — 9 of the 400 probes, all of
+them questions and none of the worked answers, 41 occurrences, at most 32 for
+one probe — which is what a benchmark that has lived on GitHub, in papers and in
+tutorials since 2021 looks like from inside a filtered web crawl: present, and
+rare. The first is a statement about what Ai2 put in front of the model; the
+second is a statement about the ecosystem's text, over a corpus that is not
+Dolma 3. Neither stands in for the other, and the SFT and RL stages are named
+as unscanned rather than counted as clean. The same rule holds inside the corpus
+count: a probe the index did not answer — a rejected query, or one that ran out
+of retries — is recorded as an error rather than as zero occurrences, the
+summary says how many there were, and an item left with an unanswered probe and
+no hit is out of the rate rather than in it as clean.
+
+Which index stands in for pretraining is not a detail. The same 400 probes
+counted in `v4_olmo-2-0325-32b-instruct_llama` — OLMo 2 32B's *full* training
+data, pretraining through Dolmino midtraining and Tulu 3 post-training — find
+all 200 items: 253 probes, 53 of them worked answers, 514 occurrences
+(`results/olmo-3-7b-instruct.corpus-v4_olmo-2-0325-32b-instruct_llama.contam-gsm8k.json`,
+kept for the comparison). What separates the two indexes is the midtraining and
+post-training data, so 191 of these 200 test items are in what OLMo 2 saw after
+pretraining and not in its crawl — and read against the full index, the corpus
+line would have reported that as a web finding. `contaminate` therefore defaults
+to the pretraining-only index, and a run against any other names it in the
+result's filename so the two cannot overwrite each other.
+
+**What is searched for.** Not the item whole. Copies of a test item in training
+data routinely differ from the original — re-wrapped, prefixed with
+"Question:", a calculator annotation stripped — and an exact search for the
+full text would miss them and report a clean stage. Each item is cut to a
+**probe**: thirteen consecutive words from its middle, matched with any
+whitespace between the words and regardless of case. Thirteen words is the
+window GPT-3's contamination analysis used, and it is long enough that a chance
+match is rare. The middle rather than the start because the start is where
+copies differ. An item with fewer than eight words is not probed and is counted
+as such rather than as clean, because a short window is where a chance match
+happens. Where the benchmark has a worked answer (GSM8K, MATH-500, HumanEval),
+the answer gets a probe of its own. Where it is multiple-choice (MMLU, MMLU-Pro,
+ARC-Challenge) the options are stored apart from the stem and get a probe of
+their own too, as a `choices` part: many MMLU stems are under the eight-word
+floor and the options are the only probe-able text, and a stem generic enough to
+recur is not a copy of the item where its options are not. The options are
+joined by newlines with no letter prefixes — copies disagree on "A." versus
+"(A)" — so a window that spans two options misses a prefixed copy; a hit on the
+options counts as the question being read, since they are what the model is
+shown rather than the letter it is scored on.
+
+**The side is the finding.** A question probe in a prompt column is the model
+being trained to *read* the test item. An answer probe in a response or chosen
+column is the model being trained to *produce* it. An answer probe in an RL
+row's reference is what the verifier scores rollouts against — a claim about
+the reward, which no completion need contain — so it gets its own line, "answer
+in a verifier reference", rather than counting as produced text. The summary
+keeps all of those apart, and a question restated in produced text is its own
+line too, so a model that echoes the question before answering cannot inflate
+the produced count. A hit only in a rejected completion is reported as seen but
+neither read nor produced.
+
+**One read per mix.** Two hundred items is up to four hundred probes, and a mix
+costs gigabytes to read, so the probes share a scan: they are searched as
+alternations, `(?:probe|probe|...)`, and the strings that matched travel back
+whole so each probe in them can be found and credited — position by position,
+because a regex engine's "all matches" are the non-overlapping ones, and two
+near-duplicate items whose windows sit a word apart would otherwise count as
+one. Not one alternation, though. RE2 runs an alternation as a DFA while its state cache fits
+and falls to an NFA when it does not, and the fall is a cliff — four hundred
+probes in one regex ran fifty times slower than the same probes split four ways.
+`contamination.CHUNK_CHARS` is that split, by pattern length rather than probe
+count, since the states are made of characters and a HumanEval probe of long
+identifiers costs more of them than a prose one.
+
+**The corpus side.** Each probe's literal text — as written, whitespace and case
+intact — is counted in the infini-gram index the registry names as closest to
+the model's pretraining data. For OLMo 3 that is OLMo 2's pretraining-only index,
+`v4_olmo-mix-1124_llama` — a different corpus, and the run says so — and not the
+full-training-data index `find` defaults to, which folds in Dolmino and Tulu 3
+and would hand back another model's post-training as corpus; for Pythia it is
+the Pile itself. The count is
+occurrences rather than documents, and a benchmark's presence on the web (GSM8K
+is on GitHub, in papers, in a hundred tutorials) is what it measures. It is a
+statement about the ecosystem's text, and the post-training scans are the
+statement about what Ai2 put in front of the model.
+
+**The interval is over the benchmark.** The items are a seeded draw from the
+test set (all of it when `--items` covers the set), so the share found estimates
+the share of the whole benchmark that is present, with a Wilson interval. The row
+counts are exact: every row of the mix was read. When the draw is the whole split
+there is nothing to estimate — the share is the benchmark's, printed as
+`k/n = x% (every item)` with no interval. When the server converted only part of
+a mix, a miss is not a known miss, so the share is printed as a floor, `≥ k/n`,
+with no interval either.
+
+Two result files per run. `results/<target>.<stage>.contam-<slug>.json`, where
+the slug is the benchmark id at the default settings and `<benchmark>-<hash>` of
+the settings otherwise, so a narrowed run cannot overwrite the full one,
+carries every probe, every (probe, side) row count, the items rolled up by claim,
+the source breakdown of matched rows, and hash-ordered example snippets; the
+`corpus` file carries every probe's occurrence count. `--stage`, `--field`,
+`--items`, `--words`, `--case-sensitive`, `--index`, `--no-corpus` and
+`--corpus-only` narrow it; `--slug` names the files instead. The byte cap and
+`--yes` are `grep`'s.
+
+Registered benchmarks: `gsm8k`, `math-500`, `humaneval`, `mmlu`, `mmlu-pro`,
+`arc-challenge`, `truthfulqa`, `ifeval`. Adding one is an entry in
+`trainspotting/benchmarks.py`: the repo, config and split, the question field,
+and the answer field if there is one long enough to probe. The site does not
+render these runs yet.
 
 ## Which way an example pushes
 
@@ -1511,6 +1665,16 @@ Parquet schema per stage (`tests/fixtures/schemas/`, re-captured by
 against small Parquet files written in the test — locally, so the counts,
 the role split, the null handling and the byte accounting are checked without a
 network. Those tests need DuckDB, which `[dev]` installs.
+
+`contaminate` is covered the same two ways. `tests/test_benchmarks.py` pins the
+probe: the window is cut from the middle, its regex survives a re-wrapped or
+re-cased copy and nothing else, a short item is not probed, and the items are
+fetched one page per page. `tests/test_contamination.py` runs the many-probe
+query against a local DPO-shaped Parquet file — a question in a prompt, its
+answer in a chosen completion, another item re-cased in a rejected one — and
+checks that every hit lands on its own probe and its own side, that splitting
+the alternation into many regexes finds the same rows as one, and that the
+roll-up to items keeps "read" and "produced" apart.
 
 The site's search index is tested where it can silently lose a match:
 `tests/test_searchindex.py` builds a small index and asserts that a query
