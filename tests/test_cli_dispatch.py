@@ -32,6 +32,7 @@ COMMANDS = [
     ("lookup", "cmd_lookup", ["lookup", "a phrase"]),
     ("case-study", "cmd_case_study", ["case-study"]),
     ("classify", "cmd_classify", ["classify", "olmo-3-7b-instruct"]),
+    ("steps", "cmd_steps", ["steps", "pythia-12b-deduped", "a string"]),
     ("bif", "cmd_bif", ["bif", "pythia-12b-deduped", "some text the model said"]),
 ]
 

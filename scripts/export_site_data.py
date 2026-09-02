@@ -51,8 +51,10 @@ BULK = (".context.json", ".docs.json")
 # fetches.
 #
 # `.bif-` is a per-target file like a budget rather than a per-stage one, and
-# `report` is the only thing that reads it.
-UNRENDERED = (".grep-", ".search-", ".bif-")
+# `report` is the only thing that reads it. `.steps-` is a per-training-step
+# count over Pythia's published batch order; the page has no card for it yet
+# either.
+UNRENDERED = (".grep-", ".search-", ".bif-", ".steps-")
 
 out = ROOT / "docs" / "data"
 out.mkdir(parents=True, exist_ok=True)

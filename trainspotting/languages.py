@@ -68,7 +68,14 @@ def _ident():
     if _identifier is None:
         from py3langid.langid import MODEL_FILE, LanguageIdentifier
 
-        _identifier = LanguageIdentifier.from_pickled_model(MODEL_FILE, norm_probs=True)
+        # py3langid 0.4 dropped the pickled model and, with it,
+        # `from_pickled_model`; the loader is `from_model_file` and the packaged
+        # model is an `.npz.xz`. Both versions hand `norm_probs` through to the
+        # same constructor, so the only thing that differs is the loader's
+        # name. Pick whichever this install has rather than pin the dependency:
+        # a 0.3 install keeps working, and 0.4 is what a fresh install gets.
+        load = getattr(LanguageIdentifier, "from_model_file", None) or LanguageIdentifier.from_pickled_model
+        _identifier = load(MODEL_FILE, norm_probs=True)
     return _identifier
 
 

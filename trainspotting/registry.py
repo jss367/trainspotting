@@ -225,6 +225,36 @@ PILE_COMPOSITION = [
 # token budget over this same corpus in this same order — the point of the suite.
 PYTHIA_TOKENS = 143_000 * 1024 * 2048
 
+# The steps EleutherAI saved a checkpoint at: zero, every power of two to 512,
+# then every thousand. 154 in all, the same list for every size, and the axis
+# every developmental study of these models is drawn on.
+PYTHIA_CHECKPOINTS = [0] + [2**i for i in range(10)] + list(range(1000, 143_001, 1000))
+
+# Where the training order is published, and how to address a step in it.
+#
+# `EleutherAI/pile-deduped-pythia-preshuffled` is the deduplicated Pile as
+# GPT-NeoX tokenized and shuffled it, stored as one stream of uint16 token ids
+# split into 30 GB shards (the `-of-00020` in the filenames counts from zero, so
+# there are 21). Its `document.idx` says every entry is 2,049 tokens, and the
+# Pythia paper says every step is 1,024 of them, so step s starts at byte
+# s × 1024 × 2049 × 2. `steps.check_layout` insists these constants close over
+# the shard sizes before a byte is read. The corpus size is the paper's ~207B
+# figure, only used to say roughly where the run starts re-reading documents.
+PYTHIA_TRAINING_ORDER = {
+    "dataset": "EleutherAI/pile-deduped-pythia-preshuffled",
+    "file": "document-{shard:05d}-of-00020.bin",
+    "shards": 21,
+    "shard_bytes": 30_000_000_000,
+    "last_shard_bytes": 78_336_000,
+    "dtype_bytes": 2,
+    "sequence_tokens": 2049,
+    "sequences_per_step": 1024,
+    "steps": 143_000,
+    "corpus_tokens": 207_000_000_000,
+    "tokenizer": "EleutherAI/pythia-12b-deduped",
+    "checkpoints": PYTHIA_CHECKPOINTS,
+}
+
 PYTHIA_DEDUPED_STAGES = [
     {
         "stage": "pretrain",
@@ -260,6 +290,8 @@ PYTHIA_DEDUPED_STAGES = [
             "did not remove them evenly, so these are the shares of the corpus "
             "this one was derived from, not of the corpus sampled below."
         ),
+        # The one stage in the registry whose order is public. `steps` reads it.
+        "training_order": PYTHIA_TRAINING_ORDER,
         "hf_dataset": None,
     },
 ]
@@ -487,3 +519,17 @@ def sample_route(stage: dict) -> str:
     caveat rather than the one that silently samples 5 GB of a 450 GB corpus.
     """
     return stage.get("sample_via", "shards")
+
+
+def training_order(target: dict) -> tuple[dict, dict] | None:
+    """The stage whose batches are published in training order, and how to read them.
+
+    None for every target but Pythia. Ai2 releases Dolma 3 as a corpus, not as
+    the sequence of batches a run took through it, so for Olmo "when did the
+    model see this" has no data behind it and `steps` says so instead of
+    sampling the corpus and calling the result an order.
+    """
+    for s in target["stages"]:
+        if s.get("training_order"):
+            return s, s["training_order"]
+    return None
