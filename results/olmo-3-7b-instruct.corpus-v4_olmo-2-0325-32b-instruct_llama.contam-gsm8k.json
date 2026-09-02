@@ -2,7 +2,7 @@
   "stage": "corpus",
   "index": "v4_olmo-2-0325-32b-instruct_llama",
   "covers": "OLMo 2 32B full training data: olmo-mix-1124 pretraining + Dolmino midtraining + Tulu 3 post-training (~4.6T tokens)",
-  "caveat": "The public infini-gram API has no Dolma 3 / OLMo 3 index, so this count is over a different corpus than the one this tool samples \u2014 the closest available, not the one the registered models were trained on.",
+  "caveat": "This index covers OLMo 2 32B full training data: olmo-mix-1124 pretraining + Dolmino midtraining + Tulu 3 post-training (~4.6T tokens). olmo-3-7b-instruct was not trained on it, so a count here says whether the string is in that corpus, not whether this model saw it.",
   "benchmark": {
     "id": "gsm8k",
     "name": "GSM8K",
@@ -5636,5 +5636,7 @@
     "question_produced": [],
     "answer_produced": [],
     "answer_rejected": []
-  }
+  },
+  "items_unresolved": [],
+  "errors": []
 }
