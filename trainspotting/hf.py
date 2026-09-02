@@ -113,6 +113,23 @@ def _get(path: str, server_error_retries: int = 6, **params) -> dict:
     r.raise_for_status()
 
 
+def rows_page(
+    dataset: str, offset: int, length: int, config: str = "default", split: str = "train"
+) -> dict:
+    """One page of the split, as the /rows endpoint returns it.
+
+    The sampler above draws random ten-row pages because it wants rows spread
+    over a mix it cannot afford to read; a benchmark test set is small enough to
+    address row by row, and `contamination.sample_items` picks its indices first
+    and then fetches the pages that hold them. Rows come back with `row_idx`,
+    which is what a caller matches its picks against, and `truncated_cells`,
+    which says whether a cell arrived whole.
+    """
+    return _get(
+        "rows", dataset=dataset, config=config, split=split, offset=offset, length=length
+    )
+
+
 def dataset_info(dataset: str, config: str = "default") -> dict:
     j = _get("info", dataset=dataset)
     return j["dataset_info"][config]

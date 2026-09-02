@@ -9,9 +9,11 @@ from pathlib import Path
 
 from . import (
     behavior,
+    benchmarks,
     budget,
     casestudy,
     classify,
+    contamination,
     context,
     extract,
     grep,
@@ -2455,6 +2457,197 @@ def cmd_case_study(args):
     print(f"-> {path}", file=sys.stderr)
 
 
+def _contam_probes(spec, items, words):
+    """One probe per probable part of each item, and why the rest were not.
+
+    A part the server cut is not probed: the window would be cut from a
+    fragment, and might land on the cut itself. A part too short for a window is
+    not probed either. Both are counted so the summary can say how many items
+    the check actually reached.
+    """
+    probes, skipped = [], {"truncated": 0, "short": 0}
+    for it in items:
+        for part in benchmarks.parts(spec):
+            if spec[part] in it["truncated"]:
+                skipped["truncated"] += 1
+                continue
+            text = benchmarks.item_text(spec, it["row"], part)
+            pr = benchmarks.probe(text or "", words)
+            if pr is None:
+                skipped["short"] += 1
+                continue
+            probes.append({"id": len(probes), "item": it["index"], "part": part, **pr})
+    return probes, skipped
+
+
+def cmd_contaminate(args):
+    """Is a benchmark's test set in the training data, where, and on which side?
+
+    Every layer this needs already exists: `grep` reads every row of a mix and
+    keeps the sides apart, `lookup` counts an exact string in a corpus index, and
+    `benchmarks` says which text is the question and which the answer. What this
+    adds is the join — one read per mix for all the probes, and the hits handed
+    back to the items they came from.
+    """
+    spec = benchmarks.resolve(args.benchmark)
+    target = registry.resolve(args.target)
+    total = benchmarks.total_items(spec)
+    indices = benchmarks.pick_indices(total, args.items, args.seed)
+    items = benchmarks.fetch_items(spec, indices)
+    bench_revision = hf.dataset_revision(spec["hf_dataset"])
+    probes, skipped = _contam_probes(spec, items, args.words)
+    probed_items = sorted({p["item"] for p in probes})
+    n_q = sum(1 for p in probes if p["part"] == "question")
+    n_a = len(probes) - n_q
+    print(
+        f"# contaminate {spec['name']} ({spec['hf_dataset']} {spec['config']}/{spec['split']}) "
+        f"on {args.target}\n"
+        f"# {len(items):,} of {total:,} items"
+        + (f" (seed {args.seed})" if len(items) < total else "")
+        + f", {args.words}-word probes: {n_q} question, {n_a} answer"
+        + (f"; {skipped['short']} part(s) too short to probe" if skipped["short"] else "")
+        + (f"; {skipped['truncated']} cut by the server" if skipped["truncated"] else "")
+        + "\n",
+        file=sys.stderr,
+    )
+    if not probes:
+        sys.exit("nothing to probe")
+
+    bench = {
+        "id": spec["id"], "name": spec["name"], "hf_dataset": spec["hf_dataset"],
+        "config": spec["config"], "split": spec["split"], "revision": bench_revision,
+        "total_items": total, "question_field": spec["question"],
+        "answer_field": spec.get("answer"),
+    }
+    common = {
+        "benchmark": bench,
+        "items_requested": args.items,
+        "seed": args.seed,
+        "words": args.words,
+        "items_probed": probed_items,
+        "skipped": skipped,
+        "case_sensitive": args.case_sensitive,
+        "probes": probes,
+    }
+
+    # --- the post-training mixes, every row -------------------------------
+    stages = registry.post_training_stages(target)
+    if args.stage:
+        stages = [s for s in stages if s["stage"] == args.stage]
+        if not stages:
+            sys.exit(f"no post-training stage {args.stage!r} for {args.target}")
+    unscanned = [
+        s["stage"] for s in registry.post_training_stages(target)
+        if s not in stages
+    ]
+    stage_runs = []
+    if stages and not args.corpus_only:
+        con = grep.connect()
+        args.by = None
+        plan = _grep_plan(con, args, stages)
+        total_bytes = sum(p["bytes"] for p in plan)
+        print(f"# {len(plan)} stage(s), {_fmt_bytes(total_bytes)} to read", file=sys.stderr)
+        for p in plan:
+            print(
+                f"- {p['stage']['stage']:6s} {p['rows']:>9,} rows  {_fmt_bytes(p['bytes']):>9}"
+                f"  {'/'.join(p['exprs'])}  ({p['stage']['hf_dataset']})",
+                file=sys.stderr,
+            )
+        cap = int(args.max_gb * 1e9)
+        if total_bytes > cap and not args.yes:
+            sys.exit(
+                f"\nthat is {_fmt_bytes(total_bytes)}, over the {args.max_gb} GB cap, and nothing has "
+                f"been read yet. Narrow it (--stage, --field) or allow it (--max-gb "
+                f"{total_bytes / 1e9:.1f}, or --yes)."
+            )
+        for p in plan:
+            s = p["stage"]
+            if p["listing"]["partial"]:
+                print(f"\n{s['stage']}: WARNING — the server converted only part of this repo, "
+                      "so every count below is a floor", file=sys.stderr)
+            if p["unsearched"]:
+                print(f"\n{s['stage']}: not searched: {', '.join(p['unsearched'])}", file=sys.stderr)
+            print(f"\nscanning {s['stage']} ({_fmt_bytes(p['bytes'])}) ...", file=sys.stderr)
+            result = contamination.scan(
+                con, grep.read_parquet_sql(p["listing"]["urls"]), p["exprs"], p["source"],
+                probes, case_sensitive=args.case_sensitive, examples=args.examples,
+            )
+            hit = contamination.items_hit(probes, result["probe_hits"])
+            totals = (
+                grep.source_totals(con, grep.read_parquet_sql(p["listing"]["urls"]), p["source"])
+                if p["source"] else {}
+            )
+            payload = {
+                "dataset": s["hf_dataset"],
+                "stage": s["stage"],
+                **common,
+                "has_answer_probes": n_a > 0,
+                "fields": list(p["exprs"]),
+                "available_fields": p["available"],
+                "source_column": p["source_column"],
+                **_stamp(s["hf_dataset"], revision=p["revision"]),
+                "parquet_revision": p["listing"]["revision"],
+                "partial": p["listing"]["partial"],
+                "shards": len(p["listing"]["urls"]),
+                "bytes_read": p["bytes"],
+                "unsearched_columns": p["unsearched"],
+                "total_rows": p["rows"],
+                "rows_by_source": totals,
+                "items": hit,
+                **result,
+            }
+            path = _write_json(
+                RESULTS / f"{args.target}.{s['stage']}.contam-{spec['id']}.json", payload
+            )
+            stage_runs.append(payload)
+            print(f"{s['stage']}: {len(hit['any'])}/{len(probed_items)} items seen, "
+                  f"{result['matched']:,} rows  -> {path}", file=sys.stderr)
+            for src, n in list(result["by_source"].items())[:8]:
+                of = totals.get(src)
+                rate = f" = {n / of * 100:5.2f}% of it" if of else ""
+                print(f"  {n:>7,} / {of or p['rows']:>9,}{rate}  {src}", file=sys.stderr)
+    elif not stages:
+        print(f"{args.target} has no post-training stages to scan", file=sys.stderr)
+
+    # --- the corpus, by exact string ---------------------------------------
+    corpus_run = None
+    index = args.index or registry.infinigram_index(target)
+    if index and not args.no_corpus:
+        caveat = infinigram.caveat_for(index)
+        print(f"\ncounting {len(probes)} probes in {index} ...", file=sys.stderr)
+        counts = []
+        for i, p in enumerate(probes, 1):
+            try:
+                c = lookup.count(index, p["literal"])
+            except lookup.LookupError_ as e:
+                counts.append({"probe": p["id"], "occurrences": 0, "approx": False, "error": str(e)})
+                continue
+            counts.append({"probe": p["id"], "occurrences": c["occurrences"], "approx": c["approx"]})
+            print(f"\r  {i}/{len(probes)}", end="", file=sys.stderr, flush=True)
+        print(file=sys.stderr)
+        # A corpus has one side. The exact-string count stands in for `rows`, and
+        # `items_hit` reads any hit as `any`; the side keys stay empty because a
+        # corpus document is neither a prompt nor a response.
+        hits = [{"probe": c["probe"], "group": "document", "rows": c["occurrences"]}
+                for c in counts if c["occurrences"]]
+        corpus_run = {
+            "stage": "corpus",
+            "index": index,
+            "covers": infinigram.INDEXES.get(index),
+            "caveat": caveat,
+            **common,
+            **_stamp(),
+            "counts": counts,
+            "items": contamination.items_hit(probes, hits),
+        }
+        path = _write_json(RESULTS / f"{args.target}.corpus.contam-{spec['id']}.json", corpus_run)
+        print(f"  -> {path}", file=sys.stderr)
+
+    print(file=sys.stderr)
+    for line in contamination.summary(stage_runs, corpus_run, unscanned):
+        print(line, file=sys.stderr)
+
+
 def main():
     ap = argparse.ArgumentParser(prog="trainspotting")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -2644,6 +2837,36 @@ def main():
     p.add_argument("--yes", action="store_true", help="scan whatever it costs")
     p.add_argument("--slug", help="short name for the result files (default: derived from the pattern)")
     p.set_defaults(fn=cmd_grep)
+
+    p = sub.add_parser(
+        "contaminate",
+        help="is a benchmark's test set in the training data — which stage, which side",
+    )
+    p.add_argument("target", help=TARGET_HELP)
+    p.add_argument("benchmark", help="one of: " + ", ".join(sorted(benchmarks.BENCHMARKS)))
+    p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
+    p.add_argument("--items", type=_positive_int, default=200,
+                   help="test items to probe; a seeded draw when the set is larger")
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--words", type=_positive_int, default=benchmarks.WORDS,
+                   help="consecutive words per probe, cut from the middle of the item")
+    p.add_argument(
+        "--field",
+        action="append",
+        choices=list(grep.GROUPS),
+        help="which part of the example to search; repeatable, default every side",
+    )
+    p.add_argument("--case-sensitive", action="store_true")
+    p.add_argument("--examples", type=_nonnegative_int, default=20,
+                   help="matching snippets to keep per stage; 0 counts without keeping any")
+    p.add_argument("--max-gb", type=float, default=5.0,
+                   help="refuse to read more than this over the network; the plan is printed either way")
+    p.add_argument("--yes", action="store_true", help="scan whatever it costs")
+    p.add_argument("--index", help="infini-gram index for the corpus side (default: the "
+                   "registry's closest index for the model)")
+    p.add_argument("--no-corpus", action="store_true", help="skip the corpus side")
+    p.add_argument("--corpus-only", action="store_true", help="skip the post-training scans")
+    p.set_defaults(fn=cmd_contaminate)
 
     p = sub.add_parser("classify")
     p.add_argument("target", help=TARGET_HELP)

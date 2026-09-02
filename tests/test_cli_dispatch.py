@@ -32,6 +32,7 @@ COMMANDS = [
     ("lookup", "cmd_lookup", ["lookup", "a phrase"]),
     ("case-study", "cmd_case_study", ["case-study"]),
     ("classify", "cmd_classify", ["classify", "olmo-3-7b-instruct"]),
+    ("contaminate", "cmd_contaminate", ["contaminate", "olmo-3-7b-instruct", "gsm8k"]),
 ]
 
 

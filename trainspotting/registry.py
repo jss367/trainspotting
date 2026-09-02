@@ -357,8 +357,29 @@ MODELS = {
     "pythia-12b-deduped": {
         "hf_model": "EleutherAI/pythia-12b-deduped",
         "stages": PYTHIA_DEDUPED_STAGES,
+        # The one registered model whose pretraining corpus has a public
+        # infini-gram index. See `infinigram_index`.
+        "infinigram_index": "v4_piletrain_llama",
     },
 }
+
+# The infini-gram index that stands closest to a model's pretraining corpus, for
+# a command that has to pick one without being told. No public index covers
+# Dolma 3, so every OLMo 3 model falls back to the OLMo 2 index — a different
+# corpus, and `infinigram.caveat_for` says so on every run that uses it. A model
+# whose entry names its own index (Pythia) gets that instead.
+FALLBACK_INFINIGRAM_INDEX = "v4_olmo-2-0325-32b-instruct_llama"
+
+
+def infinigram_index(target: dict) -> str | None:
+    """The corpus index to search for a target, or None for a dataset.
+
+    A dataset has no pretraining behind it, so there is nothing to search: a
+    count over some corpus would describe a model nobody named.
+    """
+    if not target.get("is_model"):
+        return None
+    return target.get("infinigram_index", FALLBACK_INFINIGRAM_INDEX)
 
 # The shape of the training example a prompt was drawn from. It decides what
 # `context` stores behind the prompt and whether `classify` may read a label off
