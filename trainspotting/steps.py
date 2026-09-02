@@ -198,22 +198,37 @@ def count_step(step: int, texts: list[str], rx: re.Pattern, examples: list, limi
     return {"step": step, "sequences": len(texts), "matched": matched, "occurrences": occurrences}
 
 
-def scan(order, steps_, revision, rx, decode, examples_limit=20, progress=None, workers=WORKERS):
+def scan(
+    order,
+    steps_,
+    revision,
+    rx,
+    decode,
+    examples_limit=20,
+    progress=None,
+    workers=WORKERS,
+    priority_steps=(),
+):
     """Fetch, decode and count each step, in training order.
 
     Fetches overlap; decoding and counting run in order on the main thread so
     `per_step` comes back sorted and the progress line reads as a walk through
     the run.
     """
-    per_step, examples = [], []
+    per_step, ordinary_examples, priority_examples = [], [], []
+    priority_steps = set(priority_steps)
     with ThreadPoolExecutor(max_workers=workers) as pool:
         fetched = pool.map(lambda s: fetch_step(order, s, revision), steps_)
         for i, (step, tokens) in enumerate(zip(steps_, fetched), 1):
             texts = decode(sequences(tokens, order))
+            examples = priority_examples if step in priority_steps else ordinary_examples
             per_step.append(count_step(step, texts, rx, examples, examples_limit))
             if progress:
                 progress(i, len(steps_), step)
-    return per_step, examples
+    # An exact step is requested for inspection, so its evidence gets first use
+    # of the same bounded result budget even when it sorts after sampled steps.
+    # Each temporary list is itself capped, keeping memory bounded as well.
+    return per_step, (priority_examples + ordinary_examples)[:examples_limit]
 
 
 def _records(per_step: list[dict]) -> list[dict]:

@@ -1165,7 +1165,14 @@ def cmd_steps(args):
         print(f"\r  step {step:>7,}  ({i}/{n})   ", end="", file=sys.stderr, flush=True)
 
     per_step, examples = steps.scan(
-        order, picks, revision, rx, decode, examples_limit=args.examples, progress=progress
+        order,
+        picks,
+        revision,
+        rx,
+        decode,
+        examples_limit=args.examples,
+        progress=progress,
+        priority_steps=args.at or (),
     )
     print(file=sys.stderr)
 

@@ -235,6 +235,30 @@ def test_the_scan_walks_steps_in_order_with_a_fake_fetch(monkeypatch):
     assert ex[0]["step"] == 900
 
 
+def test_an_explicit_step_gets_the_bounded_example_slot_first(monkeypatch):
+    order = {**ORDER, "sequence_tokens": 2, "sequences_per_step": 1}
+    monkeypatch.setattr(
+        steps,
+        "fetch_step",
+        lambda o, step, rev: array.array("H", [step, 0]),
+    )
+    decode = lambda seqs: [f"needle at step {seqs[0][0]}"]  # noqa: E731
+
+    _, examples = steps.scan(
+        order,
+        [1, 10],
+        "rev",
+        re.compile("needle"),
+        decode,
+        examples_limit=1,
+        workers=1,
+        priority_steps=[10],
+    )
+
+    assert len(examples) == 1
+    assert examples[0]["step"] == 10
+
+
 def test_explicit_steps_are_read_but_do_not_enter_population_estimates(
     monkeypatch, tmp_path
 ):
