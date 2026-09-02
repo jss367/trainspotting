@@ -344,26 +344,52 @@ def items_hit(probes: list[dict], probe_hits: list[dict]) -> dict:
     return {k: sorted(v) for k, v in out.items()}
 
 
-def corpus_items(probes: list[dict], counts: list[dict]) -> dict:
+def _settle(probes: list[dict], items: dict, unsettled: set[int]) -> dict:
+    """The rollup with the items the check did not finish kept out of the rate.
+
+    Which items the rate is over: an item is settled *present* once any of its
+    probes hit, however the others fared — a hit is a hit. It is settled
+    *absent* only when every part of it was probed and every probe came back
+    empty. An item in `unsettled` — one with a probe the index never answered,
+    or a part the server cut before it could be probed — and no hit is neither,
+    and is listed in `items_unresolved` rather than counted on either side of
+    the rate, so "we did not finish looking" is never read as "it is not
+    there". `items_probed` is the settled items, and is what `summary` divides by.
+    """
+    seen = set(items["any"])
+    unresolved = sorted(unsettled - seen)
+    probed = sorted({p["item"] for p in probes} - set(unresolved))
+    return {"items": items, "items_probed": probed, "items_unresolved": unresolved}
+
+
+def stage_items(probes: list[dict], probe_hits: list[dict], cut: list[int] = ()) -> dict:
+    """Roll a stage scan's probe hits up to items, with the items the server
+    cut a part from kept out of the denominator unless they hit.
+
+    Reading every row answers every probe, so a stage scan has no unanswered
+    probe. What it can have is a part that was never probed, because the
+    datasets server truncated the cell it would have been cut from. The item's
+    other parts were searched and a hit on them stands; a miss on them is not
+    a miss on the item, since the cut part may be the one that was copied.
+    `cut` is those items, by index.
+    """
+    return _settle(probes, items_hit(probes, probe_hits), set(cut))
+
+
+def corpus_items(probes: list[dict], counts: list[dict], cut: list[int] = ()) -> dict:
     """Roll the corpus counts up to items, with the probes the index never
     answered kept out of every denominator.
 
     A count carrying an `error` is a probe that was not counted — the query was
     rejected or the API stopped answering — and it is not a zero. A stage scan
     has no such case, since reading every row answers every probe; the corpus
-    side is one request per probe and any of them can fail.
+    side is one request per probe and any of them can fail. `cut` is the items
+    the server truncated a part of, and is unsettled here for the same reason
+    it is in `stage_items`.
 
     A corpus has one side, so the exact-string count stands in for `rows` and
     `items_hit` reads every hit as `any`; the side keys stay empty because a
     corpus document is neither a prompt nor a response.
-
-    Which items the rate is over: an item is settled *present* once any of its
-    probes hit, however the others fared — a hit is a hit. It is settled *absent*
-    only when every one of its probes came back with a count of zero. An item
-    with an unanswered probe and no hit is neither, and is listed in
-    `items_unresolved` rather than counted on either side of the rate, so
-    "we did not finish looking" is never read as "it is not there".
-    `items_probed` is the settled items, and is what `summary` divides by.
     """
     by_id = {p["id"]: p for p in probes}
     errors = [c["probe"] for c in counts if c.get("error")]
@@ -371,23 +397,40 @@ def corpus_items(probes: list[dict], counts: list[dict]) -> dict:
         {"probe": c["probe"], "group": "document", "rows": c["occurrences"]}
         for c in counts if not c.get("error") and c["occurrences"]
     ]
-    items = items_hit(probes, hits)
-    seen = set(items["any"])
-    unresolved = sorted({by_id[pid]["item"] for pid in errors} - seen)
-    probed = sorted({p["item"] for p in probes} - set(unresolved))
-    return {
-        "items": items,
-        "items_probed": probed,
-        "items_unresolved": unresolved,
-        "errors": errors,
-    }
+    unsettled = {by_id[pid]["item"] for pid in errors} | set(cut)
+    return {**_settle(probes, items_hit(probes, hits), unsettled), "errors": errors}
 
 
-def _rate(k: int, n: int) -> str:
+def _rate(k: int, n: int, census: bool = False, floor: bool = False) -> str:
+    """The share, with an interval only where an interval means something.
+
+    The Wilson interval is a sampling interval over the benchmark. Two cases
+    have no sampling to put one on. A census — every item of the split settled
+    — is the benchmark's share exactly, not an estimate of it. A partial
+    conversion is the other way: the rows the server never converted were
+    never read, so a miss is not a known miss and the share is a floor with no
+    upper side to state.
+    """
     if not n:
         return "—"
+    out = f"{k}/{n} = {k / n * 100:.1f}%"
+    if floor:
+        return f"≥ {out}" + (" (every item)" if census else "")
+    if census:
+        return f"{out} (every item)"
     lo, hi = wilson(k, n)
-    return f"{k}/{n} = {k / n * 100:.1f}% (95% CI {lo * 100:.1f}–{hi * 100:.1f}%)"
+    return f"{out} (95% CI {lo * 100:.1f}–{hi * 100:.1f}%)"
+
+
+def _census(r: dict) -> bool:
+    """Was every item of the split settled — a census rather than a draw.
+
+    `total_items` is the split's size; `items_probed` is the settled items,
+    with anything unresolved or never probed already left out, so equality is
+    the whole benchmark answered.
+    """
+    total = (r.get("benchmark") or {}).get("total_items")
+    return bool(total) and len(r["items_probed"]) == total
 
 
 def summary(stage_runs: list[dict], corpus_run: dict | None, unscanned: list[str]) -> list[str]:
@@ -396,14 +439,17 @@ def summary(stage_runs: list[dict], corpus_run: dict | None, unscanned: list[str
     The interval is over the benchmark: the items were a draw from the test set,
     so the share found is an estimate of the share of the whole benchmark that
     is present. It is *not* an interval over the mix — every row of that was
-    read, and the row counts are exact.
+    read, and the row counts are exact. When the draw was the whole split the
+    share is exact and no interval is printed; when the conversion was partial
+    the share is a floor and no interval is printed either — see `_rate`.
     """
     lines = []
     for r in stage_runs:
         probed = r["items_probed"]
         n = len(probed)
         hit = r["items"]
-        parts = [f"{r['stage']:6s} items seen {_rate(len(hit['any']), n)}"]
+        rate = _rate(len(hit["any"]), n, census=_census(r), floor=bool(r.get("partial")))
+        parts = [f"{r['stage']:6s} items seen {rate}"]
 
         # A claim about a side that --field left out of the read is not a zero.
         # `fields` is what this run read and `available_fields` what the mix
@@ -433,25 +479,34 @@ def summary(stage_runs: list[dict], corpus_run: dict | None, unscanned: list[str
             f"  rows: {r['matched']:,} of {r['total_rows']:,}"
             + ("  (partial conversion — a floor)" if r.get("partial") else "")
         )
+        # An item the server cut a part from, with no hit on the rest, was not
+        # fully searched; it is out of the rate, and the line says so, or the
+        # denominator reads as every item the run reached.
+        if r.get("items_unresolved"):
+            parts.append(
+                f"  {len(r['items_unresolved'])} item(s) with a part cut by the server and "
+                "no hit — unresolved, out of the rate"
+            )
         lines.extend(parts)
     for s in unscanned:
         lines.append(f"{s:6s} not scanned — not a zero")
     if corpus_run is not None:
         n = len(corpus_run["items_probed"])
         hit = corpus_run["items"]
-        lines.append(
-            f"corpus items seen {_rate(len(hit['any']), n)}  in {corpus_run['index']}"
-        )
+        rate = _rate(len(hit["any"]), n, census=_census(corpus_run))
+        lines.append(f"corpus items seen {rate}  in {corpus_run['index']}")
         # A probe the index never answered is not in `occurrences` and its item
         # is not in the rate; say so, or a count over the rest reads as complete.
+        # The same for an item the server cut a part from.
         counted = [c for c in corpus_run["counts"] if not c.get("error")]
         errored = len(corpus_run["counts"]) - len(counted)
         if errored:
-            unresolved = corpus_run.get("items_unresolved", [])
+            lines.append(f"  {errored} probe(s) could not be counted — not zeros")
+        unresolved = corpus_run.get("items_unresolved", [])
+        if unresolved:
             lines.append(
-                f"  {errored} probe(s) could not be counted — not zeros"
-                + (f"; {len(unresolved)} item(s) left unresolved and out of the rate"
-                   if unresolved else "")
+                f"  {len(unresolved)} item(s) with a probe not counted or a part cut by the "
+                "server, and no hit — unresolved, out of the rate"
             )
         occ = sum(c["occurrences"] for c in counted)
         lines.append(f"  occurrences over all probes: {occ:,}"

@@ -995,7 +995,11 @@ statement about what Ai2 put in front of the model.
 **The interval is over the benchmark.** The items are a seeded draw from the
 test set (all of it when `--items` covers the set), so the share found estimates
 the share of the whole benchmark that is present, with a Wilson interval. The row
-counts are exact: every row of the mix was read.
+counts are exact: every row of the mix was read. When the draw is the whole split
+there is nothing to estimate — the share is the benchmark's, printed as
+`k/n = x% (every item)` with no interval. When the server converted only part of
+a mix, a miss is not a known miss, so the share is printed as a floor, `≥ k/n`,
+with no interval either.
 
 Two result files per run. `results/<target>.<stage>.contam-<slug>.json`, where
 the slug is the benchmark id at the default settings and `<benchmark>-<hash>` of

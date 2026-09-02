@@ -2658,12 +2658,18 @@ def _contam_probes(spec, items, words):
     fragment, and might land on the cut itself. A part too short for a window is
     not probed either. Both are counted so the summary can say how many items
     the check actually reached.
+
+    The items with a cut part come back as well, by index. Their other parts
+    are still probed and a hit on one stands, but a miss on them is not a miss
+    on the item — the cut part may be the one that was copied — so the rollups
+    keep such an item out of the denominator unless it hit.
     """
-    probes, skipped = [], {"truncated": 0, "short": 0}
+    probes, skipped, cut = [], {"truncated": 0, "short": 0}, set()
     for it in items:
         for part in benchmarks.parts(spec):
             if benchmarks.column(spec, part) in it["truncated"]:
                 skipped["truncated"] += 1
+                cut.add(it["index"])
                 continue
             text = benchmarks.item_text(spec, it["row"], part)
             pr = benchmarks.probe(text or "", words)
@@ -2671,7 +2677,7 @@ def _contam_probes(spec, items, words):
                 skipped["short"] += 1
                 continue
             probes.append({"id": len(probes), "item": it["index"], "part": part, **pr})
-    return probes, skipped
+    return probes, skipped, sorted(cut)
 
 
 # The settings that decide what a contamination run measures, at their defaults.
@@ -2819,8 +2825,7 @@ def cmd_contaminate(args):
             f"{bench_moved[:7]} while its rows were fetched; the items may straddle both trees",
             file=sys.stderr,
         )
-    probes, skipped = _contam_probes(spec, items, args.words)
-    probed_items = sorted({p["item"] for p in probes})
+    probes, skipped, cut = _contam_probes(spec, items, args.words)
     n_q = sum(1 for p in probes if p["part"] == "question")
     n_c = sum(1 for p in probes if p["part"] == "choices")
     n_a = len(probes) - n_q - n_c
@@ -2864,7 +2869,10 @@ def cmd_contaminate(args):
         # stage's mix let the scan read. Together with the keys above this is
         # every setting the slug hashes, so a file can say why it has its name.
         "fields_requested": settings["field"],
-        "items_probed": probed_items,
+        # Which items the rate is over is each side's own: `items_probed` and
+        # `items_unresolved` come from its rollup, which settles the items in
+        # `items_cut` — a part cut by the server — only when they hit.
+        "items_cut": cut,
         "skipped": skipped,
         "case_sensitive": args.case_sensitive,
         "probes": probes,
@@ -2909,7 +2917,8 @@ def cmd_contaminate(args):
                 con, grep.read_parquet_sql(p["listing"]["urls"]), p["exprs"], p["source"],
                 probes, case_sensitive=args.case_sensitive, examples=args.examples,
             )
-            hit = contamination.items_hit(probes, result["probe_hits"])
+            rollup = contamination.stage_items(probes, result["probe_hits"], cut)
+            hit = rollup["items"]
             totals = (
                 grep.source_totals(con, grep.read_parquet_sql(p["listing"]["urls"]), p["source"])
                 if p["source"] else {}
@@ -2930,14 +2939,14 @@ def cmd_contaminate(args):
                 "unsearched_columns": p["unsearched"],
                 "total_rows": p["rows"],
                 "rows_by_source": totals,
-                "items": hit,
+                **rollup,
                 **result,
             }
             path = _write_json(
                 RESULTS / f"{args.target}.{s['stage']}.contam-{slug}.json", payload
             )
             stage_runs.append(payload)
-            print(f"{s['stage']}: {len(hit['any'])}/{len(probed_items)} items seen, "
+            print(f"{s['stage']}: {len(hit['any'])}/{len(rollup['items_probed'])} items seen, "
                   f"{result['matched']:,} rows  -> {path}", file=sys.stderr)
             for src, n in list(result["by_source"].items())[:8]:
                 of = totals.get(src)
@@ -2970,13 +2979,13 @@ def cmd_contaminate(args):
                                "approx": c["approx"]})
             print(f"\r  {i}/{len(probes)}", end="", file=sys.stderr, flush=True)
         print(file=sys.stderr)
-        rollup = contamination.corpus_items(probes, counts)
+        rollup = contamination.corpus_items(probes, counts, cut)
         if rollup["errors"]:
             print(f"  {len(rollup['errors'])} probe(s) could not be counted — not zeros",
                   file=sys.stderr)
-        # `items_probed` here is the corpus's own — the items it settled — and
-        # deliberately overrides the benchmark-wide list in `common`, which a
-        # stage scan can use as-is because reading every row answers every probe.
+        # `items_probed` here is the corpus's own — the items it settled. An
+        # unanswered probe unsettles an item here where a stage scan, reading
+        # every row, has none; a cut part unsettles it on both sides.
         corpus_run = {
             "stage": "corpus",
             "index": index,

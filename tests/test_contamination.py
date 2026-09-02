@@ -363,12 +363,105 @@ def test_summary_says_how_many_probes_were_not_counted():
     text = "\n".join(contamination.summary([], corpus, []))
     # Over the two settled items, not three; the unanswered probes named, not summed.
     assert "corpus items seen 1/2 = 50.0%" in text
-    assert "2 probe(s) could not be counted — not zeros; 1 item(s) left unresolved" in text
+    assert "2 probe(s) could not be counted — not zeros" in text
+    assert ("1 item(s) with a probe not counted or a part cut by the server, and no hit"
+            " — unresolved, out of the rate") in text
     assert "occurrences over all probes: 3" in text
     # And no such line when everything was counted.
     clean = {"index": "v4_piletrain_llama", "items_probed": [0], "items": {"any": []},
              "counts": [{"occurrences": 0, "approx": False}]}
     assert "could not be counted" not in "\n".join(contamination.summary([], clean, []))
+
+
+def test_an_item_with_a_part_the_server_cut_is_settled_only_by_a_hit():
+    """Item 0 has both parts probed and its question hits: present. Item 1 had
+    a part cut and its remaining probe missed: not a clean miss — the cut part
+    may be the copy — so unresolved, out of the rate. Item 3, cut but hit on
+    what was left: present, a hit is a hit. Both rollups apply the same rule."""
+    probes = PROBES + [_probe(4, 3, "question", SHIFT_A)]
+    hits = [{"probe": 0, "group": "prompt", "rows": 1}, {"probe": 4, "group": "prompt", "rows": 1}]
+    stage = contamination.stage_items(probes, hits, cut=[1, 3])
+    assert stage["items"]["any"] == [0, 3]
+    assert stage["items_probed"] == [0, 2, 3]
+    assert stage["items_unresolved"] == [1]
+    # Without the cut list the rollup is the plain one: item 1 is settled absent.
+    plain = contamination.stage_items(probes, hits)
+    assert plain["items_probed"] == [0, 1, 2, 3] and plain["items_unresolved"] == []
+    # An item every part of which was cut has no probe, and is unresolved too.
+    assert contamination.stage_items(probes, hits, cut=[9])["items_unresolved"] == [9]
+
+    counts = [{"probe": p["id"], "occurrences": 1 if p["id"] in (0, 4) else 0, "approx": False}
+              for p in probes]
+    corpus = contamination.corpus_items(probes, counts, cut=[1, 3])
+    assert corpus["items_probed"] == [0, 2, 3] and corpus["items_unresolved"] == [1]
+    assert corpus["errors"] == []
+
+
+def test_the_probe_cutter_names_the_items_with_a_cut_part():
+    from trainspotting import cli
+
+    spec = {"question": "q", "choices": None, "answer": "a"}
+    items = [
+        {"index": 0, "row": {"q": Q0, "a": A0}, "truncated": []},
+        {"index": 1, "row": {"q": Q1, "a": "cut"}, "truncated": ["a"]},
+        {"index": 2, "row": {"q": "cut", "a": "cut"}, "truncated": ["q", "a"]},
+        {"index": 3, "row": {"q": Q2, "a": "too short"}, "truncated": []},
+    ]
+    probes, skipped, cut = cli._contam_probes(spec, items, 8)
+    assert [(p["item"], p["part"]) for p in probes] == [
+        (0, "question"), (0, "answer"), (1, "question"), (3, "question"),
+    ]
+    assert skipped == {"truncated": 3, "short": 1}
+    # Item 3's short answer is not a cut: a short part is a known miss.
+    assert cut == [1, 2]
+
+
+def test_summary_says_how_many_items_a_cut_part_left_unresolved():
+    def run(unresolved):
+        return {
+            "stage": "sft", "items_probed": [0, 2], "items_unresolved": unresolved,
+            "has_answer_probes": False,
+            "items": {"any": [0], "question_read": [0], "question_produced": [],
+                      "answer_produced": [], "answer_rejected": []},
+            "matched": 1, "total_rows": 10, "partial": False,
+        }
+
+    text = "\n".join(contamination.summary([run([1])], None, []))
+    assert "sft    items seen 1/2 = 50.0%" in text
+    assert "1 item(s) with a part cut by the server and no hit — unresolved, out of the rate" in text
+    assert "unresolved" not in "\n".join(contamination.summary([run([])], None, []))
+
+
+def test_summary_prints_no_interval_for_a_census_or_a_partial_scan():
+    """A Wilson interval is a sampling interval over the benchmark. When every
+    item of the split was settled there was no sampling, and the share is
+    exact. When the conversion was partial a miss is not a known miss, so the
+    share is a floor with no upper side to state."""
+    def run(probed, total, partial=False):
+        return {
+            "stage": "sft", "items_probed": probed, "has_answer_probes": False,
+            "benchmark": {"total_items": total},
+            "items": {"any": [0], "question_read": [0], "question_produced": [],
+                      "answer_produced": [], "answer_rejected": []},
+            "matched": 1, "total_rows": 10, "partial": partial,
+        }
+
+    sampled = "\n".join(contamination.summary([run([0, 1, 2], 164)], None, []))
+    assert "sft    items seen 1/3 = 33.3% (95% CI" in sampled
+    census = "\n".join(contamination.summary([run([0, 1, 2], 3)], None, []))
+    assert "sft    items seen 1/3 = 33.3% (every item)" in census and "CI" not in census
+    # One item unresolved out of three is not a census, however it got there.
+    assert "(every item)" not in "\n".join(contamination.summary([run([0, 1], 3)], None, []))
+    partial = "\n".join(contamination.summary([run([0, 1, 2], 164, partial=True)], None, []))
+    assert "sft    items seen ≥ 1/3 = 33.3%" in partial and "CI" not in partial
+    assert "(partial conversion — a floor)" in partial
+    both = "\n".join(contamination.summary([run([0, 1, 2], 3, partial=True)], None, []))
+    assert "items seen ≥ 1/3 = 33.3% (every item)" in both
+    # The corpus line follows the census rule too.
+    corpus = {"index": "v4_x", "items_probed": [0, 1, 2], "items": {"any": [0, 1]},
+              "benchmark": {"total_items": 3}, "counts": [{"occurrences": 3, "approx": False}]}
+    text = "\n".join(contamination.summary([], corpus, []))
+    assert "corpus items seen 2/3 = 66.7% (every item)" in text and "CI" not in text
 
 
 def test_summary_calls_a_side_that_field_left_out_unsearched():
