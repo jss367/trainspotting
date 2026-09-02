@@ -1,6 +1,6 @@
 {
   "slug": "as-an-ai-language-model-developed-by-openai-my-knowledge-cut-db01dc89",
-  "generated": "2026-09-02T22:40:21+00:00",
+  "generated": "2026-09-02T23:08:40+00:00",
   "dropped": 0,
   "target": "pythia-12b-deduped",
   "model": "EleutherAI/pythia-70m-deduped",
@@ -26,6 +26,7 @@
     "stage": null
   },
   "candidates": 200,
+  "localized_on": 200,
   "skipped": {},
   "llc": {
     "per_chain": [
@@ -44,6 +45,7 @@
     ]
   },
   "baseline_cov": 0.015873319041080726,
+  "partial_control": "leave-one-out",
   "query_loss": {
     "at_origin": 5.716480731964111,
     "posterior_mean": 6.184649493694305,
@@ -56,12 +58,12 @@
       "n": 200,
       "mean_cov": 0.01587331904108072,
       "mean_corr": 0.5950860471626266,
-      "mean_partial": -1.0837024230466245e-18,
-      "toward": 93,
+      "mean_partial": 4.316069453286188e-06,
+      "toward": 94,
       "best": {
         "id": "row-130440228",
         "row": 130440228,
-        "partial": 0.0020964640173788407
+        "partial": 0.0023282935005517853
       }
     }
   ],
@@ -73,12 +75,12 @@
       "n": 200,
       "mean_cov": 0.01587331904108072,
       "mean_corr": 0.5950860471626266,
-      "mean_partial": -1.0837024230466245e-18,
-      "toward": 93,
+      "mean_partial": 4.316069453286188e-06,
+      "toward": 94,
       "best": {
         "id": "row-130440228",
         "row": 130440228,
-        "partial": 0.0020964640173788407
+        "partial": 0.0023282935005517853
       }
     }
   ],
@@ -428,8 +430,9 @@
       "cov": 0.017152903472291085,
       "cov_stderr": 0.008366295471147825,
       "corr": 0.5959984110080343,
-      "partial": 0.00015043719535147074,
-      "partial_stderr": 0.0003962221990564191,
+      "partial": 0.00015569103446361952,
+      "partial_stderr": 0.0004000128911410938,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0015782116206607497,
         0.03079016892489144,
@@ -438,7 +441,7 @@
       ],
       "snippet": "Mat\u00e9ria atualizada 21/05/19 `as 11:56h.\n\nDenunciado numa mat\u00e9ria da VICE em mar\u00e7o, Dom Vilson de Oliveira renunciou nest",
       "above_baseline": 0.0012795844312103594,
-      "rank": 60
+      "rank": 59
     },
     {
       "stage": "pretrain",
@@ -455,8 +458,9 @@
       "cov": 0.012234136586218233,
       "cov_stderr": 0.005445852816291655,
       "corr": 0.5792593024441064,
-      "partial": -0.0002866930548262232,
-      "partial_stderr": 0.00010821896037969253,
+      "partial": -0.00028589986548178584,
+      "partial_stderr": 0.00010843112160385233,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002192847870061814,
         0.020081164967906445,
@@ -482,8 +486,9 @@
       "cov": 0.013783249958363785,
       "cov_stderr": 0.006637629781519761,
       "corr": 0.5850506158952907,
-      "partial": 9.323366145327767e-05,
-      "partial_stderr": 0.00024854838607407014,
+      "partial": 9.844727986476189e-05,
+      "partial_stderr": 0.0002535557351478775,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0019425275297373446,
         0.02283595256546414,
@@ -509,8 +514,9 @@
       "cov": 0.014465784401670805,
       "cov_stderr": 0.006063813586532078,
       "corr": 0.6660079196572078,
-      "partial": 0.0007557214092861392,
-      "partial_stderr": 0.000576823159588757,
+      "partial": 0.0007608654247660759,
+      "partial_stderr": 0.0005788887135506653,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.004360032751897552,
         0.021298038378792534,
@@ -536,8 +542,9 @@
       "cov": 0.011641587813164609,
       "cov_stderr": 0.0047463850148298245,
       "corr": 0.5912372778386195,
-      "partial": -7.04475374579126e-05,
-      "partial_stderr": 0.0004945149667452281,
+      "partial": -6.689945581359222e-05,
+      "partial_stderr": 0.0004952735827099186,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0028722279806733695,
         0.022692330110926195,
@@ -546,7 +553,7 @@
       ],
       "snippet": "Q:\n\nAdd a Personal Package Archive (PPA)\n\nI cann't Add a Personal Package Archive (PPA) to Software Sources\nwhen I write",
       "above_baseline": -0.004231731227916117,
-      "rank": 111
+      "rank": 110
     },
     {
       "stage": "pretrain",
@@ -563,8 +570,9 @@
       "cov": 0.015728373309906375,
       "cov_stderr": 0.008629482098009556,
       "corr": 0.5643936819285673,
-      "partial": -0.00017635974081336864,
-      "partial_stderr": 0.0002598190253503818,
+      "partial": -0.0001680650484728069,
+      "partial_stderr": 0.0002609620163174703,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0027760005276206362,
         0.014944589725602782,
@@ -590,8 +598,9 @@
       "cov": 0.014873912041901463,
       "cov_stderr": 0.007276337566589292,
       "corr": 0.5714995352353074,
-      "partial": -0.0003943493032469286,
-      "partial_stderr": 0.00021813427017671356,
+      "partial": -0.00039414269071567725,
+      "partial_stderr": 0.00022039193904203715,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0017366748309220383,
         0.023704657800576207,
@@ -617,8 +626,9 @@
       "cov": 0.010972896215343588,
       "cov_stderr": 0.004759423991455586,
       "corr": 0.6621741576453162,
-      "partial": 0.000527070507877388,
-      "partial_stderr": 0.0003256514616372851,
+      "partial": 0.0005301045470984018,
+      "partial_stderr": 0.0003263456191104087,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003029054640049435,
         0.016286084247113423,
@@ -644,8 +654,9 @@
       "cov": 0.015185263283660516,
       "cov_stderr": 0.006959793791140126,
       "corr": 0.5954213149210247,
-      "partial": -0.00010602824255789586,
-      "partial_stderr": 0.0003852481261786416,
+      "partial": -0.00010506033546126863,
+      "partial_stderr": 0.0003871939346546604,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003274982851281311,
         0.0308996946216339,
@@ -654,7 +665,7 @@
       ],
       "snippet": "An artist's impression of the sky rail at Murrumbeena station.\n\nAmbitious building projects invariably impact people liv",
       "above_baseline": -0.0006880557574202098,
-      "rank": 120
+      "rank": 121
     },
     {
       "stage": "pretrain",
@@ -671,8 +682,9 @@
       "cov": 0.011018950119798093,
       "cov_stderr": 0.00549086589397837,
       "corr": 0.5758614229712774,
-      "partial": 0.0002776719726498397,
-      "partial_stderr": 0.000382250167703035,
+      "partial": 0.00028315339016078125,
+      "partial_stderr": 0.0003862488496019518,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0019441841803929493,
         0.022945615600311796,
@@ -698,8 +710,9 @@
       "cov": 0.016142661415602118,
       "cov_stderr": 0.007554847051846361,
       "corr": 0.5916517093946434,
-      "partial": -0.00033904204194757384,
-      "partial_stderr": 0.0004631516892446032,
+      "partial": -0.0003408156689647008,
+      "partial_stderr": 0.0004669055676746937,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0018980079438557823,
         0.0238588448381066,
@@ -725,8 +738,9 @@
       "cov": 0.01746423418372093,
       "cov_stderr": 0.00811083490027717,
       "corr": 0.6304933589067193,
-      "partial": 0.0003802257489668974,
-      "partial_stderr": 0.00029961708182543853,
+      "partial": 0.00038424472346522263,
+      "partial_stderr": 0.0003008496552234053,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003227833617675469,
         0.026738930423904003,
@@ -752,8 +766,9 @@
       "cov": 0.013362786171608127,
       "cov_stderr": 0.005940062861194941,
       "corr": 0.5902255592192562,
-      "partial": -0.0001916195954020745,
-      "partial_stderr": 0.00033235215069914235,
+      "partial": -0.00018958476210078116,
+      "partial_stderr": 0.00033236649809058186,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0032087730472308068,
         0.017391053506478057,
@@ -762,7 +777,7 @@
       ],
       "snippet": "General Topics Polonia Sp. z o.o., jobs\n\nGeneral Topics Polonia Sp. z o.o., jobs- reviews and comments on the forum. Chc",
       "above_baseline": -0.002510532869472599,
-      "rank": 142
+      "rank": 143
     },
     {
       "stage": "pretrain",
@@ -779,8 +794,9 @@
       "cov": 0.04785555608913712,
       "cov_stderr": 0.020602009599036564,
       "corr": 0.5894894119806356,
-      "partial": 0.0020964640173788407,
-      "partial_stderr": 0.0008516085228211208,
+      "partial": 0.0023282935005517853,
+      "partial_stderr": 0.0009123952741479484,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002407065441400482,
         0.07499889313572612,
@@ -806,8 +822,9 @@
       "cov": 0.013328810556969916,
       "cov_stderr": 0.00626753028954948,
       "corr": 0.573864802341215,
-      "partial": -0.00026978123610472065,
-      "partial_stderr": 0.00026945230382292216,
+      "partial": -0.00026848448472488446,
+      "partial_stderr": 0.00027176283607497064,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0016666255317010837,
         0.02403748262370464,
@@ -833,8 +850,9 @@
       "cov": 0.01277466453779232,
       "cov_stderr": 0.007334639278212513,
       "corr": 0.5556621854491072,
-      "partial": -0.00042456342151428873,
-      "partial_stderr": 9.415368250968369e-05,
+      "partial": -0.0004234969686075768,
+      "partial_stderr": 9.551499047987484e-05,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0016949359876522977,
         0.014307336893494359,
@@ -860,8 +878,9 @@
       "cov": 0.014916679098964413,
       "cov_stderr": 0.007001530769889512,
       "corr": 0.6210951062142039,
-      "partial": 0.00015315653613189007,
-      "partial_stderr": 0.0003139160337603584,
+      "partial": 0.00015501518847757403,
+      "partial_stderr": 0.0003148516812007236,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002566320292436376,
         0.024276833704322053,
@@ -870,7 +889,7 @@
       ],
       "snippet": "Streets of Albany, New York\n\nThe streets of Albany, New York have had a long history going back almost 400 years. Many o",
       "above_baseline": -0.0009566399421163125,
-      "rank": 59
+      "rank": 60
     },
     {
       "stage": "pretrain",
@@ -887,8 +906,9 @@
       "cov": 0.014613020681198293,
       "cov_stderr": 0.00699239679060311,
       "corr": 0.5891702347808412,
-      "partial": -7.773824046125211e-05,
-      "partial_stderr": 0.00025364732452536076,
+      "partial": -7.663915770075679e-05,
+      "partial_stderr": 0.00025538471916834,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002524470637223339,
         0.022677348852479465,
@@ -897,7 +917,7 @@
       ],
       "snippet": "\n548 S.W.2d 762 (1977)\nLinda Risinger ROBINSON, Appellant,\nv.\nFrank RISINGER, Appellee.\nNo. 964.\nCourt of Civil Appeals ",
       "above_baseline": -0.0012602983598824329,
-      "rank": 115
+      "rank": 116
     },
     {
       "stage": "pretrain",
@@ -914,8 +934,9 @@
       "cov": 0.015145258828416764,
       "cov_stderr": 0.007185107187530053,
       "corr": 0.5969043794015528,
-      "partial": -9.361444312939624e-05,
-      "partial_stderr": 0.00022063246794856744,
+      "partial": -9.071321317298935e-05,
+      "partial_stderr": 0.00022081492966533831,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0018524212055353929,
         0.02246490678030077,
@@ -941,8 +962,9 @@
       "cov": 0.011797694363228436,
       "cov_stderr": 0.005246622902694688,
       "corr": 0.5881042895182657,
-      "partial": -0.00015518357077680408,
-      "partial_stderr": 0.0002454140302642102,
+      "partial": -0.00015398765570546867,
+      "partial_stderr": 0.00024645770949457155,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0022159518424200086,
         0.021745301922742145,
@@ -951,7 +973,7 @@
       ],
       "snippet": "Shower Door Guide\n\nA quick learner from shelby nc says:\n\nSeptember 12, 2016\n\nHello,\n\nI have attached a picture of the Sh",
       "above_baseline": -0.00407562467785229,
-      "rank": 131
+      "rank": 134
     },
     {
       "stage": "pretrain",
@@ -968,8 +990,9 @@
       "cov": 0.015370502607268077,
       "cov_stderr": 0.007553252928465263,
       "corr": 0.59888550332822,
-      "partial": -0.00014783107283863694,
-      "partial_stderr": 0.0003912993103661032,
+      "partial": -0.00014486067860307376,
+      "partial_stderr": 0.00039194433730148896,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0015019707342918082,
         0.023812544305238773,
@@ -995,8 +1018,9 @@
       "cov": 0.01933354041654407,
       "cov_stderr": 0.0102106152904033,
       "corr": 0.6040973280101142,
-      "partial": 0.00015475246149163088,
-      "partial_stderr": 0.00043102863270214585,
+      "partial": 0.0001602091127524791,
+      "partial_stderr": 0.0004346122840189421,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0023432268550489656,
         0.02767815645338114,
@@ -1005,7 +1029,7 @@
       ],
       "snippet": "<!DOCTYPE html >\n<html>\n<head>\n    <link rel=\"stylesheet\" href=\"demos.css\" type=\"text/css\" media=\"screen\" />\n    \n    <s",
       "above_baseline": 0.003460221375463344,
-      "rank": 58
+      "rank": 56
     },
     {
       "stage": "pretrain",
@@ -1022,8 +1046,9 @@
       "cov": 0.01355179132533326,
       "cov_stderr": 0.006362361891799483,
       "corr": 0.5868985754190492,
-      "partial": -0.00027450148837749325,
-      "partial_stderr": 0.00041860492546297063,
+      "partial": -0.00027362502149475373,
+      "partial_stderr": 0.00042038231265376113,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0024006281743224464,
         0.022410359164967485,
@@ -1032,7 +1057,7 @@
       ],
       "snippet": "Kyrat Intl. Airport\n\nKyrat International (Intl.) Airport is a location within Kyrat in Far Cry 4. It is located at the t",
       "above_baseline": -0.002321527715747465,
-      "rank": 162
+      "rank": 161
     },
     {
       "stage": "pretrain",
@@ -1049,8 +1074,9 @@
       "cov": 0.015178799876191397,
       "cov_stderr": 0.0061718441801468585,
       "corr": 0.6497203333833104,
-      "partial": 0.0008727884207691789,
-      "partial_stderr": 0.0002944728014522843,
+      "partial": 0.0008813239569156127,
+      "partial_stderr": 0.00029505184981744277,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0036427912208775526,
         0.022712596292123542,
@@ -1076,8 +1102,9 @@
       "cov": 0.013889973268277938,
       "cov_stderr": 0.00681056868372661,
       "corr": 0.5811134834673477,
-      "partial": -0.00025648293428140565,
-      "partial_stderr": 0.00017101110038946063,
+      "partial": -0.00025635887226455696,
+      "partial_stderr": 0.00017216785090667044,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0023268740653200437,
         0.020633993408765858,
@@ -1103,8 +1130,9 @@
       "cov": 0.014056471052338372,
       "cov_stderr": 0.006656101623093088,
       "corr": 0.6216937698558165,
-      "partial": 0.0001496718111952065,
-      "partial_stderr": 0.0002205926504199465,
+      "partial": 0.00015100115635037934,
+      "partial_stderr": 0.0002213153903654616,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002566448173651816,
         0.02160350574151089,
@@ -1130,8 +1158,9 @@
       "cov": 0.018102520508572185,
       "cov_stderr": 0.008833962997130683,
       "corr": 0.6053612641517422,
-      "partial": 3.492750823843712e-05,
-      "partial_stderr": 0.0002805580997346498,
+      "partial": 3.678772988730195e-05,
+      "partial_stderr": 0.00028165966189536466,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0031951856608338856,
         0.029478976026874534,
@@ -1157,8 +1186,9 @@
       "cov": 0.013408267390161245,
       "cov_stderr": 0.006826281684892637,
       "corr": 0.5333661066925125,
-      "partial": -0.00040399000028274915,
-      "partial_stderr": 0.00042215693696850607,
+      "partial": -0.00040188752927872097,
+      "partial_stderr": 0.00042299890618951563,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0029387438821580868,
         0.022764699070639653,
@@ -1184,8 +1214,9 @@
       "cov": 0.018433514704271965,
       "cov_stderr": 0.009701927399735992,
       "corr": 0.6008783566207921,
-      "partial": 0.00012105681277276499,
-      "partial_stderr": 0.00031551772944332185,
+      "partial": 0.00012565476892866502,
+      "partial_stderr": 0.00031830085830022325,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0031163512594266653,
         0.022353628391321764,
@@ -1211,8 +1242,9 @@
       "cov": 0.018884514291289976,
       "cov_stderr": 0.010034567285134618,
       "corr": 0.5914877032350462,
-      "partial": -0.00010622705633733203,
-      "partial_stderr": 0.0003186738054922225,
+      "partial": -0.00010447852178198032,
+      "partial_stderr": 0.0003206979276095445,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002061688989460163,
         0.027467063146284273,
@@ -1221,7 +1253,7 @@
       ],
       "snippet": "Why Natchitoches?\n\nWhether for a weekend or a lifetime, you\u2019ll enjoy everything Natchitoches has to offer. The natural s",
       "above_baseline": 0.0030111952502092504,
-      "rank": 121
+      "rank": 120
     },
     {
       "stage": "pretrain",
@@ -1238,8 +1270,9 @@
       "cov": 0.01797994001304213,
       "cov_stderr": 0.008906442920335917,
       "corr": 0.5921226837029898,
-      "partial": -0.0002285944859105327,
-      "partial_stderr": 9.375052831615588e-05,
+      "partial": -0.00022849629765347404,
+      "partial_stderr": 9.491644719418332e-05,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0022703824107955825,
         0.02618768183141392,
@@ -1265,8 +1298,9 @@
       "cov": 0.01837422745044389,
       "cov_stderr": 0.008939954367715074,
       "corr": 0.5883993711832873,
-      "partial": -0.00029599427321621566,
-      "partial_stderr": 0.00014047797688460494,
+      "partial": -0.00029358342168211147,
+      "partial_stderr": 0.0001383725635245119,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003199139377013398,
         0.02870243845604955,
@@ -1292,8 +1326,9 @@
       "cov": 0.01681907842038223,
       "cov_stderr": 0.00922403614269027,
       "corr": 0.6150413660950216,
-      "partial": 1.8361571243151275e-05,
-      "partial_stderr": 0.00030236560621800637,
+      "partial": 2.197341348484947e-05,
+      "partial_stderr": 0.00030227999852186065,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002747101504866305,
         0.018644790019145967,
@@ -1319,8 +1354,9 @@
       "cov": 0.019283819826630987,
       "cov_stderr": 0.010479948560506743,
       "corr": 0.6036865942387456,
-      "partial": 9.913808521972715e-05,
-      "partial_stderr": 0.0002664813411079194,
+      "partial": 0.00010229476366501715,
+      "partial_stderr": 0.00026826861986248003,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0026255189678087393,
         0.0230893258756807,
@@ -1346,8 +1382,9 @@
       "cov": 0.010122980974621736,
       "cov_stderr": 0.0046430413532713355,
       "corr": 0.5238776300063452,
-      "partial": -0.0004200494227117347,
-      "partial_stderr": 0.0006108903397975399,
+      "partial": -0.00041627947137043404,
+      "partial_stderr": 0.0006158464378592058,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         -0.000170902191699224,
         0.018471049967822728,
@@ -1373,8 +1410,9 @@
       "cov": 0.009852712829856931,
       "cov_stderr": 0.004506015933470324,
       "corr": 0.5672886095539965,
-      "partial": 6.874361900408433e-06,
-      "partial_stderr": 0.0004845121825392405,
+      "partial": 1.1111318921427186e-05,
+      "partial_stderr": 0.00048745283350002435,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0005525097494014518,
         0.01854971352948614,
@@ -1400,8 +1438,9 @@
       "cov": 0.03162897076045035,
       "cov_stderr": 0.014888144931547396,
       "corr": 0.6215019721507035,
-      "partial": 0.0002838071439182678,
-      "partial_stderr": 0.00030338609145893835,
+      "partial": 0.00029166986542272295,
+      "partial_stderr": 0.00030436541833899985,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.004172614304505123,
         0.05279764293816597,
@@ -1427,8 +1466,9 @@
       "cov": 0.014325381304844178,
       "cov_stderr": 0.005903145693065984,
       "corr": 0.6690231499207695,
-      "partial": 0.0009196070693574154,
-      "partial_stderr": 0.0005870141569278007,
+      "partial": 0.000928875424150341,
+      "partial_stderr": 0.0005868211901934879,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003812951629946656,
         0.01806259380905458,
@@ -1454,8 +1494,9 @@
       "cov": 0.015450223128161336,
       "cov_stderr": 0.0069508448060647335,
       "corr": 0.6183397743715685,
-      "partial": 6.810510631684241e-05,
-      "partial_stderr": 0.0003291891396216996,
+      "partial": 6.980047021532638e-05,
+      "partial_stderr": 0.00033034936613710985,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0031228956876951084,
         0.022364919083745917,
@@ -1481,8 +1522,9 @@
       "cov": 0.01744504271816627,
       "cov_stderr": 0.008247917199531767,
       "corr": 0.6087546584762646,
-      "partial": 0.0002012832076917354,
-      "partial_stderr": 0.00031783199026530533,
+      "partial": 0.00020537324383271337,
+      "partial_stderr": 0.000320624696816742,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0026813940518395614,
         0.03097342541242051,
@@ -1508,8 +1550,9 @@
       "cov": 0.019766537905900914,
       "cov_stderr": 0.010692188443213586,
       "corr": 0.6042696153205169,
-      "partial": -9.76139734879455e-06,
-      "partial_stderr": 0.00021354364462946478,
+      "partial": -5.553519606504375e-06,
+      "partial_stderr": 0.0002152582272337332,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002239465127992003,
         0.022640345022918975,
@@ -1535,8 +1578,9 @@
       "cov": 0.016211317535129194,
       "cov_stderr": 0.00776347248647384,
       "corr": 0.6011401282599007,
-      "partial": 0.00010137647046701344,
-      "partial_stderr": 0.0004767213397246793,
+      "partial": 0.00010384451427110654,
+      "partial_stderr": 0.0004789583364753745,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0031663969097663084,
         0.030343825033339638,
@@ -1545,7 +1589,7 @@
       ],
       "snippet": "Background {#Sec1}\n==========\n\nIn 2006, the World Health Organization (WHO) characterized countries that did not have en",
       "above_baseline": 0.0003379984940484679,
-      "rank": 67
+      "rank": 68
     },
     {
       "stage": "pretrain",
@@ -1562,8 +1606,9 @@
       "cov": 0.013896446819318588,
       "cov_stderr": 0.006967157475805632,
       "corr": 0.5570007496643042,
-      "partial": -0.00040053769614087944,
-      "partial_stderr": 0.00047705602979940275,
+      "partial": -0.0003992597365536233,
+      "partial_stderr": 0.0004804735685853251,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.000816922445467026,
         0.02561547043866758,
@@ -1589,8 +1634,9 @@
       "cov": 0.01536242942031165,
       "cov_stderr": 0.007291983853601128,
       "corr": 0.5919574935932206,
-      "partial": -0.00016495728592584355,
-      "partial_stderr": 0.0001529849774758526,
+      "partial": -0.00016364528750572072,
+      "partial_stderr": 0.00015436895869633857,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0026471394659222823,
         0.023760585592450117,
@@ -1599,7 +1645,7 @@
       ],
       "snippet": "New computer ransomware attack needs attention\n\nSome of the companies impacted included international pharmaceutical gia",
       "above_baseline": -0.0005108896207690755,
-      "rank": 137
+      "rank": 136
     },
     {
       "stage": "pretrain",
@@ -1616,8 +1662,9 @@
       "cov": 0.01862794003455481,
       "cov_stderr": 0.009032487300620158,
       "corr": 0.602860003643666,
-      "partial": -5.536132026552032e-05,
-      "partial_stderr": 0.0001309992096725822,
+      "partial": -5.351938085667809e-05,
+      "partial_stderr": 0.00013148856536587727,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0024116047527653795,
         0.02982925474274789,
@@ -1643,8 +1690,9 @@
       "cov": 0.01954715508492625,
       "cov_stderr": 0.010440122719232156,
       "corr": 0.621560282242087,
-      "partial": 5.869479153412197e-05,
-      "partial_stderr": 0.00039002930369633237,
+      "partial": 6.136893863053934e-05,
+      "partial_stderr": 0.00039030732044568307,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0020755566281420216,
         0.027166523146912005,
@@ -1653,7 +1701,7 @@
       ],
       "snippet": "Application of universally amplifying plastid primers to environmental sampling of a stream periphyton community.\nTo dem",
       "above_baseline": 0.003673836043845524,
-      "rank": 76
+      "rank": 77
     },
     {
       "stage": "pretrain",
@@ -1670,8 +1718,9 @@
       "cov": 0.017001678723329326,
       "cov_stderr": 0.008730072478389665,
       "corr": 0.5607981143210764,
-      "partial": -0.000698481932863962,
-      "partial_stderr": 0.0004743157620506739,
+      "partial": -0.000700919447835888,
+      "partial_stderr": 0.00047754354232856046,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0008296497176108005,
         0.025846147452177504,
@@ -1697,8 +1746,9 @@
       "cov": 0.01817990705490629,
       "cov_stderr": 0.009524300983276758,
       "corr": 0.5699827901806729,
-      "partial": -0.00026904468316871406,
-      "partial_stderr": 0.0003234634086830919,
+      "partial": -0.00026650374964595346,
+      "partial_stderr": 0.0003265508612496954,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0013774240435843238,
         0.029795117294006742,
@@ -1707,7 +1757,7 @@
       ],
       "snippet": ",\n\n10.07.2018\n\nThe Assad regime is winning the war in Syria not simply by regaining territory, but also by breaking the ",
       "above_baseline": 0.002306588013825564,
-      "rank": 156
+      "rank": 157
     },
     {
       "stage": "pretrain",
@@ -1724,8 +1774,9 @@
       "cov": 0.015502978832293889,
       "cov_stderr": 0.007564968072385712,
       "corr": 0.5852529958243036,
-      "partial": -0.000270133926766408,
-      "partial_stderr": 0.0003451087484421877,
+      "partial": -0.0002694317097137806,
+      "partial_stderr": 0.00034752521452516164,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0023906248145734933,
         0.022872151467589717,
@@ -1751,8 +1802,9 @@
       "cov": 0.01480384807804885,
       "cov_stderr": 0.006778968015831784,
       "corr": 0.6158473402950218,
-      "partial": 0.00037028803952100027,
-      "partial_stderr": 0.00011785404932035605,
+      "partial": 0.000375059750428952,
+      "partial_stderr": 0.00012002522869293872,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0025316328247178715,
         0.02016207661753506,
@@ -1778,8 +1830,9 @@
       "cov": 0.016421518116735614,
       "cov_stderr": 0.00861089105015173,
       "corr": 0.5762022029561775,
-      "partial": -0.0002724331456501166,
-      "partial_stderr": 0.00019828145397172747,
+      "partial": -0.00026992584861744093,
+      "partial_stderr": 0.000199664885115784,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.001856983339814451,
         0.02459198049883016,
@@ -1805,8 +1858,9 @@
       "cov": 0.011623319575403003,
       "cov_stderr": 0.0045324508570920765,
       "corr": 0.571824592099039,
-      "partial": -0.000417217881803058,
-      "partial_stderr": 0.00040937180524288985,
+      "partial": -0.0004158192906088717,
+      "partial_stderr": 0.0004103879265709512,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002811248848895957,
         0.021177148769063025,
@@ -1832,8 +1886,9 @@
       "cov": 0.014032446905161611,
       "cov_stderr": 0.007208016806810747,
       "corr": 0.5891080779147838,
-      "partial": 0.00030606001077598403,
-      "partial_stderr": 0.0004750499299690596,
+      "partial": 0.0003164501067328024,
+      "partial_stderr": 0.00048338785759500125,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0019427231395144646,
         0.01841621175850105,
@@ -1842,7 +1897,7 @@
       ],
       "snippet": "nlp\\_architect.nn.torch.modules package\n=======================================\n\nSubmodules\n----------\n\nnlp\\_architect.n",
       "above_baseline": -0.0018408721359191148,
-      "rank": 36
+      "rank": 34
     },
     {
       "stage": "pretrain",
@@ -1859,8 +1914,9 @@
       "cov": 0.01796519481036066,
       "cov_stderr": 0.008898915684152318,
       "corr": 0.597727597254638,
-      "partial": -2.8369213829123325e-05,
-      "partial_stderr": 0.00014682823943951108,
+      "partial": -2.628522271979408e-05,
+      "partial_stderr": 0.00014799776298310356,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002652651699301532,
         0.02804884146811564,
@@ -1886,8 +1942,9 @@
       "cov": 0.017905369528995983,
       "cov_stderr": 0.008349950815067548,
       "corr": 0.5966520461205659,
-      "partial": -0.00012465962266699135,
-      "partial_stderr": 0.0002491896876895098,
+      "partial": -0.0001226415004190513,
+      "partial_stderr": 0.0002501047388354957,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0038705112319437373,
         0.030679325439080092,
@@ -1896,7 +1953,7 @@
       ],
       "snippet": "Un pav\u00e9 voire un parpaing jet\u00e9 dans la mare du march\u00e9 immobilier par l\u2019UFC Que choisir. Dans une \u00e9tude de 40 pages publi",
       "above_baseline": 0.0020320504879152573,
-      "rank": 126
+      "rank": 125
     },
     {
       "stage": "pretrain",
@@ -1913,8 +1970,9 @@
       "cov": 0.027159189659319773,
       "cov_stderr": 0.014377730562479372,
       "corr": 0.6219727512033555,
-      "partial": 0.00027943198275042375,
-      "partial_stderr": 0.0004508734705309797,
+      "partial": 0.0002872359727342134,
+      "partial_stderr": 0.00045377650634854466,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002844776142720684,
         0.03536949272410866,
@@ -1923,7 +1981,7 @@
       ],
       "snippet": "Q:\n\nxmr-stak-cpu as a service on ubuntu\n\nI'm running Ubuntu 14.04. And I need to run xmr-stak-cpu as a service.\nI tried ",
       "above_baseline": 0.011285870618239047,
-      "rank": 40
+      "rank": 39
     },
     {
       "stage": "pretrain",
@@ -1940,8 +1998,9 @@
       "cov": 0.009499772303987958,
       "cov_stderr": 0.003920169865307295,
       "corr": 0.6103700462052355,
-      "partial": 0.0001556265271215544,
-      "partial_stderr": 0.00023650901745731433,
+      "partial": 0.00015795799062571586,
+      "partial_stderr": 0.00023727204635170916,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.001780427571972041,
         0.014370356595539398,
@@ -1950,7 +2009,7 @@
       ],
       "snippet": "Q:\n\nIf and only if criterion for something to be a differential ideal\n\nLet $I \\subset \\Omega^*(M)$ be a ($2$-sided) idea",
       "above_baseline": -0.006373546737092768,
-      "rank": 57
+      "rank": 58
     },
     {
       "stage": "pretrain",
@@ -1967,8 +2026,9 @@
       "cov": 0.014679464621282329,
       "cov_stderr": 0.006882056465909543,
       "corr": 0.5799708749937327,
-      "partial": -0.00035322894610965023,
-      "partial_stderr": 0.00015336105898999998,
+      "partial": -0.00035373127781624053,
+      "partial_stderr": 0.0001547472816747175,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0020418206463009934,
         0.02518725027714836,
@@ -1994,8 +2054,9 @@
       "cov": 0.01829024104412532,
       "cov_stderr": 0.008247923646661232,
       "corr": 0.6031817409178426,
-      "partial": -6.852185551703068e-05,
-      "partial_stderr": 3.1677064747645717e-05,
+      "partial": -6.751554429043563e-05,
+      "partial_stderr": 3.170981264405548e-05,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0030133618265053425,
         0.02881206864775213,
@@ -2004,7 +2065,7 @@
       ],
       "snippet": "A fluorescence correlation spectroscopy study of ligand interaction with cytokinin-specific binding protein from mung be",
       "above_baseline": 0.0024169220030445943,
-      "rank": 110
+      "rank": 111
     },
     {
       "stage": "pretrain",
@@ -2021,8 +2082,9 @@
       "cov": 0.02170049801068833,
       "cov_stderr": 0.010592333583820472,
       "corr": 0.606916082659625,
-      "partial": -5.6781897048427467e-05,
-      "partial_stderr": 0.00023889333139580485,
+      "partial": -5.3624243612643743e-05,
+      "partial_stderr": 0.00023940707157976544,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0023853521093516066,
         0.03267459307046247,
@@ -2048,8 +2110,9 @@
       "cov": 0.013669419737803128,
       "cov_stderr": 0.0061000943489358025,
       "corr": 0.6202948718474949,
-      "partial": 0.00031052849528702317,
-      "partial_stderr": 0.00022355874699311494,
+      "partial": 0.00031549674514445803,
+      "partial_stderr": 0.00022388440679083245,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0018155004630198163,
         0.02468418552022863,
@@ -2058,7 +2121,7 @@
       ],
       "snippet": "<?php\n\nnamespace Admin\\Requests;\n\nuse System\\Classes\\FormRequest;\n\nclass Allergen extends FormRequest\n{\n    public funct",
       "above_baseline": -0.002203899303277598,
-      "rank": 35
+      "rank": 36
     },
     {
       "stage": "pretrain",
@@ -2075,8 +2138,9 @@
       "cov": 0.013768285919925813,
       "cov_stderr": 0.0065417074082870985,
       "corr": 0.5897869587103767,
-      "partial": -6.145456829112192e-05,
-      "partial_stderr": 0.00019193895219490065,
+      "partial": -5.935380183531143e-05,
+      "partial_stderr": 0.0001937867347122889,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0016044834848660228,
         0.023054126465910846,
@@ -2102,8 +2166,9 @@
       "cov": 0.02021604446211205,
       "cov_stderr": 0.00996797602475175,
       "corr": 0.5955719614341409,
-      "partial": -7.088334326565672e-05,
-      "partial_stderr": 0.00036116415976558073,
+      "partial": -6.864074487457e-05,
+      "partial_stderr": 0.00036362318436349613,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0015940199866712192,
         0.03134481270071737,
@@ -2129,8 +2194,9 @@
       "cov": 0.016160793081314,
       "cov_stderr": 0.008502716790272457,
       "corr": 0.5799240098945143,
-      "partial": -0.0003500063483986089,
-      "partial_stderr": 0.00024138540026558437,
+      "partial": -0.00035049304356573506,
+      "partial_stderr": 0.0002428242334959338,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0019217158021876458,
         0.02207578102489606,
@@ -2156,8 +2222,9 @@
       "cov": 0.013788620583560259,
       "cov_stderr": 0.005929773795582926,
       "corr": 0.6460183271621734,
-      "partial": 0.0006774709094146507,
-      "partial_stderr": 0.00014761366773179423,
+      "partial": 0.0006832802085134044,
+      "partial_stderr": 0.0001475292348220873,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003121766868586201,
         0.023992500664120963,
@@ -2183,8 +2250,9 @@
       "cov": 0.012867657975205487,
       "cov_stderr": 0.005726145853928796,
       "corr": 0.623568690205374,
-      "partial": 0.00014051636024321783,
-      "partial_stderr": 0.0003586242810076257,
+      "partial": 0.00014287719279181915,
+      "partial_stderr": 0.0003593352154462907,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0029238402019834664,
         0.024091893003622772,
@@ -2210,8 +2278,9 @@
       "cov": 0.013383356709246425,
       "cov_stderr": 0.00647165574949488,
       "corr": 0.5988673235273874,
-      "partial": 2.7937958500002672e-05,
-      "partial_stderr": 0.000251309450386252,
+      "partial": 2.968490217928999e-05,
+      "partial_stderr": 0.0002528664742194133,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002247054982029431,
         0.01941589170169027,
@@ -2237,8 +2306,9 @@
       "cov": 0.014634938762252568,
       "cov_stderr": 0.006973309714352764,
       "corr": 0.572897534936472,
-      "partial": -0.00024952050031824087,
-      "partial_stderr": 0.00027392615813259596,
+      "partial": -0.0002443507518158596,
+      "partial_stderr": 0.00027499485702726933,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0012930717250545056,
         0.023894985368348352,
@@ -2247,7 +2317,7 @@
       ],
       "snippet": "Known as the Herb of Gladness for its exhilarating effect. Try adding chopped young leaves and flowers to salads or summ",
       "above_baseline": -0.0012383802788281575,
-      "rank": 150
+      "rank": 149
     },
     {
       "stage": "pretrain",
@@ -2264,8 +2334,9 @@
       "cov": 0.014505657351762785,
       "cov_stderr": 0.0069292448379976645,
       "corr": 0.5704427720042319,
-      "partial": -0.0002692582749905075,
-      "partial_stderr": 0.00043910341971401613,
+      "partial": -0.0002643484732525133,
+      "partial_stderr": 0.0004416509472794284,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0009265062548820426,
         0.022742956175929613,
@@ -2274,7 +2345,7 @@
       ],
       "snippet": "He was a close friend and business partner of Prescott Bush. Mallon attended Yale University where he and Bush both beca",
       "above_baseline": -0.0013676616893179405,
-      "rank": 157
+      "rank": 156
     },
     {
       "stage": "pretrain",
@@ -2291,8 +2362,9 @@
       "cov": 0.010385397429370141,
       "cov_stderr": 0.004747815596775836,
       "corr": 0.5732030755862304,
-      "partial": 0.00043775486699165165,
-      "partial_stderr": 0.0004650861375748037,
+      "partial": 0.00044839999220764063,
+      "partial_stderr": 0.00046359175850286573,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003580968219913484,
         0.023861784250157142,
@@ -2318,8 +2390,9 @@
       "cov": 0.015959681276225365,
       "cov_stderr": 0.008233531751648097,
       "corr": 0.5752227542889872,
-      "partial": -0.00030419351433630794,
-      "partial_stderr": 0.0002388086283478963,
+      "partial": -0.0003033263553507161,
+      "partial_stderr": 0.00024129892390615517,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.001820394432073226,
         0.024276149833613817,
@@ -2345,8 +2418,9 @@
       "cov": 0.01587396701593202,
       "cov_stderr": 0.007665180683808809,
       "corr": 0.5832227729373982,
-      "partial": -0.00044124179131383053,
-      "partial_stderr": 0.0003468922595466798,
+      "partial": -0.00044158820828066434,
+      "partial_stderr": 0.0003482409314236459,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0021372798176702416,
         0.03009120426502368,
@@ -2372,8 +2446,9 @@
       "cov": 0.0138753282524425,
       "cov_stderr": 0.006891471840509442,
       "corr": 0.5912101782712975,
-      "partial": -6.19649711166265e-05,
-      "partial_stderr": 0.00012056818138592226,
+      "partial": -6.001092423355105e-05,
+      "partial_stderr": 0.00012144752320886155,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0029398238345670503,
         0.016882836775815487,
@@ -2399,8 +2474,9 @@
       "cov": 0.011715538417175616,
       "cov_stderr": 0.0058647133780203135,
       "corr": 0.5826514409663589,
-      "partial": 1.3789809334016647e-06,
-      "partial_stderr": 0.0001763890959139944,
+      "partial": 3.939316364046423e-06,
+      "partial_stderr": 0.00017771933255247255,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.001119796220409353,
         0.024560372955696675,
@@ -2426,8 +2502,9 @@
       "cov": 0.015202413571734054,
       "cov_stderr": 0.007417547538619361,
       "corr": 0.5710897638122218,
-      "partial": -0.0006128134678310326,
-      "partial_stderr": 0.000552317514411795,
+      "partial": -0.0006142328602640357,
+      "partial_stderr": 0.0005555096782312496,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0006575378156457648,
         0.025296302143443247,
@@ -2453,8 +2530,9 @@
       "cov": 0.017182670755122035,
       "cov_stderr": 0.008706592022766307,
       "corr": 0.6298851716328405,
-      "partial": 0.0004300557511781154,
-      "partial_stderr": 0.00035698999953926125,
+      "partial": 0.000433479540031767,
+      "partial_stderr": 0.0003586433757974318,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003540818962565208,
         0.02181988990714617,
@@ -2480,8 +2558,9 @@
       "cov": 0.01438827438321739,
       "cov_stderr": 0.006988331155115376,
       "corr": 0.574453440324314,
-      "partial": -0.00018079218500437116,
-      "partial_stderr": 0.000355532734601718,
+      "partial": -0.000179518963794819,
+      "partial_stderr": 0.00035793660862969,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002218655159907303,
         0.027367779828798303,
@@ -2507,8 +2586,9 @@
       "cov": 0.01101711439271586,
       "cov_stderr": 0.004409541305981094,
       "corr": 0.5855819237972876,
-      "partial": 0.0005523106800661621,
-      "partial_stderr": 0.00042196170537054745,
+      "partial": 0.0005663796311753126,
+      "partial_stderr": 0.00042054123795393756,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0015319748649943448,
         0.017906321281266357,
@@ -2534,8 +2614,9 @@
       "cov": 0.014346054016054178,
       "cov_stderr": 0.005893796220178805,
       "corr": 0.596935149741368,
-      "partial": 3.864017446281521e-06,
-      "partial_stderr": 0.00018784123281272424,
+      "partial": 7.299198270064184e-06,
+      "partial_stderr": 0.00018930034150755197,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0030300399166319036,
         0.024147835071497138,
@@ -2561,8 +2642,9 @@
       "cov": 0.01644661044432346,
       "cov_stderr": 0.009199870847838205,
       "corr": 0.5917027160375173,
-      "partial": -0.0001266806724752626,
-      "partial_stderr": 0.0002760516441573644,
+      "partial": -0.00012386253524257756,
+      "partial_stderr": 0.0002789804285802178,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0021606829780760565,
         0.0192358365091829,
@@ -2588,8 +2670,9 @@
       "cov": 0.014402012065620693,
       "cov_stderr": 0.008476453661453675,
       "corr": 0.4749383156538035,
-      "partial": -0.000559112859629696,
-      "partial_stderr": 0.00047103171691585357,
+      "partial": -0.0005531683356919726,
+      "partial_stderr": 0.0004755714338830815,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0005759606378070203,
         0.02265910755003133,
@@ -2615,8 +2698,9 @@
       "cov": 0.01686857281129603,
       "cov_stderr": 0.007801233575713405,
       "corr": 0.5986846455931137,
-      "partial": -0.0002562223876821021,
-      "partial_stderr": 0.00026592324473034324,
+      "partial": -0.0002549485436414996,
+      "partial_stderr": 0.00026604761605644164,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002386598802878234,
         0.032199759699673994,
@@ -2642,8 +2726,9 @@
       "cov": 0.01891790876903434,
       "cov_stderr": 0.009197556515755058,
       "corr": 0.6043826040934751,
-      "partial": 0.00013314002887308599,
-      "partial_stderr": 0.0003083563110158582,
+      "partial": 0.0001363551802982888,
+      "partial_stderr": 0.0003116920759663988,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002078914800825032,
         0.036645676184265265,
@@ -2669,8 +2754,9 @@
       "cov": 0.01571190324623143,
       "cov_stderr": 0.00734323781912534,
       "corr": 0.6165053902678697,
-      "partial": 0.00024097950558325175,
-      "partial_stderr": 0.0004385527762388841,
+      "partial": 0.000244163252516864,
+      "partial_stderr": 0.00044051166511494314,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003987787089662516,
         0.022364117318414718,
@@ -2679,7 +2765,7 @@
       ],
       "snippet": "Corn Removal Surgery Video\n\nCorns on the feet can be uncomfortable and downright painful. See a five-minute procedure th",
       "above_baseline": -0.00016141579484929558,
-      "rank": 44
+      "rank": 45
     },
     {
       "stage": "pretrain",
@@ -2696,8 +2782,9 @@
       "cov": 0.014086798649427771,
       "cov_stderr": 0.006438725376471476,
       "corr": 0.6048027282329517,
-      "partial": -4.718096019864787e-05,
-      "partial_stderr": 0.00041744998842637544,
+      "partial": -4.649160657098051e-05,
+      "partial_stderr": 0.0004192412342260713,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002952927811026757,
         0.025333317381304003,
@@ -2706,7 +2793,7 @@
       ],
       "snippet": "Tory high command rallies to defend welfare changes\n\nShare via\n\nSenior figures from across the Conservative Party rallie",
       "above_baseline": -0.0017865203916529546,
-      "rank": 102
+      "rank": 103
     },
     {
       "stage": "pretrain",
@@ -2723,8 +2810,9 @@
       "cov": 0.015313935928834859,
       "cov_stderr": 0.006804027146503095,
       "corr": 0.6819805959177233,
-      "partial": 0.0008681357163524273,
-      "partial_stderr": 0.0004428154505007233,
+      "partial": 0.000874030122015036,
+      "partial_stderr": 0.0004445995864247191,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0029709061669416312,
         0.026993708646560206,
@@ -2750,8 +2838,9 @@
       "cov": 0.012070415252160774,
       "cov_stderr": 0.006192966276541881,
       "corr": 0.6187252826065511,
-      "partial": 3.9406952935433005e-05,
-      "partial_stderr": 0.00023983275785920946,
+      "partial": 4.055412497277206e-05,
+      "partial_stderr": 0.00024040670421402542,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0013703735270157267,
         0.01650165055599282,
@@ -2777,8 +2866,9 @@
       "cov": 0.017768489729069768,
       "cov_stderr": 0.009210351944626258,
       "corr": 0.5862065424189447,
-      "partial": -0.0002579322519456941,
-      "partial_stderr": 0.00021159506248981275,
+      "partial": -0.00025691198437331677,
+      "partial_stderr": 0.00021267394188510485,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0025716092144068624,
         0.024190806603288637,
@@ -2804,8 +2894,9 @@
       "cov": 0.018842681375430242,
       "cov_stderr": 0.009142665295613422,
       "corr": 0.5842688887174327,
-      "partial": -0.0004138382031489621,
-      "partial_stderr": 0.0003001641837420534,
+      "partial": -0.0004124115857455536,
+      "partial_stderr": 0.0003007924072241754,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002855336356783391,
         0.03685273731488523,
@@ -2831,8 +2922,9 @@
       "cov": 0.013615926795324595,
       "cov_stderr": 0.006687210140140855,
       "corr": 0.5974156298097874,
-      "partial": 0.00011439758808280798,
-      "partial_stderr": 0.0002617181907763102,
+      "partial": 0.00011660672125379364,
+      "partial_stderr": 0.0002637456754492405,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.001952654534688918,
         0.022154529345436096,
@@ -2858,8 +2950,9 @@
       "cov": 0.01975595069095498,
       "cov_stderr": 0.010075650144538534,
       "corr": 0.6157175550069073,
-      "partial": 0.0001564040964691956,
-      "partial_stderr": 0.000359237295658634,
+      "partial": 0.00015949823731894585,
+      "partial_stderr": 0.0003618367730304241,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002306600837147016,
         0.03050940407945782,
@@ -2868,7 +2961,7 @@
       ],
       "snippet": "\"Sun dreams of money. Moon dreams of scientific discoveries. When their paths cross with Team Skull, both their plans go",
       "above_baseline": 0.0038826316498742526,
-      "rank": 56
+      "rank": 57
     },
     {
       "stage": "pretrain",
@@ -2885,8 +2978,9 @@
       "cov": 0.014380094162007025,
       "cov_stderr": 0.0067855190962720965,
       "corr": 0.5711931937583481,
-      "partial": -0.000605497812278858,
-      "partial_stderr": 0.0005189515952891252,
+      "partial": -0.0006057639575244081,
+      "partial_stderr": 0.0005207282671899278,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0008534658135595235,
         0.025247275851706944,
@@ -2912,8 +3006,9 @@
       "cov": 0.022801633148208295,
       "cov_stderr": 0.010700748845743896,
       "corr": 0.6249410325745204,
-      "partial": 0.00048500290976794674,
-      "partial_stderr": 0.00026990560815157643,
+      "partial": 0.0004930326062188773,
+      "partial_stderr": 0.0002714007866086914,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0033176034067448202,
         0.037962637525289396,
@@ -2939,8 +3034,9 @@
       "cov": 0.020091930391707386,
       "cov_stderr": 0.009122004604802855,
       "corr": 0.622377995946548,
-      "partial": 0.00034851624241371784,
-      "partial_stderr": 0.0005846068719432125,
+      "partial": 0.00035373995429275825,
+      "partial_stderr": 0.0005879659121704495,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.004812012999755188,
         0.031169324767334455,
@@ -2949,7 +3045,7 @@
       ],
       "snippet": "Dallas\n\nAo chegar aos Estados Unidos nesta quarta-feira (15) Jair Bolsonaro afirmou que as manifesta\u00e7\u00f5es que est\u00e3o ocorr",
       "above_baseline": 0.00421861135062666,
-      "rank": 29
+      "rank": 28
     },
     {
       "stage": "pretrain",
@@ -2966,8 +3062,9 @@
       "cov": 0.016727089252720553,
       "cov_stderr": 0.010826712612795983,
       "corr": 0.5472295090530653,
-      "partial": 0.0001007922665934728,
-      "partial_stderr": 0.00042105873395631633,
+      "partial": 0.00010731867165049883,
+      "partial_stderr": 0.0004221370524620499,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0034309247475454415,
         0.015158696415109807,
@@ -2976,7 +3073,7 @@
       ],
       "snippet": "import { UnionsOverlap } from '../union/UnionsOverlap';\n\n/**\n * Check if an object type has a certain key.\n * Will not l",
       "above_baseline": 0.0008537702116398274,
-      "rank": 69
+      "rank": 67
     },
     {
       "stage": "pretrain",
@@ -2993,8 +3090,9 @@
       "cov": 0.015818912801083423,
       "cov_stderr": 0.009467428042274519,
       "corr": 0.5889819440882514,
-      "partial": 5.302414216511097e-05,
-      "partial_stderr": 0.00017355673290195386,
+      "partial": 5.9008413627992996e-05,
+      "partial_stderr": 0.0001765376453852983,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0015764222098009215,
         0.015665749576742202,
@@ -3020,8 +3118,9 @@
       "cov": 0.01117134871782605,
       "cov_stderr": 0.005197921677254098,
       "corr": 0.5940462561149787,
-      "partial": -8.167154312165683e-05,
-      "partial_stderr": 0.0002444476686165169,
+      "partial": -8.022730048049863e-05,
+      "partial_stderr": 0.0002451157147313456,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0031916441339203626,
         0.014449599727357963,
@@ -3030,7 +3129,7 @@
       ],
       "snippet": "Q:\n\nExcel - Popup Asking for Text w/ Drop Down\n\nIs it possible to have a macro that, when pressed, pops up a message box",
       "above_baseline": -0.004701970323254676,
-      "rank": 116
+      "rank": 117
     },
     {
       "stage": "pretrain",
@@ -3047,8 +3146,9 @@
       "cov": 0.01984690824523742,
       "cov_stderr": 0.009932965683638906,
       "corr": 0.5973932223281112,
-      "partial": -6.75692966732415e-05,
-      "partial_stderr": 8.330227187726583e-05,
+      "partial": -6.485448011344076e-05,
+      "partial_stderr": 8.406280024351586e-05,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002791803081723128,
         0.030155737635427612,
@@ -3074,8 +3174,9 @@
       "cov": 0.017610794251704896,
       "cov_stderr": 0.00864457674007648,
       "corr": 0.5641405910034404,
-      "partial": -0.0007572257087189986,
-      "partial_stderr": 0.00022083126378194922,
+      "partial": -0.0007598786095178246,
+      "partial_stderr": 0.0002227743567554595,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0014302040896337531,
         0.03227908275069767,
@@ -3101,8 +3202,9 @@
       "cov": 0.014019953813341687,
       "cov_stderr": 0.0071250320516824,
       "corr": 0.5612874785291125,
-      "partial": -0.00015663166793656105,
-      "partial_stderr": 0.0003583047896137983,
+      "partial": -0.00015284913500082924,
+      "partial_stderr": 0.00036165778391417265,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0003920960532190064,
         0.023611385143366626,
@@ -3111,7 +3213,7 @@
       ],
       "snippet": "/*\n *  Licensed to the Apache Software Foundation (ASF) under one\n *  or more contributor license agreements.  See the N",
       "above_baseline": -0.0018533652277390386,
-      "rank": 132
+      "rank": 133
     },
     {
       "stage": "pretrain",
@@ -3128,8 +3230,9 @@
       "cov": 0.014397976837400893,
       "cov_stderr": 0.006834812957439917,
       "corr": 0.5699026207508722,
-      "partial": -0.0004836074257672988,
-      "partial_stderr": 9.883448715778282e-05,
+      "partial": -0.00048305087736598775,
+      "partial_stderr": 9.897409603416908e-05,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0019075172424082667,
         0.02598529112807246,
@@ -3155,8 +3258,9 @@
       "cov": 0.01787068949887665,
       "cov_stderr": 0.009345997703068421,
       "corr": 0.5873699004880616,
-      "partial": -0.00027440411371401554,
-      "partial_stderr": 0.00033082875922976903,
+      "partial": -0.0002736870377238591,
+      "partial_stderr": 0.0003333704396688246,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0013459953385065546,
         0.025108212824553083,
@@ -3165,7 +3269,7 @@
       ],
       "snippet": "Distinction between lipoma and liposarcoma by MDM2 alterations: a case report of simultaneously occurring tumors and rev",
       "above_baseline": 0.0019973704577959245,
-      "rank": 161
+      "rank": 162
     },
     {
       "stage": "pretrain",
@@ -3182,8 +3286,9 @@
       "cov": 0.018187910034461467,
       "cov_stderr": 0.010050005752130279,
       "corr": 0.5721024734333388,
-      "partial": -0.00029144178405168916,
-      "partial_stderr": 0.0005769824471653869,
+      "partial": -0.0002898883854207394,
+      "partial_stderr": 0.0005808121473330152,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.00044153292081255117,
         0.024754026894864726,
@@ -3209,8 +3314,9 @@
       "cov": 0.013481513910485455,
       "cov_stderr": 0.0069628784427316305,
       "corr": 0.5773393165860643,
-      "partial": -0.00026190664558738803,
-      "partial_stderr": 0.00027841808610887296,
+      "partial": -0.0002613500244986637,
+      "partial_stderr": 0.00027910071629967675,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0023156060634646567,
         0.019522367842530548,
@@ -3236,8 +3342,9 @@
       "cov": 0.01528461000003789,
       "cov_stderr": 0.0072589524055412915,
       "corr": 0.620860263214245,
-      "partial": 0.00022536326672043655,
-      "partial_stderr": 0.00021484990891619733,
+      "partial": 0.0002298872505214081,
+      "partial_stderr": 0.00021414324690426564,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0018589865645750705,
         0.030135341207076727,
@@ -3263,8 +3370,9 @@
       "cov": 0.014723016684590425,
       "cov_stderr": 0.007685337377336921,
       "corr": 0.5540186402959182,
-      "partial": -0.00011942892979827303,
-      "partial_stderr": 0.0004441276219853319,
+      "partial": -0.00011269525592799342,
+      "partial_stderr": 0.0004487044826442131,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0013843928809928003,
         0.025870328944228457,
@@ -3273,7 +3381,7 @@
       ],
       "snippet": "Association of sick sinus and Lown-Ganong-Levine syndromes.\nA 38-year-old woman presented with syncopal attacks for 27 y",
       "above_baseline": -0.0011503023564903014,
-      "rank": 124
+      "rank": 123
     },
     {
       "stage": "pretrain",
@@ -3290,8 +3398,9 @@
       "cov": 0.017619941642054108,
       "cov_stderr": 0.008922988057631883,
       "corr": 0.5586845509358414,
-      "partial": -0.0005786260201797951,
-      "partial_stderr": 0.00023089267944649024,
+      "partial": -0.0005781872843277622,
+      "partial_stderr": 0.0002335084394291432,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.00131596919172448,
         0.03524229975565031,
@@ -3317,8 +3426,9 @@
       "cov": 0.014435033360576064,
       "cov_stderr": 0.007589131748612869,
       "corr": 0.5913100576748577,
-      "partial": -0.0001845113306875139,
-      "partial_stderr": 0.000209389286606438,
+      "partial": -0.0001835542845004797,
+      "partial_stderr": 0.00020971722673668547,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002313507820894847,
         0.01976934599501983,
@@ -3344,8 +3454,9 @@
       "cov": 0.017501478652295874,
       "cov_stderr": 0.009171932495970517,
       "corr": 0.5744313775796132,
-      "partial": -0.000315658804195484,
-      "partial_stderr": 0.0005277849912106947,
+      "partial": -0.0003137858805457211,
+      "partial_stderr": 0.0005311309980315979,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.00027852493013915596,
         0.026693690375750704,
@@ -3371,8 +3482,9 @@
       "cov": 0.015556094434676333,
       "cov_stderr": 0.0073791010710622384,
       "corr": 0.6039331964652249,
-      "partial": -0.00011367701969975953,
-      "partial_stderr": 0.0003325071566106514,
+      "partial": -0.00011323133059971004,
+      "partial_stderr": 0.0003341323746876397,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0013540637770383913,
         0.02928553644346266,
@@ -3381,7 +3493,7 @@
       ],
       "snippet": "-24pt KL-TH/03-04 0.3truecm\n\n3truecm [**On the supermultiplet of anomalous currents in d=6**]{}\\\n1.5truecm [**R. Manvely",
       "above_baseline": -0.00031722460640439334,
-      "rank": 123
+      "rank": 124
     },
     {
       "stage": "pretrain",
@@ -3398,8 +3510,9 @@
       "cov": 0.020026352824093988,
       "cov_stderr": 0.010175929216800522,
       "corr": 0.5921533398383644,
-      "partial": -0.00022470246390792856,
-      "partial_stderr": 0.00013738583755403038,
+      "partial": -0.00022318585498899745,
+      "partial_stderr": 0.00013798322879276977,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002359177897626978,
         0.027995377959979306,
@@ -3425,8 +3538,9 @@
       "cov": 0.013409751631199503,
       "cov_stderr": 0.006786568068829472,
       "corr": 0.5831546149538901,
-      "partial": -0.0002824341205251009,
-      "partial_stderr": 0.00027160903061323376,
+      "partial": -0.00028196544505607924,
+      "partial_stderr": 0.00027208914551850755,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0019701216790481797,
         0.019238952988471374,
@@ -3452,8 +3566,9 @@
       "cov": 0.018877485595331506,
       "cov_stderr": 0.009574942650085294,
       "corr": 0.6268565898008467,
-      "partial": 0.00032923049060312596,
-      "partial_stderr": 0.0001155485393035991,
+      "partial": 0.00033344715481234427,
+      "partial_stderr": 0.00011502497343787768,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0027543000160987047,
         0.026318346809384274,
@@ -3479,8 +3594,9 @@
       "cov": 0.01144471098450506,
       "cov_stderr": 0.005238956141694989,
       "corr": 0.5953539865477615,
-      "partial": 2.2567781090128824e-05,
-      "partial_stderr": 0.00023041943594385474,
+      "partial": 2.462324293362182e-05,
+      "partial_stderr": 0.00023201107300891216,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0015971237892817047,
         0.02143628447091851,
@@ -3506,8 +3622,9 @@
       "cov": 0.016840325018073712,
       "cov_stderr": 0.009525066512803108,
       "corr": 0.6196564928968046,
-      "partial": 0.00016035963179144533,
-      "partial_stderr": 0.00016550216414402743,
+      "partial": 0.00016212604010755195,
+      "partial_stderr": 0.0001661565144400875,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0021112506368377577,
         0.018784893831691442,
@@ -3533,8 +3650,9 @@
       "cov": 0.014601151293649878,
       "cov_stderr": 0.006885948108409515,
       "corr": 0.6290136533448899,
-      "partial": 0.0001463581124092065,
-      "partial_stderr": 0.0002328236562519149,
+      "partial": 0.00014823081728819657,
+      "partial_stderr": 0.00023325970438320634,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0022459333812677867,
         0.026844265566775265,
@@ -3560,8 +3678,9 @@
       "cov": 0.01596835872322995,
       "cov_stderr": 0.007521017693763701,
       "corr": 0.6191464265308235,
-      "partial": 0.00016213002838794935,
-      "partial_stderr": 0.000295196699378724,
+      "partial": 0.00016369877249337834,
+      "partial_stderr": 0.0002965193981678816,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003175103075425613,
         0.023017846913360698,
@@ -3587,8 +3706,9 @@
       "cov": 0.021718909218597347,
       "cov_stderr": 0.011143771312553596,
       "corr": 0.6136817741581583,
-      "partial": 0.0003334478817756175,
-      "partial_stderr": 9.889511154888906e-05,
+      "partial": 0.0003413565899068891,
+      "partial_stderr": 0.00010057888783311479,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0024104063663094623,
         0.03287642104348361,
@@ -3597,7 +3717,7 @@
       ],
       "snippet": "Atle Simonsen\n\nAtle Simonsen  (born 4 November 1988) is a Norwegian politician.\n\nHe was elected deputy representative to",
       "above_baseline": 0.005845590177516621,
-      "rank": 31
+      "rank": 30
     },
     {
       "stage": "pretrain",
@@ -3614,8 +3734,9 @@
       "cov": 0.01841613016982137,
       "cov_stderr": 0.008908920801412116,
       "corr": 0.5939023412714852,
-      "partial": 5.51292907910475e-05,
-      "partial_stderr": 0.0004161953154495347,
+      "partial": 6.510357974734473e-05,
+      "partial_stderr": 0.00042538796378759693,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002816556340086936,
         0.02706399495169917,
@@ -3624,7 +3745,7 @@
       ],
       "snippet": "Q:\n\nActive Directory, LDAP UserPrincipal\n\nGot this information when I wrote out the DistinguishedName property on UserPr",
       "above_baseline": 0.0025428111287406456,
-      "rank": 77
+      "rank": 75
     },
     {
       "stage": "pretrain",
@@ -3641,8 +3762,9 @@
       "cov": 0.011144872272946952,
       "cov_stderr": 0.005117929055882688,
       "corr": 0.5945791362016531,
-      "partial": -4.719707745334158e-05,
-      "partial_stderr": 0.00016144794919517247,
+      "partial": -4.6193500197689905e-05,
+      "partial_stderr": 0.00016248008354126714,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0011956604929989681,
         0.01836493381766577,
@@ -3651,7 +3773,7 @@
       ],
       "snippet": "Sunday, May 29, 2011\n\nThere are some in the Black community who feel that the controversy ignited after Dr. Cornel West ",
       "above_baseline": -0.004728446768133774,
-      "rank": 103
+      "rank": 102
     },
     {
       "stage": "pretrain",
@@ -3668,8 +3790,9 @@
       "cov": 0.017159623076418575,
       "cov_stderr": 0.007924648136719246,
       "corr": 0.6416940942872965,
-      "partial": 0.0006188121229367933,
-      "partial_stderr": 0.00013804131728230244,
+      "partial": 0.000624216056666638,
+      "partial_stderr": 0.0001382895401661492,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002835358479634215,
         0.02526786114612896,
@@ -3695,8 +3818,9 @@
       "cov": 0.01797916906872948,
       "cov_stderr": 0.008613770088168157,
       "corr": 0.6052596208104016,
-      "partial": 2.5809450290953304e-05,
-      "partial_stderr": 0.0005030951186558821,
+      "partial": 2.856638032259366e-05,
+      "partial_stderr": 0.0005060301957694929,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0011657741056493704,
         0.029277923106531215,
@@ -3722,8 +3846,9 @@
       "cov": 0.011103563214689643,
       "cov_stderr": 0.004519402461707338,
       "corr": 0.6156448903779779,
-      "partial": 0.0003237628395330771,
-      "partial_stderr": 0.00025923613023206394,
+      "partial": 0.0003268860004263148,
+      "partial_stderr": 0.00026080830569971507,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003332173071728175,
         0.018103323890597586,
@@ -3749,8 +3874,9 @@
       "cov": 0.016411348241755695,
       "cov_stderr": 0.0088206497509894,
       "corr": 0.5790805691721586,
-      "partial": -0.0004207728031168971,
-      "partial_stderr": 0.00016969567504070124,
+      "partial": -0.0004210936308584318,
+      "partial_stderr": 0.00017029498328900535,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0029620629023551378,
         0.019303224483258056,
@@ -3776,8 +3902,9 @@
       "cov": 0.01648581058088514,
       "cov_stderr": 0.008262834213676016,
       "corr": 0.6123202565951126,
-      "partial": 0.00028196902398863456,
-      "partial_stderr": 0.00018099847109924306,
+      "partial": 0.00028663347198281904,
+      "partial_stderr": 0.00018249211533628157,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.00263509859290698,
         0.019674465652590425,
@@ -3786,7 +3913,7 @@
       ],
       "snippet": "Q:\n\nHow to pass the current element to a function from html file\n\nI'm trying to reuse a function for different elements,",
       "above_baseline": 0.0006124915398044127,
-      "rank": 39
+      "rank": 40
     },
     {
       "stage": "pretrain",
@@ -3803,8 +3930,9 @@
       "cov": 0.01338600656675128,
       "cov_stderr": 0.006271124822000782,
       "corr": 0.6124239746958882,
-      "partial": 0.0001995876866399072,
-      "partial_stderr": 0.0002949977880708803,
+      "partial": 0.0002043290995640878,
+      "partial_stderr": 0.00029464252773356726,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002729643015852252,
         0.019205072683161597,
@@ -3830,8 +3958,9 @@
       "cov": 0.011941028768761134,
       "cov_stderr": 0.0055441856624518695,
       "corr": 0.6098601452344632,
-      "partial": 0.00020607027616902795,
-      "partial_stderr": 0.000275534548725859,
+      "partial": 0.0002088506077898977,
+      "partial_stderr": 0.00027667455654682374,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0031706355979320504,
         0.015212978677605498,
@@ -3857,8 +3986,9 @@
       "cov": 0.01722852010491972,
       "cov_stderr": 0.008298945632444654,
       "corr": 0.6243141964522332,
-      "partial": 0.00040292044127614504,
-      "partial_stderr": 0.00023639286899158836,
+      "partial": 0.0004071426601945414,
+      "partial_stderr": 0.00023837741860948322,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0024297689611464195,
         0.027378729794696847,
@@ -3884,8 +4014,9 @@
       "cov": 0.021601220886157752,
       "cov_stderr": 0.009979686712211193,
       "corr": 0.6285015586350146,
-      "partial": 0.00044311921081692453,
-      "partial_stderr": 0.0004566487164509244,
+      "partial": 0.0004506134559839031,
+      "partial_stderr": 0.00045968657545690197,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0034838648117302452,
         0.02811060203201023,
@@ -3911,8 +4042,9 @@
       "cov": 0.014761922554463559,
       "cov_stderr": 0.007002279571151853,
       "corr": 0.5917026790576855,
-      "partial": -0.00013111559999948115,
-      "partial_stderr": 0.0002056169919935792,
+      "partial": -0.00012851297291579215,
+      "partial_stderr": 0.00020537669679090615,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0018424472163859717,
         0.02479785685820225,
@@ -3938,8 +4070,9 @@
       "cov": 0.010753782762021569,
       "cov_stderr": 0.008495392372211025,
       "corr": 0.41258715856414196,
-      "partial": 0.0005662469719535178,
-      "partial_stderr": 0.000603311660926528,
+      "partial": 0.0005806938703140684,
+      "partial_stderr": 0.0006078119930045859,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         -0.00043288660090101975,
         0.0037106257000859844,
@@ -3965,8 +4098,9 @@
       "cov": 0.018576088395435727,
       "cov_stderr": 0.008181343386357186,
       "corr": 0.628549295579255,
-      "partial": 0.0003834072995543303,
-      "partial_stderr": 0.0002981734580116835,
+      "partial": 0.0003874160425717679,
+      "partial_stderr": 0.0002994936687926646,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.004016934618132018,
         0.027069799814633824,
@@ -3992,8 +4126,9 @@
       "cov": 0.01582682092233213,
       "cov_stderr": 0.007367553124815898,
       "corr": 0.6243407294681158,
-      "partial": -2.6825130760355954e-06,
-      "partial_stderr": 0.0007262650561585253,
+      "partial": 7.014775804590245e-07,
+      "partial_stderr": 0.0007266433552478054,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003389429539394041,
         0.025311809057016764,
@@ -4019,8 +4154,9 @@
       "cov": 0.017432224016901567,
       "cov_stderr": 0.008459172263187051,
       "corr": 0.609648367683469,
-      "partial": -0.00014864886671082787,
-      "partial_stderr": 0.000408341416069164,
+      "partial": -0.000148190123417018,
+      "partial_stderr": 0.0004102805678202161,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0016042842038180424,
         0.03247318002219672,
@@ -4029,7 +4165,7 @@
       ],
       "snippet": "Did you know that Steven Spielberg was actually going to use stop-motion to animate the dinosaurs for his film Jurassic ",
       "above_baseline": 0.0015589049758208406,
-      "rank": 130
+      "rank": 131
     },
     {
       "stage": "pretrain",
@@ -4046,8 +4182,9 @@
       "cov": 0.015097908134970773,
       "cov_stderr": 0.0071665842139069375,
       "corr": 0.6408626111119419,
-      "partial": 0.0005225113710671353,
-      "partial_stderr": 0.0006534081937115696,
+      "partial": 0.0005266438161267309,
+      "partial_stderr": 0.0006558563977111098,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0035954078822537667,
         0.022590933227848928,
@@ -4073,8 +4210,9 @@
       "cov": 0.017603790251828105,
       "cov_stderr": 0.009462000342609045,
       "corr": 0.5386577630500867,
-      "partial": -0.000635110670025122,
-      "partial_stderr": 0.000410912913664032,
+      "partial": -0.0006334356350289461,
+      "partial_stderr": 0.00041435024255515935,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0014320609519453684,
         0.028952415815724636,
@@ -4100,8 +4238,9 @@
       "cov": 0.010179680215088239,
       "cov_stderr": 0.004958858801635039,
       "corr": 0.5459733819458388,
-      "partial": -0.00018929421939267743,
-      "partial_stderr": 0.00044742964306024844,
+      "partial": -0.0001866387536854359,
+      "partial_stderr": 0.0004494163576224274,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0021927168691233873,
         0.01824456099210629,
@@ -4127,8 +4266,9 @@
       "cov": 0.01916234393093566,
       "cov_stderr": 0.009030174036136207,
       "corr": 0.6266134795412275,
-      "partial": 0.00045243600078624636,
-      "partial_stderr": 0.0003324280064285279,
+      "partial": 0.00046028074393598343,
+      "partial_stderr": 0.0003342075033030078,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003952637796096315,
         0.027021725359219272,
@@ -4154,8 +4294,9 @@
       "cov": 0.011929063273084966,
       "cov_stderr": 0.0053861013053704675,
       "corr": 0.6080841142560173,
-      "partial": 1.7716773512355944e-05,
-      "partial_stderr": 0.0003064914737254977,
+      "partial": 1.9824341370807387e-05,
+      "partial_stderr": 0.0003067890855719972,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002087334050496429,
         0.017729357571340733,
@@ -4181,8 +4322,9 @@
       "cov": 0.01595195551382559,
       "cov_stderr": 0.007611824796530297,
       "corr": 0.5907813001723182,
-      "partial": -0.000305845918872899,
-      "partial_stderr": 0.00020899017772432575,
+      "partial": -0.00030624276625835047,
+      "partial_stderr": 0.00021040574657722207,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0019517471932940225,
         0.02423480222486824,
@@ -4208,8 +4350,9 @@
       "cov": 0.014356561794955723,
       "cov_stderr": 0.006822878722838667,
       "corr": 0.606555810153529,
-      "partial": 4.676440553632207e-05,
-      "partial_stderr": 0.0001046837788816364,
+      "partial": 4.909033741350918e-05,
+      "partial_stderr": 0.0001043229581296588,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0023902270738828516,
         0.021791965564026895,
@@ -4235,8 +4378,9 @@
       "cov": 0.023515688329124193,
       "cov_stderr": 0.012316353346789084,
       "corr": 0.5961270500151146,
-      "partial": 0.0002362226468863857,
-      "partial_stderr": 0.00032008145684327106,
+      "partial": 0.0002472457128283162,
+      "partial_stderr": 0.00032697374944878985,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0016476916342236109,
         0.03553459189261339,
@@ -4245,7 +4389,7 @@
       ],
       "snippet": "Brought to you by the makers of the World's Best World Map, MapXL (a subsidiary of Compare Infobase), an organization wi",
       "above_baseline": 0.007642369288043467,
-      "rank": 45
+      "rank": 44
     },
     {
       "stage": "pretrain",
@@ -4262,8 +4406,9 @@
       "cov": 0.011750824369818452,
       "cov_stderr": 0.006081478004272512,
       "corr": 0.5737294365695329,
-      "partial": -0.00035240366833700807,
-      "partial_stderr": 0.0002766559215070326,
+      "partial": -0.0003529790268641214,
+      "partial_stderr": 0.0002786001107416667,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0015381652830371423,
         0.015207800994733043,
@@ -4289,8 +4434,9 @@
       "cov": 0.013035605807088665,
       "cov_stderr": 0.006506303185446399,
       "corr": 0.5622918243499735,
-      "partial": -0.0005617001383716099,
-      "partial_stderr": 0.00013833706788183927,
+      "partial": -0.0005618594627975545,
+      "partial_stderr": 0.00013878759261480038,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0013535462649954296,
         0.020424869087424486,
@@ -4316,8 +4462,9 @@
       "cov": 0.016899755321800082,
       "cov_stderr": 0.008617934169736078,
       "corr": 0.6016908208275924,
-      "partial": -0.00021322740595859034,
-      "partial_stderr": 0.0003277388465258176,
+      "partial": -0.00021174923813559583,
+      "partial_stderr": 0.0003279942287851567,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0021600680150904734,
         0.022973052321461362,
@@ -4343,8 +4490,9 @@
       "cov": 0.019055580186444772,
       "cov_stderr": 0.009077622525336951,
       "corr": 0.5992699345946009,
-      "partial": -4.2590019121215594e-05,
-      "partial_stderr": 0.00014240576969978166,
+      "partial": -3.961296055216438e-05,
+      "partial_stderr": 0.00014334671057670003,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0037133674373305897,
         0.026544584114578898,
@@ -4370,8 +4518,9 @@
       "cov": 0.017358604088621235,
       "cov_stderr": 0.009183137199464338,
       "corr": 0.6102727265664479,
-      "partial": -0.0002478293922498384,
-      "partial_stderr": 0.0005723854551681348,
+      "partial": -0.0002482453164369423,
+      "partial_stderr": 0.0005748312356178731,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0009763943794347594,
         0.025106720935098564,
@@ -4380,7 +4529,7 @@
       ],
       "snippet": "An ordinance affecting how large retail and food services employers in Seattle schedule workers is set to take effect Ju",
       "above_baseline": 0.001485285047540509,
-      "rank": 149
+      "rank": 150
     },
     {
       "stage": "pretrain",
@@ -4397,8 +4546,9 @@
       "cov": 0.014968228905395745,
       "cov_stderr": 0.0070750516136595405,
       "corr": 0.6162174484412357,
-      "partial": 1.545711663985233e-05,
-      "partial_stderr": 0.0004508270953964824,
+      "partial": 1.6002988897558398e-05,
+      "partial_stderr": 0.0004532722168635089,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0016214392802857218,
         0.023064612504366505,
@@ -4424,8 +4574,9 @@
       "cov": 0.017245446911921845,
       "cov_stderr": 0.010613022560003323,
       "corr": 0.59783870606885,
-      "partial": 6.276826225027611e-05,
-      "partial_stderr": 0.000324542242145957,
+      "partial": 6.860960531667769e-05,
+      "partial_stderr": 0.00032656062944479294,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0011767766262720442,
         0.015016388127387108,
@@ -4451,8 +4602,9 @@
       "cov": 0.014724089661706524,
       "cov_stderr": 0.00720033657109109,
       "corr": 0.5611219710153624,
-      "partial": -0.0005676003351149768,
-      "partial_stderr": 0.00024384137625626335,
+      "partial": -0.000568095573192606,
+      "partial_stderr": 0.0002454978374388788,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0019356731849348309,
         0.02608398475419772,
@@ -4478,8 +4630,9 @@
       "cov": 0.01621419882317048,
       "cov_stderr": 0.007824564895935988,
       "corr": 0.5864934455773586,
-      "partial": -0.00019248825448453391,
-      "partial_stderr": 0.00041255940667449974,
+      "partial": -0.000189416934493923,
+      "partial_stderr": 0.0004134724936853234,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003587488638816285,
         0.02784066919136767,
@@ -4488,7 +4641,7 @@
       ],
       "snippet": "SOMA, Japan \u2014 The catch from six small fishing boats, the first to resume commercial fishing in the waters off Fukushima",
       "above_baseline": 0.00034087978208975286,
-      "rank": 143
+      "rank": 142
     },
     {
       "stage": "pretrain",
@@ -4505,8 +4658,9 @@
       "cov": 0.015654446554063454,
       "cov_stderr": 0.008263936291390547,
       "corr": 0.5839597599263961,
-      "partial": -0.0001240782166330453,
-      "partial_stderr": 0.0002928980026558657,
+      "partial": -0.00012275797393633875,
+      "partial_stderr": 0.00029506249257140284,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0027016196522184144,
         0.019789638492184167,
@@ -4515,7 +4669,7 @@
       ],
       "snippet": "Gamma knife surgery for hypothalamic hamartomas accompanied by medically intractable epilepsy and precocious puberty: ex",
       "above_baseline": -0.00021887248701727216,
-      "rank": 125
+      "rank": 126
     },
     {
       "stage": "pretrain",
@@ -4532,8 +4686,9 @@
       "cov": 0.017096187395451466,
       "cov_stderr": 0.008281383451045763,
       "corr": 0.6108636055109051,
-      "partial": 0.00024752997721712956,
-      "partial_stderr": 0.00028758698425205984,
+      "partial": 0.000251508359665933,
+      "partial_stderr": 0.00028889396995060933,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0030178521331717095,
         0.02972730201426548,
@@ -4559,8 +4714,9 @@
       "cov": 0.01562937924943676,
       "cov_stderr": 0.010845705771759634,
       "corr": 0.5206721799372922,
-      "partial": -0.00016107018320962518,
-      "partial_stderr": 0.0003485046467086172,
+      "partial": -0.00014548058299828287,
+      "partial_stderr": 0.00034588591362716626,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0018554788947772976,
         0.008832747707056478,
@@ -4569,7 +4725,7 @@
       ],
       "snippet": "Nikki Hill Gets 2on1 Anal and DP With Rough Sex \u2013 LegalPorno\n\n299 34%",
       "above_baseline": -0.00024393979164396423,
-      "rank": 134
+      "rank": 130
     },
     {
       "stage": "pretrain",
@@ -4586,8 +4742,9 @@
       "cov": 0.014969039059016882,
       "cov_stderr": 0.007653431241046165,
       "corr": 0.5772204887039016,
-      "partial": -0.0003449156851162859,
-      "partial_stderr": 0.00021264160864297167,
+      "partial": -0.00034426813675405833,
+      "partial_stderr": 0.00021337979769900673,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0017602680626007893,
         0.019101667954138066,
@@ -4613,8 +4770,9 @@
       "cov": 0.013450867608904809,
       "cov_stderr": 0.006962801536141706,
       "corr": 0.589611358556112,
-      "partial": -0.00016259445817203903,
-      "partial_stderr": 0.000243346511074047,
+      "partial": -0.00016222592445555383,
+      "partial_stderr": 0.0002445035946971666,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0010347210329540758,
         0.018939254453148167,
@@ -4640,8 +4798,9 @@
       "cov": 0.013905667910186843,
       "cov_stderr": 0.0073762812995077885,
       "corr": 0.5523540738400838,
-      "partial": -0.0008872159415330101,
-      "partial_stderr": 0.0004946636722605276,
+      "partial": -0.0008908539913680583,
+      "partial_stderr": 0.0004988896354217485,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0008743815092132535,
         0.020691913447779004,
@@ -4667,8 +4826,9 @@
       "cov": 0.01298681853230845,
       "cov_stderr": 0.00586838584057798,
       "corr": 0.6198043282428961,
-      "partial": 0.00010118058876773575,
-      "partial_stderr": 0.0002974066552988556,
+      "partial": 0.00010254544778548645,
+      "partial_stderr": 0.000298766948689035,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0020478957726131285,
         0.021670990268526747,
@@ -4677,7 +4837,7 @@
       ],
       "snippet": "London Gateway Port in Stanford-le-Hope: Almost half of exports from urban centres go to the EU.\nPhotograph: Bloomberg/B",
       "above_baseline": -0.0028865005087722762,
-      "rank": 68
+      "rank": 69
     },
     {
       "stage": "pretrain",
@@ -4694,8 +4854,9 @@
       "cov": 0.012821299981987397,
       "cov_stderr": 0.005662058194903651,
       "corr": 0.6064003732867475,
-      "partial": 0.00016955413553016417,
-      "partial_stderr": 0.00012888158373229757,
+      "partial": 0.00017270546544524414,
+      "partial_stderr": 0.00012976226313127063,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0026569667816430864,
         0.017925919658152725,
@@ -4721,8 +4882,9 @@
       "cov": 0.014877143829798411,
       "cov_stderr": 0.006397888898222768,
       "corr": 0.6219234821699651,
-      "partial": 0.0003488745382534151,
-      "partial_stderr": 0.000428345561304727,
+      "partial": 0.00035332489197399057,
+      "partial_stderr": 0.00043008258493628786,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003927066186581397,
         0.025103753248031442,
@@ -4731,7 +4893,7 @@
       ],
       "snippet": "using System;\nusing System.Collections.Generic;\nusing System.Linq;\nusing NLog;\n\nnamespace Improbable.Gdk.CodeGeneration.",
       "above_baseline": -0.0009961752112823147,
-      "rank": 28
+      "rank": 29
     },
     {
       "stage": "pretrain",
@@ -4748,8 +4910,9 @@
       "cov": 0.012722910923803692,
       "cov_stderr": 0.005915102199365246,
       "corr": 0.5876077055359668,
-      "partial": -0.00010228721465036257,
-      "partial_stderr": 0.00017330509409540674,
+      "partial": -0.00010094218935460223,
+      "partial_stderr": 0.00017476593243741814,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0022446502391332613,
         0.019792613773782067,
@@ -4775,8 +4938,9 @@
       "cov": 0.016740379663526813,
       "cov_stderr": 0.00780522221600172,
       "corr": 0.6385193712552957,
-      "partial": 0.00040843601079127855,
-      "partial_stderr": 0.0002786649930636262,
+      "partial": 0.00041229261100786857,
+      "partial_stderr": 0.00027908683753544844,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0036861872411629065,
         0.02288073334765777,
@@ -4802,8 +4966,9 @@
       "cov": 0.01369999526281415,
       "cov_stderr": 0.007167017759214352,
       "corr": 0.5722473914940633,
-      "partial": -0.0003684610017786843,
-      "partial_stderr": 0.00010742525636691196,
+      "partial": -0.00036796356095642916,
+      "partial_stderr": 0.00010811188614014884,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0018455611629903616,
         0.019871339349955816,
@@ -4829,8 +4994,9 @@
       "cov": 0.014982291325546248,
       "cov_stderr": 0.007129248428054292,
       "corr": 0.5908234308660305,
-      "partial": -0.00016429320590375879,
-      "partial_stderr": 8.343678354545908e-05,
+      "partial": -0.000163862132157494,
+      "partial_stderr": 8.442815718274955e-05,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0013555352275376208,
         0.027434387322206023,
@@ -4839,7 +5005,7 @@
       ],
       "snippet": "Chidobe Aquzie could only laugh when he learned that a random drug test coincided with him recently setting a top mark f",
       "above_baseline": -0.000891027715534478,
-      "rank": 136
+      "rank": 137
     },
     {
       "stage": "pretrain",
@@ -4856,8 +5022,9 @@
       "cov": 0.015663060461185253,
       "cov_stderr": 0.008126927474662815,
       "corr": 0.5940165196421072,
-      "partial": -5.08291584047958e-05,
-      "partial_stderr": 0.00022247577324371933,
+      "partial": -4.9376770629220576e-05,
+      "partial_stderr": 0.0002243204187780723,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.001644782230706551,
         0.018758416357012267,
@@ -4883,8 +5050,9 @@
       "cov": 0.015988590873797125,
       "cov_stderr": 0.007932010065490144,
       "corr": 0.6027266800793698,
-      "partial": 1.0900859646261331e-05,
-      "partial_stderr": 0.00018014847295321648,
+      "partial": 1.268359757835283e-05,
+      "partial_stderr": 0.00018122541530949735,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0013696291393030151,
         0.030304946027850565,
@@ -4910,8 +5078,9 @@
       "cov": 0.020366154970865705,
       "cov_stderr": 0.010368659715480075,
       "corr": 0.6163392452129419,
-      "partial": 0.0004683739325900693,
-      "partial_stderr": 0.00025085461896520446,
+      "partial": 0.0004793345550343373,
+      "partial_stderr": 0.0002580522105397173,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0028345718408572793,
         0.027128981595407366,
@@ -4937,8 +5106,9 @@
       "cov": 0.017855993311141675,
       "cov_stderr": 0.007992404453145857,
       "corr": 0.6319377716589352,
-      "partial": 0.0003368877151640217,
-      "partial_stderr": 0.0003947536909390862,
+      "partial": 0.00034035348681349923,
+      "partial_stderr": 0.000396352308443845,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0039397394097019965,
         0.02897815073293259,
@@ -4947,7 +5117,7 @@
       ],
       "snippet": "Introduction\n============\n\nOlder adults (OAs) at risk of falls are more likely to stop walking when talking at the same ",
       "above_baseline": 0.0019826742700609495,
-      "rank": 30
+      "rank": 31
     },
     {
       "stage": "pretrain",
@@ -4964,8 +5134,9 @@
       "cov": 0.018551425979283224,
       "cov_stderr": 0.009186236708229756,
       "corr": 0.5772495709186495,
-      "partial": -0.00022236858658000996,
-      "partial_stderr": 0.0003571931469262272,
+      "partial": -0.0002180593698400362,
+      "partial_stderr": 0.0003626593920651021,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.001921088461009276,
         0.029238431791235597,
@@ -4974,7 +5145,7 @@
       ],
       "snippet": "Phytotoxic effect of 2-benzoxazolinone (BOA) against some vegetable crops.\nBenzoxazolin-2(3H)-one (BOA) is a well known ",
       "above_baseline": 0.002678106938202498,
-      "rank": 146
+      "rank": 145
     },
     {
       "stage": "pretrain",
@@ -4991,8 +5162,9 @@
       "cov": 0.012367306162390831,
       "cov_stderr": 0.004360783506681221,
       "corr": 0.6025223967274285,
-      "partial": 0.0006251567523658697,
-      "partial_stderr": 0.0004908914887657898,
+      "partial": 0.0006346551658784057,
+      "partial_stderr": 0.0004936375683441747,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.004576419612306199,
         0.019208813055886457,
@@ -5018,8 +5190,9 @@
       "cov": 0.017386610580712773,
       "cov_stderr": 0.008788301049853623,
       "corr": 0.5983916933773002,
-      "partial": -0.00022031239490128755,
-      "partial_stderr": 0.0001858068713351141,
+      "partial": -0.00021912617882953743,
+      "partial_stderr": 0.00018579064564891315,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0021076699811320397,
         0.02507407069873534,
@@ -5028,7 +5201,7 @@
       ],
       "snippet": "VLF turns Chevy Colorado into Hummer H2-esque off-roader\n\nBelieve it or not but this orange monster comes from a company",
       "above_baseline": 0.0015132915396320473,
-      "rank": 145
+      "rank": 146
     },
     {
       "stage": "pretrain",
@@ -5045,8 +5218,9 @@
       "cov": 0.016882897065205748,
       "cov_stderr": 0.008529074842872167,
       "corr": 0.6119964455655356,
-      "partial": -0.00015958003062876034,
-      "partial_stderr": 0.000656177670867002,
+      "partial": -0.00014964302670481336,
+      "partial_stderr": 0.000653303679250003,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003236749441415213,
         0.02412136337468437,
@@ -5055,7 +5229,7 @@
       ],
       "snippet": "Hi, Nothing against those rules because you cooking the omelette you decide how many eggs u will use, but using Polski R",
       "above_baseline": 0.001009578024125022,
-      "rank": 133
+      "rank": 132
     },
     {
       "stage": "pretrain",
@@ -5072,8 +5246,9 @@
       "cov": 0.013283442504061759,
       "cov_stderr": 0.00881699451275667,
       "corr": 0.49098769510734563,
-      "partial": 6.89816825008771e-05,
-      "partial_stderr": 0.0006098847344523942,
+      "partial": 7.910502867665943e-05,
+      "partial_stderr": 0.0006171677357992922,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0011927124468384136,
         0.039253629896710114,
@@ -5099,8 +5274,9 @@
       "cov": 0.01798439392855855,
       "cov_stderr": 0.00829099381240433,
       "corr": 0.6205519949226055,
-      "partial": 0.00027517777641986724,
-      "partial_stderr": 0.00023351362715840079,
+      "partial": 0.0002793023757432788,
+      "partial_stderr": 0.0002342985029802075,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0028870028167551935,
         0.03004886096424034,
@@ -5126,8 +5302,9 @@
       "cov": 0.015113710459959793,
       "cov_stderr": 0.007629238805167499,
       "corr": 0.6075471224614046,
-      "partial": 3.630977256047147e-06,
-      "partial_stderr": 0.00016006541455573363,
+      "partial": 5.929215433614145e-06,
+      "partial_stderr": 0.0001596980797591283,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0028987147700026985,
         0.020336213348350795,
@@ -5153,8 +5330,9 @@
       "cov": 0.0076104348682953515,
       "cov_stderr": 0.00369459163446131,
       "corr": 0.5882563266732881,
-      "partial": -3.494510532245131e-05,
-      "partial_stderr": 0.00015146121832118563,
+      "partial": -3.353167004155414e-05,
+      "partial_stderr": 0.00015178354500912177,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0006207301758353424,
         0.01285413691232984,
@@ -5163,7 +5341,7 @@
       ],
       "snippet": "M?\n8:43 PM\nWhat is 586 minutes before 2:01 PM?\n4:15 AM\nWhat is 373 minutes after 5:04 PM?\n11:17 PM\nHow many minutes are ",
       "above_baseline": -0.008262884172785374,
-      "rank": 98
+      "rank": 99
     },
     {
       "stage": "pretrain",
@@ -5180,8 +5358,9 @@
       "cov": 0.01686017670281399,
       "cov_stderr": 0.007700290745290576,
       "corr": 0.6278017737845187,
-      "partial": 0.00031119092232869484,
-      "partial_stderr": 0.0004566553296363165,
+      "partial": 0.0003155109008745014,
+      "partial_stderr": 0.00045800014960467643,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0038278385858183358,
         0.02677810672856467,
@@ -5190,7 +5369,7 @@
       ],
       "snippet": "Oregon State Capitol Foundation\n\nThe Oregon State Capitol Foundation is a 501(c)(3) nonprofit organization. \n\nHistory\n\nT",
       "above_baseline": 0.0009868576617332626,
-      "rank": 34
+      "rank": 35
     },
     {
       "stage": "pretrain",
@@ -5207,8 +5386,9 @@
       "cov": 0.020857856872058367,
       "cov_stderr": 0.012385951898778058,
       "corr": 0.5924993522951746,
-      "partial": -7.638304764472121e-05,
-      "partial_stderr": 0.0008313495402711971,
+      "partial": -7.134085629125316e-05,
+      "partial_stderr": 0.0008363404923345851,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.00021320784527897554,
         0.021263493523527723,
@@ -5217,7 +5397,7 @@
       ],
       "snippet": "Non-quantal acetylcholine release after cholinesterase inhibition in vivo.\nAfter anticholinesterase treatment in vivo, d",
       "above_baseline": 0.0049845378309776416,
-      "rank": 114
+      "rank": 113
     },
     {
       "stage": "pretrain",
@@ -5234,8 +5414,9 @@
       "cov": 0.015442904045724617,
       "cov_stderr": 0.007145729168349301,
       "corr": 0.6116609406665592,
-      "partial": 0.00030212861279230917,
-      "partial_stderr": 0.00020387872107056413,
+      "partial": 0.0003070002992605018,
+      "partial_stderr": 0.00020569971503166853,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.001962063844218392,
         0.02386269594667101,
@@ -5261,8 +5442,9 @@
       "cov": 0.015412043208279942,
       "cov_stderr": 0.008336853145301613,
       "corr": 0.5979360810171176,
-      "partial": -3.553115976697872e-05,
-      "partial_stderr": 0.00035665148446752495,
+      "partial": -3.323215495329381e-05,
+      "partial_stderr": 0.00035971772697022925,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0014863256155207636,
         0.018800224071577394,
@@ -5271,7 +5453,7 @@
       ],
       "snippet": "Q:\n\npython saving output from a for iteration and subprocess for checksum\n\nThe purpose of this script is to pull md5 che",
       "above_baseline": -0.00046127583280078377,
-      "rank": 99
+      "rank": 98
     },
     {
       "stage": "pretrain",
@@ -5288,8 +5470,9 @@
       "cov": 0.015762274377864947,
       "cov_stderr": 0.009278227150706402,
       "corr": 0.4965527529932777,
-      "partial": -0.0006476203894431602,
-      "partial_stderr": 0.0006486925143183495,
+      "partial": -0.0006456453276700079,
+      "partial_stderr": 0.0006524666569311756,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         -0.00010577598387635597,
         0.03781036171560027,
@@ -5315,8 +5498,9 @@
       "cov": 0.017309086975237028,
       "cov_stderr": 0.007781681580274578,
       "corr": 0.6705196040665885,
-      "partial": 0.0009366925929888966,
-      "partial_stderr": 0.00028841128507125954,
+      "partial": 0.000944670847774529,
+      "partial_stderr": 0.0002886629903534919,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003381934640701638,
         0.03287164269085224,
@@ -5342,8 +5526,9 @@
       "cov": 0.016131132210469024,
       "cov_stderr": 0.007178963884821642,
       "corr": 0.6232517399439198,
-      "partial": 0.00021378123605780467,
-      "partial_stderr": 0.00024107048001512798,
+      "partial": 0.00021727634664661465,
+      "partial_stderr": 0.00024109605920619048,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0035821853817360077,
         0.028862474707602906,
@@ -5369,8 +5554,9 @@
       "cov": 0.013418577928398259,
       "cov_stderr": 0.0063857394013439196,
       "corr": 0.6044318455654297,
-      "partial": -3.99891562086108e-05,
-      "partial_stderr": 0.0001494159687301438,
+      "partial": -3.791024880239188e-05,
+      "partial_stderr": 0.00014852893998012557,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002164853098552976,
         0.020645603807694715,
@@ -5396,8 +5582,9 @@
       "cov": 0.013901536121553157,
       "cov_stderr": 0.006860723161108965,
       "corr": 0.6036849583455501,
-      "partial": -7.380362700715044e-05,
-      "partial_stderr": 0.00013508900879867709,
+      "partial": -7.266002930853498e-05,
+      "partial_stderr": 0.00013518664596782933,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0017915101120685906,
         0.020111327368081036,
@@ -5406,7 +5593,7 @@
       ],
       "snippet": "For one that prides itself in its progressive nature, it is no hidden secret that the solar industry has a diversity iss",
       "above_baseline": -0.0019717829195275687,
-      "rank": 113
+      "rank": 114
     },
     {
       "stage": "pretrain",
@@ -5423,8 +5610,9 @@
       "cov": 0.013585231756134228,
       "cov_stderr": 0.0068552731907165305,
       "corr": 0.5408623711942868,
-      "partial": -0.0007312650748403107,
-      "partial_stderr": 0.00012568533998997308,
+      "partial": -0.0007315014428842538,
+      "partial_stderr": 0.00012817474369055464,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0017734747507367503,
         0.025242924487129406,
@@ -5450,8 +5638,9 @@
       "cov": 0.014688612213283101,
       "cov_stderr": 0.007329854324282134,
       "corr": 0.5689394703028592,
-      "partial": -1.5774272379106373e-05,
-      "partial_stderr": 0.0005124114856401403,
+      "partial": -9.397596066974714e-06,
+      "partial_stderr": 0.0005179218090492178,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0032035601713356755,
         0.020829733420049616,
@@ -5477,8 +5666,9 @@
       "cov": 0.011349308160488954,
       "cov_stderr": 0.004395162547181629,
       "corr": 0.6206177667864007,
-      "partial": 0.0004355374622599976,
-      "partial_stderr": 0.0002975371452717214,
+      "partial": 0.00044171934325658877,
+      "partial_stderr": 0.0002969171317157502,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0028982668998132795,
         0.018564038230986808,
@@ -5504,8 +5694,9 @@
       "cov": 0.018187590464141465,
       "cov_stderr": 0.008522995409201158,
       "corr": 0.6806076017107977,
-      "partial": 0.0008446741492515616,
-      "partial_stderr": 0.0004609146877517946,
+      "partial": 0.0008505655767868353,
+      "partial_stderr": 0.0004614716701231156,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.003587553736923337,
         0.030080691423491315,
@@ -5531,8 +5722,9 @@
       "cov": 0.016240454965050118,
       "cov_stderr": 0.0076558826024334704,
       "corr": 0.6082411529458976,
-      "partial": 6.229712931920391e-05,
-      "partial_stderr": 0.0002424550872404658,
+      "partial": 6.47400877178425e-05,
+      "partial_stderr": 0.00024362949992256795,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0015427449145092396,
         0.030244874923699445,
@@ -5541,7 +5733,7 @@
       ],
       "snippet": "When word broke that Jussie Smollett was a victim of a brutal hate crime, people across the country were outraged. The a",
       "above_baseline": 0.00036713592396939165,
-      "rank": 75
+      "rank": 76
     },
     {
       "stage": "pretrain",
@@ -5558,8 +5750,9 @@
       "cov": 0.016162390520251996,
       "cov_stderr": 0.007674856384817697,
       "corr": 0.6137581338230809,
-      "partial": 9.910875379357168e-06,
-      "partial_stderr": 0.00023509423803711233,
+      "partial": 1.1603787272231697e-05,
+      "partial_stderr": 0.0002355042511983611,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002584573790211425,
         0.025109369705363406,
@@ -5585,8 +5778,9 @@
       "cov": 0.01734620736090968,
       "cov_stderr": 0.008664426452770305,
       "corr": 0.5730476117468672,
-      "partial": -0.00043956536263014444,
-      "partial_stderr": 0.0002990162646096057,
+      "partial": -0.00043953665222763445,
+      "partial_stderr": 0.00030122999236493927,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0011110076237567683,
         0.033208727754671596,
@@ -5612,8 +5806,9 @@
       "cov": 0.013908195535714355,
       "cov_stderr": 0.005696316901577667,
       "corr": 0.6335425655910842,
-      "partial": 0.0005868588894225146,
-      "partial_stderr": 0.0003596494534177648,
+      "partial": 0.0005935554915187653,
+      "partial_stderr": 0.00036162719446482673,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0028484268169996995,
         0.02563666315891278,
@@ -5639,8 +5834,9 @@
       "cov": 0.014082167671830188,
       "cov_stderr": 0.0068897508688741714,
       "corr": 0.5900473675093201,
-      "partial": -0.00011114312681846178,
-      "partial_stderr": 0.0003021862108957893,
+      "partial": -0.00011027761463532721,
+      "partial_stderr": 0.00030343971469714957,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002854446194493812,
         0.021331305860201974,
@@ -5666,8 +5862,9 @@
       "cov": 0.013333309769348774,
       "cov_stderr": 0.006973432071721983,
       "corr": 0.5707935212947973,
-      "partial": -0.00032573128287494694,
-      "partial_stderr": 0.00025336639603113745,
+      "partial": -0.00032479491310581665,
+      "partial_stderr": 0.00025421197759086607,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0005857364553530259,
         0.02044161096313064,
@@ -5693,8 +5890,9 @@
       "cov": 0.00953541325642484,
       "cov_stderr": 0.004558011951262933,
       "corr": 0.5972153819327641,
-      "partial": 0.0002119811326285173,
-      "partial_stderr": 0.00017568371473973893,
+      "partial": 0.00021530630769450701,
+      "partial_stderr": 0.00017696328099238125,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0014944907349121422,
         0.016467716886439575,
@@ -5720,8 +5918,9 @@
       "cov": 0.03105729221815227,
       "cov_stderr": 0.015100886057164408,
       "corr": 0.6005921175320437,
-      "partial": -8.425873916869325e-05,
-      "partial_stderr": 0.00030742106710415627,
+      "partial": -7.340241329242964e-05,
+      "partial_stderr": 0.00030634583136153736,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0041746620935588,
         0.049148748022160085,
@@ -5730,7 +5929,7 @@
       ],
       "snippet": "This item has been removed from the community because it violates Steam Community & Content Guidelines. It is only visib",
       "above_baseline": 0.015183973177071545,
-      "rank": 117
+      "rank": 115
     },
     {
       "stage": "pretrain",
@@ -5747,8 +5946,9 @@
       "cov": 0.015223407150363164,
       "cov_stderr": 0.00781140605274566,
       "corr": 0.5709946093836428,
-      "partial": -0.00024971917649881754,
-      "partial_stderr": 0.0001558498205457842,
+      "partial": -0.0002482913093265149,
+      "partial_stderr": 0.0001573875911449283,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.001610852443654403,
         0.02695036672763472,
@@ -5774,8 +5974,9 @@
       "cov": 0.01405817808503973,
       "cov_stderr": 0.007095697983855268,
       "corr": 0.5792915675058044,
-      "partial": -0.0003479253341490247,
-      "partial_stderr": 0.00011759546185016246,
+      "partial": -0.0003488283181454266,
+      "partial_stderr": 0.00011846461900156398,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.002069313841799794,
         0.02095000635959532,
@@ -5801,8 +6002,9 @@
       "cov": 0.017678210022096994,
       "cov_stderr": 0.007682835081546022,
       "corr": 0.6223793439584916,
-      "partial": 0.00023348453562237117,
-      "partial_stderr": 0.0002842700775374142,
+      "partial": 0.00023707800862932566,
+      "partial_stderr": 0.0002848246472048101,
+      "partial_control": "leave-one-out",
       "chain_covs": [
         0.0033116653024171227,
         0.029068730725362365,
