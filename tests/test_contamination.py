@@ -162,6 +162,67 @@ def test_no_hit_is_an_empty_result_not_an_error(con, dpo_parquet):
     assert result["matched"] == 0 and result["probe_hits"] == [] and result["examples"] == []
 
 
+def test_corpus_rollup_keeps_unanswered_probes_out_of_every_denominator():
+    """Item 0: question hit, answer errored — present, a hit is a hit. Item 1:
+    errored, no hit — unresolved, on neither side of the rate. Item 2: counted,
+    zero — settled absent."""
+    counts = [
+        {"probe": 0, "occurrences": 3, "approx": False},
+        {"probe": 1, "occurrences": None, "approx": False, "error": "unreachable"},
+        {"probe": 2, "occurrences": None, "approx": False, "error": "unreachable"},
+        {"probe": 3, "occurrences": 0, "approx": False},
+    ]
+    out = contamination.corpus_items(PROBES, counts)
+    assert out["items"]["any"] == [0]
+    assert out["items_probed"] == [0, 2]
+    assert out["items_unresolved"] == [1]
+    assert out["errors"] == [1, 2]
+    # The side keys stay empty: a corpus document is neither a prompt nor a response.
+    assert out["items"]["question_read"] == [] and out["items"]["answer_produced"] == []
+
+
+def test_corpus_rollup_with_every_probe_counted_is_the_plain_rollup():
+    counts = [{"probe": p["id"], "occurrences": 1 if p["item"] == 1 else 0, "approx": False}
+              for p in PROBES]
+    out = contamination.corpus_items(PROBES, counts)
+    assert out["items"]["any"] == [1]
+    assert out["items_probed"] == [0, 1, 2] and out["items_unresolved"] == [] and out["errors"] == []
+
+
+def test_summary_says_how_many_probes_were_not_counted():
+    counts = [
+        {"probe": 0, "occurrences": 3, "approx": False},
+        {"probe": 1, "occurrences": None, "approx": False, "error": "unreachable"},
+        {"probe": 2, "occurrences": None, "approx": False, "error": "unreachable"},
+        {"probe": 3, "occurrences": 0, "approx": False},
+    ]
+    corpus = {"index": "v4_piletrain_llama", "counts": counts,
+              **contamination.corpus_items(PROBES, counts)}
+    text = "\n".join(contamination.summary([], corpus, []))
+    # Over the two settled items, not three; the unanswered probes named, not summed.
+    assert "corpus items seen 1/2 = 50.0%" in text
+    assert "2 probe(s) could not be counted — not zeros; 1 item(s) left unresolved" in text
+    assert "occurrences over all probes: 3" in text
+    # And no such line when everything was counted.
+    clean = {"index": "v4_piletrain_llama", "items_probed": [0], "items": {"any": []},
+             "counts": [{"occurrences": 0, "approx": False}]}
+    assert "could not be counted" not in "\n".join(contamination.summary([], clean, []))
+
+
+def test_corpus_only_leaves_every_stage_unscanned():
+    from trainspotting import cli
+
+    stages = [{"stage": "sft"}, {"stage": "dpo"}, {"stage": "rlvr"}]
+    # A --stage selection scans one and names the rest.
+    assert cli._contam_unscanned(stages, [stages[1]], corpus_only=False) == ["sft", "rlvr"]
+    # No selection scans them all and names none.
+    assert cli._contam_unscanned(stages, stages, corpus_only=False) == []
+    # --corpus-only reads nothing, so the selection does not matter: every
+    # stage is unscanned, and the summary has to say so.
+    assert cli._contam_unscanned(stages, stages, corpus_only=True) == ["sft", "dpo", "rlvr"]
+    assert cli._contam_unscanned(stages, [stages[1]], corpus_only=True) == ["sft", "dpo", "rlvr"]
+
+
 def test_summary_names_unscanned_stages_and_the_corpus_caveat():
     run = {
         "stage": "sft", "items_probed": [0, 1, 2], "has_answer_probes": True,

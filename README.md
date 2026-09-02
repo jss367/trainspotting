@@ -824,7 +824,11 @@ that has lived on GitHub, in papers and in tutorials since 2021 looks like from
 inside a web crawl. The first is a statement about what Ai2 put in front of the
 model; the second is a statement about the ecosystem's text, over a corpus that
 is not Dolma 3. Neither stands in for the other, and the SFT and RL stages are
-named as unscanned rather than counted as clean.
+named as unscanned rather than counted as clean. The same rule holds inside the
+corpus count: a probe the index did not answer — a rejected query, or one that
+ran out of retries — is recorded as an error rather than as zero occurrences,
+the summary says how many there were, and an item left with an unanswered probe
+and no hit is out of the rate rather than in it as clean.
 
 **What is searched for.** Not the item whole. Copies of a test item in training
 data routinely differ from the original — re-wrapped, prefixed with

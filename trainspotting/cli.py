@@ -2480,6 +2480,20 @@ def _contam_probes(spec, items, words):
     return probes, skipped
 
 
+def _contam_unscanned(all_stages: list[dict], scanned: list[dict], corpus_only: bool) -> list[str]:
+    """The stage names the summary must call unscanned rather than let read as clean.
+
+    With --corpus-only no mix is read at all, so every stage is unscanned — the
+    stages the user selected included. Filtering on the selection alone came
+    back empty there, and a corpus-only summary then said nothing about the
+    stages it had not looked at, which is the one silence this command exists
+    to refuse.
+    """
+    if corpus_only:
+        return [s["stage"] for s in all_stages]
+    return [s["stage"] for s in all_stages if s not in scanned]
+
+
 def cmd_contaminate(args):
     """Is a benchmark's test set in the training data, where, and on which side?
 
@@ -2491,10 +2505,24 @@ def cmd_contaminate(args):
     """
     spec = benchmarks.resolve(args.benchmark)
     target = registry.resolve(args.target)
+    # Resolved before the rows are read, so the stamp names the tree the items
+    # were cut from rather than one published while the pages were fetched —
+    # the same order every other row-drawing command here uses.
+    bench_revision = hf.dataset_revision(spec["hf_dataset"])
     total = benchmarks.total_items(spec)
     indices = benchmarks.pick_indices(total, args.items, args.seed)
     items = benchmarks.fetch_items(spec, indices)
-    bench_revision = hf.dataset_revision(spec["hf_dataset"])
+    # And again after. The pages are served from whatever the tree is at the
+    # time, so a benchmark republished mid-fetch would leave probes cut from two
+    # versions of it under one SHA, and a probe nobody can find in the recorded
+    # revision. Same check and same field as the paged samplers.
+    bench_moved = hf.dataset_revision(spec["hf_dataset"])
+    if bench_revision and bench_moved and bench_moved != bench_revision:
+        print(
+            f"# note: {spec['hf_dataset']} moved from {bench_revision[:7]} to "
+            f"{bench_moved[:7]} while its rows were fetched; the items may straddle both trees",
+            file=sys.stderr,
+        )
     probes, skipped = _contam_probes(spec, items, args.words)
     probed_items = sorted({p["item"] for p in probes})
     n_q = sum(1 for p in probes if p["part"] == "question")
@@ -2516,6 +2544,8 @@ def cmd_contaminate(args):
     bench = {
         "id": spec["id"], "name": spec["name"], "hf_dataset": spec["hf_dataset"],
         "config": spec["config"], "split": spec["split"], "revision": bench_revision,
+        **({"revision_moved_to": bench_moved}
+           if bench_revision and bench_moved and bench_moved != bench_revision else {}),
         "total_items": total, "question_field": spec["question"],
         "answer_field": spec.get("answer"),
     }
@@ -2531,15 +2561,13 @@ def cmd_contaminate(args):
     }
 
     # --- the post-training mixes, every row -------------------------------
-    stages = registry.post_training_stages(target)
+    all_stages = registry.post_training_stages(target)
+    stages = all_stages
     if args.stage:
         stages = [s for s in stages if s["stage"] == args.stage]
         if not stages:
             sys.exit(f"no post-training stage {args.stage!r} for {args.target}")
-    unscanned = [
-        s["stage"] for s in registry.post_training_stages(target)
-        if s not in stages
-    ]
+    unscanned = _contam_unscanned(all_stages, stages, args.corpus_only)
     stage_runs = []
     if stages and not args.corpus_only:
         con = grep.connect()
@@ -2620,16 +2648,27 @@ def cmd_contaminate(args):
             try:
                 c = lookup.count(index, p["literal"])
             except lookup.LookupError_ as e:
-                counts.append({"probe": p["id"], "occurrences": 0, "approx": False, "error": str(e)})
-                continue
-            counts.append({"probe": p["id"], "occurrences": c["occurrences"], "approx": c["approx"]})
+                # The index did not answer — it rejected the query, or five
+                # attempts got no reply. That is not zero occurrences, and it
+                # must not be written as one: a run of hundreds of requests will
+                # see a transient failure sooner or later, and a copied item
+                # whose probe happened to be the one that failed would otherwise
+                # come out clean. `occurrences` is null, and `corpus_items`
+                # keeps the probe out of every count and every denominator.
+                counts.append({"probe": p["id"], "occurrences": None, "approx": False,
+                               "error": str(e)})
+            else:
+                counts.append({"probe": p["id"], "occurrences": c["occurrences"],
+                               "approx": c["approx"]})
             print(f"\r  {i}/{len(probes)}", end="", file=sys.stderr, flush=True)
         print(file=sys.stderr)
-        # A corpus has one side. The exact-string count stands in for `rows`, and
-        # `items_hit` reads any hit as `any`; the side keys stay empty because a
-        # corpus document is neither a prompt nor a response.
-        hits = [{"probe": c["probe"], "group": "document", "rows": c["occurrences"]}
-                for c in counts if c["occurrences"]]
+        rollup = contamination.corpus_items(probes, counts)
+        if rollup["errors"]:
+            print(f"  {len(rollup['errors'])} probe(s) could not be counted — not zeros",
+                  file=sys.stderr)
+        # `items_probed` here is the corpus's own — the items it settled — and
+        # deliberately overrides the benchmark-wide list in `common`, which a
+        # stage scan can use as-is because reading every row answers every probe.
         corpus_run = {
             "stage": "corpus",
             "index": index,
@@ -2638,7 +2677,7 @@ def cmd_contaminate(args):
             **common,
             **_stamp(),
             "counts": counts,
-            "items": contamination.items_hit(probes, hits),
+            **rollup,
         }
         path = _write_json(RESULTS / f"{args.target}.corpus.contam-{spec['id']}.json", corpus_run)
         print(f"  -> {path}", file=sys.stderr)

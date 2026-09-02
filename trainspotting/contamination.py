@@ -262,6 +262,45 @@ def items_hit(probes: list[dict], probe_hits: list[dict]) -> dict:
     return {k: sorted(v) for k, v in out.items()}
 
 
+def corpus_items(probes: list[dict], counts: list[dict]) -> dict:
+    """Roll the corpus counts up to items, with the probes the index never
+    answered kept out of every denominator.
+
+    A count carrying an `error` is a probe that was not counted — the query was
+    rejected or the API stopped answering — and it is not a zero. A stage scan
+    has no such case, since reading every row answers every probe; the corpus
+    side is one request per probe and any of them can fail.
+
+    A corpus has one side, so the exact-string count stands in for `rows` and
+    `items_hit` reads every hit as `any`; the side keys stay empty because a
+    corpus document is neither a prompt nor a response.
+
+    Which items the rate is over: an item is settled *present* once any of its
+    probes hit, however the others fared — a hit is a hit. It is settled *absent*
+    only when every one of its probes came back with a count of zero. An item
+    with an unanswered probe and no hit is neither, and is listed in
+    `items_unresolved` rather than counted on either side of the rate, so
+    "we did not finish looking" is never read as "it is not there".
+    `items_probed` is the settled items, and is what `summary` divides by.
+    """
+    by_id = {p["id"]: p for p in probes}
+    errors = [c["probe"] for c in counts if c.get("error")]
+    hits = [
+        {"probe": c["probe"], "group": "document", "rows": c["occurrences"]}
+        for c in counts if not c.get("error") and c["occurrences"]
+    ]
+    items = items_hit(probes, hits)
+    seen = set(items["any"])
+    unresolved = sorted({by_id[pid]["item"] for pid in errors} - seen)
+    probed = sorted({p["item"] for p in probes} - set(unresolved))
+    return {
+        "items": items,
+        "items_probed": probed,
+        "items_unresolved": unresolved,
+        "errors": errors,
+    }
+
+
 def _rate(k: int, n: int) -> str:
     if not n:
         return "—"
@@ -304,9 +343,20 @@ def summary(stage_runs: list[dict], corpus_run: dict | None, unscanned: list[str
         lines.append(
             f"corpus items seen {_rate(len(hit['any']), n)}  in {corpus_run['index']}"
         )
-        occ = sum(c["occurrences"] for c in corpus_run["counts"])
+        # A probe the index never answered is not in `occurrences` and its item
+        # is not in the rate; say so, or a count over the rest reads as complete.
+        counted = [c for c in corpus_run["counts"] if not c.get("error")]
+        errored = len(corpus_run["counts"]) - len(counted)
+        if errored:
+            unresolved = corpus_run.get("items_unresolved", [])
+            lines.append(
+                f"  {errored} probe(s) could not be counted — not zeros"
+                + (f"; {len(unresolved)} item(s) left unresolved and out of the rate"
+                   if unresolved else "")
+            )
+        occ = sum(c["occurrences"] for c in counted)
         lines.append(f"  occurrences over all probes: {occ:,}"
-                     + (" (some approximate)" if any(c["approx"] for c in corpus_run["counts"]) else ""))
+                     + (" (some approximate)" if any(c["approx"] for c in counted) else ""))
         if corpus_run.get("caveat"):
             lines.append(f"  note: {corpus_run['caveat']}")
     return lines
