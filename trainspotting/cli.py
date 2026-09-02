@@ -46,6 +46,16 @@ def _count_int(value: str) -> int:
     return n
 
 
+def _docs_arg(value: str) -> int | str:
+    """argparse type for `lookup --docs`: a count, or `all` to walk every
+    occurrence by rank instead of sampling ten at a time. The word rather than
+    a separate flag, because "how many documents" is the one question and
+    "all of them" is one of its answers."""
+    if value.strip().lower() == "all":
+        return "all"
+    return _count_int(value)
+
+
 def _positive_int(value: str) -> int:
     """argparse type for counts. Zero divides by zero deep inside the sampler and
     a negative one silently returns nothing; both should be a usage error."""
@@ -2406,13 +2416,21 @@ def cmd_lookup(args):
         detail = ""
         if args.docs and n:
             docs = r["documents"]
-            detail = (
-                f"  in {len(docs)} document{'s' if len(docs) != 1 else ''}"
-                + ("" if r["exhaustive"] else f" (sampled from {r['drawn']} draws)")
-            )
+            # Three different claims, and the parenthetical has to say which:
+            # every occurrence was seen; a random sample was drawn; or the
+            # census asked for every rank and the index answered fewer.
+            if r["exhaustive"]:
+                how = f" (all {r['drawn']:,} occurrences)" if args.docs == "all" else ""
+            elif args.docs == "all":
+                how = f" ({r['drawn']:,} of {n:,} occurrences returned a document)"
+            else:
+                how = f" (sampled from {r['drawn']} draws)"
+            detail = f"  in {len(docs)} document{'s' if len(docs) != 1 else ''}{how}"
         print(f"  {info['label']:<{width}}  {n:>9,} occurrence{'s' if n != 1 else ' '}{'~' if r['approx'] else ''}{detail}")
         for d in r.get("documents", []):
             bits = [b for b in [d["subset"], d["snapshot"], f"{d['tokens']:,} tok" if d["tokens"] else None] if b]
+            if d.get("occurrences_drawn", 1) > 1:
+                bits.append(f"×{d['occurrences_drawn']}" if args.docs == "all" else f"{d['occurrences_drawn']} draws")
             print(f"      {d['url'] or d['shard'] or '?'}")
             print(f"        {' · '.join(bits)}")
     for seq, labels in tokenised.items():
@@ -2604,10 +2622,11 @@ def main():
     )
     p.add_argument(
         "--docs",
-        type=_count_int,
+        type=_docs_arg,
         default=0,
-        metavar="N",
-        help="also pull up to N documents behind each count (the index caps a single call at 10)",
+        metavar="N|all",
+        help="also pull up to N documents behind each count (the index caps a single call at 10), "
+        "or `all` to fetch every occurrence one request at a time",
     )
     p.set_defaults(fn=cmd_lookup)
 
