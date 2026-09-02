@@ -903,12 +903,15 @@ test set (all of it when `--items` covers the set), so the share found estimates
 the share of the whole benchmark that is present, with a Wilson interval. The row
 counts are exact: every row of the mix was read.
 
-Two result files per run. `results/<target>.<stage>.contam-<benchmark>.json`
+Two result files per run. `results/<target>.<stage>.contam-<slug>.json`, where
+the slug is the benchmark id at the default settings and `<benchmark>-<hash>` of
+the settings otherwise, so a narrowed run cannot overwrite the full one,
 carries every probe, every (probe, side) row count, the items rolled up by claim,
 the source breakdown of matched rows, and hash-ordered example snippets; the
 `corpus` file carries every probe's occurrence count. `--stage`, `--field`,
 `--items`, `--words`, `--case-sensitive`, `--index`, `--no-corpus` and
-`--corpus-only` narrow it. The byte cap and `--yes` are `grep`'s.
+`--corpus-only` narrow it; `--slug` names the files instead. The byte cap and
+`--yes` are `grep`'s.
 
 Registered benchmarks: `gsm8k`, `math-500`, `humaneval`, `mmlu`, `mmlu-pro`,
 `arc-challenge`, `truthfulqa`, `ifeval`. Adding one is an entry in

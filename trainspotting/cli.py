@@ -2512,6 +2512,51 @@ def _contam_probes(spec, items, words):
     return probes, skipped
 
 
+# The settings that decide what a contamination run measures, at their defaults.
+# The parser takes its defaults from here and `_contam_slug` compares against
+# it, so a run at the defaults is recognized as one however the flags are spelt.
+CONTAM_DEFAULTS = {
+    "items": 200,
+    "seed": 0,
+    "words": benchmarks.WORDS,
+    "field": None,
+    "case_sensitive": False,
+}
+
+
+def _contam_settings(args) -> dict:
+    """The settings that change which probes are cut or where they are searched.
+
+    `--stage` and `--index` are left out because each already names its own
+    file; `--examples` and the byte cap change what is kept, not what is found.
+    The field list is sorted and deduplicated so the spelling of the flags does
+    not make a new run.
+    """
+    return {
+        "items": args.items,
+        "seed": args.seed,
+        "words": args.words,
+        "field": sorted(set(args.field)) if args.field else None,
+        "case_sensitive": bool(args.case_sensitive),
+    }
+
+
+def _contam_slug(benchmark: str, settings: dict) -> str:
+    """The name a contamination run's result files carry: the benchmark id at
+    the default settings, else the id and a hash of the settings.
+
+    A run with `--field prompt` or `--items 20` cuts different probes or reads
+    a different side, and writing it to the file of the default run overwrote
+    a full measurement with a narrow one and left no sign. The default keeps
+    the bare id, so the committed runs keep their names and a diagnostic run
+    cannot overwrite them; `--slug` names a run instead, as it does for `grep`.
+    """
+    if settings == CONTAM_DEFAULTS:
+        return benchmark
+    digest = hashlib.sha1(json.dumps(settings, sort_keys=True).encode()).hexdigest()[:8]
+    return f"{benchmark}-{digest}"
+
+
 def _contam_unscanned(all_stages: list[dict], scanned: list[dict], corpus_only: bool) -> list[str]:
     """The stage names the summary must call unscanned rather than let read as clean.
 
@@ -2595,6 +2640,9 @@ def cmd_contaminate(args):
     n_q = sum(1 for p in probes if p["part"] == "question")
     n_c = sum(1 for p in probes if p["part"] == "choices")
     n_a = len(probes) - n_q - n_c
+    # Same rule as `grep`: `--slug` is a filename component, not a path.
+    settings = _contam_settings(args)
+    slug = _filename_part(args.slug) if args.slug else _contam_slug(spec["id"], settings)
     print(
         f"# contaminate {spec['name']} ({spec['hf_dataset']} {spec['config']}/{spec['split']}) "
         f"on {args.target}\n"
@@ -2605,6 +2653,9 @@ def cmd_contaminate(args):
         + f", {n_a} answer"
         + (f"; {skipped['short']} part(s) too short to probe" if skipped["short"] else "")
         + (f"; {skipped['truncated']} cut by the server" if skipped["truncated"] else "")
+        + f"\n# result files: *.contam-{slug}.json"
+        + ("" if args.slug or slug == spec["id"] else
+           " (settings differ from the defaults, so the default run's files are left alone)")
         + "\n",
         file=sys.stderr,
     )
@@ -2621,9 +2672,14 @@ def cmd_contaminate(args):
     }
     common = {
         "benchmark": bench,
+        "slug": slug,
         "items_requested": args.items,
         "seed": args.seed,
         "words": args.words,
+        # What --field asked for, as distinct from `fields`, which is what a
+        # stage's mix let the scan read. Together with the keys above this is
+        # every setting the slug hashes, so a file can say why it has its name.
+        "fields_requested": settings["field"],
         "items_probed": probed_items,
         "skipped": skipped,
         "case_sensitive": args.case_sensitive,
@@ -2694,7 +2750,7 @@ def cmd_contaminate(args):
                 **result,
             }
             path = _write_json(
-                RESULTS / f"{args.target}.{s['stage']}.contam-{spec['id']}.json", payload
+                RESULTS / f"{args.target}.{s['stage']}.contam-{slug}.json", payload
             )
             stage_runs.append(payload)
             print(f"{s['stage']}: {len(hit['any'])}/{len(probed_items)} items seen, "
@@ -2749,8 +2805,9 @@ def cmd_contaminate(args):
         }
         # The index is in the stage slot, as the mix is for a stage run: two
         # `--index` runs describe two corpora and must not overwrite each other.
+        # The slug is the stage files', since the same settings cut its probes.
         path = _write_json(
-            RESULTS / f"{args.target}.corpus-{_filename_part(index)}.contam-{spec['id']}.json",
+            RESULTS / f"{args.target}.corpus-{_filename_part(index)}.contam-{slug}.json",
             corpus_run,
         )
         print(f"  -> {path}", file=sys.stderr)
@@ -2958,10 +3015,10 @@ def main():
     p.add_argument("target", help=TARGET_HELP)
     p.add_argument("benchmark", help="one of: " + ", ".join(sorted(benchmarks.BENCHMARKS)))
     p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
-    p.add_argument("--items", type=_positive_int, default=200,
+    p.add_argument("--items", type=_positive_int, default=CONTAM_DEFAULTS["items"],
                    help="test items to probe; a seeded draw when the set is larger")
-    p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--words", type=_probe_words, default=benchmarks.WORDS,
+    p.add_argument("--seed", type=int, default=CONTAM_DEFAULTS["seed"])
+    p.add_argument("--words", type=_probe_words, default=CONTAM_DEFAULTS["words"],
                    help="consecutive words per probe, cut from the middle of the item; "
                         f"at least {benchmarks.MIN_WORDS}")
     p.add_argument(
@@ -2983,6 +3040,9 @@ def main():
     side = p.add_mutually_exclusive_group()
     side.add_argument("--no-corpus", action="store_true", help="skip the corpus side")
     side.add_argument("--corpus-only", action="store_true", help="skip the post-training scans")
+    p.add_argument("--slug", help="short name for the result files (default: the benchmark, "
+                   "with a hash of --items/--seed/--words/--field/--case-sensitive when any "
+                   "is not at its default)")
     p.set_defaults(fn=cmd_contaminate)
 
     p = sub.add_parser("classify")
