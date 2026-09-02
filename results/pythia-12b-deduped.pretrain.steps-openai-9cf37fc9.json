@@ -1,0 +1,1625 @@
+{
+  "dataset": "EleutherAI/pile-deduped-pythia-preshuffled",
+  "stage": "pretrain",
+  "name": "The Pile (deduplicated)",
+  "pattern": "OpenAI",
+  "slug": "openai-9cf37fc9",
+  "regex": false,
+  "case_sensitive": true,
+  "generated": "2026-09-02T18:41:11+00:00",
+  "revision": "4647773ea142ab1ff5694602fa104bbf49088408",
+  "tokenizer": "EleutherAI/pythia-12b-deduped",
+  "tokenizer_revision": "39c1bd94f9dbe4ebd1d191f364cb33a2e5c47707",
+  "steps_total": 143000,
+  "sequence_tokens": 2049,
+  "sequences_per_step": 1024,
+  "sample": 64,
+  "seed": 0,
+  "at": [],
+  "bytes_read": 268566528,
+  "second_pass_step": 98706,
+  "caveat": "The unit is a 2,049-token training sequence, not a document. Documents are concatenated with no separator and cut into sequences, so one sequence can hold the ends of several documents, and a string falling across a sequence boundary is missed. Steps are sampled, one from each equal slice of the run, and every sequence of a sampled step is read, so the interval is clustered by step. The exposure figures assume the sampled rate holds across the steps not read; the per-slice rates are the check on that.",
+  "steps": 64,
+  "sequences": 65536,
+  "matched": 4,
+  "occurrences": 8,
+  "rate": 6.103515625e-05,
+  "lo": 2.3735244377112366e-05,
+  "hi": 0.0001569426411794496,
+  "design_effect": 1.0,
+  "n_effective": 65536.0,
+  "slices": [
+    {
+      "from_step": 0,
+      "to_step": 17874,
+      "steps": 8,
+      "sequences": 8192,
+      "matched": 0,
+      "occurrences": 0,
+      "rate": 0.0,
+      "lo": 0.0,
+      "hi": 0.0004687255058711725,
+      "design_effect": 1.0,
+      "n_effective": 8192.0
+    },
+    {
+      "from_step": 17875,
+      "to_step": 35749,
+      "steps": 8,
+      "sequences": 8192,
+      "matched": 1,
+      "occurrences": 1,
+      "rate": 0.0001220703125,
+      "lo": 2.154817829997204e-05,
+      "hi": 0.0006912035176332436,
+      "design_effect": 1.0,
+      "n_effective": 8192.0
+    },
+    {
+      "from_step": 35750,
+      "to_step": 53624,
+      "steps": 8,
+      "sequences": 8192,
+      "matched": 1,
+      "occurrences": 5,
+      "rate": 0.0001220703125,
+      "lo": 2.154817829997204e-05,
+      "hi": 0.0006912035176332436,
+      "design_effect": 1.0,
+      "n_effective": 8192.0
+    },
+    {
+      "from_step": 53625,
+      "to_step": 71499,
+      "steps": 8,
+      "sequences": 8192,
+      "matched": 0,
+      "occurrences": 0,
+      "rate": 0.0,
+      "lo": 0.0,
+      "hi": 0.0004687255058711725,
+      "design_effect": 1.0,
+      "n_effective": 8192.0
+    },
+    {
+      "from_step": 71500,
+      "to_step": 89374,
+      "steps": 8,
+      "sequences": 8192,
+      "matched": 1,
+      "occurrences": 1,
+      "rate": 0.0001220703125,
+      "lo": 2.154817829997204e-05,
+      "hi": 0.0006912035176332436,
+      "design_effect": 1.0,
+      "n_effective": 8192.0
+    },
+    {
+      "from_step": 89375,
+      "to_step": 107249,
+      "steps": 8,
+      "sequences": 8192,
+      "matched": 0,
+      "occurrences": 0,
+      "rate": 0.0,
+      "lo": 0.0,
+      "hi": 0.0004687255058711725,
+      "design_effect": 1.0,
+      "n_effective": 8192.0
+    },
+    {
+      "from_step": 107250,
+      "to_step": 125124,
+      "steps": 8,
+      "sequences": 8192,
+      "matched": 1,
+      "occurrences": 1,
+      "rate": 0.0001220703125,
+      "lo": 2.154817829997204e-05,
+      "hi": 0.0006912035176332436,
+      "design_effect": 1.0,
+      "n_effective": 8192.0
+    },
+    {
+      "from_step": 125125,
+      "to_step": 142999,
+      "steps": 8,
+      "sequences": 8192,
+      "matched": 0,
+      "occurrences": 0,
+      "rate": 0.0,
+      "lo": 0.0,
+      "hi": 0.0004687255058711725,
+      "design_effect": 1.0,
+      "n_effective": 8192.0
+    }
+  ],
+  "exposure": [
+    {
+      "step": 0,
+      "sequences_seen": 0,
+      "expected": 0.0,
+      "lo": 0.0,
+      "hi": 0.0
+    },
+    {
+      "step": 1,
+      "sequences_seen": 1024,
+      "expected": 0.0625,
+      "lo": 0.024304890242163063,
+      "hi": 0.1607092645677564
+    },
+    {
+      "step": 2,
+      "sequences_seen": 2048,
+      "expected": 0.125,
+      "lo": 0.048609780484326126,
+      "hi": 0.3214185291355128
+    },
+    {
+      "step": 4,
+      "sequences_seen": 4096,
+      "expected": 0.25,
+      "lo": 0.09721956096865225,
+      "hi": 0.6428370582710256
+    },
+    {
+      "step": 8,
+      "sequences_seen": 8192,
+      "expected": 0.5,
+      "lo": 0.1944391219373045,
+      "hi": 1.285674116542051
+    },
+    {
+      "step": 16,
+      "sequences_seen": 16384,
+      "expected": 1.0,
+      "lo": 0.388878243874609,
+      "hi": 2.571348233084102
+    },
+    {
+      "step": 32,
+      "sequences_seen": 32768,
+      "expected": 2.0,
+      "lo": 0.777756487749218,
+      "hi": 5.142696466168204
+    },
+    {
+      "step": 64,
+      "sequences_seen": 65536,
+      "expected": 4.0,
+      "lo": 1.555512975498436,
+      "hi": 10.285392932336409
+    },
+    {
+      "step": 128,
+      "sequences_seen": 131072,
+      "expected": 8.0,
+      "lo": 3.111025950996872,
+      "hi": 20.570785864672818
+    },
+    {
+      "step": 256,
+      "sequences_seen": 262144,
+      "expected": 16.0,
+      "lo": 6.222051901993744,
+      "hi": 41.141571729345635
+    },
+    {
+      "step": 512,
+      "sequences_seen": 524288,
+      "expected": 32.0,
+      "lo": 12.444103803987488,
+      "hi": 82.28314345869127
+    },
+    {
+      "step": 1000,
+      "sequences_seen": 1024000,
+      "expected": 62.5,
+      "lo": 24.30489024216306,
+      "hi": 160.70926456775638
+    },
+    {
+      "step": 2000,
+      "sequences_seen": 2048000,
+      "expected": 125.0,
+      "lo": 48.60978048432612,
+      "hi": 321.41852913551276
+    },
+    {
+      "step": 3000,
+      "sequences_seen": 3072000,
+      "expected": 187.5,
+      "lo": 72.91467072648919,
+      "hi": 482.12779370326916
+    },
+    {
+      "step": 4000,
+      "sequences_seen": 4096000,
+      "expected": 250.0,
+      "lo": 97.21956096865225,
+      "hi": 642.8370582710255
+    },
+    {
+      "step": 5000,
+      "sequences_seen": 5120000,
+      "expected": 312.5,
+      "lo": 121.52445121081531,
+      "hi": 803.546322838782
+    },
+    {
+      "step": 6000,
+      "sequences_seen": 6144000,
+      "expected": 375.0,
+      "lo": 145.82934145297838,
+      "hi": 964.2555874065383
+    },
+    {
+      "step": 7000,
+      "sequences_seen": 7168000,
+      "expected": 437.5,
+      "lo": 170.13423169514144,
+      "hi": 1124.9648519742948
+    },
+    {
+      "step": 8000,
+      "sequences_seen": 8192000,
+      "expected": 500.0,
+      "lo": 194.4391219373045,
+      "hi": 1285.674116542051
+    },
+    {
+      "step": 9000,
+      "sequences_seen": 9216000,
+      "expected": 562.5,
+      "lo": 218.74401217946757,
+      "hi": 1446.3833811098075
+    },
+    {
+      "step": 10000,
+      "sequences_seen": 10240000,
+      "expected": 625.0,
+      "lo": 243.04890242163063,
+      "hi": 1607.092645677564
+    },
+    {
+      "step": 11000,
+      "sequences_seen": 11264000,
+      "expected": 687.5,
+      "lo": 267.3537926637937,
+      "hi": 1767.8019102453202
+    },
+    {
+      "step": 12000,
+      "sequences_seen": 12288000,
+      "expected": 750.0,
+      "lo": 291.65868290595677,
+      "hi": 1928.5111748130767
+    },
+    {
+      "step": 13000,
+      "sequences_seen": 13312000,
+      "expected": 812.5,
+      "lo": 315.9635731481198,
+      "hi": 2089.220439380833
+    },
+    {
+      "step": 14000,
+      "sequences_seen": 14336000,
+      "expected": 875.0,
+      "lo": 340.2684633902829,
+      "hi": 2249.9297039485896
+    },
+    {
+      "step": 15000,
+      "sequences_seen": 15360000,
+      "expected": 937.5,
+      "lo": 364.57335363244596,
+      "hi": 2410.638968516346
+    },
+    {
+      "step": 16000,
+      "sequences_seen": 16384000,
+      "expected": 1000.0,
+      "lo": 388.878243874609,
+      "hi": 2571.348233084102
+    },
+    {
+      "step": 17000,
+      "sequences_seen": 17408000,
+      "expected": 1062.5,
+      "lo": 413.18313411677207,
+      "hi": 2732.0574976518587
+    },
+    {
+      "step": 18000,
+      "sequences_seen": 18432000,
+      "expected": 1125.0,
+      "lo": 437.48802435893515,
+      "hi": 2892.766762219615
+    },
+    {
+      "step": 19000,
+      "sequences_seen": 19456000,
+      "expected": 1187.5,
+      "lo": 461.7929146010982,
+      "hi": 3053.476026787371
+    },
+    {
+      "step": 20000,
+      "sequences_seen": 20480000,
+      "expected": 1250.0,
+      "lo": 486.09780484326126,
+      "hi": 3214.185291355128
+    },
+    {
+      "step": 21000,
+      "sequences_seen": 21504000,
+      "expected": 1312.5,
+      "lo": 510.40269508542434,
+      "hi": 3374.894555922884
+    },
+    {
+      "step": 22000,
+      "sequences_seen": 22528000,
+      "expected": 1375.0,
+      "lo": 534.7075853275874,
+      "hi": 3535.6038204906404
+    },
+    {
+      "step": 23000,
+      "sequences_seen": 23552000,
+      "expected": 1437.5,
+      "lo": 559.0124755697504,
+      "hi": 3696.313085058397
+    },
+    {
+      "step": 24000,
+      "sequences_seen": 24576000,
+      "expected": 1500.0,
+      "lo": 583.3173658119135,
+      "hi": 3857.0223496261533
+    },
+    {
+      "step": 25000,
+      "sequences_seen": 25600000,
+      "expected": 1562.5,
+      "lo": 607.6222560540766,
+      "hi": 4017.7316141939095
+    },
+    {
+      "step": 26000,
+      "sequences_seen": 26624000,
+      "expected": 1625.0,
+      "lo": 631.9271462962396,
+      "hi": 4178.440878761666
+    },
+    {
+      "step": 27000,
+      "sequences_seen": 27648000,
+      "expected": 1687.5,
+      "lo": 656.2320365384027,
+      "hi": 4339.1501433294225
+    },
+    {
+      "step": 28000,
+      "sequences_seen": 28672000,
+      "expected": 1750.0,
+      "lo": 680.5369267805658,
+      "hi": 4499.859407897179
+    },
+    {
+      "step": 29000,
+      "sequences_seen": 29696000,
+      "expected": 1812.5,
+      "lo": 704.8418170227288,
+      "hi": 4660.568672464935
+    },
+    {
+      "step": 30000,
+      "sequences_seen": 30720000,
+      "expected": 1875.0,
+      "lo": 729.1467072648919,
+      "hi": 4821.277937032692
+    },
+    {
+      "step": 31000,
+      "sequences_seen": 31744000,
+      "expected": 1937.5,
+      "lo": 753.451597507055,
+      "hi": 4981.987201600448
+    },
+    {
+      "step": 32000,
+      "sequences_seen": 32768000,
+      "expected": 2000.0,
+      "lo": 777.756487749218,
+      "hi": 5142.696466168204
+    },
+    {
+      "step": 33000,
+      "sequences_seen": 33792000,
+      "expected": 2062.5,
+      "lo": 802.061377991381,
+      "hi": 5303.405730735961
+    },
+    {
+      "step": 34000,
+      "sequences_seen": 34816000,
+      "expected": 2125.0,
+      "lo": 826.3662682335441,
+      "hi": 5464.1149953037175
+    },
+    {
+      "step": 35000,
+      "sequences_seen": 35840000,
+      "expected": 2187.5,
+      "lo": 850.6711584757072,
+      "hi": 5624.824259871473
+    },
+    {
+      "step": 36000,
+      "sequences_seen": 36864000,
+      "expected": 2250.0,
+      "lo": 874.9760487178703,
+      "hi": 5785.53352443923
+    },
+    {
+      "step": 37000,
+      "sequences_seen": 37888000,
+      "expected": 2312.5,
+      "lo": 899.2809389600334,
+      "hi": 5946.242789006987
+    },
+    {
+      "step": 38000,
+      "sequences_seen": 38912000,
+      "expected": 2375.0,
+      "lo": 923.5858292021964,
+      "hi": 6106.952053574742
+    },
+    {
+      "step": 39000,
+      "sequences_seen": 39936000,
+      "expected": 2437.5,
+      "lo": 947.8907194443594,
+      "hi": 6267.661318142499
+    },
+    {
+      "step": 40000,
+      "sequences_seen": 40960000,
+      "expected": 2500.0,
+      "lo": 972.1956096865225,
+      "hi": 6428.370582710256
+    },
+    {
+      "step": 41000,
+      "sequences_seen": 41984000,
+      "expected": 2562.5,
+      "lo": 996.5004999286856,
+      "hi": 6589.079847278012
+    },
+    {
+      "step": 42000,
+      "sequences_seen": 43008000,
+      "expected": 2625.0,
+      "lo": 1020.8053901708487,
+      "hi": 6749.789111845768
+    },
+    {
+      "step": 43000,
+      "sequences_seen": 44032000,
+      "expected": 2687.5,
+      "lo": 1045.1102804130117,
+      "hi": 6910.498376413525
+    },
+    {
+      "step": 44000,
+      "sequences_seen": 45056000,
+      "expected": 2750.0,
+      "lo": 1069.4151706551747,
+      "hi": 7071.207640981281
+    },
+    {
+      "step": 45000,
+      "sequences_seen": 46080000,
+      "expected": 2812.5,
+      "lo": 1093.7200608973378,
+      "hi": 7231.916905549037
+    },
+    {
+      "step": 46000,
+      "sequences_seen": 47104000,
+      "expected": 2875.0,
+      "lo": 1118.024951139501,
+      "hi": 7392.626170116794
+    },
+    {
+      "step": 47000,
+      "sequences_seen": 48128000,
+      "expected": 2937.5,
+      "lo": 1142.329841381664,
+      "hi": 7553.33543468455
+    },
+    {
+      "step": 48000,
+      "sequences_seen": 49152000,
+      "expected": 3000.0,
+      "lo": 1166.634731623827,
+      "hi": 7714.044699252307
+    },
+    {
+      "step": 49000,
+      "sequences_seen": 50176000,
+      "expected": 3062.5,
+      "lo": 1190.9396218659901,
+      "hi": 7874.753963820063
+    },
+    {
+      "step": 50000,
+      "sequences_seen": 51200000,
+      "expected": 3125.0,
+      "lo": 1215.2445121081532,
+      "hi": 8035.463228387819
+    },
+    {
+      "step": 51000,
+      "sequences_seen": 52224000,
+      "expected": 3187.5,
+      "lo": 1239.5494023503163,
+      "hi": 8196.172492955577
+    },
+    {
+      "step": 52000,
+      "sequences_seen": 53248000,
+      "expected": 3250.0,
+      "lo": 1263.8542925924792,
+      "hi": 8356.881757523332
+    },
+    {
+      "step": 53000,
+      "sequences_seen": 54272000,
+      "expected": 3312.5,
+      "lo": 1288.1591828346423,
+      "hi": 8517.591022091088
+    },
+    {
+      "step": 54000,
+      "sequences_seen": 55296000,
+      "expected": 3375.0,
+      "lo": 1312.4640730768053,
+      "hi": 8678.300286658845
+    },
+    {
+      "step": 55000,
+      "sequences_seen": 56320000,
+      "expected": 3437.5,
+      "lo": 1336.7689633189684,
+      "hi": 8839.009551226602
+    },
+    {
+      "step": 56000,
+      "sequences_seen": 57344000,
+      "expected": 3500.0,
+      "lo": 1361.0738535611315,
+      "hi": 8999.718815794358
+    },
+    {
+      "step": 57000,
+      "sequences_seen": 58368000,
+      "expected": 3562.5,
+      "lo": 1385.3787438032946,
+      "hi": 9160.428080362115
+    },
+    {
+      "step": 58000,
+      "sequences_seen": 59392000,
+      "expected": 3625.0,
+      "lo": 1409.6836340454577,
+      "hi": 9321.13734492987
+    },
+    {
+      "step": 59000,
+      "sequences_seen": 60416000,
+      "expected": 3687.5,
+      "lo": 1433.9885242876207,
+      "hi": 9481.846609497627
+    },
+    {
+      "step": 60000,
+      "sequences_seen": 61440000,
+      "expected": 3750.0,
+      "lo": 1458.2934145297838,
+      "hi": 9642.555874065383
+    },
+    {
+      "step": 61000,
+      "sequences_seen": 62464000,
+      "expected": 3812.5,
+      "lo": 1482.598304771947,
+      "hi": 9803.26513863314
+    },
+    {
+      "step": 62000,
+      "sequences_seen": 63488000,
+      "expected": 3875.0,
+      "lo": 1506.90319501411,
+      "hi": 9963.974403200897
+    },
+    {
+      "step": 63000,
+      "sequences_seen": 64512000,
+      "expected": 3937.5,
+      "lo": 1531.208085256273,
+      "hi": 10124.683667768653
+    },
+    {
+      "step": 64000,
+      "sequences_seen": 65536000,
+      "expected": 4000.0,
+      "lo": 1555.512975498436,
+      "hi": 10285.392932336408
+    },
+    {
+      "step": 65000,
+      "sequences_seen": 66560000,
+      "expected": 4062.5,
+      "lo": 1579.817865740599,
+      "hi": 10446.102196904165
+    },
+    {
+      "step": 66000,
+      "sequences_seen": 67584000,
+      "expected": 4125.0,
+      "lo": 1604.122755982762,
+      "hi": 10606.811461471922
+    },
+    {
+      "step": 67000,
+      "sequences_seen": 68608000,
+      "expected": 4187.5,
+      "lo": 1628.4276462249252,
+      "hi": 10767.520726039678
+    },
+    {
+      "step": 68000,
+      "sequences_seen": 69632000,
+      "expected": 4250.0,
+      "lo": 1652.7325364670883,
+      "hi": 10928.229990607435
+    },
+    {
+      "step": 69000,
+      "sequences_seen": 70656000,
+      "expected": 4312.5,
+      "lo": 1677.0374267092513,
+      "hi": 11088.939255175192
+    },
+    {
+      "step": 70000,
+      "sequences_seen": 71680000,
+      "expected": 4375.0,
+      "lo": 1701.3423169514144,
+      "hi": 11249.648519742947
+    },
+    {
+      "step": 71000,
+      "sequences_seen": 72704000,
+      "expected": 4437.5,
+      "lo": 1725.6472071935775,
+      "hi": 11410.357784310703
+    },
+    {
+      "step": 72000,
+      "sequences_seen": 73728000,
+      "expected": 4500.0,
+      "lo": 1749.9520974357406,
+      "hi": 11571.06704887846
+    },
+    {
+      "step": 73000,
+      "sequences_seen": 74752000,
+      "expected": 4562.5,
+      "lo": 1774.2569876779037,
+      "hi": 11731.776313446217
+    },
+    {
+      "step": 74000,
+      "sequences_seen": 75776000,
+      "expected": 4625.0,
+      "lo": 1798.5618779200668,
+      "hi": 11892.485578013973
+    },
+    {
+      "step": 75000,
+      "sequences_seen": 76800000,
+      "expected": 4687.5,
+      "lo": 1822.8667681622296,
+      "hi": 12053.19484258173
+    },
+    {
+      "step": 76000,
+      "sequences_seen": 77824000,
+      "expected": 4750.0,
+      "lo": 1847.1716584043927,
+      "hi": 12213.904107149485
+    },
+    {
+      "step": 77000,
+      "sequences_seen": 78848000,
+      "expected": 4812.5,
+      "lo": 1871.4765486465558,
+      "hi": 12374.613371717242
+    },
+    {
+      "step": 78000,
+      "sequences_seen": 79872000,
+      "expected": 4875.0,
+      "lo": 1895.7814388887189,
+      "hi": 12535.322636284998
+    },
+    {
+      "step": 79000,
+      "sequences_seen": 80896000,
+      "expected": 4937.5,
+      "lo": 1920.086329130882,
+      "hi": 12696.031900852755
+    },
+    {
+      "step": 80000,
+      "sequences_seen": 81920000,
+      "expected": 5000.0,
+      "lo": 1944.391219373045,
+      "hi": 12856.741165420512
+    },
+    {
+      "step": 81000,
+      "sequences_seen": 82944000,
+      "expected": 5062.5,
+      "lo": 1968.6961096152081,
+      "hi": 13017.450429988268
+    },
+    {
+      "step": 82000,
+      "sequences_seen": 83968000,
+      "expected": 5125.0,
+      "lo": 1993.0009998573712,
+      "hi": 13178.159694556023
+    },
+    {
+      "step": 83000,
+      "sequences_seen": 84992000,
+      "expected": 5187.5,
+      "lo": 2017.3058900995343,
+      "hi": 13338.86895912378
+    },
+    {
+      "step": 84000,
+      "sequences_seen": 86016000,
+      "expected": 5250.0,
+      "lo": 2041.6107803416974,
+      "hi": 13499.578223691537
+    },
+    {
+      "step": 85000,
+      "sequences_seen": 87040000,
+      "expected": 5312.5,
+      "lo": 2065.9156705838604,
+      "hi": 13660.287488259293
+    },
+    {
+      "step": 86000,
+      "sequences_seen": 88064000,
+      "expected": 5375.0,
+      "lo": 2090.2205608260233,
+      "hi": 13820.99675282705
+    },
+    {
+      "step": 87000,
+      "sequences_seen": 89088000,
+      "expected": 5437.5,
+      "lo": 2114.5254510681866,
+      "hi": 13981.706017394807
+    },
+    {
+      "step": 88000,
+      "sequences_seen": 90112000,
+      "expected": 5500.0,
+      "lo": 2138.8303413103495,
+      "hi": 14142.415281962561
+    },
+    {
+      "step": 89000,
+      "sequences_seen": 91136000,
+      "expected": 5562.5,
+      "lo": 2163.135231552513,
+      "hi": 14303.124546530318
+    },
+    {
+      "step": 90000,
+      "sequences_seen": 92160000,
+      "expected": 5625.0,
+      "lo": 2187.4401217946756,
+      "hi": 14463.833811098075
+    },
+    {
+      "step": 91000,
+      "sequences_seen": 93184000,
+      "expected": 5687.5,
+      "lo": 2211.745012036839,
+      "hi": 14624.543075665832
+    },
+    {
+      "step": 92000,
+      "sequences_seen": 94208000,
+      "expected": 5750.0,
+      "lo": 2236.049902279002,
+      "hi": 14785.252340233588
+    },
+    {
+      "step": 93000,
+      "sequences_seen": 95232000,
+      "expected": 5812.5,
+      "lo": 2260.3547925211647,
+      "hi": 14945.961604801345
+    },
+    {
+      "step": 94000,
+      "sequences_seen": 96256000,
+      "expected": 5875.0,
+      "lo": 2284.659682763328,
+      "hi": 15106.6708693691
+    },
+    {
+      "step": 95000,
+      "sequences_seen": 97280000,
+      "expected": 5937.5,
+      "lo": 2308.964573005491,
+      "hi": 15267.380133936857
+    },
+    {
+      "step": 96000,
+      "sequences_seen": 98304000,
+      "expected": 6000.0,
+      "lo": 2333.269463247654,
+      "hi": 15428.089398504613
+    },
+    {
+      "step": 97000,
+      "sequences_seen": 99328000,
+      "expected": 6062.5,
+      "lo": 2357.574353489817,
+      "hi": 15588.79866307237
+    },
+    {
+      "step": 98000,
+      "sequences_seen": 100352000,
+      "expected": 6125.0,
+      "lo": 2381.8792437319803,
+      "hi": 15749.507927640127
+    },
+    {
+      "step": 99000,
+      "sequences_seen": 101376000,
+      "expected": 6187.5,
+      "lo": 2406.184133974143,
+      "hi": 15910.217192207883
+    },
+    {
+      "step": 100000,
+      "sequences_seen": 102400000,
+      "expected": 6250.0,
+      "lo": 2430.4890242163065,
+      "hi": 16070.926456775638
+    },
+    {
+      "step": 101000,
+      "sequences_seen": 103424000,
+      "expected": 6312.5,
+      "lo": 2454.7939144584693,
+      "hi": 16231.635721343395
+    },
+    {
+      "step": 102000,
+      "sequences_seen": 104448000,
+      "expected": 6375.0,
+      "lo": 2479.0988047006326,
+      "hi": 16392.344985911153
+    },
+    {
+      "step": 103000,
+      "sequences_seen": 105472000,
+      "expected": 6437.5,
+      "lo": 2503.4036949427955,
+      "hi": 16553.05425047891
+    },
+    {
+      "step": 104000,
+      "sequences_seen": 106496000,
+      "expected": 6500.0,
+      "lo": 2527.7085851849583,
+      "hi": 16713.763515046663
+    },
+    {
+      "step": 105000,
+      "sequences_seen": 107520000,
+      "expected": 6562.5,
+      "lo": 2552.0134754271216,
+      "hi": 16874.47277961442
+    },
+    {
+      "step": 106000,
+      "sequences_seen": 108544000,
+      "expected": 6625.0,
+      "lo": 2576.3183656692845,
+      "hi": 17035.182044182176
+    },
+    {
+      "step": 107000,
+      "sequences_seen": 109568000,
+      "expected": 6687.5,
+      "lo": 2600.623255911448,
+      "hi": 17195.891308749935
+    },
+    {
+      "step": 108000,
+      "sequences_seen": 110592000,
+      "expected": 6750.0,
+      "lo": 2624.9281461536107,
+      "hi": 17356.60057331769
+    },
+    {
+      "step": 109000,
+      "sequences_seen": 111616000,
+      "expected": 6812.5,
+      "lo": 2649.233036395774,
+      "hi": 17517.309837885445
+    },
+    {
+      "step": 110000,
+      "sequences_seen": 112640000,
+      "expected": 6875.0,
+      "lo": 2673.537926637937,
+      "hi": 17678.019102453203
+    },
+    {
+      "step": 111000,
+      "sequences_seen": 113664000,
+      "expected": 6937.5,
+      "lo": 2697.8428168801,
+      "hi": 17838.728367020958
+    },
+    {
+      "step": 112000,
+      "sequences_seen": 114688000,
+      "expected": 7000.0,
+      "lo": 2722.147707122263,
+      "hi": 17999.437631588717
+    },
+    {
+      "step": 113000,
+      "sequences_seen": 115712000,
+      "expected": 7062.5,
+      "lo": 2746.4525973644263,
+      "hi": 18160.14689615647
+    },
+    {
+      "step": 114000,
+      "sequences_seen": 116736000,
+      "expected": 7125.0,
+      "lo": 2770.757487606589,
+      "hi": 18320.85616072423
+    },
+    {
+      "step": 115000,
+      "sequences_seen": 117760000,
+      "expected": 7187.5,
+      "lo": 2795.0623778487525,
+      "hi": 18481.565425291985
+    },
+    {
+      "step": 116000,
+      "sequences_seen": 118784000,
+      "expected": 7250.0,
+      "lo": 2819.3672680909153,
+      "hi": 18642.27468985974
+    },
+    {
+      "step": 117000,
+      "sequences_seen": 119808000,
+      "expected": 7312.5,
+      "lo": 2843.672158333078,
+      "hi": 18802.9839544275
+    },
+    {
+      "step": 118000,
+      "sequences_seen": 120832000,
+      "expected": 7375.0,
+      "lo": 2867.9770485752415,
+      "hi": 18963.693218995253
+    },
+    {
+      "step": 119000,
+      "sequences_seen": 121856000,
+      "expected": 7437.5,
+      "lo": 2892.2819388174044,
+      "hi": 19124.40248356301
+    },
+    {
+      "step": 120000,
+      "sequences_seen": 122880000,
+      "expected": 7500.0,
+      "lo": 2916.5868290595677,
+      "hi": 19285.111748130767
+    },
+    {
+      "step": 121000,
+      "sequences_seen": 123904000,
+      "expected": 7562.5,
+      "lo": 2940.8917193017305,
+      "hi": 19445.82101269852
+    },
+    {
+      "step": 122000,
+      "sequences_seen": 124928000,
+      "expected": 7625.0,
+      "lo": 2965.196609543894,
+      "hi": 19606.53027726628
+    },
+    {
+      "step": 123000,
+      "sequences_seen": 125952000,
+      "expected": 7687.5,
+      "lo": 2989.5014997860567,
+      "hi": 19767.239541834035
+    },
+    {
+      "step": 124000,
+      "sequences_seen": 126976000,
+      "expected": 7750.0,
+      "lo": 3013.80639002822,
+      "hi": 19927.948806401793
+    },
+    {
+      "step": 125000,
+      "sequences_seen": 128000000,
+      "expected": 7812.5,
+      "lo": 3038.111280270383,
+      "hi": 20088.658070969548
+    },
+    {
+      "step": 126000,
+      "sequences_seen": 129024000,
+      "expected": 7875.0,
+      "lo": 3062.416170512546,
+      "hi": 20249.367335537307
+    },
+    {
+      "step": 127000,
+      "sequences_seen": 130048000,
+      "expected": 7937.5,
+      "lo": 3086.721060754709,
+      "hi": 20410.07660010506
+    },
+    {
+      "step": 128000,
+      "sequences_seen": 131072000,
+      "expected": 8000.0,
+      "lo": 3111.025950996872,
+      "hi": 20570.785864672816
+    },
+    {
+      "step": 129000,
+      "sequences_seen": 132096000,
+      "expected": 8062.5,
+      "lo": 3135.330841239035,
+      "hi": 20731.495129240575
+    },
+    {
+      "step": 130000,
+      "sequences_seen": 133120000,
+      "expected": 8125.0,
+      "lo": 3159.635731481198,
+      "hi": 20892.20439380833
+    },
+    {
+      "step": 131000,
+      "sequences_seen": 134144000,
+      "expected": 8187.5,
+      "lo": 3183.9406217233613,
+      "hi": 21052.91365837609
+    },
+    {
+      "step": 132000,
+      "sequences_seen": 135168000,
+      "expected": 8250.0,
+      "lo": 3208.245511965524,
+      "hi": 21213.622922943843
+    },
+    {
+      "step": 133000,
+      "sequences_seen": 136192000,
+      "expected": 8312.5,
+      "lo": 3232.5504022076875,
+      "hi": 21374.332187511598
+    },
+    {
+      "step": 134000,
+      "sequences_seen": 137216000,
+      "expected": 8375.0,
+      "lo": 3256.8552924498504,
+      "hi": 21535.041452079357
+    },
+    {
+      "step": 135000,
+      "sequences_seen": 138240000,
+      "expected": 8437.5,
+      "lo": 3281.1601826920137,
+      "hi": 21695.75071664711
+    },
+    {
+      "step": 136000,
+      "sequences_seen": 139264000,
+      "expected": 8500.0,
+      "lo": 3305.4650729341765,
+      "hi": 21856.45998121487
+    },
+    {
+      "step": 137000,
+      "sequences_seen": 140288000,
+      "expected": 8562.5,
+      "lo": 3329.76996317634,
+      "hi": 22017.169245782625
+    },
+    {
+      "step": 138000,
+      "sequences_seen": 141312000,
+      "expected": 8625.0,
+      "lo": 3354.0748534185027,
+      "hi": 22177.878510350383
+    },
+    {
+      "step": 139000,
+      "sequences_seen": 142336000,
+      "expected": 8687.5,
+      "lo": 3378.3797436606656,
+      "hi": 22338.587774918138
+    },
+    {
+      "step": 140000,
+      "sequences_seen": 143360000,
+      "expected": 8750.0,
+      "lo": 3402.684633902829,
+      "hi": 22499.297039485893
+    },
+    {
+      "step": 141000,
+      "sequences_seen": 144384000,
+      "expected": 8812.5,
+      "lo": 3426.9895241449917,
+      "hi": 22660.00630405365
+    },
+    {
+      "step": 142000,
+      "sequences_seen": 145408000,
+      "expected": 8875.0,
+      "lo": 3451.294414387155,
+      "hi": 22820.715568621406
+    },
+    {
+      "step": 143000,
+      "sequences_seen": 146432000,
+      "expected": 8937.5,
+      "lo": 3475.599304629318,
+      "hi": 22981.424833189165
+    }
+  ],
+  "per_step": [
+    {
+      "step": 1577,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 3956,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 4633,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 7763,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 11031,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 13161,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 15064,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 16882,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 19827,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 21575,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 23237,
+      "sequences": 1024,
+      "matched": 1,
+      "occurrences": 1
+    },
+    {
+      "step": 26645,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 27382,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 30200,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 31853,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 33903,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 36776,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 40165,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 40819,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 43723,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 45091,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 47223,
+      "sequences": 1024,
+      "matched": 1,
+      "occurrences": 5
+    },
+    {
+      "step": 50508,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 53323,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 54037,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 57308,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 59871,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 61623,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 63399,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 66749,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 68844,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 71400,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 72566,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 73989,
+      "sequences": 1024,
+      "matched": 1,
+      "occurrences": 1
+    },
+    {
+      "step": 76025,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 78585,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 82070,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 82675,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 86927,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 88504,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 90374,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 92941,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 94100,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 96860,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 99220,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 101523,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 103364,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 107239,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 109084,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 109857,
+      "sequences": 1024,
+      "matched": 1,
+      "occurrences": 1
+    },
+    {
+      "step": 112047,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 115263,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 118267,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 120425,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 121102,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 124124,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 126317,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 127870,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 130955,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 134041,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 134894,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 137474,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 140353,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    },
+    {
+      "step": 141140,
+      "sequences": 1024,
+      "matched": 0,
+      "occurrences": 0
+    }
+  ],
+  "examples": [
+    {
+      "step": 23237,
+      "sequence": 583,
+      "snippet": " page in other languages: Russian\n\nIt\u2019s been nearly two years since researchers from Google, Stanford, UC Berkeley, and OpenAI released the paper, \u201cConcrete Problems in AI Safety,\u201d yet it\u2019s still one of the most important pieces on AI safety. Eve"
+    },
+    {
+      "step": 47223,
+      "sequence": 178,
+      "snippet": "tly Brazilian and one entirely Chinese team took on artificial intelligence at the tournament this year. The so-called \u201cOpenAI Five\u201d squad was composed of bots developed by OpenAI, a nonprofit research company funded in part by Elon Musk. The bot"
+    },
+    {
+      "step": 73989,
+      "sequence": 481,
+      "snippet": "ames go[1].\n\nAnd DeepMind is able to use a single agent rather than a different specific\none for each game. I wonder if OpenAI wants to go in a different direction\nalthough RL has considerable success. Whereas the other goals definitely need\na lo"
+    },
+    {
+      "step": 109857,
+      "sequence": 826,
+      "snippet": "lado videos durante mucho tiempo, pero las cosas han cambiado recientemente\", dijo Jack Clark, director de Pol\u00edticas de OpenAI, una organizaci\u00f3n que aspira a garantizar que la AI genere beneficios para todos, en la audiencia del Comit\u00e9 de Intelig"
+    }
+  ]
+}

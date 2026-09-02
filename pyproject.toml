@@ -17,7 +17,10 @@ trainspotting = "trainspotting.cli:main"
 # Only the grep layer needs duckdb, and only it needs a query engine at all —
 # every other layer talks to the datasets-server over HTTP.
 grep = ["duckdb>=1.0"]
-dev = ["pytest>=8", "duckdb>=1.0"]
+# Only the steps layer decodes tokens: Pythia's training order is published as
+# token ids, not text, so reading a batch back means the GPT-NeoX tokenizer.
+steps = ["tokenizers>=0.15"]
+dev = ["pytest>=8", "duckdb>=1.0", "tokenizers>=0.15"]
 
 [build-system]
 requires = ["setuptools>=68"]

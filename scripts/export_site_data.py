@@ -49,7 +49,10 @@ BULK = (".context.json", ".docs.json")
 # page has a search box, but it searches the committed samples directly and
 # never reads a `.search-` result file. Exporting one ships bytes nobody
 # fetches.
-UNRENDERED = (".grep-", ".search-")
+#
+# `.steps-` is a per-training-step count over Pythia's published batch order; the
+# page has no card for it yet either.
+UNRENDERED = (".grep-", ".search-", ".steps-")
 
 out = ROOT / "docs" / "data"
 out.mkdir(parents=True, exist_ok=True)

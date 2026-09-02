@@ -68,6 +68,15 @@ def test_case_sensitivity_names_a_different_run():
     assert _pattern_slug("i-cannot", case_sensitive=True) != "i-cannot"
 
 
+def test_literal_and_regex_modes_name_different_runs():
+    """The same punctuation is data in one mode and syntax in the other, so
+    neither run may silently overwrite the other after an expensive scan."""
+    from trainspotting.cli import _pattern_slug
+
+    assert _pattern_slug("a.b") != _pattern_slug("a.b", regex=True)
+    assert _pattern_slug("i-cannot") != _pattern_slug("i-cannot", regex=True)
+
+
 def test_a_long_plain_pattern_is_still_a_filename():
     """A 300-character literal is its own slug, so the readable shortcut would
     hand back a basename no filesystem accepts — after the whole sampling run
