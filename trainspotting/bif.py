@@ -486,32 +486,45 @@ def influence(losses: list[list[list[float]]]) -> list[dict]:
     it has anything to do with the query.
 
     `partial` is the covariance after the chain's shared movement is taken out
-    of both series — each is regressed on the per-draw mean candidate loss and
-    the residuals covaried. Every loss rises and falls with the chain's excursion
-    from w*, and on Pythia-70m that one component gave all 200 documents a
-    correlation near 0.85 with the query and ranked them by how far their own
-    loss swings. What is left after removing it is the part of an example's
-    movement that is specific to the query, and that is what the ranking uses.
+    of both series — each is regressed on the per-draw mean loss of the *other*
+    candidates and the residuals covaried. Every loss rises and falls with the
+    chain's excursion from w*, and on Pythia-70m that one component gave all 200
+    documents a correlation near 0.85 with the query and ranked them by how far
+    their own loss swings. What is left after removing it is the part of an
+    example's movement that is specific to the query, and that is what the
+    ranking uses.
+
+    The control leaves the candidate being scored out of the mean, because a
+    candidate in its own control is partly regressed on itself, and a lone
+    candidate would be *entirely* its own control: the residual would be zero
+    and every partial would print as an exact, meaningless tie. With one
+    candidate there is no other example to control on, so its partial is the
+    raw covariance, and `partial_control` says which was done.
     """
     n = len(losses[0][0]) - 1
+    control = "leave-one-out" if n > 1 else "none"
     out = []
     for j in range(n):
         covs, corrs, partials = [], [], []
         for chain in losses:
             q = [d[0] for d in chain]
             c = [d[j + 1] for d in chain]
-            m = [_mean(d[1:]) for d in chain]
             cov = _cov(q, c)
             sq, sc = _std(q), _std(c)
             covs.append(cov)
             corrs.append(cov / (sq * sc) if sq > 0 and sc > 0 else 0.0)
-            partials.append(_cov(_residual(q, m), _residual(c, m)))
+            if n > 1:
+                m = [_mean(d[k] for k in range(1, n + 1) if k != j + 1) for d in chain]
+                partials.append(_cov(_residual(q, m), _residual(c, m)))
+            else:
+                partials.append(cov)
         out.append({
             "cov": _mean(covs),
             "cov_stderr": _stderr(covs),
             "corr": _mean(corrs),
             "partial": _mean(partials),
             "partial_stderr": _stderr(partials),
+            "partial_control": control,
             "chain_covs": covs,
         })
     return out
@@ -626,6 +639,7 @@ def result(target_name, model_id, revision, query, prompt, cands, encoded, run, 
         "skipped": skipped,
         "llc": llc(run),
         "baseline_cov": common,
+        "partial_control": stats[0]["partial_control"] if stats else None,
         "query_loss": {
             "at_origin": run["at_origin"][0],
             "posterior_mean": _mean(query_losses),
@@ -721,6 +735,11 @@ def render(res: dict, top: int = 5) -> list[str]:
             f"it is the part of each example's movement specific to the query; the raw "
             f"covariance is shown beside it."
         )
+        if res.get("partial_control") == "none":
+            lines.append(
+                "With one candidate there is no other example to regress on, so its partial "
+                "covariance here is the raw covariance."
+            )
     lines.append("")
     lines.append("| stage | side | n | mean partial | mean cov | mean corr | toward |")
     lines.append("|---|---|---:|---:|---:|---:|---:|")

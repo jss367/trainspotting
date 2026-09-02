@@ -1238,8 +1238,12 @@ documents correlated near 0.85 with the query, at the default near 0.6, and the
 raw ranking was by how far each document's own loss swings rather than by
 anything to do with the query. So the ranking uses the
 *partial* covariance instead: both series are regressed on the per-draw mean
-candidate loss and the residuals covaried, which is the part of an example's
-movement that is specific to the query. The raw covariance, the correlation and
+loss of the *other* candidates and the residuals covaried, which is the part of
+an example's movement that is specific to the query. The candidate being scored
+is left out of its own control, since a lone candidate regressed on itself has
+a residual of exactly zero; with one candidate there is nothing to control on,
+so its partial is the raw covariance and the file says so (`partial_control`).
+The raw covariance, the correlation and
 the query's covariance with the average candidate (`baseline_cov`, and each
 example's `above_baseline`) are all kept beside it. The raw draws are in the
 file too (`draws[chain][draw]`, the query's loss then each record's), so any

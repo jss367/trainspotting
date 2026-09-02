@@ -228,11 +228,27 @@ def test_partial_covariance_removes_what_moves_with_the_sample_average():
     stats = bif.influence([chain(q, c0, c1, c2)])
     # Raw covariance calls all three positive and the pure common mode largest.
     assert stats[0]["cov"] > stats[1]["cov"] > 0 and stats[2]["cov"] > 0
-    # Partial covariance sees through it.
+    # Partial covariance sees through it. The control for candidate 0 is the
+    # mean of the other two, which is `m` exactly, so nothing of it is left.
     assert stats[0]["partial"] == pytest.approx(0.0, abs=1e-9)
     assert stats[1]["partial"] > 0
     assert stats[2]["partial"] < 0
-    assert stats[1]["partial"] == pytest.approx(-stats[2]["partial"])
+    # The two are not exact mirrors: each is controlled on the other two, and
+    # candidate 1's control carries a little of candidate 2's opposing component
+    # where candidate 2's carries a little of candidate 1's. The signs are the
+    # finding; the magnitudes depend on what else is in the sample.
+    assert all(s["partial_control"] == "leave-one-out" for s in stats)
+
+
+def test_a_lone_candidate_is_not_its_own_control():
+    # Regressed on itself the residual would be zero and the partial an exact,
+    # meaningless zero however the candidate covaries with the query.
+    q = [1.0, 2.0, 3.0, 4.0]
+    c = [1.0, 3.0, 2.0, 4.0]
+    [s] = bif.influence([chain(q, c)])
+    assert s["cov"] != 0
+    assert s["partial"] == pytest.approx(s["cov"])
+    assert s["partial_control"] == "none"
 
 
 def test_llc_is_positive_when_the_posterior_sits_above_the_loss_at_origin():
@@ -288,7 +304,7 @@ def test_summarize_groups_and_ranks_by_mean_covariance():
 # --- Result and rendering -------------------------------------------------------
 
 
-def fake_result(llc_sign=1.0):
+def fake_result(llc_sign=1.0, one=False):
     cands = [
         {"stage": "pretrain", "kind": "pretrain", "side": "document", "source": "Pile-CC",
          "id": "row-1", "row": 1, "cut": False, "turns": [{"role": "text", "text": "As an AI language model I"}]},
@@ -314,6 +330,10 @@ def fake_result(llc_sign=1.0):
         run["at_origin"] = [1.0, 20.0, 30.0]
     if llc_sign == 0:
         run["trajectory"] = [[2.0, 2.0, 2.0, 9.0], [2.0, 2.2, 2.2, 2.2]]
+    if one:
+        cands, encoded = cands[:1], encoded[:1]
+        run["at_origin"] = run["at_origin"][:2]
+        run["losses"] = [[d[:2] for d in c] for c in run["losses"]]
     settings = {"chains": 2, "draws": 3, "burn_in": 1, "lr": 1e-5, "nbeta": 3.0, "gamma": 100.0,
                 "batch": 8, "max_tokens": 512}
     return bif.result("pythia-12b-deduped", "EleutherAI/pythia-70m-deduped", "abc123def456789",
@@ -350,6 +370,15 @@ def test_render_names_the_checkpoint_the_skip_and_the_ends_of_the_ranking():
     assert "row-1" in text and "row-2" in text
     assert "[truncated] [cut]" in text
     assert "not on the training set" in text
+
+
+def test_render_says_so_when_one_candidate_has_no_control():
+    res = fake_result(one=True)
+    assert res["partial_control"] == "none"
+    assert res["records"][0]["partial"] == pytest.approx(res["records"][0]["cov"])
+    text = "\n".join(bif.render(res))
+    assert "no other example to regress on" in text
+    assert "no other example to regress on" not in "\n".join(bif.render(fake_result()))
 
 
 def test_render_says_so_when_a_chain_sat_below_the_origin_loss():
