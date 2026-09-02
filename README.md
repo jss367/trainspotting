@@ -1350,9 +1350,14 @@ scored as context and masked out of the loss. The candidates are the committed
 samples: the context records of each post-training stage and the document
 sample of each pretraining corpus. An SFT example is fit on its assistant turns
 behind the rest of the conversation, rendered through the model's chat template
-so the tokens are the ones training saw. A DPO pair yields *two* candidates, its
-chosen and its rejected completion, because the objective pushes the model off
-the rejected text. The posterior is localized on the text the model was fit
+so the tokens are the ones training saw; a think model's reasoning, which the
+context record stores beside the answer, is put back inside its `<think>`
+markers first, since the model was fit to both and the reasoning is most of it.
+A DPO pair yields *two* candidates, its chosen and its rejected completion,
+because the objective pushes the model off the rejected text. The turns the two
+share before they branch are the conversation the pair was judged in, so an
+assistant turn in that shared history is context on both sides, as it is for
+the fit share above. The posterior is localized on the text the model was fit
 *toward* — documents, SFT responses, chosen completions — and the rejected
 completions are scored at every draw but never drawn into an SGLD minibatch,
 since fitting the chain to them would localize it on the opposite of what

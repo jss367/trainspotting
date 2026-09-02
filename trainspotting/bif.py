@@ -31,13 +31,19 @@ rather than assumed.
 The per-example loss is the mean token loss over the text the example fits the
 model to, with the rest of the example as context and masked out of the loss:
 the assistant turns of an SFT example, the chosen completion of a DPO pair, the
-whole of a corpus document. A DPO pair yields two candidates, its chosen and its
-rejected side, because the two carry opposite signs in training: the objective
-pushes the model off the rejected text. The posterior is localized on the text
-the model was fit *toward* — documents, SFT responses, chosen completions — and
-the rejected completions are scored at every draw but never put in a minibatch,
-since fitting the chain to them would localize it on the opposite of what
-training did. Their covariance with the query is still the number of interest:
+whole of a corpus document. A think model's response is its reasoning and its
+answer together, in the `<think>` markers it was trained with, so the reasoning
+the context record stores beside the answer is put back before scoring. A DPO
+pair yields two candidates, its chosen and its rejected side, because the two
+carry opposite signs in training: the objective pushes the model off the
+rejected text. The turns the two sides share before they branch are the
+conversation the pair was judged in, not either completion, so an assistant turn
+in that shared history is context on both sides rather than target. The
+posterior is localized on the text the model was fit *toward* — documents, SFT
+responses, chosen completions — and the rejected completions are scored at every
+draw but never put in a minibatch, since fitting the chain to them would localize
+it on the opposite of what training did. Their covariance with the query is
+still the number of interest:
 a positive covariance on a rejected completion is evidence that the pair taught
 the model *away* from the query, where the same number on the chosen side is
 evidence it taught the model toward it. This is a reading of the loss
@@ -62,12 +68,23 @@ import random
 import re
 import sys
 
-from . import paths, registry
+from . import context, paths, registry
 
 # The turn roles whose text is a training target. `text` is a corpus document,
 # which is all target. Anything else — user, system, tool — is context the loss
-# is masked over.
+# is masked over. A turn can say otherwise with an explicit `fit` flag, which is
+# how an assistant turn in a DPO pair's shared history is kept as context; the
+# role is the default for turns built without one.
 FIT_ROLES = {"assistant", "text"}
+
+# How a think model's response was written in its training data: the reasoning
+# inside `<think>` markers, then the answer. `context._split_think` strips the
+# markers and the whitespace around them when it stores the two halves, and the
+# rows vary in that whitespace (zero to two newlines after `</think>`), so the
+# round trip is faithful to the markers and takes the most common spacing — the
+# form of every sampled Dolci-Think-DPO turn and the plurality of the SFT ones.
+THINK_OPEN = "<think>\n"
+THINK_CLOSE = "\n</think>\n\n"
 
 SNIPPET = 120  # characters of the fit text shown per ranked candidate
 
@@ -106,9 +123,15 @@ def _context_candidates(target_name: str, stage: dict) -> tuple[list[dict], str 
             turns = rec.get("turns") or []
             out.append({**base, "side": "response", "turns": _turns(turns), "cut": _cut(turns)})
         elif kind == "dpo":
-            for side in ("chosen", "rejected"):
-                turns = (rec.get(side) or {}).get("turns") or []
-                out.append({**base, "side": side, "turns": _turns(turns), "cut": _cut(turns)})
+            # The two sides share every turn before they branch, so the branch
+            # is found once per pair and both sides are cut at it: what comes
+            # before is the conversation the pair was judged in and is context
+            # on both, assistant turns included.
+            chosen = (rec.get("chosen") or {}).get("turns") or []
+            rejected = (rec.get("rejected") or {}).get("turns") or []
+            shared = context.branch_point(chosen, rejected)
+            for side, turns in (("chosen", chosen), ("rejected", rejected)):
+                out.append({**base, "side": side, "turns": _turns(turns, shared), "cut": _cut(turns)})
     return out, None
 
 
@@ -142,13 +165,45 @@ def _source(meta: dict, stage: dict) -> str | None:
     return None
 
 
-def _turns(turns) -> list[dict]:
-    return [{"role": t.get("role") or "user", "text": t.get("text") or ""} for t in turns]
+def _turns(turns, shared: int = 0) -> list[dict]:
+    """The stored turns as candidate turns: role, the text the model read, and
+    whether the loss is taken over it.
+
+    The context record stores a think model's reasoning beside its answer, with
+    the `<think>` markers stripped. The model was fit to the whole response, and
+    on the think mixes the reasoning is most of it, so the two are joined back
+    in the trained form. The chat template of a think model ends its assistant
+    header with `<think>`, so a response that lacks the marker also breaks the
+    cumulative rendering in `pieces` and sends the example to the role fallback.
+
+    `shared` is how many leading turns are shared history — the turns before a
+    DPO pair branches — and an assistant turn among them is not fit.
+    """
+    out = []
+    for i, t in enumerate(turns):
+        role = t.get("role") or "user"
+        text = t.get("text") or ""
+        reasoning = (t.get("reasoning") or {}).get("text")
+        if reasoning:
+            text = f"{THINK_OPEN}{reasoning}{THINK_CLOSE}{text}"
+        out.append({"role": role, "text": text, "fit": role in FIT_ROLES and i >= shared})
+    return out
 
 
 def _cut(turns) -> bool:
-    """Whether the context record shortened any turn (it stores 4,000 characters a field)."""
-    return any((t.get("chars") or 0) > len(t.get("text") or "") for t in turns)
+    """Whether the context record shortened any field of any turn (it stores
+    4,000 characters a field, and a think turn's reasoning is its own field)."""
+    fields = []
+    for t in turns:
+        fields.append(t)
+        if t.get("reasoning"):
+            fields.append(t["reasoning"])
+    return any((f.get("chars") or 0) > len(f.get("text") or "") for f in fields)
+
+
+def fits(turn: dict) -> bool:
+    """Whether a turn's text is a loss target: its `fit` flag, or its role."""
+    return turn.get("fit", turn["role"] in FIT_ROLES)
 
 
 def candidates(
@@ -199,7 +254,7 @@ def candidate_text(c: dict) -> str:
 
 
 def fit_text(c: dict) -> str:
-    return "\n".join(t["text"] for t in c["turns"] if t["role"] in FIT_ROLES)
+    return "\n".join(t["text"] for t in c["turns"] if fits(t))
 
 
 def query_candidate(query: str, prompt: str | None = None) -> dict:
@@ -252,14 +307,14 @@ def pieces(tokenizer, turns: list[dict]) -> list[tuple[str, bool]]:
             out = []
             for k, t in enumerate(turns, start=1):
                 grown = rendered[k][len(rendered[k - 1]):]
-                out.append((grown, t["role"] in FIT_ROLES))
+                out.append((grown, fits(t)))
             return out
     if roles == {"text"}:
-        return [(t["text"], True) for t in turns]
+        return [(t["text"], fits(t)) for t in turns]
     out = []
     for t in turns:
         out.append((f"{t['role']}: ", False))
-        out.append((t["text"] + "\n\n", t["role"] in FIT_ROLES))
+        out.append((t["text"] + "\n\n", fits(t)))
     return out
 
 

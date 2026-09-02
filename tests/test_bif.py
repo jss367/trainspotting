@@ -10,6 +10,7 @@ against a toy model when torch is importable, which checks the plumbing (shapes,
 restoring w*, finite losses) rather than the physics.
 """
 
+import json
 import math
 
 import pytest
@@ -79,6 +80,64 @@ def test_a_missing_context_file_is_a_skip_naming_the_command():
     cands, skipped = bif.candidates("no-such-target", target, stages=["sft"])
     assert cands == []
     assert "trainspotting context no-such-target --stage sft" in skipped["sft"]
+
+
+def context_candidates(monkeypatch, tmp_path, kind, records):
+    """Candidates from a constructed context file for one stage of `kind`."""
+    path = tmp_path / f"t.{kind}.context.json"
+    path.write_text(json.dumps({"records": records}))
+    monkeypatch.setattr(bif.paths, "find", lambda name: path if name == path.name else None)
+    cands, skipped = bif._context_candidates("t", {"stage": kind, "kind": kind})
+    assert skipped is None
+    return cands
+
+
+def think_turn(reasoning, text, reasoning_chars=None):
+    return {"role": "assistant", "text": text, "chars": len(text),
+            "reasoning": {"text": reasoning, "chars": reasoning_chars or len(reasoning)}}
+
+
+def test_a_think_turn_is_fit_on_its_reasoning_and_its_answer_in_the_trained_form(monkeypatch, tmp_path):
+    # `context` stores the reasoning beside the answer with the markers
+    # stripped; the model was fit to the whole response.
+    rec = {"id": "r", "row": 1, "turns": [{"role": "user", "text": "q", "chars": 1},
+                                          think_turn("let me see", "the answer")]}
+    [c] = context_candidates(monkeypatch, tmp_path, "sft", [rec])
+    fit = bif.fit_text(c)
+    assert fit == "<think>\nlet me see\n</think>\n\nthe answer"
+    assert "let me see" in fit and c["cut"] is False
+    # A reasoning field the record shortened is a cut, like a shortened answer.
+    rec["turns"][1] = think_turn("let me see", "the answer", reasoning_chars=5000)
+    [c] = context_candidates(monkeypatch, tmp_path, "sft", [rec])
+    assert c["cut"] is True
+    # A turn without reasoning is what it was before.
+    rec["turns"][1] = {"role": "assistant", "text": "plain", "chars": 5}
+    [c] = context_candidates(monkeypatch, tmp_path, "sft", [rec])
+    assert bif.fit_text(c) == "plain"
+
+
+def test_a_dpo_pair_is_fit_only_past_the_turn_where_its_sides_branch(monkeypatch, tmp_path):
+    # A multi-turn pair shares its first three turns; the assistant turn among
+    # them is the conversation the pair was judged in, not either completion.
+    history = [{"role": "user", "text": "a", "chars": 1}, {"role": "assistant", "text": "b", "chars": 1},
+               {"role": "user", "text": "c", "chars": 1}]
+    rec = {"id": "p", "row": 2,
+           "chosen": {"turns": history + [{"role": "assistant", "text": "yes", "chars": 3}]},
+           "rejected": {"turns": history + [{"role": "assistant", "text": "no", "chars": 2}]}}
+    chosen, rejected = context_candidates(monkeypatch, tmp_path, "dpo", [rec])
+    assert [t["fit"] for t in chosen["turns"]] == [False, False, False, True]
+    assert [t["fit"] for t in rejected["turns"]] == [False, False, False, True]
+    assert bif.fit_text(chosen) == "yes" and bif.fit_text(rejected) == "no"
+    # The encoding reads the flag, not the role: only the final answer is a label.
+    e = bif.encode(Tok(), chosen["turns"], max_tokens=200)
+    fit_ids = [i for i, lab in zip(e["ids"], e["labels"]) if lab != -100]
+    assert bytes(fit_ids).decode() == "yes\n\n"
+    # A single-turn pair is fit on its one assistant turn, as before.
+    single = {"id": "s", "row": 3,
+              "chosen": {"turns": history[:1] + [{"role": "assistant", "text": "yes", "chars": 3}]},
+              "rejected": {"turns": history[:1] + [{"role": "assistant", "text": "no", "chars": 2}]}}
+    chosen, rejected = context_candidates(monkeypatch, tmp_path, "dpo", [single])
+    assert bif.fit_text(chosen) == "yes" and bif.fit_text(rejected) == "no"
 
 
 # --- Encoding -------------------------------------------------------------------
@@ -159,6 +218,28 @@ def test_a_system_turn_before_the_user_keeps_the_template_rendering():
     assert spans == [("<s><system>be</>", False), ("<user>hi</><assistant>", False), ("yo</>", True)]
     e = bif.encode(ChatTok(), turns, max_tokens=100)
     assert bytes(i for i, lab in zip(e["ids"], e["labels"]) if lab != -100).decode() == "yo</>"
+
+
+class ThinkTok(ChatTok):
+    """A think model's template: the assistant header ends with the open
+    marker, as OLMo 3 Think's does, so the response is expected to start
+    inside it."""
+
+    def apply_chat_template(self, msgs, tokenize=False, add_generation_prompt=False):
+        s = super().apply_chat_template(msgs, tokenize=False, add_generation_prompt=False)
+        return s + "<assistant><think>" if add_generation_prompt else s
+
+
+def test_a_think_response_with_its_markers_restored_renders_through_the_template():
+    turns = bif._turns([{"role": "user", "text": "hi"}, think_turn("hmm", "yo")])
+    spans = bif.pieces(ThinkTok(), turns)
+    # The open marker is the header's, so it is context; everything the
+    # response grew the rendering by, reasoning and answer, is fit.
+    assert spans == [("<s><user>hi</><assistant><think>", False), ("\nhmm\n</think>\n\nyo</>", True)]
+    # Without the markers the response cannot start inside the header, the
+    # prefix check fails, and the whole example falls back to roles.
+    bare = [{"role": "user", "text": "hi"}, {"role": "assistant", "text": "yo"}]
+    assert bif.pieces(ThinkTok(), bare) == bif.pieces(Tok(), bare)
 
 
 def test_a_template_that_cannot_render_falls_back_to_roles():
