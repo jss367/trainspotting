@@ -251,7 +251,8 @@ def probe(text: str, words: int = WORDS, min_words: int = MIN_WORDS) -> dict | N
     # punctuation and miss the exact copy. So each end is anchored only when
     # its own character is a word character, in RE2's ASCII sense: Python's
     # `\w` admits "é", RE2's `\b` does not, and anchoring on a letter RE2 does
-    # not count as one would fail on the copy that matters.
+    # not count as one would fail on the copy that matters. The regex is
+    # RE2's; `contamination._python` rewrites the anchors for Python's `re`.
     if _EDGE.match(text[first]):
         regex = r"\b" + regex
     if _EDGE.match(text[last - 1]):

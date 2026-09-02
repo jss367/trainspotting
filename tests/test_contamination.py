@@ -19,6 +19,9 @@ Q0 = "Janet sells duck eggs at the farmers market for two dollars each"
 A0 = "She has sixteen minus seven equals nine eggs to sell"
 Q1 = "A robe takes two bolts of blue fiber and half that white"
 Q2 = "Nothing in the mix says anything like this sentence does"
+# An item whose middle window holds an accented letter, for the case-folding side
+# of the RE2/Python boundary parity.
+ACCENTED = "Le café noir est servi après le déjeuner chaud"
 
 PROBES = [
     _probe(0, 0, "question", Q0),
@@ -49,6 +52,20 @@ def test_find_hands_a_match_to_its_own_probe():
     assert _find(PROBES, PROBES[0]["literal"].upper()) == [0]
     assert _find(PROBES, PROBES[0]["literal"].upper(), case_sensitive=True) == []
     assert _find(PROBES, "not a probe") == []
+
+
+def test_python_side_reads_the_boundary_as_re2_does():
+    r"""RE2's `\b` is ASCII; Python's counts `é` as a word character. The probe
+    regex is RE2's, so the Python copy scopes ASCII to the anchor alone and
+    keeps case-folding Unicode-aware, as RE2's `(?i)` is."""
+    assert PROBES[0]["regex"].startswith(r"\b") and PROBES[0]["regex"].endswith(r"\b")
+    assert _find(PROBES, "étrain " + PROBES[0]["literal"] + "é") == [0]
+    accented = [_probe(0, 0, "question", ACCENTED)]
+    assert accented[0]["literal"] == "noir est servi après le"
+    assert _find(accented, "NOIR EST SERVI APRÈS LE") == [0]
+    assert _find(accented, "NOIR EST SERVI APRÈS LE", case_sensitive=True) == []
+    # A backslash in the text is an escaped pair, not an anchor to rewrite.
+    assert contamination._python(r"a\\b\s+c\b") == r"a\\b\s+c(?a:\b)"
 
 
 def test_two_items_sharing_a_window_are_both_hit():
@@ -231,6 +248,28 @@ def test_scan_does_not_credit_a_window_that_ends_inside_a_longer_word(con, tmp_p
     assert result["matched"] == 1
     assert result["by_source"] == {"exact": 1}
     assert _hits(result) == {(0, "prompt"): 1}
+
+
+def test_scan_attributes_a_copy_against_an_accented_letter(con, tmp_path):
+    r"""RE2 selects `étrain ...` — `é` is not a word character to its `\b` — and
+    the row must then be credited to its probe: a row in `matched` with no
+    `probe_hits` entry is a count that contradicts itself. The recased accented
+    copy is the other direction: RE2's `(?i)` folds `É`, so Python's must too."""
+    path = tmp_path / "prompts.parquet"
+    con.execute(
+        f"""
+        COPY (SELECT * FROM (VALUES
+            ('étrain {PROBES[0]["literal"]}é', 'accented'),
+            ('NOIR EST SERVI APRÈS LE', 'recased'),
+            ('Say hi', 'wildchat')
+        ) AS t(prompt, dataset_source)) TO '{path}' (FORMAT parquet)
+        """
+    )
+    recased = _probe(1, 1, "question", ACCENTED)
+    result = _run(con, path, [PROBES[0], recased])
+    assert result["matched"] == 2
+    assert result["by_source"] == {"accented": 1, "recased": 1}
+    assert _hits(result) == {(0, "prompt"): 1, (1, "prompt"): 1}
 
 
 def test_no_hit_is_an_empty_result_not_an_error(con, dpo_parquet):

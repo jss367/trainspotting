@@ -136,18 +136,40 @@ def _snippet_sql(exprs: list[str], patterns: list[str], case_sensitive: bool) ->
     return q(f"substr(s, {start}, {width})"), q(start), q("len(s)")
 
 
+def _python(regex: str) -> str:
+    r"""A probe regex as Python's `re` must read it to agree with DuckDB's RE2.
+
+    The scan runs the regex through RE2 and hands back the strings it matched;
+    `find` then runs the same regex here to say which probe matched. Wherever
+    the two engines read a token differently, a row RE2 selected can go
+    unattributed — counted in `matched` and on its side, in no probe's tally.
+    The one token that can do that is `\b`: RE2's is ASCII, Python's counts
+    every Unicode letter as a word character, so a copy against an accented
+    letter (`étrain ...`) is a hit to RE2 and a boundary failure here. Each
+    `\b` is rewritten as `(?a:\b)`, ASCII scoped to the boundary alone, so
+    case-folding stays Unicode-aware the way RE2's `(?i)` is — `re.ASCII` on
+    the whole pattern would stop folding `É` to `é` and drop the recased copy
+    RE2 matched. `\s` differs the other way — Python's admits a no-break
+    space, RE2's does not — which cannot lose a hit: Python only ever
+    attributes strings RE2 already selected.
+
+    `re.escape` never emits a bare `\b` (a backslash in the text becomes
+    `\\`, and the `b` after it stays a plain `b`), so walking the pattern by
+    escape pairs rewrites exactly the anchors `probe()` added.
+    """
+    return re.sub(r"(?s)\\(.)", lambda m: r"(?a:\b)" if m.group(1) == "b" else m.group(0), regex)
+
+
+def _compile(regex: str, case_sensitive: bool) -> re.Pattern:
+    return re.compile(_python(regex), 0 if case_sensitive else re.IGNORECASE)
+
+
 def compile_probes(probes: list[dict], case_sensitive: bool = False) -> list[tuple[dict, re.Pattern]]:
-    return [
-        (p, re.compile(p["regex"], 0 if case_sensitive else re.IGNORECASE))
-        for p in probes
-    ]
+    return [(p, _compile(p["regex"], case_sensitive)) for p in probes]
 
 
 def compile_alternations(probes: list[dict], case_sensitive: bool = False) -> list[re.Pattern]:
-    return [
-        re.compile(alternation(c), 0 if case_sensitive else re.IGNORECASE)
-        for c in chunks(probes)
-    ]
+    return [_compile(alternation(c), case_sensitive) for c in chunks(probes)]
 
 
 def find(text: str, alternations: list[re.Pattern], compiled: list[tuple[dict, re.Pattern]]) -> list[dict]:
