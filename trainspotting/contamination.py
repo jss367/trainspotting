@@ -10,8 +10,10 @@ The scan is `grep`'s — the same Parquet route, the same column-to-side mapping
 the same branch split for a preference pair — with one change: many patterns in
 one pass. Reading a mix costs gigabytes over the network, so two hundred probes
 have to share a read rather than each paying for one. They are searched as
-alternations, `(?:probe|probe|...)`, and the string each alternation matched is
-pulled back with it so the hit can be handed to the probe it belongs to.
+alternations, `(?:probe|probe|...)`, and the strings an alternation matched are
+pulled back whole so the probes in each can be found here, one position at a
+time — RE2's extraction hands back non-overlapping matches only, and two
+near-duplicate items whose windows sit a word apart would otherwise count as one.
 
 One alternation does not hold them all. RE2 runs an alternation as a DFA while
 its state cache fits and falls back to an NFA when it does not, and the fall is
@@ -103,9 +105,15 @@ def _extract(patterns: list[str], case_sensitive: bool, var: str = "t") -> str:
 
 
 def _matches_sql(exprs: list[str], patterns: list[str], case_sensitive: bool) -> str:
-    """Every matched substring across a group's strings, as one VARCHAR[]."""
-    matching = grep._matching(exprs, _test(patterns, case_sensitive))
-    return f"flatten(list_transform({matching}, t -> {_extract(patterns, case_sensitive)}))"
+    """Every string of a group any alternation matched, whole, as one VARCHAR[].
+
+    Whole rather than the matched substrings, because `regexp_extract_all` walks
+    a string left to right and resumes after each match: a probe whose window
+    starts a word inside another's is consumed with it and never comes back.
+    The strings are few — only matching rows reach here — and `find` does the
+    attribution on them with overlaps kept.
+    """
+    return grep._matching(exprs, _test(patterns, case_sensitive))
 
 
 def _snippet_sql(exprs: list[str], patterns: list[str], case_sensitive: bool) -> tuple[str, str, str]:
@@ -135,14 +143,40 @@ def compile_probes(probes: list[dict], case_sensitive: bool = False) -> list[tup
     ]
 
 
-def attribute(matched: str, compiled: list[tuple[dict, re.Pattern]]) -> list[dict]:
-    """The probes a matched substring belongs to.
+def compile_alternations(probes: list[dict], case_sensitive: bool = False) -> list[re.Pattern]:
+    return [
+        re.compile(alternation(c), 0 if case_sensitive else re.IGNORECASE)
+        for c in chunks(probes)
+    ]
 
-    An alternation match is exactly one branch's match, so it fullmatches that
-    branch's own regex. Usually one probe; two when two items share a window,
-    which duplicated items in a benchmark do, and then both are hit.
+
+def find(text: str, alternations: list[re.Pattern], compiled: list[tuple[dict, re.Pattern]]) -> list[dict]:
+    """Every probe in `text`, overlapping copies included.
+
+    The alternations find where a probe starts; every probe is then tried at
+    that position. Two things make it more than one pass of `finditer`:
+
+      * The search resumes one character after each match *started*, not where
+        it ended. A finder that resumes at the end skips any probe whose window
+        begins inside the match — two near-duplicate items a word apart, which
+        templated benchmarks have — and reports the second as a miss.
+      * At one position the alternation reports only its first branch, so the
+        probes are tried there one by one. Two items sharing a window both
+        match, as do two whose windows differ only past a shared prefix.
+
+    Anchored `match` calls fail on the first character for almost every probe,
+    so this costs a few hundred cheap checks per occurrence, on the matching
+    rows only.
     """
-    return [p for p, rx in compiled if rx.fullmatch(matched)]
+    found: dict[int, dict] = {}
+    for rx in alternations:
+        pos = 0
+        while (m := rx.search(text, pos)) is not None:
+            for p, prx in compiled:
+                if p["id"] not in found and prx.match(text, m.start()):
+                    found[p["id"]] = p
+            pos = m.start() + 1
+    return list(found.values())
 
 
 def scan(
@@ -157,11 +191,12 @@ def scan(
     """Rows of the mix each probe lands in, by side, in one pass over the columns.
 
     Same shape of query as `grep.scan`: only matching rows come back, with the
-    matched substrings per side, and the tallying happens here. A row holding
-    two probes is one row in `matched` and one row against each probe.
+    matching strings per side, and the attribution and tallying happen here. A
+    row holding two probes is one row in `matched` and one row against each probe.
     """
     patterns = [alternation(c) for c in chunks(probes)]
     compiled = compile_probes(probes, case_sensitive)
+    alternations = compile_alternations(probes, case_sensitive)
     groups = list(exprs)
 
     select = [f"{source or 'NULL'} AS src"]
@@ -198,7 +233,7 @@ def scan(
                 by_group[g] += 1
                 seen: set[int] = set()
                 for s in strings:
-                    for p in attribute(s, compiled):
+                    for p in find(s, alternations, compiled):
                         if p["id"] in seen:
                             continue
                         seen.add(p["id"])
@@ -322,9 +357,26 @@ def summary(stage_runs: list[dict], corpus_run: dict | None, unscanned: list[str
         n = len(probed)
         hit = r["items"]
         parts = [f"{r['stage']:6s} items seen {_rate(len(hit['any']), n)}"]
-        parts.append(f"  question in a prompt: {len(hit['question_read'])}")
+
+        # A claim about a side that --field left out of the read is not a zero.
+        # `fields` is what this run read and `available_fields` what the mix
+        # holds; a claim is searched when every side it draws on that the mix
+        # has was read. A file from before the key recorded every side.
+        def searched(groups) -> bool:
+            if r.get("fields") is None:
+                return True
+            need = set(groups) & set(r.get("available_fields") or r["fields"])
+            return bool(need) and need <= set(r["fields"])
+
+        parts.append(
+            f"  question in a prompt: {len(hit['question_read'])}"
+            if searched(("prompt",)) else "  question in a prompt: not searched — not a zero"
+        )
         if r["has_answer_probes"]:
-            parts.append(f"  answer in produced text: {len(hit['answer_produced'])}")
+            parts.append(
+                f"  answer in produced text: {len(hit['answer_produced'])}"
+                if searched(PRODUCE) else "  answer in produced text: not searched — not a zero"
+            )
             if hit["answer_rejected"]:
                 parts.append(f"  answer in a rejected completion only: "
                              f"{len(set(hit['answer_rejected']) - set(hit['answer_produced']))}")

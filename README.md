@@ -854,9 +854,11 @@ seen but neither read nor produced.
 
 **One read per mix.** Two hundred items is up to four hundred probes, and a mix
 costs gigabytes to read, so the probes share a scan: they are searched as
-alternations, `(?:probe|probe|...)`, and the substring each alternation matched
-travels back so the hit can be handed to the probe it belongs to. Not one
-alternation, though. RE2 runs an alternation as a DFA while its state cache fits
+alternations, `(?:probe|probe|...)`, and the strings that matched travel back
+whole so each probe in them can be found and credited — position by position,
+because a regex engine's "all matches" are the non-overlapping ones, and two
+near-duplicate items whose windows sit a word apart would otherwise count as
+one. Not one alternation, though. RE2 runs an alternation as a DFA while its state cache fits
 and falls to an NFA when it does not, and the fall is a cliff — four hundred
 probes in one regex ran fifty times slower than the same probes split four ways.
 `contamination.CHUNK_CHARS` is that split, by pattern length rather than probe

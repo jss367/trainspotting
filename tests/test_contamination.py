@@ -37,17 +37,39 @@ def test_chunks_respect_a_character_budget_and_keep_order():
     assert contamination.chunks([{"id": 0, "regex": "y" * 500}], budget=100) == [[{"id": 0, "regex": "y" * 500}]]
 
 
-def test_attribute_hands_a_match_to_its_own_probe():
-    compiled = contamination.compile_probes(PROBES)
-    assert [p["id"] for p in contamination.attribute(PROBES[0]["literal"], compiled)] == [0]
-    assert [p["id"] for p in contamination.attribute(PROBES[0]["literal"].upper(), compiled)] == [0]
-    assert contamination.attribute("not a probe", compiled) == []
+def _find(probes, text, **kw):
+    return sorted(p["id"] for p in contamination.find(
+        text, contamination.compile_alternations(probes, **kw),
+        contamination.compile_probes(probes, **kw),
+    ))
+
+
+def test_find_hands_a_match_to_its_own_probe():
+    assert _find(PROBES, "Question: " + PROBES[0]["literal"] + " ok") == [0]
+    assert _find(PROBES, PROBES[0]["literal"].upper()) == [0]
+    assert _find(PROBES, PROBES[0]["literal"].upper(), case_sensitive=True) == []
+    assert _find(PROBES, "not a probe") == []
 
 
 def test_two_items_sharing_a_window_are_both_hit():
     twins = [_probe(0, 0, "question", Q0), _probe(1, 9, "question", Q0)]
-    compiled = contamination.compile_probes(twins)
-    assert [p["item"] for p in contamination.attribute(twins[0]["literal"], compiled)] == [0, 9]
+    assert _find(twins, twins[0]["literal"]) == [0, 1]
+
+
+# Two near-duplicate items — the second is the first shifted by one word, as a
+# templated benchmark produces — so their windows overlap in a string holding
+# both. A finder that resumes after each match sees only the first.
+SHIFT_A = "one two three four five six seven"
+SHIFT_B = "two three four five six seven eight"
+SHIFTED = [_probe(0, 0, "question", SHIFT_A), _probe(1, 1, "question", SHIFT_B)]
+
+
+def test_overlapping_windows_are_both_found():
+    assert SHIFTED[0]["literal"] == "two three four five six"
+    assert SHIFTED[1]["literal"] == "three four five six seven"
+    assert _find(SHIFTED, "one two three four five six seven eight") == [0, 1]
+    # And in either order of the alternation's branches.
+    assert _find(SHIFTED[::-1], "one two three four five six seven eight") == [0, 1]
 
 
 @pytest.fixture
@@ -157,6 +179,21 @@ def test_many_chunks_find_the_same_rows_as_one(con, dpo_parquet, monkeypatch):
     assert _hits(one) == _hits(many) and one["matched"] == many["matched"]
 
 
+def test_scan_credits_both_of_two_overlapping_probes_in_one_row(con, tmp_path):
+    path = tmp_path / "prompts.parquet"
+    con.execute(
+        f"""
+        COPY (SELECT * FROM (VALUES
+            ('Solve: one two three four five six seven eight', 'templated'),
+            ('Say hi', 'wildchat')
+        ) AS t(prompt, dataset_source)) TO '{path}' (FORMAT parquet)
+        """
+    )
+    result = _run(con, path, SHIFTED)
+    assert result["matched"] == 1
+    assert _hits(result) == {(0, "prompt"): 1, (1, "prompt"): 1}
+
+
 def test_no_hit_is_an_empty_result_not_an_error(con, dpo_parquet):
     result = _run(con, dpo_parquet, [PROBES[3]])
     assert result["matched"] == 0 and result["probe_hits"] == [] and result["examples"] == []
@@ -207,6 +244,27 @@ def test_summary_says_how_many_probes_were_not_counted():
     clean = {"index": "v4_piletrain_llama", "items_probed": [0], "items": {"any": []},
              "counts": [{"occurrences": 0, "approx": False}]}
     assert "could not be counted" not in "\n".join(contamination.summary([], clean, []))
+
+
+def test_summary_calls_a_side_that_field_left_out_unsearched():
+    def run(fields):
+        return {
+            "stage": "dpo", "items_probed": [0, 1], "has_answer_probes": True,
+            "fields": fields, "available_fields": ["prompt", "chosen", "rejected"],
+            "items": {"any": [], "question_read": [], "question_produced": [],
+                      "answer_produced": [], "answer_rejected": []},
+            "matched": 0, "total_rows": 10, "partial": False,
+        }
+
+    prompts_only = "\n".join(contamination.summary([run(["prompt"])], None, []))
+    assert "question in a prompt: 0" in prompts_only
+    assert "answer in produced text: not searched — not a zero" in prompts_only
+    produced_only = "\n".join(contamination.summary([run(["chosen"])], None, []))
+    assert "question in a prompt: not searched — not a zero" in produced_only
+    assert "answer in produced text: 0" in produced_only
+    # Reading the rejected side too changes nothing: it is not a produced side.
+    everything = "\n".join(contamination.summary([run(["prompt", "chosen", "rejected"])], None, []))
+    assert "not searched" not in everything
 
 
 def test_corpus_only_leaves_every_stage_unscanned():

@@ -60,9 +60,12 @@ def test_probe_regex_escapes_what_needs_escaping():
 
 def test_probe_literal_keeps_the_original_whitespace():
     text = "one two\n\nthree   four five six seven eight nine ten"
-    p = benchmarks.probe(text, words=4)
-    assert p["literal"] in text
-    assert "\n" in p["literal"] or "   " in p["literal"] or " " in p["literal"]
+    # Eight of ten words is the window that spans both oddities, and the
+    # literal must be that span exactly — not a normalized copy of it.
+    p = benchmarks.probe(text, words=8)
+    assert p["literal"] == "two\n\nthree   four five six seven eight nine"
+    # While the regex does not care how the copy was wrapped.
+    assert re.compile(p["regex"]).search("two three four five six seven eight nine")
 
 
 def test_short_items_are_not_probed():

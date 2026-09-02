@@ -2503,7 +2503,11 @@ def cmd_contaminate(args):
     adds is the join — one read per mix for all the probes, and the hits handed
     back to the items they came from.
     """
-    spec = benchmarks.resolve(args.benchmark)
+    try:
+        spec = benchmarks.resolve(args.benchmark)
+    except KeyError as e:
+        # The message names the known benchmarks; a traceback would bury it.
+        sys.exit(e.args[0])
     target = registry.resolve(args.target)
     # Resolved before the rows are read, so the stamp names the tree the items
     # were cut from rather than one published while the pages were fetched —
@@ -2903,8 +2907,11 @@ def main():
     p.add_argument("--yes", action="store_true", help="scan whatever it costs")
     p.add_argument("--index", help="infini-gram index for the corpus side (default: the "
                    "registry's closest index for the model)")
-    p.add_argument("--no-corpus", action="store_true", help="skip the corpus side")
-    p.add_argument("--corpus-only", action="store_true", help="skip the post-training scans")
+    # Together these would fetch the benchmark, read nothing, and exit 0 with a
+    # summary of stages not scanned — a run that asked no question.
+    side = p.add_mutually_exclusive_group()
+    side.add_argument("--no-corpus", action="store_true", help="skip the corpus side")
+    side.add_argument("--corpus-only", action="store_true", help="skip the post-training scans")
     p.set_defaults(fn=cmd_contaminate)
 
     p = sub.add_parser("classify")
