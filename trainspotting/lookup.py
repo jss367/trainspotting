@@ -44,6 +44,11 @@ API = "https://api.infini-gram.io/"
 # only change needed to draw a bigger sample per round trip.
 MAX_DOCS_PER_CALL = 10
 
+# What `search_docs` shows of a document when it is not told otherwise, checked
+# against the live API. `get_doc_by_rank` defaults lower, so the rank walk asks
+# for this explicitly and a document reads the same whichever path fetched it.
+DISP_LEN = 1000
+
 # Corpora with a public index, in the order the site lists them. `label` is what
 # a reader sees; `note` says whose corpus it is and roughly when, because the
 # whole point of showing five of them is that the answer depends on which one a
@@ -424,6 +429,60 @@ def sample_documents(index: str, query: str, occurrences: int, want: int = MAX_D
     }
 
 
+def every_document(index: str, query: str) -> dict:
+    """Every occurrence of `query`, one fetch each, and the documents they land in.
+
+    `search_docs` draws occurrences at random with replacement, so above the
+    ten-per-call cap `sample_documents` can never promise it saw them all: 333
+    draws of 333 occurrences cover about two thirds of them. The index also
+    exposes the occurrence list directly — `find` returns, per suffix-array
+    shard, the rank range the phrase occupies, and `get_doc_by_rank` resolves
+    one rank to its document. Walking every rank in every range is the census
+    the sampler cannot take, at one request per occurrence.
+
+    That price is the reason this is opt-in: a phrase counted in the thousands
+    is thousands of round trips, and a common one is out of reach. The result
+    has the shape `sample_documents` returns so the printing and the study can
+    read either. `drawn` equals the count, `exhaustive` is true only if every
+    rank came back with a document, and `occurrences_drawn` is a real per-
+    document count rather than a tally of how often a random draw landed there.
+    """
+    found = _post({"index": index, "query_type": "find", "query": query})
+    seen: dict[int, dict] = {}
+    drawn = 0
+    total = 0
+    for shard, (lo, hi) in enumerate(found.get("segment_by_shard", [])):
+        total += hi - lo
+        for rank in range(lo, hi):
+            j = _post(
+                {
+                    "index": index,
+                    "query_type": "get_doc_by_rank",
+                    "query": query,
+                    "s": shard,
+                    "rank": rank,
+                    "max_disp_len": DISP_LEN,
+                }
+            )
+            # A rank that resolves to nothing is a gap in the census, not a
+            # crash: count what arrived and let `exhaustive` answer to it.
+            if not j.get("spans") and not j.get("text"):
+                continue
+            rec = normalize(j)
+            drawn += 1
+            key = _identity(rec)
+            if key in seen:
+                seen[key]["occurrences_drawn"] += 1
+            else:
+                rec["occurrences_drawn"] = 1
+                seen[key] = rec
+    return {
+        "drawn": drawn,
+        "exhaustive": total > 0 and drawn == total,
+        "documents": sorted(seen.values(), key=lambda d: -d["occurrences_drawn"]),
+    }
+
+
 def domain_shares(documents: list[dict]) -> list[dict]:
     """Which sites host the sampled occurrences, most first.
 
@@ -442,9 +501,16 @@ def domain_shares(documents: list[dict]) -> list[dict]:
     ]
 
 
-def probe(index: str, query: str, docs: int = 0) -> dict:
-    """A count plus, optionally, the documents behind it."""
+def probe(index: str, query: str, docs: int | str = 0) -> dict:
+    """A count plus, optionally, the documents behind it.
+
+    `docs` is how many to sample, or `"all"` to walk every occurrence with
+    `every_document` — a census instead of a draw, at one request each.
+    """
     out = count(index, query)
     if docs and out["occurrences"]:
-        out.update(sample_documents(index, query, out["occurrences"], docs))
+        if docs == "all":
+            out.update(every_document(index, query))
+        else:
+            out.update(sample_documents(index, query, out["occurrences"], docs))
     return out
