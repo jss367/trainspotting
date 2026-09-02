@@ -212,6 +212,27 @@ def test_scan_credits_both_of_two_overlapping_probes_in_one_row(con, tmp_path):
     assert _hits(result) == {(0, "prompt"): 1, (1, "prompt"): 1}
 
 
+def test_scan_does_not_credit_a_window_that_ends_inside_a_longer_word(con, tmp_path):
+    """The same `\\b` the Python side keys on, run through DuckDB's RE2: a copy
+    that extends the last word, or prefixes the first, is not a hit; the exact
+    copy with punctuation against it is."""
+    assert PROBES[0]["literal"] == "eggs at the farmers market"
+    path = tmp_path / "prompts.parquet"
+    con.execute(
+        f"""
+        COPY (SELECT * FROM (VALUES
+            ('eggs at the farmers marketplace', 'longer'),
+            ('duckeggs at the farmers market', 'prefixed'),
+            ('(eggs at the farmers market).', 'exact')
+        ) AS t(prompt, dataset_source)) TO '{path}' (FORMAT parquet)
+        """
+    )
+    result = _run(con, path, [PROBES[0]])
+    assert result["matched"] == 1
+    assert result["by_source"] == {"exact": 1}
+    assert _hits(result) == {(0, "prompt"): 1}
+
+
 def test_no_hit_is_an_empty_result_not_an_error(con, dpo_parquet):
     result = _run(con, dpo_parquet, [PROBES[3]])
     assert result["matched"] == 0 and result["probe_hits"] == [] and result["examples"] == []

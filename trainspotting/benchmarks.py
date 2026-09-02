@@ -13,7 +13,8 @@ routinely differ from the original in whitespace, in a stripped annotation, or i
 a prefix ("Question: ") — so an exact search for the full text misses them and
 reports a clean stage. What is searched for is a **probe**: a window of
 consecutive words from the middle of the item, matched with any whitespace
-between the words and regardless of case. Thirteen words is the window GPT-3's
+between the words, as whole words at either end, and regardless of case.
+Thirteen words is the window GPT-3's
 contamination analysis used (Brown et al. 2020, appendix C), and it is long
 enough that a chance match is rare: thirteen consecutive words from a maths
 word problem do not recur in unrelated text.
@@ -207,6 +208,8 @@ def item_text(spec: dict, row: dict, part: str) -> str | None:
 
 
 _WORD = re.compile(r"\S+")
+# A word character as RE2 counts one for `\b`: ASCII only, unlike Python's `\w`.
+_EDGE = re.compile(r"[0-9A-Za-z_]")
 
 
 def probe(text: str, words: int = WORDS, min_words: int = MIN_WORDS) -> dict | None:
@@ -215,8 +218,9 @@ def probe(text: str, words: int = WORDS, min_words: int = MIN_WORDS) -> dict | N
     Two forms of the same window come back. `literal` is the text as written,
     whitespace included, for an index that matches exact strings. `regex` is
     the words escaped and joined by `\\s+`, for a scan that should not care how
-    a copy was re-wrapped. Both are cut from the same words, so a hit on either
-    is a hit on the same span of the item.
+    a copy was re-wrapped, with a word boundary at each end that is a word
+    character so the window is matched as whole words. Both are cut from the
+    same words, so a hit on either is a hit on the same span of the item.
 
     The middle rather than the start, because the start is where copies differ:
     a "Question:" prefix, a stripped title, a renumbered problem. An item with
@@ -237,9 +241,24 @@ def probe(text: str, words: int = WORDS, min_words: int = MIN_WORDS) -> dict | N
     k = min(words, len(spans))
     start = (len(spans) - k) // 2
     window = spans[start : start + k]
+    first, last = window[0][0], window[-1][1]
+    regex = r"\s+".join(re.escape(text[a:b]) for a, b in window)
+    # The window's ends are whole words, not prefixes or suffixes of one: a
+    # window ending in "market" is not in "marketplace", nor one starting in
+    # "train" in "restrain". RE2 has no lookaround, so the only edge assertion
+    # is `\b`, and `\b` demands a word character on the inside — put next to
+    # "$2", "market?" or a closing paren it would ask for one past the
+    # punctuation and miss the exact copy. So each end is anchored only when
+    # its own character is a word character, in RE2's ASCII sense: Python's
+    # `\w` admits "é", RE2's `\b` does not, and anchoring on a letter RE2 does
+    # not count as one would fail on the copy that matters.
+    if _EDGE.match(text[first]):
+        regex = r"\b" + regex
+    if _EDGE.match(text[last - 1]):
+        regex = regex + r"\b"
     return {
-        "literal": text[window[0][0] : window[-1][1]],
-        "regex": r"\s+".join(re.escape(text[a:b]) for a, b in window),
+        "literal": text[first:last],
+        "regex": regex,
         "words": k,
     }
 

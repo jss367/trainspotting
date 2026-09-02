@@ -60,6 +60,36 @@ def test_probe_regex_matches_a_rewrapped_copy_and_a_recased_one():
     assert not rx.search(GSM.replace("farmers'", "grocers'"))
 
 
+def test_probe_regex_matches_whole_words_at_either_end():
+    """A window ending in "market" is not in "marketplace", nor one starting
+    in "train" in "restrain" — but the exact copy, however punctuated around
+    it, still is."""
+    end = benchmarks.probe("Janet sells duck eggs at the farmers market", words=8)
+    rx = re.compile(end["regex"], re.IGNORECASE)
+    assert rx.search("So Janet sells duck eggs at the farmers market.")
+    assert not rx.search("Janet sells duck eggs at the farmers marketplace")
+    start = benchmarks.probe("train leaves the station at nine every morning", words=8)
+    rx = re.compile(start["regex"], re.IGNORECASE)
+    assert rx.search("The train leaves the station at nine every morning")
+    assert not rx.search("restrain leaves the station at nine every morning")
+
+
+def test_probe_regex_does_not_anchor_an_end_that_is_punctuation():
+    """`\\b` next to punctuation would demand a word character beyond it and
+    miss the item's own text, so an end that is not a word character is left
+    unanchored."""
+    for text in ("how many eggs does she sell at market?",
+                 "$2 is what each egg sells at market",
+                 "eggs (duck) sold at the farmers market (Tuesday)"):
+        p = benchmarks.probe(text, words=8)
+        rx = re.compile(p["regex"], re.IGNORECASE)
+        assert rx.search(text), text
+        assert rx.search(f"Q:{text}?"), text
+    assert not re.compile(benchmarks.probe("$2 is what each egg sells at market", words=8)["regex"]).search(
+        "$2 is what each egg sells at marketplace"
+    )
+
+
 def test_probe_regex_escapes_what_needs_escaping():
     p = benchmarks.probe("a b c d e f g $2.50 (x) [y] h+i j*k")
     rx = re.compile(p["regex"])
