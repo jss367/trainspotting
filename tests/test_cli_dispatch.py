@@ -90,6 +90,30 @@ def test_a_probe_window_below_the_minimum_is_a_usage_error(monkeypatch):
     assert not called
 
 
+def test_a_dataset_given_a_corpus_index_exits_before_anything_is_fetched(monkeypatch):
+    """`contaminate wildchat-1m gsm8k --index v4_piletrain_llama` would count
+    the probes in the Pile and file the result under the dataset, as if the
+    Pile were part of its training. The refusal comes before the benchmark is
+    fetched, so nothing goes over the network first."""
+    from trainspotting import benchmarks, hf
+
+    def never(*args, **kwargs):
+        raise AssertionError("fetched before the refusal")
+
+    monkeypatch.setattr(hf, "dataset_revision", never)
+    monkeypatch.setattr(benchmarks, "total_items", never)
+    monkeypatch.setattr(benchmarks, "fetch_items", never)
+    monkeypatch.setattr(
+        sys, "argv",
+        ["trainspotting", "contaminate", "wildchat-1m", "gsm8k", "--index", "v4_piletrain_llama"],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+
+    assert "wildchat-1m is a dataset" in str(exc.value)
+
+
 def test_the_targetless_commands_are_the_ones_this_expects():
     """A new command that takes no target has to be added to COMMANDS above, or
     it ships untested through the same hole this file exists to close."""

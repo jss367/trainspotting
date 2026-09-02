@@ -420,6 +420,60 @@ def test_a_run_with_no_side_left_to_measure_is_refused():
     assert cli._contam_refusal(args(), False, None)
 
 
+def test_a_dataset_cannot_be_given_a_corpus_index():
+    """`--index` moves a model to another corpus. On a dataset it would count
+    the probes in some model's pretraining and file the result under the
+    dataset's name — a corpus presented as training data nothing was trained
+    on. `registry.infinigram_index` already says None for a dataset; the flag
+    must not be a way around it."""
+    from types import SimpleNamespace
+
+    from trainspotting import cli, registry
+
+    def args(target, index=None):
+        return SimpleNamespace(target=target, index=index)
+
+    olmo = registry.resolve("olmo-3-7b-instruct")
+    assert cli._contam_index(args("olmo-3-7b-instruct"), olmo) == "v4_olmo-mix-1124_llama"
+    assert (
+        cli._contam_index(args("olmo-3-7b-instruct", "v4_piletrain_llama"), olmo)
+        == "v4_piletrain_llama"
+    )
+    wildchat = registry.resolve("wildchat-1m")
+    assert cli._contam_index(args("wildchat-1m"), wildchat) is None
+    with pytest.raises(SystemExit) as exc:
+        cli._contam_index(args("wildchat-1m", "v4_piletrain_llama"), wildchat)
+    assert "wildchat-1m is a dataset" in str(exc.value) and "v4_piletrain_llama" in str(exc.value)
+
+
+def test_the_corpus_caveat_is_about_the_target_not_just_the_index():
+    """Keyed on the index alone, an OLMo 3 run against the Pile printed the
+    deduplication note written for Pythia, and a Pythia run against an OLMo
+    index printed the missing-Dolma-3 note written for OLMo — each the other
+    model's caveat, and neither saying the corpus was not this model's."""
+    from trainspotting import infinigram, registry
+
+    olmo = registry.resolve("olmo-3-7b-instruct")
+    pythia = registry.resolve("pythia-12b-deduped")
+    # A target's own index keeps the caveat written for it: registered or fallback.
+    assert registry.infinigram_caveat(pythia, "v4_piletrain_llama") == infinigram.PILE_DEDUP_CAVEAT
+    assert registry.infinigram_caveat(olmo, "v4_olmo-mix-1124_llama") == infinigram.NO_OLMO3_CAVEAT
+    # Pointed at the other's index, each is told the corpus is not its own,
+    # by what the index covers — not handed the other model's caveat.
+    c = registry.infinigram_caveat(olmo, "v4_piletrain_llama")
+    assert "olmo-3-7b-instruct was not trained on it" in c and "Pythia was pretrained on" in c
+    assert "dedup" not in c
+    c = registry.infinigram_caveat(pythia, "v4_olmo-mix-1124_llama")
+    assert "pythia-12b-deduped was not trained on it" in c and "OLMo 2 pretraining only" in c
+    assert "Dolma 3" not in c
+    # An index this tool does not know is still not characterized: it may be
+    # the Dolma 3 index `infinigram` waits for, and "not trained on it" would
+    # be exactly wrong.
+    assert registry.infinigram_caveat(olmo, "v4_dolma3_llama") is None
+    # `find` has no target and keeps the per-index table.
+    assert infinigram.caveat_for("v4_piletrain_llama") == infinigram.PILE_DEDUP_CAVEAT
+
+
 def test_corpus_only_leaves_every_stage_unscanned():
     from trainspotting import cli
 

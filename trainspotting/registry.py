@@ -22,6 +22,8 @@ blog; Pythia's from the Pythia paper (arXiv:2304.01373) and the Pile paper
 (arXiv:2101.00027).
 """
 
+from . import infinigram
+
 # Schema hints:
 #   prompt_path: how to pull the user prompt out of a row.
 #     "messages"        -> first role=="user" content in row["messages"]
@@ -387,6 +389,34 @@ def infinigram_index(target: dict) -> str | None:
     if not target.get("is_model"):
         return None
     return target.get("infinigram_index", FALLBACK_INFINIGRAM_INDEX)
+
+
+def infinigram_caveat(target: dict, index: str) -> str | None:
+    """What a count in `index` does not say about `target`, or None.
+
+    `infinigram.caveat_for` knows each index on its own: the Pile index differs
+    from what `pythia-12b-deduped` saw by deduplication, the OLMo 2 indexes
+    stand in for a Dolma 3 nobody has indexed. Each is true only of the target
+    its index was chosen for. Read for an OLMo 3 model pointed at the Pile with
+    --index, the deduplication note is about Pythia and says nothing about the
+    thing that matters — OLMo 3 never trained on the Pile; read for Pythia
+    pointed at an OLMo index, the missing-Dolma-3 note is about OLMo. So the
+    caveat is decided from both. The target's own index — registered, or the
+    fallback for a model with none — keeps the caveat written for it. Any
+    other known index gets the plain statement that this target did not train
+    on it. An index this tool does not know is left uncharacterized, for the
+    reason `caveat_for` gives: it may be the real thing.
+    """
+    if index == infinigram_index(target):
+        return infinigram.caveat_for(index)
+    covers = infinigram.INDEXES.get(index)
+    if covers is None:
+        return None
+    return (
+        f"This index covers {covers}. {target['target']} was not trained on it, so a "
+        f"count here says whether the string is in that corpus, not whether this "
+        f"model saw it."
+    )
 
 # The shape of the training example a prompt was drawn from. It decides what
 # `context` stores behind the prompt and whether `classify` may read a label off

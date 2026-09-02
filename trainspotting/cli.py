@@ -2597,6 +2597,28 @@ def _contam_refusal(args, has_stages: bool, index: str | None) -> str | None:
     return "nothing to measure: " + "; ".join(why)
 
 
+def _contam_index(args, target: dict) -> str | None:
+    """The index the corpus side counts in, or None when the target has no corpus side.
+
+    `--index` moves a model to a different corpus — the full OLMo 2 index for the
+    comparison in the README, or a Dolma 3 index the day Ai2 publishes one. It
+    cannot give a dataset one. Nothing was pretrained on a dataset, so there is
+    no corpus behind it to count in, and `registry.infinigram_index` says None
+    for exactly that reason; letting the flag override that would count the
+    probes in some model's corpus and file the result under the dataset's name,
+    as if that corpus were part of its training. Refused here, before the
+    benchmark is fetched, the same way `_contam_refusal` refuses a run with
+    nothing to measure.
+    """
+    if args.index and not target["is_model"]:
+        sys.exit(
+            f"--index {args.index}: {args.target} is a dataset, and nothing was pretrained "
+            f"on a dataset. There is no corpus behind it to count in; a count over "
+            f"{args.index} would describe a model nobody named. Drop --index, or name a model."
+        )
+    return args.index or registry.infinigram_index(target)
+
+
 def cmd_contaminate(args):
     """Is a benchmark's test set in the training data, where, and on which side?
 
@@ -2613,7 +2635,7 @@ def cmd_contaminate(args):
         sys.exit(e.args[0])
     target = registry.resolve(args.target)
     all_stages = registry.post_training_stages(target)
-    index = args.index or registry.infinigram_index(target)
+    index = _contam_index(args, target)
     refusal = _contam_refusal(args, bool(all_stages), index)
     if refusal:
         sys.exit(refusal)
@@ -2765,7 +2787,7 @@ def cmd_contaminate(args):
     # --- the corpus, by exact string ---------------------------------------
     corpus_run = None
     if index and not args.no_corpus:
-        caveat = infinigram.caveat_for(index)
+        caveat = registry.infinigram_caveat(target, index)
         print(f"\ncounting {len(probes)} probes in {index} ...", file=sys.stderr)
         counts = []
         for i, p in enumerate(probes, 1):
@@ -3034,7 +3056,8 @@ def main():
                    help="refuse to read more than this over the network; the plan is printed either way")
     p.add_argument("--yes", action="store_true", help="scan whatever it costs")
     p.add_argument("--index", help="infini-gram index for the corpus side (default: the "
-                   "registry's closest index for the model)")
+                   "registry's closest index for the model; a dataset has no corpus side "
+                   "and takes none)")
     # Together these would fetch the benchmark, read nothing, and exit 0 with a
     # summary of stages not scanned — a run that asked no question.
     side = p.add_mutually_exclusive_group()
