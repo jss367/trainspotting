@@ -68,12 +68,12 @@ def _ident():
     if _identifier is None:
         from py3langid.langid import MODEL_FILE, LanguageIdentifier
 
-        # py3langid 0.4 swapped the pickled model for an npz and renamed the
-        # loader with it: `from_pickled_model` became `from_model_file`. The
-        # dependency is unpinned on purpose, so the day 0.4 shipped a PR that
-        # never touched this module went red. Take whichever loader this
-        # install has; `MODEL_FILE` tracks the format on both sides, and
-        # `classify` still returns (code, prob).
+        # py3langid 0.4 dropped the pickled model and, with it,
+        # `from_pickled_model`; the loader is `from_model_file` and the packaged
+        # model is an `.npz.xz`. Both versions hand `norm_probs` through to the
+        # same constructor, so the only thing that differs is the loader's
+        # name. Pick whichever this install has rather than pin the dependency:
+        # a 0.3 install keeps working, and 0.4 is what a fresh install gets.
         load = getattr(LanguageIdentifier, "from_model_file", None) or LanguageIdentifier.from_pickled_model
         _identifier = load(MODEL_FILE, norm_probs=True)
     return _identifier

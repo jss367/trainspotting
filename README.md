@@ -1369,7 +1369,8 @@ array over five public corpora, and prints the count per corpus with the
 documents behind it:
 
 ```bash
-trainspotting lookup "For the pointer I thank" --docs 10
+trainspotting lookup "For the pointer I thank" --docs 10     # ten random occurrences
+trainspotting lookup "For the pointer I thank" --docs all    # every occurrence, by rank
 ```
 
 | Corpus | What it is |
@@ -1390,14 +1391,22 @@ to get backwards:
 - **The count is occurrences, not documents.** A page that repeats a phrase
   three times contributes three. Reading a count as "copies in the training
   data" inflates it.
-- **Documents are exhaustive only at or under ten occurrences, and only when
-  the run asked for all of them.** Ten is the API's per-call cap. Above it the
-  index draws occurrences uniformly at random and a re-run returns different
-  ones, so a committed result is a snapshot; below it, `--docs 3` against a
-  phrase occurring eight times is still a sample of three, and the flag says so.
-  It is also cleared when the index returns fewer documents than were asked for.
-  Result files carry `exhaustive` per pull and a `run_on` date instead of a
-  revision, because a live index has nothing to pin.
+- **Sampled documents are exhaustive only at or under ten occurrences, and
+  only when the run asked for all of them.** Ten is the API's per-call cap.
+  Above it the index draws occurrences uniformly at random, with replacement,
+  and a re-run returns different ones, so a committed result is a snapshot;
+  below it, `--docs 3` against a phrase occurring eight times is still a sample
+  of three, and the flag says so. It is also cleared when the index returns
+  fewer documents than were asked for. Result files carry `exhaustive` per pull
+  and a `run_on` date instead of a revision, because a live index has nothing
+  to pin.
+- **`--docs all` takes the census instead.** The index also lists occurrences
+  by rank, one request each, so `trainspotting lookup "For the pointer I
+  thank" --docs all` fetches all 333 and reports how many distinct documents
+  they collapse to, with a `×n` on any document that holds the phrase more
+  than once. It costs one round trip per occurrence, which is why it is
+  opt-in: fine for hundreds, slow for thousands, out of reach for a common
+  phrase.
 
 ### The committed study
 

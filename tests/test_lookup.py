@@ -362,3 +362,106 @@ def test_text_is_still_read_when_there_are_no_spans():
     rec = lookup.normalize({"doc_ix": 1, "text": "all there is", "spans": []})
 
     assert rec["excerpt"] == "all there is"
+
+
+@pytest.fixture
+def ranked(monkeypatch):
+    """A two-shard index holding five occurrences of a phrase across three
+    documents, answered by rank the way `find` + `get_doc_by_rank` do. Records
+    every rank asked for so a test can check the walk covered each one once."""
+    asked = []
+    # rank -> (path, doc_ix): one document seen at three ranks, two seen once.
+    # A document lives in one suffix-array shard, so all of its ranks are in
+    # that shard's range: the repeated one is shard 0's, the two singles shard 1's.
+    where = {
+        10: ("a.json.gz", 1), 11: ("a.json.gz", 1), 12: ("a.json.gz", 1),
+        50: ("b.json.gz", 2), 51: ("c.json.gz", 3),
+    }
+
+    def fake_post(payload):
+        if payload["query_type"] == "find":
+            return {"cnt": 5, "segment_by_shard": [[10, 13], [50, 52]]}
+        assert payload["query_type"] == "get_doc_by_rank"
+        asked.append((payload["s"], payload["rank"]))
+        path, ix = where[payload["rank"]]
+        return {
+            "doc_ix": ix, "doc_len": 10, "spans": [["text", None]],
+            "metadata": json.dumps({"path": path}),
+        }
+
+    monkeypatch.setattr(lookup, "_post", fake_post)
+    return asked
+
+
+def test_every_document_walks_each_rank_once_and_is_exhaustive(ranked):
+    out = lookup.every_document("idx", "q")
+    assert ranked == [(0, 10), (0, 11), (0, 12), (1, 50), (1, 51)]
+    assert out["drawn"] == 5
+    assert out["exhaustive"]
+    # Three documents, and the repeated one carries its real occurrence count.
+    assert [(d["shard"], d["occurrences_drawn"]) for d in out["documents"]] == [
+        ("a.json.gz", 3), ("b.json.gz", 1), ("c.json.gz", 1),
+    ]
+
+
+def test_every_document_is_not_exhaustive_when_a_rank_returns_nothing(ranked, monkeypatch):
+    real = lookup._post
+
+    def flaky(payload):
+        if payload.get("rank") == 51:
+            return {"blocked": True}
+        return real(payload)
+
+    monkeypatch.setattr(lookup, "_post", flaky)
+    out = lookup.every_document("idx", "q")
+    assert out["drawn"] == 4
+    assert not out["exhaustive"]
+
+
+def test_probe_all_uses_the_rank_walk(ranked, monkeypatch):
+    monkeypatch.setattr(lookup, "count", lambda i, q: {"occurrences": 5, "approx": False, "tokens": []})
+    out = lookup.probe("idx", "q", docs="all")
+    assert out["exhaustive"] and out["drawn"] == 5 and len(ranked) == 5
+
+
+def test_probe_all_with_no_occurrences_costs_no_call(ranked, monkeypatch):
+    monkeypatch.setattr(lookup, "count", lambda i, q: {"occurrences": 0, "approx": False, "tokens": []})
+    lookup.probe("idx", "q", docs="all")
+    assert ranked == []
+
+
+def _ranked_without_metadata(segments, monkeypatch):
+    """Every rank resolves to `doc_ix` 7 with metadata that will not decode, so
+    the record has neither a path nor a URL — the shape `_identity` refuses to
+    merge on. The rank walk knows the shard and does not need to refuse."""
+
+    def fake_post(payload):
+        if payload["query_type"] == "find":
+            return {"cnt": sum(hi - lo for lo, hi in segments), "segment_by_shard": segments}
+        return {"doc_ix": 7, "doc_len": 10, "spans": [["text", None]], "metadata": "{broken"}
+
+    monkeypatch.setattr(lookup, "_post", fake_post)
+
+
+def test_every_document_merges_repeats_in_one_shard_even_with_no_metadata(monkeypatch):
+    """Two ranks in the same shard landing on the same `doc_ix` are one document
+    seen twice, whatever its metadata says — unlike `sample_documents`, which has
+    to leave two such hits apart because it does not know their shard."""
+    _ranked_without_metadata([[10, 12]], monkeypatch)
+
+    out = lookup.every_document("idx", "q")
+
+    assert out["drawn"] == 2 and out["exhaustive"]
+    assert len(out["documents"]) == 1
+    assert out["documents"][0]["occurrences_drawn"] == 2
+
+
+def test_every_document_keeps_the_same_doc_ix_in_different_shards_apart(monkeypatch):
+    """`doc_ix` is shard-local: the same number in two shards is two files."""
+    _ranked_without_metadata([[10, 11], [50, 51]], monkeypatch)
+
+    out = lookup.every_document("idx", "q")
+
+    assert out["drawn"] == 2 and out["exhaustive"]
+    assert len(out["documents"]) == 2
+    assert all(d["occurrences_drawn"] == 1 for d in out["documents"])
