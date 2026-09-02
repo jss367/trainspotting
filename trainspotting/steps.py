@@ -215,20 +215,33 @@ def scan(
     `per_step` comes back sorted and the progress line reads as a walk through
     the run.
     """
-    per_step, ordinary_examples, priority_examples = [], [], []
+    per_step, ordinary_examples = [], []
+    priority_first, priority_extra = [], []
     priority_steps = set(priority_steps)
     with ThreadPoolExecutor(max_workers=workers) as pool:
         fetched = pool.map(lambda s: fetch_step(order, s, revision), steps_)
         for i, (step, tokens) in enumerate(zip(steps_, fetched), 1):
             texts = decode(sequences(tokens, order))
-            examples = priority_examples if step in priority_steps else ordinary_examples
-            per_step.append(count_step(step, texts, rx, examples, examples_limit))
+            if step in priority_steps:
+                step_examples = []
+                count = count_step(step, texts, rx, step_examples, examples_limit)
+                if step_examples:
+                    if len(priority_first) < examples_limit:
+                        priority_first.append(step_examples[0])
+                    room = examples_limit - len(priority_extra)
+                    priority_extra.extend(step_examples[1 : 1 + room])
+            else:
+                count = count_step(
+                    step, texts, rx, ordinary_examples, examples_limit
+                )
+            per_step.append(count)
             if progress:
                 progress(i, len(steps_), step)
-    # An exact step is requested for inspection, so its evidence gets first use
-    # of the same bounded result budget even when it sorts after sampled steps.
-    # Each temporary list is itself capped, keeping memory bounded as well.
-    return per_step, (priority_examples + ordinary_examples)[:examples_limit]
+    # Exact steps are requested for inspection, so one snippet from each gets
+    # first use of the bounded result budget. Only then do extra explicit-step
+    # snippets and ordinary sampled snippets enter it. Every list is capped.
+    examples = priority_first + priority_extra + ordinary_examples
+    return per_step, examples[:examples_limit]
 
 
 def _records(per_step: list[dict]) -> list[dict]:
