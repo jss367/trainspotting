@@ -69,9 +69,11 @@ def chunks(probes: list[dict], budget: int | None = None) -> list[list[dict]]:
     size = 0
     for p in probes:
         n = len(p["regex"]) + 1
+        # The wrapper `alternation` adds, `(?:` and `)`, is part of what RE2
+        # compiles, so it counts against the same budget as the probes it holds.
         if not out or size + n > budget:
             out.append([p])
-            size = n
+            size = len("(?:)") + n
         else:
             out[-1].append(p)
             size += n
@@ -159,6 +161,14 @@ def _python(regex: str) -> str:
     case-folding stays Unicode-aware the way RE2's `(?i)` is — `re.ASCII` on
     the whole pattern would stop folding `É` to `é` and drop the recased copy
     RE2 matched.
+
+    Case folding is the residual gap, and it is left as one. Python's
+    `IGNORECASE` folds the dotted capital I (U+0130) to `i` and RE2's `(?i)`
+    does not, so a string RE2 selected for one probe could hand Python a second
+    probe's words that differ from the text only by that letter — the same
+    invent-a-hit direction as `\s`, and confined to probes containing it. No
+    RE2-compatible folder ships with Python, and carrying RE2's folding table
+    here to close a gap that narrow is not a trade this module makes.
 
     `re.escape` never emits a bare `\b` or `\s` (a backslash in the text
     becomes `\\`, and the letter after it stays a plain letter), so walking

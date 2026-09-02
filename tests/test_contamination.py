@@ -31,6 +31,15 @@ PROBES = [
 ]
 
 
+def test_a_chunk_counts_its_own_wrapper_against_the_budget():
+    """The bound is on what RE2 compiles, which is the alternation with its
+    `(?:` and `)` — a probe one short of the budget must not land it over."""
+    probes = [{"id": 0, "regex": "x" * 96}, {"id": 1, "regex": "y" * 96}]
+    for chunk in contamination.chunks(probes, budget=100):
+        assert len(contamination.alternation(chunk)) <= 100
+    assert len(contamination.chunks(probes, budget=100)) == 2
+
+
 def test_chunks_respect_a_character_budget_and_keep_order():
     probes = [{"id": i, "regex": "x" * 40} for i in range(10)]
     out = contamination.chunks(probes, budget=100)
