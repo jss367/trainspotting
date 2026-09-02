@@ -433,7 +433,12 @@ def _census(r: dict) -> bool:
     return bool(total) and len(r["items_probed"]) == total
 
 
-def summary(stage_runs: list[dict], corpus_run: dict | None, unscanned: list[str]) -> list[str]:
+def summary(
+    stage_runs: list[dict],
+    corpus_run: dict | None,
+    unscanned: list[str],
+    corpus_skipped: str | None = None,
+) -> list[str]:
     """Lines for the whole check, one stage at a time, then the corpus.
 
     The interval is over the benchmark: the items were a draw from the test set,
@@ -442,6 +447,11 @@ def summary(stage_runs: list[dict], corpus_run: dict | None, unscanned: list[str
     read, and the row counts are exact. When the draw was the whole split the
     share is exact and no interval is printed; when the conversion was partial
     the share is a floor and no interval is printed either — see `_rate`.
+
+    `corpus_skipped` names the flag that took the corpus side out of a run
+    that has one. A stage `--corpus-only` skipped is listed as not scanned;
+    a corpus `--no-corpus` skipped gets the same line, or the stage-only
+    summary reads as the whole check.
     """
     lines = []
     for r in stage_runs:
@@ -490,6 +500,8 @@ def summary(stage_runs: list[dict], corpus_run: dict | None, unscanned: list[str
         lines.extend(parts)
     for s in unscanned:
         lines.append(f"{s:6s} not scanned — not a zero")
+    if corpus_run is None and corpus_skipped:
+        lines.append(f"corpus not scanned — not a zero ({corpus_skipped})")
     if corpus_run is not None:
         n = len(corpus_run["items_probed"])
         hit = corpus_run["items"]

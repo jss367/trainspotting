@@ -3006,7 +3006,10 @@ def cmd_contaminate(args):
         print(f"  -> {path}", file=sys.stderr)
 
     print(file=sys.stderr)
-    for line in contamination.summary(stage_runs, corpus_run, unscanned):
+    # A corpus side the flag removed is named, as a stage --corpus-only removed
+    # is; a dataset has none to name, and _contam_index already said so.
+    skipped = "--no-corpus" if index and args.no_corpus else None
+    for line in contamination.summary(stage_runs, corpus_run, unscanned, corpus_skipped=skipped):
         print(line, file=sys.stderr)
 
 

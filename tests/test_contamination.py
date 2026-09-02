@@ -590,6 +590,21 @@ def test_corpus_only_leaves_every_stage_unscanned():
     assert cli._contam_unscanned(stages, [stages[1]], corpus_only=True) == ["sft", "dpo", "rlvr"]
 
 
+def test_summary_names_a_corpus_that_a_flag_skipped():
+    """`--no-corpus` on a model run is the mirror of `--corpus-only`: the side it
+    took away is listed as not scanned, not left off as if the check were whole."""
+    run = {
+        "stage": "sft", "items_probed": [0, 1], "has_answer_probes": False,
+        "items": {"any": [], "question_read": [], "question_produced": [],
+                  "answer_produced": [], "answer_rejected": []},
+        "matched": 0, "total_rows": 10, "partial": False,
+    }
+    text = "\n".join(contamination.summary([run], None, [], corpus_skipped="--no-corpus"))
+    assert "corpus not scanned — not a zero (--no-corpus)" in text
+    # A dataset target has no corpus to skip, and nothing is claimed about one.
+    assert "corpus" not in "\n".join(contamination.summary([run], None, []))
+
+
 def test_summary_names_unscanned_stages_and_the_corpus_caveat():
     run = {
         "stage": "sft", "items_probed": [0, 1, 2], "has_answer_probes": True,
