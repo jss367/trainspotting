@@ -739,7 +739,10 @@ def sample(
     at_origin = batch_losses(model, everything, device, eval_batch)
     losses: list[list[list[float]]] = []
     trajectory: list[list[float]] = []
-    steps = burn_in + draws * every
+    # The last retained draw is at step burn_in + (draws - 1) * every; nothing
+    # after it reaches a covariance, and steps taken there would still land in
+    # the trajectory and could trip the drift check on movement no draw saw.
+    steps = burn_in + (draws - 1) * every + 1
     for chain in range(chains):
         with torch.no_grad():
             for p, m, w in zip(params, master, origin):
@@ -1086,7 +1089,12 @@ def _fmt(x: float | None, digits: int = 4) -> str:
 
 
 def _one_line(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip()
+    """One printable line: whitespace collapsed, and any other control
+    character shown as its escape. Snippets and source names are text from the
+    training data, and a stored ESC sequence would otherwise reach the terminal
+    of whoever reads the report as an instruction to it."""
+    flat = re.sub(r"\s+", " ", text).strip()
+    return "".join(ch if ch.isprintable() else repr(ch)[1:-1] for ch in flat)
 
 
 def render(res: dict, top: int = 5) -> list[str]:
@@ -1202,7 +1210,7 @@ def render(res: dict, top: int = 5) -> list[str]:
 
 
 def _record_line(r: dict) -> str:
-    where = " / ".join(x for x in (r["stage"], r["side"], r["source"]) if x)
+    where = " / ".join(_one_line(str(x)) for x in (r["stage"], r["side"], r["source"]) if x)
     partial = r.get("partial", r["cov"])
     value = r.get("pull", r["cov"])
     se = r.get("cov_stderr")

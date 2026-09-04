@@ -679,6 +679,15 @@ def test_render_says_so_when_a_chain_sat_below_the_origin_loss():
     assert "not posterior covariances" not in text
 
 
+def test_control_characters_in_a_snippet_or_source_never_reach_the_terminal():
+    res = fake_result()
+    res["records"][0]["snippet"] = "red \x1b[31mtext\x1b[0m\x07"
+    res["records"][0]["source"] = "Pile\x1bCC"
+    text = "\n".join(bif.render(res))
+    assert "\x1b" not in text and "\x07" not in text
+    assert "\\x1b[31mtext" in text and "Pile\\x1bCC" in text
+
+
 def test_render_says_so_when_a_chain_was_still_moving_either_way():
     text = "\n".join(bif.render(fake_result(llc_sign=0)))
     assert "1 of 2 chains were still drifting" in text
@@ -748,7 +757,9 @@ def test_sample_records_every_loss_and_puts_the_weights_back():
     assert len(run["at_origin"]) == 4
     assert len(run["losses"]) == 2 and all(len(c) == 4 for c in run["losses"])
     assert all(len(d) == 4 for c in run["losses"] for d in c)
-    assert all(len(t) == 2 + 4 * 2 for t in run["trajectory"])
+    # Two burn-in steps, then draws at steps 2, 4, 6, 8: the loop stops at the
+    # last retained draw rather than running `every - 1` steps past it.
+    assert all(len(t) == 2 + 3 * 2 + 1 for t in run["trajectory"])
     assert all(math.isfinite(x) for c in run["losses"] for d in c for x in d)
     for p, w in zip(model.parameters(), before):
         assert torch.equal(p.detach(), w)
