@@ -1470,7 +1470,10 @@ at `1e-7` the minibatch loss rose 0.75 nats from a start of 3.4, just under the
 line the report draws; at the default `5e-8` it rose about 0.4 with a learning
 coefficient of 2.2, and the four chains agreed with each other to one decimal. A
 bigger model needs a smaller step, and the report says when it does. `nβ`
-defaults to `batch / ln(batch)` as in devinterp, `γ = 100`, four chains of a
+defaults to `n / ln(n)` with `n` the number of candidates the posterior is
+localized on (devinterp sets it from the minibatch, as a convention for
+comparing coefficients; here a minibatch is a memory setting and must not move
+the posterior), `γ = 100`, four chains of a
 hundred retained draws after fifty burn-in steps. The runtime is `chains ×
 draws × candidates` forward passes plus the SGLD steps: minutes for a 70M model
 over 300 documents on a laptop GPU, and a multi-GPU-hour job for a 7B model,

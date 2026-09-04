@@ -457,25 +457,25 @@ def pieces(tokenizer, turns: list[dict]) -> list[tuple[str, bool]]:
     roles = {t["role"] for t in turns}
     template = getattr(tokenizer, "chat_template", None)
     if template and "text" not in roles:
-        rendered = []
-        try:
-            for k in range(len(turns) + 1):
-                msgs = [{"role": t["role"], "content": t["text"]} for t in turns[:k]]
-                if k == 0:
-                    rendered.append("")
+        texts = [t["text"] for t in turns]
+        rendered = _render(tokenizer, turns, texts)
+        if rendered and not _nested(rendered):
+            # A think model's generation prompt ends inside the response — OLMo
+            # 3 Think's assistant header closes with `<think>` — so a reply
+            # decoded from the model, or a query typed as one, starts after the
+            # marker and the full rendering no longer begins with the prompt
+            # rendering. Put the missing tail of the generation prompt back in
+            # front of that turn's text: it was the model's context, and the
+            # span the turn grows the rendering by then excludes it.
+            for k, t in enumerate(turns, start=1):
+                if t["role"] != "assistant" or rendered[k].startswith(rendered[k - 1]):
                     continue
-                # The generation prompt is the assistant header, so it belongs
-                # only where an assistant turn comes next. Added after a system
-                # turn that a user turn follows, it would sit before the user
-                # text, the longer rendering would no longer start with the
-                # shorter one, and the whole example would fall back to roles.
-                add_prompt = k < len(turns) and turns[k]["role"] == "assistant"
-                rendered.append(tokenizer.apply_chat_template(
-                    msgs, tokenize=False, add_generation_prompt=add_prompt
-                ))
-        except Exception:  # a template that rejects these roles or this shape
-            rendered = None
-        if rendered and all(b.startswith(a) for a, b in zip(rendered, rendered[1:])):
+                shared = _common_prefix(rendered[k - 1], rendered[k])
+                tail = rendered[k - 1][shared:]
+                if tail and not texts[k - 1].startswith(tail):
+                    texts[k - 1] = tail + texts[k - 1]
+            rendered = _render(tokenizer, turns, texts)
+        if rendered and _nested(rendered):
             out = []
             for k, t in enumerate(turns, start=1):
                 grown = rendered[k][len(rendered[k - 1]):]
@@ -488,6 +488,43 @@ def pieces(tokenizer, turns: list[dict]) -> list[tuple[str, bool]]:
         out.append((f"{t['role']}: ", False))
         out.append((t["text"] + "\n\n", fits(t)))
     return out
+
+
+def _render(tokenizer, turns: list[dict], texts: list[str]) -> list[str] | None:
+    """The conversation rendered cumulatively: `rendered[k]` is the template
+    over the first k turns, with the generation prompt added only where an
+    assistant turn comes next. None when the template rejects the shape."""
+    rendered = [""]
+    try:
+        for k in range(1, len(turns) + 1):
+            msgs = [{"role": t["role"], "content": text} for t, text in zip(turns[:k], texts[:k])]
+            # The generation prompt is the assistant header, so it belongs only
+            # where an assistant turn comes next. Added after a system turn that
+            # a user turn follows, it would sit before the user text, the longer
+            # rendering would no longer start with the shorter one, and the
+            # whole example would fall back to roles.
+            add_prompt = k < len(turns) and turns[k]["role"] == "assistant"
+            rendered.append(tokenizer.apply_chat_template(
+                msgs, tokenize=False, add_generation_prompt=add_prompt
+            ))
+    except Exception:  # a template that rejects these roles or this shape
+        return None
+    return rendered
+
+
+def _nested(rendered: list[str]) -> bool:
+    """Whether each rendering starts with the one before it, which is what lets
+    a turn's span be read off as the text the rendering grew by."""
+    return all(b.startswith(a) for a, b in zip(rendered, rendered[1:]))
+
+
+def _common_prefix(a: str, b: str) -> int:
+    n = 0
+    for x, y in zip(a, b):
+        if x != y:
+            break
+        n += 1
+    return n
 
 
 def encode(tokenizer, turns: list[dict], max_tokens: int) -> dict:
@@ -616,11 +653,18 @@ def _tokenize(tokenizer, spans: list[tuple[str, bool]]) -> tuple[list[int], list
 # --- Sampling -------------------------------------------------------------------
 
 
-def default_nbeta(batch: int) -> float:
-    """The inverse temperature devinterp defaults to for a minibatch of this
-    size, batch / ln(batch): the scale at which the posterior's pull on the
-    weights matches the noise a minibatch gradient carries."""
-    return batch / math.log(batch) if batch > 1 else 1.0
+def default_nbeta(n: int) -> float:
+    """The inverse temperature for a posterior localized on `n` examples,
+    n / ln(n), Watanabe's scale for the loss's pull against the prior.
+
+    `n` is the size of the localized sample, the candidates whose mean loss is
+    L, and not the minibatch: a minibatch only estimates L's gradient, and a
+    temperature set from its size would make the posterior — every covariance
+    and the learning coefficient with it — a function of a memory setting.
+    devinterp's estimator does use the batch size here, as a convention for
+    comparing coefficients across runs; this layer's posterior is a property of
+    its data, and `--nbeta` overrides either way."""
+    return n / math.log(n) if n > 1 else 1.0
 
 
 def pick_device(name: str = "auto") -> str:
@@ -691,14 +735,20 @@ def _losses(model, chunk: list[dict], device: str):
         labels[r, :n] = torch.tensor(e["labels"])
         mask[r, :n] = 1
     ids, labels, mask = ids.to(device), labels.to(device), mask.to(device)
-    logits = model(input_ids=ids, attention_mask=mask).logits[:, :-1].float()
+    logits = model(input_ids=ids, attention_mask=mask).logits
     target = labels[:, 1:]
-    logp = torch.log_softmax(logits, dim=-1)
-    keep = target != -100
-    picked = logp.gather(-1, target.clamp(min=0).unsqueeze(-1)).squeeze(-1)
-    nll = -(picked * keep).sum(dim=1)
-    count = keep.sum(dim=1).clamp(min=1)
-    return nll / count
+    # One row at a time, widened to float32 only there: the whole batch's
+    # logits in float32, plus a log-softmax of them, is two more tensors the
+    # size of batch × tokens × vocabulary — some 3 GB each for a 7B model at
+    # the default settings — on a device already holding the weights twice.
+    out = []
+    for r in range(len(chunk)):
+        row = torch.nn.functional.cross_entropy(
+            logits[r, :-1].float(), target[r], ignore_index=-100, reduction="sum"
+        )
+        count = (target[r] != -100).sum().clamp(min=1)
+        out.append(row / count)
+    return torch.stack(out)
 
 
 def sample(

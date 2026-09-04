@@ -2698,7 +2698,7 @@ def cmd_bif(args):
             "every candidate is a rejected completion, so there is no text the model was fit toward "
             "to localize the posterior on; widen --match or add a stage"
         )
-    nbeta = args.nbeta if args.nbeta is not None else bif.default_nbeta(args.batch)
+    nbeta = args.nbeta if args.nbeta is not None else bif.default_nbeta(len(localize))
     settings = {
         "chains": args.chains,
         "draws": args.draws,
@@ -3308,9 +3308,11 @@ def main():
     p.add_argument("--every", type=_positive_int, default=1, help="SGLD steps between retained draws")
     p.add_argument("--lr", type=_positive_float, default=5e-8,
                    help="SGLD step size ε; the report says if the chains climbed away from w*, in which case lower it")
-    p.add_argument("--nbeta", type=_positive_float, help="inverse temperature nβ (default: batch / ln batch)")
+    p.add_argument("--nbeta", type=_positive_float,
+                   help="inverse temperature nβ (default: n / ln n over the localized candidates)")
     p.add_argument("--gamma", type=_positive_float, default=100.0, help="localization strength γ")
-    p.add_argument("--batch", type=_positive_int, default=8, help="candidates per SGLD minibatch")
+    p.add_argument("--batch", type=_positive_int, default=8,
+                   help="candidates per SGLD minibatch (a memory setting; it does not change the posterior)")
     p.add_argument("--eval-batch", type=_positive_int, default=16, help="examples per forward pass when recording losses")
     p.add_argument("--max-tokens", type=_positive_int, default=512, help="tokens kept per example (the front is dropped)")
     # No float16: its exponent range is narrow enough that small likelihood

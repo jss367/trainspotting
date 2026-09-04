@@ -365,10 +365,13 @@ def test_a_think_response_with_its_markers_restored_renders_through_the_template
     # The open marker is the header's, so it is context; everything the
     # response grew the rendering by, reasoning and answer, is fit.
     assert spans == [("<s><user>hi</><assistant><think>", False), ("\nhmm\n</think>\nyo</>", True)]
-    # Without the markers the response cannot start inside the header, the
-    # prefix check fails, and the whole example falls back to roles.
+    # A reply without the marker — what the model decodes after its generation
+    # prompt, or a query typed as one — gets the prompt's missing tail put back
+    # in front, as context, so it still renders through the template.
     bare = [{"role": "user", "text": "hi"}, {"role": "assistant", "text": "yo"}]
-    assert bif.pieces(ThinkTok(), bare) == bif.pieces(Tok(), bare)
+    assert bif.pieces(ThinkTok(), bare) == [("<s><user>hi</><assistant><think>", False), ("yo</>", True)]
+    e = bif.encode(ThinkTok(), bare, max_tokens=100)
+    assert bytes(i for i, lab in zip(e["ids"], e["labels"]) if lab != -100).decode() == "yo</>"
 
 
 class OffsetTok(Tok):
@@ -737,8 +740,8 @@ def test_render_says_so_when_a_chain_was_still_moving_either_way():
     assert "covaries" in text and "average candidate" in text
 
 
-def test_default_nbeta_is_batch_over_log_batch():
-    assert bif.default_nbeta(8) == pytest.approx(8 / math.log(8))
+def test_default_nbeta_is_n_over_log_n_of_the_localized_sample():
+    assert bif.default_nbeta(200) == pytest.approx(200 / math.log(200))
     assert bif.default_nbeta(1) == 1.0
 
 
