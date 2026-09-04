@@ -553,9 +553,12 @@ def _tokenize(tokenizer, spans: list[tuple[str, bool]]) -> tuple[list[int], list
     offsets: a token is a target when any character of it lies in a fit span,
     so the merged boundary token counts as the reply it begins.
 
-    A tokenizer without offsets (a slow one, or a stub) is encoded span by span,
-    which is exact when no token straddles a boundary and the best available
-    when one does.
+    A tokenizer without offsets (a slow one, or a stub) still encodes the whole
+    string once, so the ids are the sequence the model saw; the mask is then
+    aligned by prefix length — a token is a target when its index falls past
+    the token count of the text before the fit span and before that of the
+    text through it. A token that straddles a boundary lands on one side of it;
+    the ids themselves are never wrong.
     """
     fit_ranges = []
     pos = 0
@@ -572,11 +575,13 @@ def _tokenize(tokenizer, spans: list[tuple[str, bool]]) -> tuple[list[int], list
             inside = any(s < hi and e > lo for lo, hi in fit_ranges)
             labels.append(tok if inside else -100)
         return ids, labels
-    ids, labels = [], []
-    for text, fit in spans:
-        toks = tokenizer.encode(text, add_special_tokens=False)
-        ids.extend(toks)
-        labels.extend(toks if fit else [-100] * len(toks))
+    ids = list(tokenizer.encode(full, add_special_tokens=False))
+    ranges = []
+    for lo, hi in fit_ranges:
+        start = len(tokenizer.encode(full[:lo], add_special_tokens=False)) if lo else 0
+        end = len(tokenizer.encode(full[:hi], add_special_tokens=False))
+        ranges.append((start, end))
+    labels = [tok if any(s <= i < e for s, e in ranges) else -100 for i, tok in enumerate(ids)]
     return ids, labels
 
 

@@ -1441,7 +1441,14 @@ file too (`draws[chain][draw]`, the query's loss then each record's), so any
 other statistic can be computed later without re-running the chains.
 
 Two things bound what the number means, and both are in the result file rather
-than assumed. The posterior is localized on the candidates — a few hundred
+than assumed. A third is stated here: a pretraining document is scored on its
+own, from its first token, where Pythia saw it packed into a 2,049-token
+stream with the tail of the document before it as context. The loss of a
+standalone document is a different loss from the one training took, and the
+covariances over the committed Pythia run are of the former. Rebuilding the
+packed context is possible, since the training order is published and
+indexed (see [Where in training it was seen](#where-in-training-it-was-seen)),
+and is a follow-up rather than part of this layer. The posterior is localized on the candidates — a few hundred
 examples — not on the training set, so the covariances are about that sample.
 And the influence is on the loss of the checkpoint named in the file: pass
 `--model` to weigh a target's samples against a different checkpoint (all Pythia
