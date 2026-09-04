@@ -147,7 +147,7 @@ def _context_candidates(target_name: str, stage: dict) -> tuple[list[dict], str 
         return [], why, 0
     out = []
     skipped = 0
-    for rec in data.get("records", []):
+    for ordinal, rec in enumerate(data.get("records", [])):
         sides = [rec.get("turns") or []] if kind == "sft" else [
             (rec.get(side) or {}).get("turns") or [] for side in ("chosen", "rejected")
         ]
@@ -157,6 +157,7 @@ def _context_candidates(target_name: str, stage: dict) -> tuple[list[dict], str 
         base = {
             "stage": name,
             "kind": kind,
+            "rec": ordinal,
             "id": rec.get("id"),
             "row": rec.get("row"),
             "source": _source(rec.get("meta") or {}, stage),
@@ -188,11 +189,12 @@ def _docs_candidates(target_name: str, stage: dict) -> tuple[list[dict], str | N
     if why:
         return [], why
     out = []
-    for doc in data.get("records", []):
+    for ordinal, doc in enumerate(data.get("records", [])):
         text = doc.get("text") or ""
         out.append({
             "stage": name,
             "kind": "pretrain",
+            "rec": ordinal,
             "id": doc.get("id"),
             "row": doc.get("row"),
             "source": doc.get("source") or None,
@@ -318,8 +320,19 @@ def _matching(cands: list[dict], pattern) -> list[dict]:
     So the regex is matched per record and every side of a matching record is
     kept.
     """
-    hit = {(c["id"], c["row"]) for c in cands if pattern.search(candidate_text(c))}
-    return [c for c in cands if (c["id"], c["row"]) in hit]
+    hit = {_record(c) for c in cands if pattern.search(candidate_text(c))}
+    return [c for c in cands if _record(c) in hit]
+
+
+def _record(c: dict):
+    """What makes two candidates sides of one stored record.
+
+    The record's position in its file, assigned when the candidates were built:
+    an id and a row are what a reader wants to see, but a record can lack both,
+    and two such records keyed on (None, None) would be grouped as one — every
+    side kept when one matched, and a limit of one returning them all.
+    """
+    return c["rec"] if "rec" in c else (c["id"], c["row"])
 
 
 def _limit(cands: list[dict], limit: int, rng: random.Random) -> list[dict]:
@@ -332,7 +345,7 @@ def _limit(cands: list[dict], limit: int, rng: random.Random) -> list[dict]:
     """
     units: dict = {}
     for c in cands:
-        units.setdefault((c["id"], c["row"]), []).append(c)
+        units.setdefault(_record(c), []).append(c)
     keys = list(units)
     if len(keys) <= limit:
         return cands

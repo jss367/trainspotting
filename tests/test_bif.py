@@ -112,6 +112,18 @@ def test_match_keeps_both_sides_of_a_pair_when_either_side_holds_the_pattern():
     assert [(c["id"], c["side"]) for c in kept] == [("p", "chosen"), ("p", "rejected")]
 
 
+def test_records_without_id_or_row_are_still_distinct_records():
+    import re
+
+    def side(rec, side, text):
+        return {"rec": rec, "id": None, "row": None, "side": side,
+                "turns": [{"role": "assistant", "text": text}]}
+    cands = [side(0, "chosen", "alpha"), side(0, "rejected", "beta"),
+             side(1, "chosen", "gamma"), side(1, "rejected", "delta")]
+    assert [c["rec"] for c in bif._matching(cands, re.compile("alpha"))] == [0, 0]
+    assert len(bif._limit(cands, 1, __import__("random").Random(0))) == 2
+
+
 def test_limit_keeps_both_sides_of_a_dpo_pair_together():
     target = registry.resolve("olmo-3-7b-instruct")
     for seed in range(5):

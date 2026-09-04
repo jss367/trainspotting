@@ -3302,7 +3302,13 @@ def main():
     p.add_argument("--batch", type=_positive_int, default=8, help="candidates per SGLD minibatch")
     p.add_argument("--eval-batch", type=_positive_int, default=16, help="examples per forward pass when recording losses")
     p.add_argument("--max-tokens", type=_positive_int, default=512, help="tokens kept per example (the front is dropped)")
-    p.add_argument("--dtype", default="float32", choices=["float32", "bfloat16", "float16"])
+    # No float16: its exponent range is narrow enough that small likelihood
+    # gradients underflow in `backward()` before the float32 master ever sees
+    # them, and a chain fed those gradients samples the prior and the noise
+    # rather than the posterior. Curing that needs a loss scaler; bfloat16 has
+    # float32's exponent range and needs none.
+    p.add_argument("--dtype", default="float32", choices=["float32", "bfloat16"],
+                   help="weights precision; bfloat16 halves memory and keeps float32's exponent range")
     p.add_argument("--device", default="auto", help="cuda, mps, cpu, or auto")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--slug", help="short name for the result file (default: derived from the text)")
