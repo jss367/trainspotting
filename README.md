@@ -1382,8 +1382,10 @@ rejected completion without the chosen one it was scored against.
 
 The committed run (`results/pythia-12b-deduped.bif-as-an-ai-language-model-…json`)
 is the query above against Pythia-70m and 200 sampled Pile documents, and shows
-what a first result looks like: the partial covariances split 101 toward to 99
-away, and the strongest of them is about three standard errors from zero. A 70-million
+what a first result looks like: every one of the 200 covariances is positive,
+because every loss moves with the chain's excursion, and the partial
+covariances beneath them split 101 toward to 99 away, the strongest about
+three standard errors from zero. A 70-million
 parameter model and a seventeen-token query are a small signal; the point of
 the committed file is that the machinery, the diagnostics and the shape of the
 answer are there to run on a bigger one.
