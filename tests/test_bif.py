@@ -76,6 +76,18 @@ def test_limit_caps_per_stage_deterministically():
     assert [x["row"] for x in a] != [x["row"] for x in c]
 
 
+def test_limit_keeps_both_sides_of_a_dpo_pair_together():
+    target = registry.resolve("olmo-3-7b-instruct")
+    for seed in range(5):
+        cands, _ = bif.candidates("olmo-3-7b-instruct", target, stages=["dpo"], limit=3, seed=seed)
+        assert len(cands) == 6
+        rows = [c["row"] for c in cands]
+        assert all(rows.count(r) == 2 for r in rows)
+        assert {c["side"] for c in cands} == {"chosen", "rejected"}
+    one, _ = bif.candidates("olmo-3-7b-instruct", target, stages=["dpo"], limit=1, seed=0)
+    assert [c["side"] for c in one] == ["chosen", "rejected"]
+
+
 def test_a_missing_context_file_is_a_skip_naming_the_command():
     target = registry.resolve("olmo-3-7b-instruct")
     cands, skipped = bif.candidates("no-such-target", target, stages=["sft"])

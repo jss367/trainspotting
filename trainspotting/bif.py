@@ -227,8 +227,9 @@ def candidates(
 
     `match` keeps only candidates whose text holds the regex, which is how a
     phrase `grep` found is turned into the set of examples to weigh. `limit`
-    caps the count per stage, drawn at random with `seed`, so a run on a big
-    model can be sized to the machine.
+    caps the records per stage, drawn at random with `seed`, so a run on a big
+    model can be sized to the machine; a DPO pair is one record and keeps both
+    its sides.
     """
     out: list[dict] = []
     skipped: dict[str, str] = {}
@@ -252,10 +253,28 @@ def candidates(
             if not cands:
                 skipped[name] = f"no sampled example matches {match!r}"
                 continue
-        if limit and len(cands) > limit:
-            cands = rng.sample(cands, limit)
+        if limit:
+            cands = _limit(cands, limit, rng)
         out.extend(cands)
     return out, skipped
+
+
+def _limit(cands: list[dict], limit: int, rng: random.Random) -> list[dict]:
+    """At most `limit` *records* of a stage, drawn at random, sides kept together.
+
+    A DPO pair is two candidates from one row. Sampling the candidates one by
+    one could keep a rejected completion and drop its chosen one, and a stage
+    reduced to rejected sides alone has nothing to localize the posterior on,
+    so the draw is over rows and both sides of a drawn row come along.
+    """
+    units: dict = {}
+    for c in cands:
+        units.setdefault((c["id"], c["row"]), []).append(c)
+    keys = list(units)
+    if len(keys) <= limit:
+        return cands
+    keep = set(rng.sample(range(len(keys)), limit))
+    return [c for i, k in enumerate(keys) if i in keep for c in units[k]]
 
 
 def candidate_text(c: dict) -> str:

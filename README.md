@@ -1371,8 +1371,9 @@ target.
 An RL row stores no response and is skipped, and the skip is printed with its
 reason, as is a stage with no committed sample. `--match` keeps only candidates
 whose text holds a regex, which is how a phrase `grep` found becomes the set of
-examples to weigh; `--limit` caps the count per stage so a run on a big model
-fits the machine.
+examples to weigh; `--limit` caps the records per stage so a run on a big model
+fits the machine, and a DPO pair is one record, so a limit never keeps a
+rejected completion without the chosen one it was scored against.
 
 The committed run (`results/pythia-12b-deduped.bif-as-an-ai-language-model-…json`)
 is the query above against Pythia-70m and 200 sampled Pile documents, and shows
