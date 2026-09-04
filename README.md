@@ -1395,7 +1395,7 @@ The committed run (`results/pythia-12b-deduped.bif-as-an-ai-language-model-…js
 is the query above against Pythia-70m and 200 sampled Pile documents, and shows
 what a first result looks like: every one of the 200 covariances is positive,
 because every loss moves with the chain's excursion, and the partial
-covariances beneath them split 103 toward to 97 away, the strongest two and a
+covariances beneath them split 99 toward to 101 away, the strongest two and a
 half standard errors from zero. A 70-million
 parameter model and a seventeen-token query are a small signal; the point of
 the committed file is that the machinery, the diagnostics and the shape of the
@@ -1468,7 +1468,8 @@ walk comparable to the weights themselves is a chain that has left the model.
 On Pythia-70m over 200 Pile documents, 80 steps at `ε = 1e-6` doubled the loss;
 at `1e-7` the minibatch loss rose 0.75 nats from a start of 3.4, just under the
 line the report draws; at the default `5e-8` it rose about 0.4 with a learning
-coefficient of 2.2, and the four chains agreed with each other to one decimal. A
+coefficient of 21 at `nβ = 37.7`, and the four chains agreed with each other
+to within a unit. A
 bigger model needs a smaller step, and the report says when it does. `nβ`
 defaults to `n / ln(n)` with `n` the number of candidates the posterior is
 localized on (devinterp sets it from the minibatch, as a convention for
