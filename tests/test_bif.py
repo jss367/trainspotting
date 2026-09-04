@@ -520,13 +520,16 @@ def test_llc_is_positive_when_the_posterior_sits_above_the_loss_at_origin():
     assert below["mean"] < 0
 
 
-def test_drift_is_the_rise_across_the_retained_steps_only():
+def test_drift_is_read_off_the_localized_loss_at_the_draws_not_the_minibatches():
+    # The localized candidate's loss rises across the draws; the minibatch
+    # trajectory, a fresh random draw each step, says the opposite and is
+    # ignored. A rejected side scored but not localized on does not count.
     run = {
-        "at_origin": [0.5, 1.0],
-        "losses": [chain([0.5], [1.5])],
+        "at_origin": [0.5, 1.0, 1.0],
+        "losses": [chain([0.5] * 8, [1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0], [40.0] * 8)],
         "nbeta": 1.0,
-        # Two burn-in steps that fell, then eight retained steps that rose.
-        "trajectory": [[9.0, 8.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0]],
+        "localized": [0],
+        "trajectory": [[9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0]],
         "burn_in": 2,
     }
     assert bif.llc(run)["drift"] == pytest.approx([4.0 - 1.0])
@@ -590,8 +593,10 @@ def fake_result(llc_sign=1.0, one=False):
         # Candidates sit at 0.5 at w* and average 2.0 under the posterior, so
         # the chains did rise off the origin, as a sampler that behaved would.
         "at_origin": [1.0, 0.5, 0.5],
+        # Each chain's mean candidate loss is flat across the draws (2.0), so
+        # neither drifts; the individual series still move for the covariances.
         "losses": [chain(q, [1.0, 2.0, 3.0], [3.0, 2.0, 1.0]),
-                   chain(q, [2.0, 3.0, 4.0], [1.0, 1.0, 1.0])],
+                   chain(q, [2.0, 3.0, 4.0], [2.0, 1.0, 0.0])],
         "trajectory": [[2.0, 2.1, 2.1, 2.1], [2.0, 2.2, 2.2, 2.2]],
         "nbeta": 3.0,
         "burn_in": 1,
@@ -599,7 +604,8 @@ def fake_result(llc_sign=1.0, one=False):
     if llc_sign < 0:
         run["at_origin"] = [1.0, 20.0, 30.0]
     if llc_sign == 0:
-        run["trajectory"] = [[2.0, 2.0, 2.0, 9.0], [2.0, 2.2, 2.2, 2.2]]
+        # Chain b's mean candidate loss climbs from 2.0 to 4.5 across the draws.
+        run["losses"][1] = chain(q, [2.0, 3.0, 9.0], [2.0, 1.0, 0.0])
     if one:
         cands, encoded = cands[:1], encoded[:1]
         run["at_origin"] = run["at_origin"][:2]
@@ -683,9 +689,10 @@ def test_control_characters_in_a_snippet_or_source_never_reach_the_terminal():
     res = fake_result()
     res["records"][0]["snippet"] = "red \x1b[31mtext\x1b[0m\x07"
     res["records"][0]["source"] = "Pile\x1bCC"
+    res["records"][0]["id"] = "bad\x1b[31mid"
     text = "\n".join(bif.render(res))
     assert "\x1b" not in text and "\x07" not in text
-    assert "\\x1b[31mtext" in text and "Pile\\x1bCC" in text
+    assert "\\x1b[31mtext" in text and "Pile\\x1bCC" in text and "bad\\x1b[31mid" in text
 
 
 def test_render_says_so_when_a_chain_was_still_moving_either_way():

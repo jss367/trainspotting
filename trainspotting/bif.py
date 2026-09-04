@@ -901,11 +901,15 @@ def llc(run: dict) -> dict:
     few rejected sides far from the origin could call the chains invalid, or
     valid, on their own. `over` says how many candidates the coefficient covers.
 
-    Beside it, the drift: how much each chain's minibatch loss rose between the
-    first and last quarter of its retained steps. A positive coefficient alone
-    does not say the chain was stationary — a chain climbing steadily away from
-    w* has one too, and the run at ten times the step size that motivated this
-    check reported "sat near w*" while its loss doubled.
+    Beside it, the drift: how much the chain's loss over the localized
+    candidates — the same fixed set at every retained draw — moved between the
+    first and last quarter of its draws. A positive coefficient alone does not
+    say the chain was stationary: a chain climbing steadily away from w* has one
+    too, and the run at ten times the step size that motivated this check
+    reported "sat near w*" while its loss doubled. The minibatch trajectory is
+    not what is compared, since each step's minibatch is a fresh random draw
+    and a run of harder documents late in the chain would read as drift while a
+    real drift could hide behind easier ones.
     """
     # Column 0 of every draw is the query; candidate i is column i + 1. A run
     # without `localized` (one written before it was recorded) was localized on
@@ -918,10 +922,10 @@ def llc(run: dict) -> dict:
         expected = _mean(_mean(d[i] for i in cols) for d in chain)
         per_chain.append(run["nbeta"] * (expected - base))
     drift = []
-    for traj in run.get("trajectory") or []:
-        kept = traj[run.get("burn_in", 0):]
-        q = max(1, len(kept) // 4)
-        drift.append(_mean(kept[-q:]) - _mean(kept[:q]) if kept else 0.0)
+    for chain in run["losses"]:
+        series = [_mean(d[i] for i in cols) for d in chain]
+        q = max(1, len(series) // 4)
+        drift.append(_mean(series[-q:]) - _mean(series[:q]) if series else 0.0)
     return {"per_chain": per_chain, "mean": _mean(per_chain), "loss_at_origin": base, "drift": drift,
             "over": len(cols)}
 
@@ -1136,11 +1140,12 @@ def render(res: dict, top: int = 5) -> list[str]:
     moving = [d for d in drift if abs(d) > MAX_DRIFT * lc["loss_at_origin"]]
     if moving:
         verdict = (f"{len(moving)} of {len(drift)} chains were still drifting from w* "
-                   f"(minibatch loss {', '.join(f'{d:+.2f}' for d in moving)} across the retained "
-                   f"steps), so lower --lr before reading the covariances as posterior covariances")
+                   f"(loss over the localized candidates {', '.join(f'{d:+.2f}' for d in moving)} "
+                   f"across the retained draws), so lower --lr before reading the covariances as "
+                   f"posterior covariances")
     else:
         drifted = ", ".join(f"{d:+.2f}" for d in drift) if drift else "n/a"
-        verdict = f"the chains sat near w* (minibatch loss drift per chain: {drifted})"
+        verdict = f"the chains sat near w* (loss drift per chain over the localized candidates: {drifted})"
     if lc["mean"] <= 0 or any(x <= 0 for x in lc["per_chain"]):
         # Not a fault by itself. w* minimizes the training set, not this sample
         # of a few hundred candidates, so a chain that sampled the posterior
@@ -1215,7 +1220,7 @@ def _record_line(r: dict) -> str:
     value = r.get("pull", r["cov"])
     se = r.get("cov_stderr")
     err = f" ± {se:.4f}" if se is not None else ""
-    ident = r["id"] if r["id"] is not None else (f"row {r['row']}" if r["row"] is not None else "")
+    ident = _one_line(str(r["id"])) if r["id"] is not None else (f"row {r['row']}" if r["row"] is not None else "")
     flags = "".join(
         f" [{f}]" for f, on in (("truncated", r["truncated"]), ("cut", r["cut"])) if on
     )

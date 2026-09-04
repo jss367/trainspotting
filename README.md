@@ -1410,8 +1410,8 @@ candidates the posterior was localized on, which is at or below zero when
 the chains sat at a lower loss on that sample than `w*` does (possible
 without fault, since `w*` minimizes the training set and not a few hundred
 sampled examples; the report says so rather than calling the run invalid),
-and the drift of each chain's minibatch loss across its
-retained steps, which catches the failure the coefficient alone does not — a
+and the drift of each chain's loss over the localized candidates, the same
+set at every draw, across its retained draws, which catches the failure the coefficient alone does not — a
 chain climbing steadily away from `w*` has a positive coefficient and a doubled
 loss. A run at ten times the default step size did exactly that on Pythia-70m,
 and reported every candidate as positively correlated with the query for no
