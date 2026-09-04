@@ -1860,7 +1860,7 @@ truncation drops the prompt rather than the answer, that a chat template's
 rendering is what gets tokenized and a template that cannot render falls back to
 roles, the sign and normalization of the covariance, that chains are averaged
 within rather than pooled, the drift and baseline diagnostics, and what the
-report says when a chain was still climbing or sat below `w*`. The SGLD loop
+report says when a chain was still drifting, in either direction, or sat below `w*`. The SGLD loop
 runs against a toy model when torch is importable — shapes, finite losses, the
 weights restored to `w*` afterwards, padding kept out of the loss — and is
 skipped otherwise.
@@ -1908,7 +1908,7 @@ sampling run that quietly labels nothing.
 - `bif` weighs a few hundred sampled examples against one checkpoint's loss,
   with a posterior localized on those examples rather than on the training set.
   It ranks the examples the other layers found; it does not find new ones. A
-  covariance from a chain the report flags as still climbing away from `w*` is
+  covariance from a chain the report flags as still drifting from `w*`, up or down, is
   not a posterior covariance; a learning coefficient at or below zero is not
   that flag, since `w*` minimizes the training set and not the few hundred
   examples the posterior is localized on.

@@ -181,8 +181,17 @@ def test_a_think_turn_is_fit_on_its_reasoning_and_its_answer_in_the_trained_form
                                           think_turn("let me see", "the answer")]}
     [c] = context_candidates(monkeypatch, tmp_path, "sft", [rec])
     fit = bif.fit_text(c)
-    assert fit == "<think>\nlet me see\n</think>\n\nthe answer"
-    assert "let me see" in fit and c["cut"] is False
+    # No recorded raw length: the record predates it, and the turn is left as
+    # its answer rather than guessed at.
+    assert fit == "the answer"
+    # With the length the turn had as written, the markers and whitespace are
+    # put back to exactly that length: 18 over the two fields is the common
+    # Think SFT form, one newline after the closing marker.
+    rec["turns"][1] = {**think_turn("let me see", "the answer"), "chars_raw": 10 + 10 + 18}
+    [c] = context_candidates(monkeypatch, tmp_path, "sft", [rec])
+    fit = bif.fit_text(c)
+    assert fit == "<think>\nlet me see\n</think>\nthe answer"
+    assert len(fit) == 38 and c["cut"] is False
     # A reasoning field the record shortened is a cut fit turn: the block would
     # close early with the answer appended, a sequence the model never saw, so
     # the record is skipped and counted rather than kept with a flag.
@@ -330,11 +339,12 @@ class ThinkTok(ChatTok):
 
 
 def test_a_think_response_with_its_markers_restored_renders_through_the_template():
-    turns = bif._turns([{"role": "user", "text": "hi"}, think_turn("hmm", "yo")])
+    # 23 as written: "<think>\nhmm\n</think>\nyo", the common Think SFT form.
+    turns = bif._turns([{"role": "user", "text": "hi"}, {**think_turn("hmm", "yo"), "chars_raw": 23}])
     spans = bif.pieces(ThinkTok(), turns)
     # The open marker is the header's, so it is context; everything the
     # response grew the rendering by, reasoning and answer, is fit.
-    assert spans == [("<s><user>hi</><assistant><think>", False), ("\nhmm\n</think>\n\nyo</>", True)]
+    assert spans == [("<s><user>hi</><assistant><think>", False), ("\nhmm\n</think>\nyo</>", True)]
     # Without the markers the response cannot start inside the header, the
     # prefix check fails, and the whole example falls back to roles.
     bare = [{"role": "user", "text": "hi"}, {"role": "assistant", "text": "yo"}]
@@ -378,7 +388,10 @@ def test_an_empty_think_block_is_put_back_from_the_length_it_left_behind():
     turns = [{"role": "user", "text": "q", "chars": 1, "raw": True},
              {"role": "assistant", "text": "answer", "chars": 6, "chars_raw": 25}]
     out = bif._turns(turns)
-    assert out[1]["text"] == bif.THINK_OPEN + bif.THINK_CLOSE + "answer"
+    # 25 written, 6 of answer: the markers are 15, one newline each side of
+    # the (empty) reasoning, and two after the closing marker.
+    assert out[1]["text"] == "<think>\n\n</think>\n\nanswer"
+    assert len(out[1]["text"]) == 25
     # A cut field alone does not: `chars` is the true length, so it equals
     # `chars_raw` when nothing but the truncation happened.
     plain = bif._turns([{"role": "assistant", "text": "ans", "chars": 6, "chars_raw": 6}])
@@ -664,10 +677,14 @@ def test_render_says_so_when_a_chain_sat_below_the_origin_loss():
     assert "not posterior covariances" not in text
 
 
-def test_render_says_so_when_a_chain_was_still_climbing():
+def test_render_says_so_when_a_chain_was_still_moving_either_way():
     text = "\n".join(bif.render(fake_result(llc_sign=0)))
-    assert "1 of 2 chains were still climbing" in text
+    assert "1 of 2 chains were still drifting" in text
     assert "lower --lr" in text
+    res = fake_result()
+    res["llc"]["drift"] = [-0.9, 0.0]  # descending into the sample's lower-loss region
+    text = "\n".join(bif.render(res))
+    assert "1 of 2 chains were still drifting" in text and "-0.90" in text
     assert "covaries" in text and "average candidate" in text
 
 

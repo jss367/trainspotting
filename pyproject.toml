@@ -19,7 +19,9 @@ trainspotting = "trainspotting.cli:main"
 grep = ["duckdb>=1.0"]
 # Only the bif layer touches model weights. It samples around a checkpoint with
 # SGLD, so it is the one command that needs torch, transformers and a GPU.
-bif = ["torch>=2.2", "transformers>=4.40"]
+# 4.57 is the first release that knows the OLMo 3 architecture; it also takes
+# the `dtype` keyword, so no older spelling is needed.
+bif = ["torch>=2.2", "transformers>=4.57"]
 # Only the steps layer decodes tokens: Pythia's training order is published as
 # token ids, not text, so reading a batch back means the GPT-NeoX tokenizer.
 steps = ["tokenizers>=0.15"]

@@ -84,7 +84,9 @@ FIT_ROLES = {"assistant", "text"}
 # round trip is faithful to the markers and takes the most common spacing — the
 # form of every sampled Dolci-Think-DPO turn and the plurality of the SFT ones.
 THINK_OPEN = "<think>\n"
-THINK_CLOSE = "\n</think>\n\n"
+THINK_CLOSE = "\n</think>"
+# `<think>` and `</think>` themselves, the fixed part of what the markers cost.
+THINK_MARKERS = len("<think>") + len("</think>")
 
 SNIPPET = 120  # characters of the fit text shown per ranked candidate
 
@@ -134,6 +136,9 @@ def incomplete(turns, shared: int = 0) -> bool:
             continue
         fields = [t] + ([t["reasoning"]] if t.get("reasoning") else [])
         if any((f.get("chars") or 0) > len(f.get("text") or "") for f in fields):
+            return True
+        # A recorded length the markers and whitespace cannot be fitted to.
+        if t.get("chars_raw") is not None and len(think_form(t)) != t["chars_raw"]:
             return True
     return False
 
@@ -254,14 +259,34 @@ def _turns(turns, shared: int = 0) -> list[dict]:
     out = []
     for i, t in enumerate(turns):
         role = t.get("role") or "user"
-        text = t.get("text") or ""
-        reasoning = (t.get("reasoning") or {}).get("text")
-        if reasoning:
-            text = f"{THINK_OPEN}{reasoning}{THINK_CLOSE}{text}"
-        elif (t.get("chars_raw") or 0) > (t.get("chars") or 0):
-            text = f"{THINK_OPEN}{THINK_CLOSE}{text}"
+        text = think_form(t)
         out.append({"role": role, "text": text, "fit": role in FIT_ROLES and i >= shared})
     return out
+
+
+def think_form(t: dict) -> str:
+    """The turn's text as written, with its thinking span and markers put back.
+
+    `context._turns` strips `<think>`, `</think>` and the whitespace around them
+    and records only how long the turn was as written (`chars_raw`). The
+    markers are fixed; the whitespace is not — most Think SFT turns cost 18
+    characters over their two fields, one newline each side of the reasoning
+    and one after the closing marker, while an empty span costs 19 — so the
+    newlines after `</think>` are however many the recorded length calls for.
+    A turn whose recorded length cannot be met that way is left as its answer;
+    `incomplete` refuses it before it is scored.
+    """
+    text = t.get("text") or ""
+    reasoning = (t.get("reasoning") or {}).get("text")
+    raw = t.get("chars_raw")
+    if raw is None:
+        return text
+    span = t.get("chars") or len(text)
+    inner = (t.get("reasoning") or {}).get("chars") or len(reasoning or "")
+    trailing = raw - span - inner - THINK_MARKERS - len(THINK_OPEN) + len("<think>") - 1
+    if trailing < 0:
+        return text
+    return f"{THINK_OPEN}{reasoning or ''}{THINK_CLOSE}{chr(10) * trailing}{text}"
 
 
 def _cut(turns) -> bool:
@@ -895,8 +920,9 @@ def llc(run: dict) -> dict:
             "over": len(cols)}
 
 
-# A chain whose loss rose by more than this share of the loss at w* between its
-# first and last retained quarter was still leaving w*, not sampling around it.
+# A chain whose loss moved, up or down, by more than this share of the loss at
+# w* between its first and last retained quarter was still travelling, not
+# sampling around a point.
 MAX_DRIFT = 0.25
 
 
@@ -1093,10 +1119,13 @@ def render(res: dict, top: int = 5) -> list[str]:
     lc = res["llc"]
     per = ", ".join(f"{x:.1f}" for x in lc["per_chain"])
     drift = lc.get("drift") or []
-    climbing = [d for d in drift if d > MAX_DRIFT * lc["loss_at_origin"]]
-    if climbing:
-        verdict = (f"{len(climbing)} of {len(drift)} chains were still climbing away from w* "
-                   f"(minibatch loss up {', '.join(f'{d:+.2f}' for d in climbing)} across the retained "
+    # Either direction: a chain still descending into a lower-loss region of
+    # the sample is as far from stationary as one still climbing, and a shared
+    # trend in every loss series makes covariances out of nothing either way.
+    moving = [d for d in drift if abs(d) > MAX_DRIFT * lc["loss_at_origin"]]
+    if moving:
+        verdict = (f"{len(moving)} of {len(drift)} chains were still drifting from w* "
+                   f"(minibatch loss {', '.join(f'{d:+.2f}' for d in moving)} across the retained "
                    f"steps), so lower --lr before reading the covariances as posterior covariances")
     else:
         drifted = ", ".join(f"{d:+.2f}" for d in drift) if drift else "n/a"
