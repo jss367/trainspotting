@@ -528,7 +528,25 @@ def sample(
     # one gets a float32 master the updates accumulate in, cast back into the
     # parameter for the forward pass.
     master = [p if p.dtype == torch.float32 else p.detach().float().clone() for p in params]
-    origin = [m.detach().clone() for m in master]
+    # w* stays in the checkpoint's own dtype: those are the values as loaded,
+    # exactly representable there, and a second float32 copy of a 7B model is
+    # 28 GB that buys nothing. The prior term widens it on the fly.
+    origin = [p.detach().clone() for p in params]
+    # One generator per device the parameters live on. Drawing on the CPU and
+    # copying would move a full parameter's worth of noise over the bus every
+    # step; for a 7B model over the default run that is tens of terabytes.
+    gens: dict = {}
+
+    def generator(dev, chain):
+        key = str(dev)
+        if key not in gens:
+            try:
+                gens[key] = torch.Generator(device=dev)
+            except (RuntimeError, TypeError):  # a device without generator support
+                gens[key] = torch.Generator(device="cpu")
+            gens[key].manual_seed(seed * 1000 + chain)
+        return gens[key]
+
     everything = [query, *encoded]
     at_origin = batch_losses(model, everything, device, eval_batch)
     losses: list[list[list[float]]] = []
@@ -540,7 +558,7 @@ def sample(
                 m.copy_(w)
                 if m is not p:
                     p.copy_(m.to(p.dtype))
-        gen = torch.Generator(device="cpu").manual_seed(seed * 1000 + chain)
+        gens.clear()
         rng = random.Random(seed * 1000 + chain)
         chain_losses: list[list[float]] = []
         chain_traj: list[float] = []
@@ -559,10 +577,14 @@ def sample(
                 for p, m, w in zip(params, master, origin):
                     # A parameter the forward pass never reaches has no
                     # gradient; the prior still pulls it back to w*.
-                    drift = gamma * (m - w)
+                    drift = gamma * (m - w.float())
                     if p.grad is not None:
                         drift = drift + nbeta * p.grad.float()
-                    noise = torch.randn(m.shape, generator=gen, dtype=torch.float32).to(m.device)
+                    gen = generator(m.device, chain)
+                    noise = torch.randn(m.shape, generator=gen, dtype=torch.float32,
+                                        device=gen.device)
+                    if noise.device != m.device:
+                        noise = noise.to(m.device)
                     m.add_(-0.5 * lr * drift + math.sqrt(lr) * noise)
                     if m is not p:
                         p.copy_(m.to(p.dtype))
@@ -575,7 +597,7 @@ def sample(
         trajectory.append(chain_traj)
     with torch.no_grad():
         for p, w in zip(params, origin):
-            p.copy_(w.to(p.dtype))
+            p.copy_(w)
     # `localized` is the indices themselves, not only their count, because the
     # learning coefficient has to be taken over the same loss the chains were
     # localized on, and a candidate scored but never fit is not part of it.
@@ -741,7 +763,13 @@ def baseline(losses: list[list[list[float]]]) -> float:
 def summarize(cands: list[dict], stats: list[dict], key) -> list[dict]:
     """Candidates grouped by `key(c)` — a tuple of (field, value) pairs — with
     the group's mean covariance, the share pulling toward the query, and its
-    strongest member."""
+    strongest member.
+
+    Direction is read off `pull`, not off the partial covariance: on a DPO
+    rejected side the two have opposite signs, since the objective pushed the
+    model off that text, and a table that counted a positive partial there as
+    "toward" would report the training direction backwards.
+    """
     groups: dict = {}
     for c, s in zip(cands, stats):
         groups.setdefault(key(c), []).append((c, s))
@@ -749,17 +777,31 @@ def summarize(cands: list[dict], stats: list[dict], key) -> list[dict]:
     for k, members in groups.items():
         covs = [s["cov"] for _, s in members]
         partials = [s.get("partial", s["cov"]) for _, s in members]
-        best = max(members, key=lambda m: m[1].get("partial", m[1]["cov"]))
+        pulls = [pull(c, s) for c, s in members]
+        best = max(members, key=lambda m: pull(*m))
         out.append({
             **dict(k),
             "n": len(members),
             "mean_cov": _mean(covs),
             "mean_corr": _mean(s["corr"] for _, s in members),
             "mean_partial": _mean(partials),
-            "toward": sum(1 for x in partials if x > 0),
-            "best": {"id": best[0]["id"], "row": best[0]["row"], "partial": best[1].get("partial", best[1]["cov"])},
+            "mean_pull": _mean(pulls),
+            "toward": sum(1 for x in pulls if x > 0),
+            "best": {"id": best[0]["id"], "row": best[0]["row"], "pull": pull(*best)},
         })
-    return sorted(out, key=lambda g: -g["mean_partial"])
+    return sorted(out, key=lambda g: -g["mean_pull"])
+
+
+def pull(c: dict, s: dict) -> float:
+    """How hard an example pulls the model toward the query, signed.
+
+    The partial covariance, except on a DPO rejected completion, where training
+    pushed the model off the text: a loss that moves with the query's there is
+    a pair that taught the model away from it, so the sign is flipped. The raw
+    fields are untouched; this is the one number that reads as a direction.
+    """
+    value = s.get("partial", s["cov"])
+    return -value if c.get("side") == "rejected" else value
 
 
 # --- Result ---------------------------------------------------------------------
@@ -787,7 +829,8 @@ def result(target_name, model_id, revision, query, prompt, cands, encoded, run, 
     common = baseline(run["losses"])
     for r in records:
         r["above_baseline"] = r["cov"] - common
-    ranked = sorted(range(len(records)), key=lambda i: -records[i]["partial"])
+        r["pull"] = pull(r, r)
+    ranked = sorted(range(len(records)), key=lambda i: -records[i]["pull"])
     for rank, i in enumerate(ranked, start=1):
         records[i]["rank"] = rank
     query_losses = [d[0] for chain in run["losses"] for d in chain]
@@ -911,7 +954,9 @@ def render(res: dict, top: int = 5) -> list[str]:
             f"{_fmt(res['baseline_cov'])} with the average candidate. The ranking below is by the "
             f"*partial* covariance, with that shared movement regressed out of both series, so "
             f"it is the part of each example's movement specific to the query; the raw "
-            f"covariance is shown beside it."
+            f"covariance is shown beside it. On a DPO rejected side the sign is flipped "
+            f"before anything is called toward or away, since training pushed the model off "
+            f"that text (`pull` in the file; the partial itself is kept as is)."
         )
         if res.get("partial_control") == "none":
             lines.append(
@@ -919,15 +964,17 @@ def render(res: dict, top: int = 5) -> list[str]:
                 "covariance here is the raw covariance."
             )
     lines.append("")
-    lines.append("| stage | side | n | mean partial | mean cov | mean corr | toward |")
-    lines.append("|---|---|---:|---:|---:|---:|---:|")
+    lines.append("| stage | side | n | mean pull | mean partial | mean cov | mean corr | toward |")
+    lines.append("|---|---|---:|---:|---:|---:|---:|---:|")
     for g in res["stages"]:
+        partial = g.get("mean_partial", g["mean_cov"])
         lines.append(
-            f"| {g['stage']} | {g['side']} | {g['n']} | {_fmt(g.get('mean_partial', g['mean_cov']))} | "
-            f"{_fmt(g['mean_cov'])} | {_fmt(g['mean_corr'], 3)} | {g['toward']}/{g['n']} |"
+            f"| {g['stage']} | {g['side']} | {g['n']} | {_fmt(g.get('mean_pull', partial))} | "
+            f"{_fmt(partial)} | {_fmt(g['mean_cov'])} | {_fmt(g['mean_corr'], 3)} | "
+            f"{g['toward']}/{g['n']} |"
         )
     for stage, why in (res.get("skipped") or {}).items():
-        lines.append(f"| {stage} | — | 0 | — | — | — | not weighed: {why} |")
+        lines.append(f"| {stage} | — | 0 | — | — | — | — | not weighed: {why} |")
     lines.append("")
     records = sorted(res["records"], key=lambda r: r["rank"])
     if records:
@@ -952,14 +999,18 @@ def render(res: dict, top: int = 5) -> list[str]:
 def _record_line(r: dict) -> str:
     where = " / ".join(x for x in (r["stage"], r["side"], r["source"]) if x)
     partial = r.get("partial", r["cov"])
+    value = r.get("pull", partial)
     se = r.get("partial_stderr", r.get("cov_stderr"))
     err = f" ± {se:.4f}" if se is not None else ""
     ident = r["id"] if r["id"] is not None else (f"row {r['row']}" if r["row"] is not None else "")
     flags = "".join(
         f" [{f}]" for f, on in (("truncated", r["truncated"]), ("cut", r["cut"])) if on
     )
+    detail = f"cov {_fmt(r['cov'])}, corr {_fmt(r['corr'], 3)}"
+    if r.get("side") == "rejected":
+        detail = f"rejected side, partial {_fmt(partial)} flipped; {detail}"
     return (
-        f"- {_fmt(partial)}{err} (cov {_fmt(r['cov'])}, corr {_fmt(r['corr'], 3)}) {where} {ident}{flags}: "
+        f"- {_fmt(value)}{err} ({detail}) {where} {ident}{flags}: "
         f"“{_one_line(r['snippet'])[:SNIPPET]}”"
     )
 

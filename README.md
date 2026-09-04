@@ -1442,7 +1442,12 @@ defaults to `batch / ln(batch)` as in devinterp, `γ = 100`, four chains of a
 hundred retained draws after fifty burn-in steps. The runtime is `chains ×
 draws × candidates` forward passes plus the SGLD steps: minutes for a 70M model
 over 300 documents on a laptop GPU, and a multi-GPU-hour job for a 7B model,
-which is what `--limit`, `--max-tokens` and `--dtype bfloat16` are for.
+which is what `--limit`, `--max-tokens` and `--dtype bfloat16` are for. Memory
+for a reduced-precision run is the model and its gradients in that precision,
+a float32 master copy the chain walks in (the default step is below bfloat16's
+own spacing, so the walk cannot happen in bfloat16), and `w*` in the loaded
+precision: about five times the weights' reduced size, or 70 GB for 7B before
+activations. Noise is drawn on the parameter's own device.
 
 ## Pretraining data
 

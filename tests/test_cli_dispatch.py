@@ -128,7 +128,8 @@ def test_the_targetless_commands_are_the_ones_this_expects():
             assert registry.resolve(argv[1])
 
 
-@pytest.mark.parametrize("bad", [["--draws", "1"], ["--lr", "-1e-8"], ["--lr", "nan"], ["--lr", "0"]])
+@pytest.mark.parametrize("bad", [["--draws", "1"], ["--lr", "-1e-8"], ["--lr", "nan"], ["--lr", "0"],
+                                 ["--nbeta", "nan"], ["--nbeta", "-1"], ["--gamma", "0"], ["--gamma", "nan"]])
 def test_bif_rejects_a_step_size_or_draw_count_the_sampler_cannot_use(bad, monkeypatch):
     """One retained draw makes every covariance exactly zero and a negative step
     reaches `math.sqrt` after the checkpoint has loaded; both are usage errors."""

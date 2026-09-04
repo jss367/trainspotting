@@ -98,8 +98,11 @@ def _draws(value: str) -> int:
 
 
 def _positive_float(value: str) -> float:
-    """argparse type for a step size. A negative or non-finite one reaches
-    `math.sqrt` inside the sampler after the checkpoint has been loaded."""
+    """argparse type for the sampler's real-valued settings. A negative or
+    non-finite step size reaches `math.sqrt` inside the sampler after the
+    checkpoint has been loaded; a negative γ makes the prior repulsive and a
+    negative nβ drives the chain up the loss, and either writes a result for a
+    distribution that is not the documented posterior."""
     x = float(value)
     if not (x > 0 and math.isfinite(x)):
         raise argparse.ArgumentTypeError(f"must be a positive finite number, got {value}")
@@ -3289,8 +3292,8 @@ def main():
     p.add_argument("--every", type=_positive_int, default=1, help="SGLD steps between retained draws")
     p.add_argument("--lr", type=_positive_float, default=5e-8,
                    help="SGLD step size ε; the report says if the chains climbed away from w*, in which case lower it")
-    p.add_argument("--nbeta", type=float, help="inverse temperature nβ (default: batch / ln batch)")
-    p.add_argument("--gamma", type=float, default=100.0, help="localization strength γ")
+    p.add_argument("--nbeta", type=_positive_float, help="inverse temperature nβ (default: batch / ln batch)")
+    p.add_argument("--gamma", type=_positive_float, default=100.0, help="localization strength γ")
     p.add_argument("--batch", type=_positive_int, default=8, help="candidates per SGLD minibatch")
     p.add_argument("--eval-batch", type=_positive_int, default=16, help="examples per forward pass when recording losses")
     p.add_argument("--max-tokens", type=_positive_int, default=512, help="tokens kept per example (the front is dropped)")
