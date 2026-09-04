@@ -537,6 +537,11 @@ def test_result_ranks_records_and_carries_every_provenance_field():
     # The raw draws travel with the file: chains × draws × (query + records).
     assert len(res["draws"]) == 2 and all(len(c) == 3 for c in res["draws"])
     assert all(len(d) == 3 for c in res["draws"] for d in c)
+    assert res["skipped"] == {"sft": "no committed context records"}
+    assert res["query_loss"]["at_origin"] == 1.0
+    assert res["llc"]["mean"] > 0
+    assert res["stages"][0]["n"] == 2
+    assert {g["source"] for g in res["sources"]} == {"Pile-CC", "GitHub"}
 
 
 def test_the_stored_draws_keep_full_precision():
@@ -549,11 +554,6 @@ def test_the_stored_draws_keep_full_precision():
            "trajectory": [[1.0, 1.0]], "nbeta": 1.0, "burn_in": 0}
     res = bif.result("t", "m", None, "q", None, cands, encoded, run, {}, {})
     assert res["draws"][0][0] == [0.123456789, 0.987654321]
-    assert res["skipped"] == {"sft": "no committed context records"}
-    assert res["query_loss"]["at_origin"] == 1.0
-    assert res["llc"]["mean"] > 0
-    assert res["stages"][0]["n"] == 2
-    assert {g["source"] for g in res["sources"]} == {"Pile-CC", "GitHub"}
 
 
 def test_render_names_the_checkpoint_the_skip_and_the_ends_of_the_ranking():
