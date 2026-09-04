@@ -846,9 +846,19 @@ def sample(
             idx = [rng.choice(localize) for _ in range(batch)]
             for p in params:
                 p.grad = None
-            loss = _losses(model, [encoded[i] for i in idx], device).mean()
-            loss.backward()
-            chain_traj.append(float(loss.detach()))
+            # One example per forward and backward pass, gradients accumulated,
+            # rather than one pass over the minibatch. Under gradient tracking
+            # the widened logits of every example in a batch stay alive until
+            # backward runs, and for a 7B model that is a sequence-by-vocabulary
+            # float32 tensor per example held at once; example by example, each
+            # is freed before the next is made. Scaling by 1/batch keeps the
+            # accumulated gradient the minibatch mean's.
+            total = 0.0
+            for i in idx:
+                part = _losses(model, [encoded[i]], device)[0] / batch
+                part.backward()
+                total += float(part.detach())
+            chain_traj.append(total)
             if not math.isfinite(chain_traj[-1]):
                 raise RuntimeError(
                     f"chain {chain} diverged at step {step} (loss {chain_traj[-1]}); lower --lr"

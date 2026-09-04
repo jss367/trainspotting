@@ -826,6 +826,7 @@ def test_sample_fits_only_the_localized_candidates_and_scores_them_all(monkeypat
     def spy(model, chunk, device):
         # A minibatch step runs with grad; every scoring pass is under no_grad.
         if torch.is_grad_enabled():
+            assert len(chunk) == 1, "a gradient pass takes one example at a time"
             fitted.extend(id(e) for e in chunk)
         return real(model, chunk, device)
 
@@ -837,6 +838,9 @@ def test_sample_fits_only_the_localized_candidates_and_scores_them_all(monkeypat
     )
     assert fitted and set(fitted) <= {id(chosen), id(doc)}
     assert run["localized_on"] == 2 and run["localized"] == [0, 2]
+    # Steps: 2 chains × (1 burn-in + 3 draws) × a minibatch of 2, one example
+    # per gradient pass, so nothing widened for one example outlives it.
+    assert len(fitted) == 2 * 4 * 2
     # The rejected side is still in every draw, so its covariance is reported.
     assert all(len(d) == 4 for c in run["losses"] for d in c)
     with pytest.raises(ValueError):
