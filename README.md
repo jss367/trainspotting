@@ -1377,8 +1377,8 @@ rejected completion without the chosen one it was scored against.
 
 The committed run (`results/pythia-12b-deduped.bif-as-an-ai-language-model-…json`)
 is the query above against Pythia-70m and 200 sampled Pile documents, and shows
-what a first result looks like: the partial covariances split 94 toward to 106
-away, and the strongest of them is two and a half standard errors from zero. A 70-million
+what a first result looks like: the partial covariances split 101 toward to 99
+away, and the strongest of them is about three standard errors from zero. A 70-million
 parameter model and a seventeen-token query are a small signal; the point of
 the committed file is that the machinery, the diagnostics and the shape of the
 answer are there to run on a bigger one.
@@ -1437,8 +1437,8 @@ random-walks about `√(Tε)` in each of tens of millions of directions, and a
 walk comparable to the weights themselves is a chain that has left the model.
 On Pythia-70m over 200 Pile documents, 80 steps at `ε = 1e-6` doubled the loss;
 at `1e-7` the minibatch loss rose 0.75 nats from a start of 3.4, just under the
-line the report draws; at the default `5e-8` it rose 0.4 with a learning
-coefficient of 2.2, and the chains agreed with each other to two decimals. A
+line the report draws; at the default `5e-8` it rose about 0.5 with a learning
+coefficient of 2.2, and the four chains agreed with each other to one decimal. A
 bigger model needs a smaller step, and the report says when it does. `nβ`
 defaults to `batch / ln(batch)` as in devinterp, `γ = 100`, four chains of a
 hundred retained draws after fifty burn-in steps. The runtime is `chains ×
