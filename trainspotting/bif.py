@@ -68,7 +68,7 @@ import random
 import re
 import sys
 
-from . import context, paths, registry
+from . import context, paths, registry, search
 
 # The turn roles whose text is a training target. `text` is a corpus document,
 # which is all target. Anything else — user, system, tool — is context the loss
@@ -88,30 +88,72 @@ THINK_CLOSE = "\n</think>\n\n"
 
 SNIPPET = 120  # characters of the fit text shown per ranked candidate
 
+# Turn fields the context record keeps beside `content`, or notes it dropped,
+# that the model was trained on in a template-specific form this layer cannot
+# rebuild: the tool menu a system turn offered, an assistant turn's function
+# call, a refusal. A record carrying any of these is not the conversation the
+# model saw, so it is skipped and counted rather than scored as if it were.
+STRUCTURED = ("omitted", *search.STRUCTURED_TURN_FIELDS, *search.INPUT_TURN_FIELDS)
+
 
 # --- Candidates -----------------------------------------------------------------
 
 
-def _context_candidates(target_name: str, stage: dict) -> tuple[list[dict], str | None]:
+def stale(data: dict, dataset: str | None) -> str | None:
+    """Why a stored sample cannot stand for `dataset`, or None.
+
+    The two questions `cli._stale_context` asks before `stance` spends a judge
+    on stored examples: are they from this dataset, and were they drawn from
+    one tree. A stage repointed at another mix keeps its filename, and a draw
+    that straddled a republish records `revision_moved_to`; either way the file
+    is not a sample of the stage it is named for, and a model run over it would
+    attribute its examples to that stage.
+    """
+    if dataset and data.get("dataset") and data["dataset"] != dataset:
+        return f"the stored examples are from {data['dataset']} but this stage names {dataset}"
+    if data.get("revision_moved_to"):
+        return "the stored examples straddled a republish while they were drawn"
+    return None
+
+
+def incomplete(turns) -> bool:
+    """Whether a stored record carries or notes turn fields this layer cannot rebuild."""
+    return any(t.get(k) for t in turns for k in STRUCTURED)
+
+
+def _context_candidates(target_name: str, stage: dict) -> tuple[list[dict], str | None, int]:
     """The committed context records of one post-training stage as candidates.
 
-    Returns (candidates, skip reason). A stage with no context file is a skip
-    with its reason, as is one whose kind stores no response at all; both are
+    Returns (candidates, skip reason, records skipped as incomplete). A stage
+    with no context file is a skip with its reason, as is one whose kind stores
+    no response at all or whose file is a sample of some other mix; all are
     reported, since a stage silently absent from the ranking reads as a stage
-    with nothing to say.
+    with nothing to say. A record with tool use is skipped on its own and
+    counted: the context record does not hold it as the model was trained on
+    it (see STRUCTURED).
     """
     kind = registry.stage_kind(stage)
     name = stage["stage"]
     if kind == "rlvr":
-        return [], "an RL row stores no response, so there is no text the model was fit to"
+        return [], "an RL row stores no response, so there is no text the model was fit to", 0
     if kind == "chat":
-        return [], "a conversation log was not trained on, so nothing in it was fit"
+        return [], "a conversation log was not trained on, so nothing in it was fit", 0
     path = paths.find(f"{target_name}.{name}.context.json")
     if path is None:
-        return [], f"no committed context records — run `trainspotting context {target_name} --stage {name}`"
+        return [], f"no committed context records — run `trainspotting context {target_name} --stage {name}`", 0
     data = json.loads(path.read_text())
+    why = stale(data, stage.get("hf_dataset"))
+    if why:
+        return [], why, 0
     out = []
+    skipped = 0
     for rec in data.get("records", []):
+        sides = [rec.get("turns") or []] if kind == "sft" else [
+            (rec.get(side) or {}).get("turns") or [] for side in ("chosen", "rejected")
+        ]
+        if any(incomplete(t) for t in sides):
+            skipped += 1
+            continue
         base = {
             "stage": name,
             "kind": kind,
@@ -132,7 +174,7 @@ def _context_candidates(target_name: str, stage: dict) -> tuple[list[dict], str 
             shared = context.branch_point(chosen, rejected)
             for side, turns in (("chosen", chosen), ("rejected", rejected)):
                 out.append({**base, "side": side, "turns": _turns(turns, shared), "cut": _cut(turns)})
-    return out, None
+    return out, None, skipped
 
 
 def _docs_candidates(target_name: str, stage: dict) -> tuple[list[dict], str | None]:
@@ -142,6 +184,9 @@ def _docs_candidates(target_name: str, stage: dict) -> tuple[list[dict], str | N
     if path is None:
         return [], f"no committed document sample — run `trainspotting pretrain {target_name} --stage {name}`"
     data = json.loads(path.read_text())
+    why = stale(data, stage.get("sample_dataset"))
+    if why:
+        return [], why
     out = []
     for doc in data.get("records", []):
         text = doc.get("text") or ""
@@ -222,6 +267,7 @@ def candidates(
     match: str | None = None,
     limit: int | None = None,
     seed: int = 0,
+    incomplete: dict[str, int] | None = None,
 ) -> tuple[list[dict], dict[str, str]]:
     """Every candidate example for a target, and the stages that yielded none.
 
@@ -230,7 +276,8 @@ def candidates(
     turned into the set of examples to weigh. `limit`
     caps the records per stage, drawn at random with `seed`, so a run on a big
     model can be sized to the machine; a DPO pair is one record and keeps both
-    its sides.
+    its sides. `incomplete`, if given, is filled with the records per stage
+    skipped for carrying tool use the record cannot hold in trained form.
     """
     out: list[dict] = []
     skipped: dict[str, str] = {}
@@ -241,7 +288,9 @@ def candidates(
         if stages and name not in stages:
             continue
         if stage.get("hf_dataset"):
-            cands, why = _context_candidates(target_name, stage)
+            cands, why, dropped = _context_candidates(target_name, stage)
+            if dropped and incomplete is not None:
+                incomplete[name] = dropped
         elif stage.get("sample_dataset"):
             cands, why = _docs_candidates(target_name, stage)
         else:

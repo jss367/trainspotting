@@ -1369,7 +1369,11 @@ loss covariance, not the influence function of the pairwise DPO objective,
 which would also need the reference model's log-ratio. A corpus document is all
 target.
 An RL row stores no response and is skipped, and the skip is printed with its
-reason, as is a stage with no committed sample. `--match` keeps only candidates
+reason, as is a stage with no committed sample or one whose sample is of a
+different mix than the stage now names. A record with tool use (a function
+menu on the system turn, a function call in place of an answer) is skipped
+and counted, because the context record does not hold those fields in the
+form the model was trained on; 60 of the 300 Instruct SFT records are such. `--match` keeps only candidates
 whose text holds a regex, which is how a phrase `grep` found becomes the set of
 examples to weigh; `--limit` caps the records per stage so a run on a big model
 fits the machine, and a DPO pair is one record, so a limit never keeps a
@@ -1889,9 +1893,11 @@ sampling run that quietly labels nothing.
   model", use OLMoTrace.
 - `bif` weighs a few hundred sampled examples against one checkpoint's loss,
   with a posterior localized on those examples rather than on the training set.
-  It ranks the examples the other layers found; it does not find new ones, and
-  a covariance from a chain the report flags as climbing or sitting below `w*`
-  is not a posterior covariance at all.
+  It ranks the examples the other layers found; it does not find new ones. A
+  covariance from a chain the report flags as still climbing away from `w*` is
+  not a posterior covariance; a learning coefficient at or below zero is not
+  that flag, since `w*` minimizes the training set and not the few hundred
+  examples the posterior is localized on.
 - `context` names each RL mix's verifier by matching its `dataset_source`
   against known mixes (math answer match, code unit tests, constraint checker,
   LLM judge). The raw source tag travels with every record, so the inference is

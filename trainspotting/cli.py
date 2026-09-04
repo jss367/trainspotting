@@ -2636,11 +2636,16 @@ def cmd_bif(args):
         except re.error as e:
             sys.exit(f"--match {args.match!r} is not a valid regex: {e}")
     stages = [args.stage] if args.stage else None
+    incomplete: dict[str, int] = {}
     cands, skipped = bif.candidates(
-        args.target, target, stages=stages, match=args.match, limit=args.limit, seed=args.seed
+        args.target, target, stages=stages, match=args.match, limit=args.limit, seed=args.seed,
+        incomplete=incomplete,
     )
     for stage, why in skipped.items():
         print(f"{stage}: not weighed — {why}", file=sys.stderr)
+    for stage, n in incomplete.items():
+        print(f"{stage}: {n} records skipped — they carry tool use the context record does not "
+              f"hold in the form the model was trained on", file=sys.stderr)
     if not cands:
         sys.exit("no candidate examples: nothing committed for this target that this layer can weigh")
     try:
@@ -2717,7 +2722,7 @@ def cmd_bif(args):
     # from the report.
     slug = _filename_part(args.slug) if args.slug else _slug(query)
     res = bif.result(args.target, model_id, revision, query, args.prompt, kept, encoded, run, skipped, settings)
-    res = {"slug": slug, **_stamp(), "dropped": dropped, **res}
+    res = {"slug": slug, **_stamp(), "dropped": dropped, "incomplete": incomplete, **res}
     path = _write_json(RESULTS / f"{args.target}.bif-{slug}.json", res)
     for line in bif.render(res):
         print(line)

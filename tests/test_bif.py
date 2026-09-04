@@ -48,6 +48,30 @@ def test_post_training_context_yields_a_side_per_fit_text_and_skips_rl_with_a_re
     assert len(bif.fit_text(sft)) < len(bif.candidate_text(sft))
 
 
+def test_records_with_tool_use_are_skipped_and_counted():
+    target = registry.resolve("olmo-3-7b-instruct")
+    incomplete: dict = {}
+    cands, _ = bif.candidates("olmo-3-7b-instruct", target, stages=["sft"], incomplete=incomplete)
+    assert incomplete == {"sft": 60}
+    assert len(cands) == 240
+    assert not any(k in t for c in cands for t in c["turns"] for k in bif.STRUCTURED)
+
+
+def test_a_sample_of_another_mix_or_a_straddled_draw_is_a_skip(tmp_path, monkeypatch):
+    target = registry.resolve("olmo-3-7b-instruct")
+    stage = next(s for s in target["stages"] if s["stage"] == "sft")
+    wrong = tmp_path / "x.sft.context.json"
+    wrong.write_text('{"dataset": "allenai/Some-Other-Mix", "records": []}')
+    monkeypatch.setattr(bif.paths, "find", lambda name: wrong)
+    cands, skipped = bif.candidates("x", {"stages": [stage]}, stages=["sft"])
+    assert cands == [] and "Some-Other-Mix" in skipped["sft"]
+    moved = tmp_path / "y.sft.context.json"
+    moved.write_text(json.dumps({"dataset": stage["hf_dataset"], "revision_moved_to": "abc", "records": []}))
+    monkeypatch.setattr(bif.paths, "find", lambda name: moved)
+    _, skipped = bif.candidates("y", {"stages": [stage]}, stages=["sft"])
+    assert "republish" in skipped["sft"]
+
+
 def test_a_conversation_log_is_not_a_candidate():
     target = registry.resolve("wildchat-1m")
     cands, skipped = bif.candidates("wildchat-1m", target)
@@ -112,7 +136,7 @@ def context_candidates(monkeypatch, tmp_path, kind, records):
     path = tmp_path / f"t.{kind}.context.json"
     path.write_text(json.dumps({"records": records}))
     monkeypatch.setattr(bif.paths, "find", lambda name: path if name == path.name else None)
-    cands, skipped = bif._context_candidates("t", {"stage": kind, "kind": kind})
+    cands, skipped, _ = bif._context_candidates("t", {"stage": kind, "kind": kind})
     assert skipped is None
     return cands
 
