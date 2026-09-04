@@ -52,9 +52,25 @@ def test_records_with_tool_use_are_skipped_and_counted():
     target = registry.resolve("olmo-3-7b-instruct")
     incomplete: dict = {}
     cands, _ = bif.candidates("olmo-3-7b-instruct", target, stages=["sft"], incomplete=incomplete)
-    assert incomplete == {"sft": 60}
-    assert len(cands) == 240
+    assert incomplete["sft"] >= 60  # the 60 with tool use, plus any with a cut fit turn
+    assert len(cands) + incomplete["sft"] == 300
     assert not any(k in t for c in cands for t in c["turns"] for k in bif.STRUCTURED)
+
+
+def test_a_record_with_a_cut_fit_turn_is_incomplete_and_a_cut_prompt_is_not():
+    cut_answer = [{"role": "user", "text": "q", "chars": 1},
+                  {"role": "assistant", "text": "a" * 10, "chars": 4000}]
+    assert bif.incomplete(cut_answer)
+    cut_reasoning = [{"role": "user", "text": "q", "chars": 1},
+                     {"role": "assistant", "text": "a", "chars": 1, "reasoning": {"text": "r", "chars": 99}}]
+    assert bif.incomplete(cut_reasoning)
+    cut_prompt = [{"role": "user", "text": "q" * 5, "chars": 4000}, {"role": "assistant", "text": "a", "chars": 1}]
+    assert not bif.incomplete(cut_prompt)
+    # A cut assistant turn in the shared history of a DPO pair is context, not target.
+    shared = [{"role": "user", "text": "q", "chars": 1}, {"role": "assistant", "text": "a", "chars": 4000},
+              {"role": "user", "text": "q2", "chars": 2}, {"role": "assistant", "text": "b", "chars": 1}]
+    assert not bif.incomplete(shared, shared=2)
+    assert bif.incomplete(shared, shared=0)
 
 
 def test_a_sample_of_another_mix_or_a_straddled_draw_is_a_skip(tmp_path, monkeypatch):
@@ -167,10 +183,15 @@ def test_a_think_turn_is_fit_on_its_reasoning_and_its_answer_in_the_trained_form
     fit = bif.fit_text(c)
     assert fit == "<think>\nlet me see\n</think>\n\nthe answer"
     assert "let me see" in fit and c["cut"] is False
-    # A reasoning field the record shortened is a cut, like a shortened answer.
+    # A reasoning field the record shortened is a cut fit turn: the block would
+    # close early with the answer appended, a sequence the model never saw, so
+    # the record is skipped and counted rather than kept with a flag.
     rec["turns"][1] = think_turn("let me see", "the answer", reasoning_chars=5000)
-    [c] = context_candidates(monkeypatch, tmp_path, "sft", [rec])
-    assert c["cut"] is True
+    path = tmp_path / "t.sft.context.json"
+    path.write_text(json.dumps({"records": [rec]}))
+    monkeypatch.setattr(bif.paths, "find", lambda name: path if name == path.name else None)
+    cands, skipped, dropped = bif._context_candidates("t", {"stage": "sft", "kind": "sft"})
+    assert cands == [] and skipped is None and dropped == 1
     # A turn without reasoning is what it was before.
     rec["turns"][1] = {"role": "assistant", "text": "plain", "chars": 5}
     [c] = context_candidates(monkeypatch, tmp_path, "sft", [rec])
@@ -212,6 +233,15 @@ class Tok:
     chat_template = None
 
     def encode(self, text, add_special_tokens=False):
+        # Prepends its BOS when asked for special tokens, as a Llama-style
+        # tokenizer does; `NoBosTok` below is the Pythia shape.
+        return ([self.bos_token_id] if add_special_tokens else []) + [ord(ch) for ch in text]
+
+
+class NoBosTok(Tok):
+    """Names a BOS id but never prepends it, as Pythia's tokenizer does."""
+
+    def encode(self, text, add_special_tokens=False):
         return [ord(ch) for ch in text]
 
 
@@ -248,6 +278,14 @@ def test_a_document_is_all_target_but_its_first_token():
     e = bif.encode(Tok(), [{"role": "text", "text": "hello"}], max_tokens=100)
     assert e["tokens"] == 6  # BOS + 5
     assert e["fit_tokens"] == 5
+
+
+def test_bos_follows_the_tokenizer_policy_not_the_existence_of_an_id():
+    assert bif.prepends_bos(Tok()) is True
+    assert bif.prepends_bos(NoBosTok()) is False
+    e = bif.encode(NoBosTok(), [{"role": "text", "text": "hello"}], max_tokens=100)
+    assert e["ids"] == [ord(c) for c in "hello"]  # no BOS in front
+    assert e["fit_tokens"] == 4  # the first token is never a target
 
 
 def test_truncation_drops_the_front_and_keeps_the_fit_text():

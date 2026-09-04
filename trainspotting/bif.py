@@ -116,9 +116,26 @@ def stale(data: dict, dataset: str | None) -> str | None:
     return None
 
 
-def incomplete(turns) -> bool:
-    """Whether a stored record carries or notes turn fields this layer cannot rebuild."""
-    return any(t.get(k) for t in turns for k in STRUCTURED)
+def incomplete(turns, shared: int = 0) -> bool:
+    """Whether a stored record is not the example the model was trained on.
+
+    Two ways: a turn carries or notes fields this layer cannot rebuild
+    (STRUCTURED), or a turn the loss would be taken over was cut at the context
+    record's 4,000-character field limit. A cut *fit* turn is not a prefix of
+    the training example the way a cut document is: the reasoning of a think
+    turn is closed early and the answer appended after it, a sequence and a
+    conditioning boundary the model never saw. A cut context turn is kept — the
+    front of an example is what `encode` drops anyway.
+    """
+    if any(t.get(k) for t in turns for k in STRUCTURED):
+        return True
+    for i, t in enumerate(turns):
+        if i < shared or (t.get("role") or "user") not in FIT_ROLES:
+            continue
+        fields = [t] + ([t["reasoning"]] if t.get("reasoning") else [])
+        if any((f.get("chars") or 0) > len(f.get("text") or "") for f in fields):
+            return True
+    return False
 
 
 def _context_candidates(target_name: str, stage: dict) -> tuple[list[dict], str | None, int]:
@@ -151,7 +168,8 @@ def _context_candidates(target_name: str, stage: dict) -> tuple[list[dict], str 
         sides = [rec.get("turns") or []] if kind == "sft" else [
             (rec.get(side) or {}).get("turns") or [] for side in ("chosen", "rejected")
         ]
-        if any(incomplete(t) for t in sides):
+        shared_turns = context.branch_point(*sides) if kind == "dpo" else 0
+        if any(incomplete(t, shared_turns) for t in sides):
             skipped += 1
             continue
         base = {
@@ -442,7 +460,7 @@ def encode(tokenizer, turns: list[dict], max_tokens: int) -> dict:
     bos = getattr(tokenizer, "bos_token_id", None)
     first = spans[0][0] if spans else ""
     bos_text = getattr(tokenizer, "bos_token", None)
-    if bos is not None and not (bos_text and first.startswith(bos_text)):
+    if prepends_bos(tokenizer) and not (bos_text and first.startswith(bos_text)):
         ids.append(bos)
         labels.append(-100)
     body, body_labels = _tokenize(tokenizer, spans)
@@ -462,6 +480,38 @@ def encode(tokenizer, turns: list[dict], max_tokens: int) -> dict:
         "fit_tokens": sum(1 for x in labels if x != -100),
         "truncated": truncated,
     }
+
+
+def prepends_bos(tokenizer) -> bool:
+    """Whether this tokenizer's own encoding puts its BOS token first.
+
+    Having a `bos_token_id` is not the same thing: Pythia's tokenizer names the
+    end-of-text token as BOS and never prepends it, and its training stream had
+    no such separator, so inserting one gave every document and the query a
+    first token none of them was trained with. The policy is read off the
+    tokenizer by encoding a probe with and without special tokens and seeing
+    whether the BOS id appears in front. Cached on the tokenizer, since it is
+    asked once per candidate.
+    """
+    cached = getattr(tokenizer, "_bif_prepends_bos", None)
+    if cached is not None:
+        return cached
+    bos = getattr(tokenizer, "bos_token_id", None)
+    answer = False
+    if bos is not None:
+        try:
+            with_special = tokenizer.encode("probe", add_special_tokens=True)
+            without = tokenizer.encode("probe", add_special_tokens=False)
+            answer = bool(with_special) and with_special[0] == bos and (
+                not without or without[0] != bos
+            )
+        except TypeError:  # a tokenizer whose encode takes no such flag
+            answer = False
+    try:
+        tokenizer._bif_prepends_bos = answer
+    except (AttributeError, TypeError):
+        pass
+    return answer
 
 
 def _tokenize(tokenizer, spans: list[tuple[str, bool]]) -> tuple[list[int], list[int]]:

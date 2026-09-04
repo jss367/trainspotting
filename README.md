@@ -1374,7 +1374,13 @@ reason, as is a stage with no committed sample or one whose sample is of a
 different mix than the stage now names. A record with tool use (a function
 menu on the system turn, a function call in place of an answer) is skipped
 and counted, because the context record does not hold those fields in the
-form the model was trained on; 60 of the 300 Instruct SFT records are such. `--match` keeps only candidates
+form the model was trained on; 60 of the 300 Instruct SFT records are such. So
+is a record whose fit turn was cut at the context record's 4,000-character
+field limit: a think turn's reasoning closed early with the answer appended is
+a sequence the model never saw, where a cut document is still a prefix of one.
+That costs the think mixes most of their sample (229 of the 300 Think-7B SFT
+records have cut reasoning), and a fuller `context` store is what would give
+it back. `--match` keeps only candidates
 whose text holds a regex, which is how a phrase `grep` found becomes the set of
 examples to weigh; `--limit` caps the records per stage so a run on a big model
 fits the machine, and a DPO pair is one record, so a limit never keeps a
