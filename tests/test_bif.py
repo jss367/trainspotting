@@ -76,6 +76,18 @@ def test_limit_caps_per_stage_deterministically():
     assert [x["row"] for x in a] != [x["row"] for x in c]
 
 
+def test_match_keeps_both_sides_of_a_pair_when_either_side_holds_the_pattern():
+    import re
+
+    def pair(side, text):
+        return {"id": "p", "row": 7, "side": side, "turns": [{"role": "assistant", "text": text}]}
+
+    other = {"id": "q", "row": 8, "side": "chosen", "turns": [{"role": "assistant", "text": "nothing here"}]}
+    cands = [pair("chosen", "plain answer"), pair("rejected", "I am ChatGPT"), other]
+    kept = bif._matching(cands, re.compile("chatgpt", re.IGNORECASE))
+    assert [(c["id"], c["side"]) for c in kept] == [("p", "chosen"), ("p", "rejected")]
+
+
 def test_limit_keeps_both_sides_of_a_dpo_pair_together():
     target = registry.resolve("olmo-3-7b-instruct")
     for seed in range(5):

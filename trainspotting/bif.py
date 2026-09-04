@@ -225,8 +225,9 @@ def candidates(
 ) -> tuple[list[dict], dict[str, str]]:
     """Every candidate example for a target, and the stages that yielded none.
 
-    `match` keeps only candidates whose text holds the regex, which is how a
-    phrase `grep` found is turned into the set of examples to weigh. `limit`
+    `match` keeps only records whose text holds the regex — either side of a
+    DPO pair, and then both sides of it — which is how a phrase `grep` found is
+    turned into the set of examples to weigh. `limit`
     caps the records per stage, drawn at random with `seed`, so a run on a big
     model can be sized to the machine; a DPO pair is one record and keeps both
     its sides.
@@ -249,7 +250,7 @@ def candidates(
             skipped[name] = why
             continue
         if pattern:
-            cands = [c for c in cands if pattern.search(candidate_text(c))]
+            cands = _matching(cands, pattern)
             if not cands:
                 skipped[name] = f"no sampled example matches {match!r}"
                 continue
@@ -257,6 +258,19 @@ def candidates(
             cands = _limit(cands, limit, rng)
         out.extend(cands)
     return out, skipped
+
+
+def _matching(cands: list[dict], pattern) -> list[dict]:
+    """The candidates whose *record* holds the pattern, both sides of a pair.
+
+    A phrase found only in a rejected completion still names the pair as the
+    example to weigh: the chosen side is what that pair taught instead, and
+    dropping it would leave a rejected completion with nothing to localize on.
+    So the regex is matched per record and every side of a matching record is
+    kept.
+    """
+    hit = {(c["id"], c["row"]) for c in cands if pattern.search(candidate_text(c))}
+    return [c for c in cands if (c["id"], c["row"]) in hit]
 
 
 def _limit(cands: list[dict], limit: int, rng: random.Random) -> list[dict]:
