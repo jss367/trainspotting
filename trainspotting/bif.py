@@ -178,6 +178,13 @@ def _turns(turns, shared: int = 0) -> list[dict]:
 
     `shared` is how many leading turns are shared history — the turns before a
     DPO pair branches — and an assistant turn among them is not fit.
+
+    An *empty* thinking span leaves no reasoning field at all: `context._turns`
+    strips the markers and stores nothing, and the only trace is that the turn
+    as written (`chars_raw`) was longer than the answer (`chars`). The committed
+    32B-think sample has such a turn — 192 characters written, 173 of answer. The
+    model was still fit to the markers, and the think template's cumulative
+    rendering still expects them, so the empty block is put back too.
     """
     out = []
     for i, t in enumerate(turns):
@@ -186,6 +193,8 @@ def _turns(turns, shared: int = 0) -> list[dict]:
         reasoning = (t.get("reasoning") or {}).get("text")
         if reasoning:
             text = f"{THINK_OPEN}{reasoning}{THINK_CLOSE}{text}"
+        elif (t.get("chars_raw") or 0) > (t.get("chars") or 0):
+            text = f"{THINK_OPEN}{THINK_CLOSE}{text}"
         out.append({"role": role, "text": text, "fit": role in FIT_ROLES and i >= shared})
     return out
 
@@ -335,10 +344,9 @@ def encode(tokenizer, turns: list[dict], max_tokens: int) -> dict:
     if bos is not None and not (bos_text and first.startswith(bos_text)):
         ids.append(bos)
         labels.append(-100)
-    for text, fit in spans:
-        toks = tokenizer.encode(text, add_special_tokens=False)
-        ids.extend(toks)
-        labels.extend(toks if fit else [-100] * len(toks))
+    body, body_labels = _tokenize(tokenizer, spans)
+    ids.extend(body)
+    labels.extend(body_labels)
     truncated = len(ids) > max_tokens
     if truncated:
         ids, labels = ids[-max_tokens:], labels[-max_tokens:]
@@ -353,6 +361,44 @@ def encode(tokenizer, turns: list[dict], max_tokens: int) -> dict:
         "fit_tokens": sum(1 for x in labels if x != -100),
         "truncated": truncated,
     }
+
+
+def _tokenize(tokenizer, spans: list[tuple[str, bool]]) -> tuple[list[int], list[int]]:
+    """Token ids for the whole rendering, and a label per token.
+
+    The example is tokenized as one string, the way training saw it: a tokenizer
+    that merges across a span boundary — the space closing an assistant header
+    with the first word of the reply — gives a different sequence when the spans
+    are encoded one at a time, and a loss over that sequence is a loss over
+    tokens the model was never shown together. Labels come from character
+    offsets: a token is a target when any character of it lies in a fit span,
+    so the merged boundary token counts as the reply it begins.
+
+    A tokenizer without offsets (a slow one, or a stub) is encoded span by span,
+    which is exact when no token straddles a boundary and the best available
+    when one does.
+    """
+    fit_ranges = []
+    pos = 0
+    for text, fit in spans:
+        if fit and text:
+            fit_ranges.append((pos, pos + len(text)))
+        pos += len(text)
+    full = "".join(text for text, _ in spans)
+    if getattr(tokenizer, "is_fast", False):
+        enc = tokenizer(full, add_special_tokens=False, return_offsets_mapping=True)
+        ids = list(enc["input_ids"])
+        labels = []
+        for tok, (s, e) in zip(ids, enc["offset_mapping"]):
+            inside = any(s < hi and e > lo for lo, hi in fit_ranges)
+            labels.append(tok if inside else -100)
+        return ids, labels
+    ids, labels = [], []
+    for text, fit in spans:
+        toks = tokenizer.encode(text, add_special_tokens=False)
+        ids.extend(toks)
+        labels.extend(toks if fit else [-100] * len(toks))
+    return ids, labels
 
 
 # --- Sampling -------------------------------------------------------------------
@@ -383,7 +429,13 @@ def load(model_id: str, device: str, dtype: str):
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
-    model = AutoModelForCausalLM.from_pretrained(model_id, dtype=getattr(torch, dtype))
+    try:
+        model = AutoModelForCausalLM.from_pretrained(model_id, dtype=getattr(torch, dtype))
+    except TypeError:
+        # Transformers before 4.56 knows the precision keyword only as
+        # `torch_dtype`, and hands an unknown `dtype` on to the model's
+        # constructor, which rejects it. The extra's floor is 4.40.
+        model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=getattr(torch, dtype))
     model.to(device)
     model.train(False)
     revision = getattr(model.config, "_commit_hash", None)
@@ -468,7 +520,15 @@ def sample(
     if not localize:
         raise ValueError("nothing to localize the posterior on")
     params = [p for p in model.parameters() if p.requires_grad]
-    origin = [p.detach().clone() for p in params]
+    # The chain walks in float32 whatever the model holds. At the default step
+    # the noise is about 2e-4 a step, under the spacing between neighbouring
+    # bfloat16 values for an ordinary weight, so a step applied to a bfloat16
+    # parameter rounds to nothing or to a whole ULP and the chain is quantized
+    # rather than Gaussian. A float32 model is its own master copy; a reduced
+    # one gets a float32 master the updates accumulate in, cast back into the
+    # parameter for the forward pass.
+    master = [p if p.dtype == torch.float32 else p.detach().float().clone() for p in params]
+    origin = [m.detach().clone() for m in master]
     everything = [query, *encoded]
     at_origin = batch_losses(model, everything, device, eval_batch)
     losses: list[list[list[float]]] = []
@@ -476,8 +536,10 @@ def sample(
     steps = burn_in + draws * every
     for chain in range(chains):
         with torch.no_grad():
-            for p, w in zip(params, origin):
-                p.copy_(w)
+            for p, m, w in zip(params, master, origin):
+                m.copy_(w)
+                if m is not p:
+                    p.copy_(m.to(p.dtype))
         gen = torch.Generator(device="cpu").manual_seed(seed * 1000 + chain)
         rng = random.Random(seed * 1000 + chain)
         chain_losses: list[list[float]] = []
@@ -494,10 +556,16 @@ def sample(
                     f"chain {chain} diverged at step {step} (loss {chain_traj[-1]}); lower --lr"
                 )
             with torch.no_grad():
-                for p, w in zip(params, origin):
-                    drift = nbeta * p.grad + gamma * (p - w)
-                    noise = torch.randn(p.shape, generator=gen, dtype=torch.float32).to(p.device, p.dtype)
-                    p.add_(-0.5 * lr * drift + math.sqrt(lr) * noise)
+                for p, m, w in zip(params, master, origin):
+                    # A parameter the forward pass never reaches has no
+                    # gradient; the prior still pulls it back to w*.
+                    drift = gamma * (m - w)
+                    if p.grad is not None:
+                        drift = drift + nbeta * p.grad.float()
+                    noise = torch.randn(m.shape, generator=gen, dtype=torch.float32).to(m.device)
+                    m.add_(-0.5 * lr * drift + math.sqrt(lr) * noise)
+                    if m is not p:
+                        p.copy_(m.to(p.dtype))
             if step >= burn_in and (step - burn_in) % every == 0:
                 chain_losses.append(batch_losses(model, everything, device, eval_batch))
                 if log:
@@ -507,7 +575,7 @@ def sample(
         trajectory.append(chain_traj)
     with torch.no_grad():
         for p, w in zip(params, origin):
-            p.copy_(w)
+            p.copy_(w.to(p.dtype))
     # `localized` is the indices themselves, not only their count, because the
     # learning coefficient has to be taken over the same loss the chains were
     # localized on, and a candidate scored but never fit is not part of it.

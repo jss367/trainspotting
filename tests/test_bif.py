@@ -11,6 +11,7 @@ restoring w*, finite losses) rather than the physics.
 """
 
 import json
+import importlib.util
 import math
 
 import pytest
@@ -240,6 +241,50 @@ def test_a_think_response_with_its_markers_restored_renders_through_the_template
     # prefix check fails, and the whole example falls back to roles.
     bare = [{"role": "user", "text": "hi"}, {"role": "assistant", "text": "yo"}]
     assert bif.pieces(ThinkTok(), bare) == bif.pieces(Tok(), bare)
+
+
+class OffsetTok(Tok):
+    """A fast-style tokenizer: words with the space before them attached, so a
+    token straddles the boundary between a header ending in a space and the
+    first word of the reply, which is where span-by-span encoding goes wrong."""
+
+    is_fast = True
+
+    def __call__(self, text, add_special_tokens=False, return_offsets_mapping=False):
+        import re
+
+        ids, offsets = [], []
+        for m in re.finditer(r"\s*\S+|\s+$", text):
+            ids.append(hash(m.group()) & 0xFFFF)
+            offsets.append((m.start(), m.end()))
+        return {"input_ids": ids, "offset_mapping": offsets}
+
+
+def test_the_whole_rendering_is_tokenized_once_and_labels_follow_offsets():
+    turns = [{"role": "user", "text": "ab"}, {"role": "assistant", "text": "yo there"}]
+    tok = OffsetTok()
+    e = bif.encode(tok, turns, max_tokens=100)
+    full = "".join(text for text, _ in bif.pieces(tok, turns))
+    whole = tok(full)["input_ids"]
+    assert e["ids"] == [1, *whole]  # BOS, then exactly the one-shot encoding
+    # "assistant: " ends in a space that the tokenizer glues to "yo"; that token
+    # is part of the reply and is a target. "ab" and the headers are not.
+    fit = [tok_id for tok_id, lab in zip(e["ids"], e["labels"]) if lab != -100]
+    assert fit == tok(" yo there\n\n")["input_ids"]
+    assert e["fit_tokens"] == 3  # " yo", " there", and the closing newlines
+
+
+def test_an_empty_think_block_is_put_back_from_the_length_it_left_behind():
+    # `context._turns` stores no reasoning field for an empty span, only that
+    # the turn as written was longer than its answer.
+    turns = [{"role": "user", "text": "q", "chars": 1, "raw": True},
+             {"role": "assistant", "text": "answer", "chars": 6, "chars_raw": 25}]
+    out = bif._turns(turns)
+    assert out[1]["text"] == bif.THINK_OPEN + bif.THINK_CLOSE + "answer"
+    # A cut field alone does not: `chars` is the true length, so it equals
+    # `chars_raw` when nothing but the truncation happened.
+    plain = bif._turns([{"role": "assistant", "text": "ans", "chars": 6, "chars_raw": 6}])
+    assert plain[0]["text"] == "ans"
 
 
 def test_a_template_that_cannot_render_falls_back_to_roles():
@@ -508,24 +553,34 @@ def test_default_nbeta_is_batch_over_log_batch():
 
 # --- The sampler, on a toy ------------------------------------------------------
 
-torch = pytest.importorskip("torch")
+# A module-level `importorskip` would skip this whole file: pytest imports a
+# test module as one unit, so the line's position does not limit its reach, and
+# the candidate, encoding and statistics tests above need no torch at all.
+torch = importlib.import_module("torch") if importlib.util.find_spec("torch") else None
+requires_torch = pytest.mark.skipif(torch is None, reason="the SGLD loop needs torch")
 
+if torch is not None:
 
-class Toy(torch.nn.Module):
-    """The smallest thing with the causal-LM interface `sample` reads."""
+    class Toy(torch.nn.Module):
+        """The smallest thing with the causal-LM interface `sample` reads."""
 
-    def __init__(self, vocab=16, dim=8):
-        super().__init__()
-        self.emb = torch.nn.Embedding(vocab, dim)
-        self.out = torch.nn.Linear(dim, vocab)
+        def __init__(self, vocab=16, dim=8, dtype=None, unused=False):
+            super().__init__()
+            self.emb = torch.nn.Embedding(vocab, dim)
+            self.out = torch.nn.Linear(dim, vocab)
+            # A parameter the forward pass never touches, so it never gets a
+            # gradient: the shape of a tied or dormant weight in a real model.
+            self.unused = torch.nn.Parameter(torch.zeros(3)) if unused else None
+            if dtype is not None:
+                self.to(dtype)
 
-    def forward(self, input_ids, attention_mask=None):
-        class Out:
-            pass
+        def forward(self, input_ids, attention_mask=None):
+            class Out:
+                pass
 
-        o = Out()
-        o.logits = self.out(self.emb(input_ids))
-        return o
+            o = Out()
+            o.logits = self.out(self.emb(input_ids))
+            return o
 
 
 def enc(ids, fit_from):
@@ -535,6 +590,7 @@ def enc(ids, fit_from):
             "truncated": False}
 
 
+@requires_torch
 def test_sample_records_every_loss_and_puts_the_weights_back():
     torch.manual_seed(0)
     model = Toy()
@@ -557,6 +613,7 @@ def test_sample_records_every_loss_and_puts_the_weights_back():
     assert all(s["cov_stderr"] is not None for s in stats)
 
 
+@requires_torch
 def test_sample_fits_only_the_localized_candidates_and_scores_them_all(monkeypatch):
     torch.manual_seed(0)
     model = Toy()
@@ -587,6 +644,7 @@ def test_sample_fits_only_the_localized_candidates_and_scores_them_all(monkeypat
         )
 
 
+@requires_torch
 def test_batch_losses_are_per_example_means_over_fit_tokens_only():
     torch.manual_seed(0)
     model = Toy()
@@ -597,3 +655,35 @@ def test_batch_losses_are_per_example_means_over_fit_tokens_only():
     alone = bif.batch_losses(model, [short], "cpu", batch=1)
     assert padded[0] == pytest.approx(alone[0], rel=1e-5)  # padding does not leak into the loss
     assert padded[1] != pytest.approx(padded[0])
+
+
+@requires_torch
+def test_reduced_precision_walks_in_float32_and_an_unused_parameter_has_no_gradient():
+    torch.manual_seed(0)
+    model = Toy(dtype=torch.bfloat16, unused=True)
+    before = [p.detach().clone() for p in model.parameters()]
+    cands = [enc([1, 2, 3, 4, 5], 2), enc([6, 7, 8], 1)]
+    run = bif.sample(
+        model, cands, enc([3, 4, 5], 0), device="cpu", chains=1, draws=2, burn_in=1, every=1,
+        lr=1e-3, nbeta=2.0, gamma=10.0, batch=2, eval_batch=2, seed=1,
+    )
+    assert all(math.isfinite(x) for c in run["losses"] for d in c for x in d)
+    # The unused parameter never gets a gradient and the step still runs; and
+    # every parameter, bfloat16 included, is back at w* afterwards.
+    for p, w in zip(model.parameters(), before):
+        assert p.dtype == w.dtype
+        assert torch.equal(p.detach(), w)
+
+
+def test_a_bfloat16_parameter_moves_by_less_than_its_own_spacing():
+    """The reason for the float32 master: a step of 1e-4 on a weight near 1.0
+    is below bfloat16's spacing there (about 7.8e-3), so applied in bfloat16 it
+    rounds to nothing, and accumulated in float32 it is kept."""
+    if torch is None:
+        pytest.skip("needs torch")
+    w = torch.tensor([1.0], dtype=torch.bfloat16)
+    assert torch.equal(w + torch.tensor([1e-4], dtype=torch.bfloat16), w)
+    m = w.float()
+    for _ in range(100):
+        m += 1e-4
+    assert m.to(torch.bfloat16).item() > 1.0

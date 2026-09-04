@@ -1,6 +1,7 @@
 import argparse
 import hashlib
 import json
+import math
 import re
 import sys
 import urllib.parse
@@ -81,6 +82,28 @@ def _probe_words(value: str) -> int:
             "window matches by chance, and a chance match reads as contamination"
         )
     return n
+
+
+def _draws(value: str) -> int:
+    """argparse type for `bif --draws`. One retained draw is a series of one
+    observation: centering it gives every covariance, correlation and partial
+    exactly zero, and the file written would rank the candidates in an arbitrary
+    tie and look like a result."""
+    n = _positive_int(value)
+    if n < 2:
+        raise argparse.ArgumentTypeError(
+            f"a covariance needs at least 2 retained draws, got {n}"
+        )
+    return n
+
+
+def _positive_float(value: str) -> float:
+    """argparse type for a step size. A negative or non-finite one reaches
+    `math.sqrt` inside the sampler after the checkpoint has been loaded."""
+    x = float(value)
+    if not (x > 0 and math.isfinite(x)):
+        raise argparse.ArgumentTypeError(f"must be a positive finite number, got {value}")
+    return x
 
 
 def _nonnegative_int(value: str) -> int:
@@ -2604,6 +2627,11 @@ def cmd_bif(args):
     query = sys.stdin.read() if args.text == "-" else args.text
     if not query.strip():
         sys.exit("the query is empty")
+    if args.match:
+        try:
+            re.compile(args.match)
+        except re.error as e:
+            sys.exit(f"--match {args.match!r} is not a valid regex: {e}")
     stages = [args.stage] if args.stage else None
     cands, skipped = bif.candidates(
         args.target, target, stages=stages, match=args.match, limit=args.limit, seed=args.seed
@@ -2681,7 +2709,10 @@ def cmd_bif(args):
         batch=args.batch, eval_batch=args.eval_batch, seed=args.seed, localize=localize,
         log=lambda m: print(m, file=sys.stderr),
     )
-    slug = args.slug or _slug(query)
+    # Through `_filename_part` like every other explicit slug: a slash in it
+    # would write a file `bif.committed` never globs, and the run would vanish
+    # from the report.
+    slug = _filename_part(args.slug) if args.slug else _slug(query)
     res = bif.result(args.target, model_id, revision, query, args.prompt, kept, encoded, run, skipped, settings)
     res = {"slug": slug, **_stamp(), "dropped": dropped, **res}
     path = _write_json(RESULTS / f"{args.target}.bif-{slug}.json", res)
@@ -3253,10 +3284,10 @@ def main():
     p.add_argument("--limit", type=_positive_int, help="at most this many candidates per stage, drawn at random")
     p.add_argument("--model", help="HuggingFace id of the checkpoint to sample around (default: the target's own)")
     p.add_argument("--chains", type=_positive_int, default=4)
-    p.add_argument("--draws", type=_positive_int, default=100, help="retained draws per chain")
+    p.add_argument("--draws", type=_draws, default=100, help="retained draws per chain (at least 2)")
     p.add_argument("--burn-in", type=_nonnegative_int, default=50, help="SGLD steps discarded per chain")
     p.add_argument("--every", type=_positive_int, default=1, help="SGLD steps between retained draws")
-    p.add_argument("--lr", type=float, default=5e-8,
+    p.add_argument("--lr", type=_positive_float, default=5e-8,
                    help="SGLD step size ε; the report says if the chains climbed away from w*, in which case lower it")
     p.add_argument("--nbeta", type=float, help="inverse temperature nβ (default: batch / ln batch)")
     p.add_argument("--gamma", type=float, default=100.0, help="localization strength γ")

@@ -1387,7 +1387,7 @@ its commit, every sampler setting, the per-example covariance with its
 across-chain standard error, and the correlation beside it, since covariance
 scales with how much a loss moves and a long high-entropy document moves more
 than a short answer whether or not it has anything to do with the query. The
-report prints the stages ranked by mean covariance, the examples at either end
+report prints the stages ranked by mean partial covariance, the examples at either end
 of the ranking, and two checks on the sampler that come free from the same
 draws: the local learning coefficient `nβ(E[L] - L(w*))`, taken over the
 candidates the posterior was localized on (a rejected completion is scored but

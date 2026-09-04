@@ -126,3 +126,15 @@ def test_the_targetless_commands_are_the_ones_this_expects():
     for _, _, argv in COMMANDS:
         if len(argv) > 1 and argv[0] not in targetless:
             assert registry.resolve(argv[1])
+
+
+@pytest.mark.parametrize("bad", [["--draws", "1"], ["--lr", "-1e-8"], ["--lr", "nan"], ["--lr", "0"]])
+def test_bif_rejects_a_step_size_or_draw_count_the_sampler_cannot_use(bad, monkeypatch):
+    """One retained draw makes every covariance exactly zero and a negative step
+    reaches `math.sqrt` after the checkpoint has loaded; both are usage errors."""
+    called = []
+    monkeypatch.setattr(cli, "cmd_bif", lambda args: called.append(args))
+    monkeypatch.setattr(sys, "argv", ["trainspotting", "bif", "pythia-12b-deduped", "text", *bad])
+    with pytest.raises(SystemExit):
+        cli.main()
+    assert not called
