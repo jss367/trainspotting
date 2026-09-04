@@ -60,12 +60,12 @@
       "mean_cov": 0.02115105361201706,
       "mean_corr": 0.8621554277424913,
       "mean_partial": 4.8632288432004e-06,
-      "mean_pull": 4.8632288432004e-06,
-      "toward": 101,
+      "mean_pull": 0.02115105361201706,
+      "toward": 200,
       "best": {
-        "id": "row-96113152",
-        "row": 96113152,
-        "pull": 0.0012734782010700172
+        "id": "row-130440228",
+        "row": 130440228,
+        "pull": 0.07015217538706596
       }
     }
   ],
@@ -78,12 +78,12 @@
       "mean_cov": 0.02115105361201706,
       "mean_corr": 0.8621554277424913,
       "mean_partial": 4.8632288432004e-06,
-      "mean_pull": 4.8632288432004e-06,
-      "toward": 101,
+      "mean_pull": 0.02115105361201706,
+      "toward": 200,
       "best": {
-        "id": "row-96113152",
-        "row": 96113152,
-        "pull": 0.0012734782010700172
+        "id": "row-130440228",
+        "row": 130440228,
+        "pull": 0.07015217538706596
       }
     }
   ],
@@ -444,8 +444,8 @@
       ],
       "snippet": "PUT /clients admin/admin\nContent-Type: application/json\n\n{\n  \"organizationId\" : \"Policy_IPWhitelistTest\",\n  \"clientId\" :",
       "above_baseline": -0.00615581346047119,
-      "pull": 0.00014487601565495124,
-      "rank": 62
+      "pull": 0.014995240151545875,
+      "rank": 196
     },
     {
       "stage": "pretrain",
@@ -473,8 +473,8 @@
       ],
       "snippet": "In each of these interviews, we asked the principal players not only to tell their stories, from start to finish, but al",
       "above_baseline": -0.001174460365761902,
-      "pull": 0.00018454868136516425,
-      "rank": 58
+      "pull": 0.019976593246255163,
+      "rank": 124
     },
     {
       "stage": "pretrain",
@@ -502,8 +502,8 @@
       ],
       "snippet": "Q:\n\nHow to query this in LINQ? C#\n\nConsidering the following:\npublic class Person\n{\n    public Person(string fName, stri",
       "above_baseline": -0.002450144282917316,
-      "pull": 0.00023150660603600833,
-      "rank": 47
+      "pull": 0.01870090932909975,
+      "rank": 157
     },
     {
       "stage": "pretrain",
@@ -531,8 +531,8 @@
       ],
       "snippet": "package cn.itcast.ssh.domain;\n\nimport java.util.Date;\n\n/**\n * \u8bf7\u5047\u5355\n */\npublic class LeaveBill {\n\tprivate Long id;//\u4e3b\u952eID\n\t",
       "above_baseline": -0.0019820968884437865,
-      "pull": 0.00011130541212649364,
-      "rank": 68
+      "pull": 0.01916895672357328,
+      "rank": 147
     },
     {
       "stage": "pretrain",
@@ -560,8 +560,8 @@
       ],
       "snippet": "Theseplates are Red Eagle high performance clutch plates. These clutches are put through a process where the friction pa",
       "above_baseline": 0.002153551587485616,
-      "pull": -0.000432933296165114,
-      "rank": 185
+      "pull": 0.02330460519950268,
+      "rank": 34
     },
     {
       "stage": "pretrain",
@@ -589,8 +589,8 @@
       ],
       "snippet": "Plasma enterolactone or intestinal Bifidobacterium levels do not explain adenoma formation in multiple intestinal neopla",
       "above_baseline": 0.0036712955633555547,
-      "pull": -0.00023909304613498123,
-      "rank": 162
+      "pull": 0.02482234917537262,
+      "rank": 15
     },
     {
       "stage": "pretrain",
@@ -618,8 +618,8 @@
       ],
       "snippet": "/*\n *  Licensed to the Apache Software Foundation (ASF) under one\n *  or more contributor license agreements.  See the N",
       "above_baseline": 0.0011280033815816264,
-      "pull": 0.00030325343845977225,
-      "rank": 33
+      "pull": 0.02227905699359869,
+      "rank": 55
     },
     {
       "stage": "pretrain",
@@ -647,8 +647,8 @@
       ],
       "snippet": "Media\n\nAlan Dershowitz\u2019s new book will counter the #MeToo movement\n\nAlan Dershowitz \u2014 who has been mired in controversy ",
       "above_baseline": -0.002501690861256546,
-      "pull": -0.0003862639826200463,
-      "rank": 180
+      "pull": 0.01864936275076052,
+      "rank": 159
     },
     {
       "stage": "pretrain",
@@ -676,8 +676,8 @@
       ],
       "snippet": "Associated Press\n\nLANSING \u2014 Michigan\u2019s elections bureau says a ballot drive to legalize marijuana for recreational use i",
       "above_baseline": 0.00018862739210744398,
-      "pull": -0.0005238702474422157,
-      "rank": 192
+      "pull": 0.02133968100412451,
+      "rank": 89
     },
     {
       "stage": "pretrain",
@@ -705,8 +705,8 @@
       ],
       "snippet": "Q:\n\nWhy is my JavaScript code not working?\n\nI have got some code that I got from JSFiddle\n$(function() {\n    $('.toggler",
       "above_baseline": -0.005835112441578812,
-      "pull": 0.00011095310138175216,
-      "rank": 69
+      "pull": 0.015315941170438253,
+      "rank": 193
     },
     {
       "stage": "pretrain",
@@ -734,8 +734,8 @@
       ],
       "snippet": "Dallas\n\nAo chegar aos Estados Unidos nesta quarta-feira (15) Jair Bolsonaro afirmou que as manifesta\u00e7\u00f5es que est\u00e3o ocorr",
       "above_baseline": 0.004253422428751295,
-      "pull": 0.00024112190477556552,
-      "rank": 46
+      "pull": 0.02540447604076836,
+      "rank": 12
     },
     {
       "stage": "pretrain",
@@ -763,8 +763,8 @@
       ],
       "snippet": "Socio-demographic Predictors of Tobacco Use among Women of Nepal: Evidence from Non Communicable Disease Risk Factors ST",
       "above_baseline": -0.0014642396748790268,
-      "pull": 0.00041679147329251647,
-      "rank": 15
+      "pull": 0.019686813937138038,
+      "rank": 135
     },
     {
       "stage": "pretrain",
@@ -792,8 +792,8 @@
       ],
       "snippet": "Follow us\n\nAccount\n\nMedia: A Moment with Marquis\n\nRobert Ditcham, the new ITV adjudicator, shouldn't pack his CV in the ",
       "above_baseline": -0.0021109597401870843,
-      "pull": 0.0004231998549782915,
-      "rank": 14
+      "pull": 0.01904009387182998,
+      "rank": 151
     },
     {
       "stage": "pretrain",
@@ -821,8 +821,8 @@
       ],
       "snippet": "Q:\n\nPlone 4 : CalendarWidget to display Year only without Date and Month\n\nIn Plone 4, I am using the CalendarWidget. Is ",
       "above_baseline": 0.0009108232944934555,
-      "pull": 0.00012410622712469014,
-      "rank": 64
+      "pull": 0.02206187690651052,
+      "rank": 62
     },
     {
       "stage": "pretrain",
@@ -850,8 +850,8 @@
       ],
       "snippet": "import { UnionsOverlap } from '../union/UnionsOverlap';\n\n/**\n * Check if an object type has a certain key.\n * Will not l",
       "above_baseline": 0.0046903748084612465,
-      "pull": 0.00033347912433188894,
-      "rank": 29
+      "pull": 0.02584142842047831,
+      "rank": 11
     },
     {
       "stage": "pretrain",
@@ -879,8 +879,8 @@
       ],
       "snippet": "nlp\\_architect.nn.torch.modules package\n=======================================\n\nSubmodules\n----------\n\nnlp\\_architect.n",
       "above_baseline": -0.0012841236848883143,
-      "pull": -0.00018782111694928616,
-      "rank": 153
+      "pull": 0.01986692992712875,
+      "rank": 129
     },
     {
       "stage": "pretrain",
@@ -908,8 +908,8 @@
       ],
       "snippet": "Brought to you by the makers of the World's Best World Map, MapXL (a subsidiary of Compare Infobase), an organization wi",
       "above_baseline": 0.0025812766450032387,
-      "pull": -0.000357966347051315,
-      "rank": 174
+      "pull": 0.023732330257020304,
+      "rank": 24
     },
     {
       "stage": "pretrain",
@@ -937,8 +937,8 @@
       ],
       "snippet": "Q:\n\nHow to populate DB values in content type field, drupal 7\n\nI have created a content type with 4 field in Drupal 7. O",
       "above_baseline": -0.004581975005468281,
-      "pull": -5.778046261324251e-05,
-      "rank": 116
+      "pull": 0.016569078606548784,
+      "rank": 184
     },
     {
       "stage": "pretrain",
@@ -966,8 +966,8 @@
       ],
       "snippet": "//* This file is part of the MOOSE framework\n//* https://www.mooseframework.org\n//*\n//* All rights reserved, see COPYRIG",
       "above_baseline": -0.0004678832639701154,
-      "pull": -0.00046301069397260787,
-      "rank": 188
+      "pull": 0.02068317034804695,
+      "rank": 101
     },
     {
       "stage": "pretrain",
@@ -995,8 +995,8 @@
       ],
       "snippet": "Super-resolution for imagery from integrated microgrid polarimeters.\nImagery from microgrid polarimeters is obtained by ",
       "above_baseline": -0.0009310880894009901,
-      "pull": -0.000397398909806999,
-      "rank": 181
+      "pull": 0.020219965522616075,
+      "rank": 117
     },
     {
       "stage": "pretrain",
@@ -1024,8 +1024,8 @@
       ],
       "snippet": "The design and production of Co-Cr alloy implants with controlled surface topography by CAD-CAM method and their effects",
       "above_baseline": 0.0020308095631263075,
-      "pull": 0.0003134683098706785,
-      "rank": 31
+      "pull": 0.023181863175143372,
+      "rank": 35
     },
     {
       "stage": "pretrain",
@@ -1053,8 +1053,8 @@
       ],
       "snippet": "Get breaking news alerts and special reports. The news and stories that matter, delivered weekday mornings.\n\nThe relic o",
       "above_baseline": 0.0005214668671144826,
-      "pull": -0.00020278996339833462,
-      "rank": 156
+      "pull": 0.021672520479131548,
+      "rank": 78
     },
     {
       "stage": "pretrain",
@@ -1082,8 +1082,8 @@
       ],
       "snippet": "Hinges are for use on average traffic in commercial construction. Hinges are furnished with All Wood Screws (1 1/4\" x 12",
       "above_baseline": 0.0009714436704121206,
-      "pull": 0.00038609244737633096,
-      "rank": 21
+      "pull": 0.022122497282429186,
+      "rank": 61
     },
     {
       "stage": "pretrain",
@@ -1111,8 +1111,8 @@
       ],
       "snippet": "Warning: Memcache::get() [memcache.get]: No servers added to memcache connection in /home/measured/public_html/libs/phpc",
       "above_baseline": -0.0022205697689088345,
-      "pull": -0.0001252549633044259,
-      "rank": 143
+      "pull": 0.01893048384310823,
+      "rank": 153
     },
     {
       "stage": "pretrain",
@@ -1140,8 +1140,8 @@
       ],
       "snippet": "\nA global reforestation project is how we fix climate change - apsec112\nhttps://medium.com/@yishan/a-massive-global-refo",
       "above_baseline": 0.0002467138544790595,
-      "pull": -2.5776991817247216e-05,
-      "rank": 108
+      "pull": 0.021397767466496125,
+      "rank": 87
     },
     {
       "stage": "pretrain",
@@ -1169,8 +1169,8 @@
       ],
       "snippet": "<!DOCTYPE html >\n<html>\n<head>\n    <link rel=\"stylesheet\" href=\"demos.css\" type=\"text/css\" media=\"screen\" />\n    \n    <s",
       "above_baseline": 0.0027680122581069735,
-      "pull": 0.00019903188742563283,
-      "rank": 55
+      "pull": 0.02391906587012404,
+      "rank": 23
     },
     {
       "stage": "pretrain",
@@ -1198,8 +1198,8 @@
       ],
       "snippet": "In industry the use of metal products manufactured by compacting and sintering metal-powder compositions is becoming inc",
       "above_baseline": 0.001516704754401483,
-      "pull": 0.00013350857749666785,
-      "rank": 63
+      "pull": 0.022667758366418548,
+      "rank": 51
     },
     {
       "stage": "pretrain",
@@ -1227,8 +1227,8 @@
       ],
       "snippet": "Q:\n\nHow to do DB backup with VistaDB?\n\nI'm trying to do a XML export of the database with VistaDB.\nUnfortuanently, I'm l",
       "above_baseline": 0.006000022506777759,
-      "pull": -0.0001115446968821427,
-      "rank": 138
+      "pull": 0.027151076118794824,
+      "rank": 8
     },
     {
       "stage": "pretrain",
@@ -1256,8 +1256,8 @@
       ],
       "snippet": "Q:\n\nNeed guidance on SQL query\n\nSo the problem is:\nfan(fanID: integer, fanName: string)\nband(bandID: integer, bandName: ",
       "above_baseline": 0.0006459753519206142,
-      "pull": 0.0007710246411256432,
-      "rank": 3
+      "pull": 0.02179702896393768,
+      "rank": 73
     },
     {
       "stage": "pretrain",
@@ -1285,8 +1285,8 @@
       ],
       "snippet": "Scrappy Carroll\n\nJohn E. \"Scrappy\" Carroll (August 27, 1860 \u2013 November 14, 1942) was an outfielder in Major League Baseb",
       "above_baseline": -0.0027830151522119095,
-      "pull": -4.323594814684093e-05,
-      "rank": 110
+      "pull": 0.018368038459805155,
+      "rank": 162
     },
     {
       "stage": "pretrain",
@@ -1314,8 +1314,8 @@
       ],
       "snippet": "Q:\n\nmac ox replacing strings in terminal\n\nI would like to replace a string in a bunch of text files with another string.",
       "above_baseline": -0.005970979923452925,
-      "pull": 2.5265094034137627e-05,
-      "rank": 93
+      "pull": 0.01518007368856414,
+      "rank": 195
     },
     {
       "stage": "pretrain",
@@ -1343,8 +1343,8 @@
       ],
       "snippet": "The essential elements for creating the perfect bar cart style - it really just comes down to 8 things! Check out the po",
       "above_baseline": 0.001900347977453698,
-      "pull": -0.0001561560167332668,
-      "rank": 148
+      "pull": 0.023051401589470763,
+      "rank": 37
     },
     {
       "stage": "pretrain",
@@ -1372,8 +1372,8 @@
       ],
       "snippet": "using System;\nusing System.Collections.Generic;\nusing System.Linq;\nusing NLog;\n\nnamespace Improbable.Gdk.CodeGeneration.",
       "above_baseline": 0.0017881269948401349,
-      "pull": 0.00034625962675246337,
-      "rank": 28
+      "pull": 0.0229391806068572,
+      "rank": 43
     },
     {
       "stage": "pretrain",
@@ -1401,8 +1401,8 @@
       ],
       "snippet": "Mike Posner Hits Rewind With \u201cPlease Don\u2019t Go\u201d Video\n\nRecent Duke grad turned overnight pop sensation Mike Posner has de",
       "above_baseline": -0.001931978578951457,
-      "pull": -0.00011516970803311359,
-      "rank": 139
+      "pull": 0.019219075033065608,
+      "rank": 145
     },
     {
       "stage": "pretrain",
@@ -1430,8 +1430,8 @@
       ],
       "snippet": "youthlarge's bibimbop\n\nTuesday, October 04, 2005\n\nPark Slope Gastronome #14 - I'm Dining With Elsa\n\nA new addition to ou",
       "above_baseline": 0.002249993358254935,
-      "pull": 0.00024248607362480887,
-      "rank": 44
+      "pull": 0.023401046970272,
+      "rank": 32
     },
     {
       "stage": "pretrain",
@@ -1459,8 +1459,8 @@
       ],
       "snippet": "This is not an exhaustive list of conservative institutions and should not be taken as such. Nor should it be the only s",
       "above_baseline": -0.002407181110998753,
-      "pull": -0.0001451993190234491,
-      "rank": 146
+      "pull": 0.018743872501018312,
+      "rank": 156
     },
     {
       "stage": "pretrain",
@@ -1488,8 +1488,8 @@
       ],
       "snippet": "Chidobe Aquzie could only laugh when he learned that a random drug test coincided with him recently setting a top mark f",
       "above_baseline": -0.0009119156379924359,
-      "pull": -0.00020457577836184047,
-      "rank": 159
+      "pull": 0.02023913797402463,
+      "rank": 115
     },
     {
       "stage": "pretrain",
@@ -1517,8 +1517,8 @@
       ],
       "snippet": "//\n// VMime library (http://www.vmime.org)\n// Copyright (C) 2002 Vincent Richard <vincent@vmime.org>\n//\n// This program ",
       "above_baseline": 0.0028648168232649797,
-      "pull": 0.0004115922199140613,
-      "rank": 17
+      "pull": 0.024015870435282045,
+      "rank": 19
     },
     {
       "stage": "pretrain",
@@ -1546,8 +1546,8 @@
       ],
       "snippet": "import os.path\nimport numpy as np\nimport itertools\nimport Tools\n\n\n# Those patterns are used for tests and benchmarks.\n# ",
       "above_baseline": 0.007101717712322278,
-      "pull": -9.607920213984708e-05,
-      "rank": 131
+      "pull": 0.028252771324339343,
+      "rank": 5
     },
     {
       "stage": "pretrain",
@@ -1575,8 +1575,8 @@
       ],
       "snippet": "Q:\n\nPython AST NodeTransformer: Return multiple nodes\n\nIs there an easy way to return multiple nodes to replace a single",
       "above_baseline": -0.0028740110310066305,
-      "pull": 5.784361284864544e-07,
-      "rank": 101
+      "pull": 0.018277042581010434,
+      "rank": 164
     },
     {
       "stage": "pretrain",
@@ -1604,8 +1604,8 @@
       ],
       "snippet": "-24pt KL-TH/03-04 0.3truecm\n\n3truecm [**On the supermultiplet of anomalous currents in d=6**]{}\\\n1.5truecm [**R. Manvely",
       "above_baseline": -0.0029685591433539354,
-      "pull": -0.0001200316254406333,
-      "rank": 142
+      "pull": 0.01818249446866313,
+      "rank": 167
     },
     {
       "stage": "pretrain",
@@ -1633,8 +1633,8 @@
       ],
       "snippet": "Application of universally amplifying plastid primers to environmental sampling of a stream periphyton community.\nTo dem",
       "above_baseline": 0.0025573929276075623,
-      "pull": 0.0002010811992588395,
-      "rank": 54
+      "pull": 0.023708446539624627,
+      "rank": 25
     },
     {
       "stage": "pretrain",
@@ -1662,8 +1662,8 @@
       ],
       "snippet": "Q:\n\nPointer to auto_ptr instead of a classical double pointer\n\nI'm quite new to smart pointers and was trying to refacto",
       "above_baseline": -0.0010713005614934913,
-      "pull": 6.612434322285234e-05,
-      "rank": 83
+      "pull": 0.020079753050523574,
+      "rank": 119
     },
     {
       "stage": "pretrain",
@@ -1691,8 +1691,8 @@
       ],
       "snippet": "Non-quantal acetylcholine release after cholinesterase inhibition in vivo.\nAfter anticholinesterase treatment in vivo, d",
       "above_baseline": 0.00134516330831818,
-      "pull": -0.00019980024679332425,
-      "rank": 155
+      "pull": 0.022496216920335245,
+      "rank": 54
     },
     {
       "stage": "pretrain",
@@ -1720,7 +1720,7 @@
       ],
       "snippet": "Significance of interspecies matches when evolutionary rate varies.\nWe develop techniques to estimate the statistical si",
       "above_baseline": 0.0018655616169284232,
-      "pull": 0.00026569842159106867,
+      "pull": 0.023016615228945488,
       "rank": 38
     },
     {
@@ -1749,8 +1749,8 @@
       ],
       "snippet": "Did you know that Steven Spielberg was actually going to use stop-motion to animate the dinosaurs for his film Jurassic ",
       "above_baseline": 0.0007341119057252612,
-      "pull": -7.659328549310335e-05,
-      "rank": 126
+      "pull": 0.021885165517742326,
+      "rank": 69
     },
     {
       "stage": "pretrain",
@@ -1778,8 +1778,8 @@
       ],
       "snippet": "TORONTO (Reuters) \u2013 A dating website is pledging to match Americans who can\u2019t live with a Donald Trump presidency to Can",
       "above_baseline": -0.004693299215182245,
-      "pull": -0.0002043361781831617,
-      "rank": 158
+      "pull": 0.01645775439683482,
+      "rank": 186
     },
     {
       "stage": "pretrain",
@@ -1807,8 +1807,8 @@
       ],
       "snippet": "General Topics Polonia Sp. z o.o., jobs\n\nGeneral Topics Polonia Sp. z o.o., jobs- reviews and comments on the forum. Chc",
       "above_baseline": -0.0010066141639136078,
-      "pull": 0.000365549807498164,
-      "rank": 25
+      "pull": 0.020144439448103457,
+      "rank": 118
     },
     {
       "stage": "pretrain",
@@ -1836,8 +1836,8 @@
       ],
       "snippet": "Upcoming Events\n\nAt its Microsoft EDU event in New York City today, the company announced it is bringing Microsoft Offic",
       "above_baseline": 0.0005771983823253633,
-      "pull": -6.287505446223664e-05,
-      "rank": 119
+      "pull": 0.02172825199434243,
+      "rank": 75
     },
     {
       "stage": "pretrain",
@@ -1865,8 +1865,8 @@
       ],
       "snippet": "Strong Recovery of Travel and Tourism expected in 2010\n\n\u201cOur challenge is to see through the pressures of today and prep",
       "above_baseline": -0.003622082350892425,
-      "pull": 1.6159907436145938e-05,
-      "rank": 96
+      "pull": 0.01752897126112464,
+      "rank": 174
     },
     {
       "stage": "pretrain",
@@ -1894,8 +1894,8 @@
       ],
       "snippet": "1. Background {#sec1051}\n=============\n\nHepatitis C virus (HCV) was discovered in 1989 as a causative agent of non-A non",
       "above_baseline": -0.00020565518126478693,
-      "pull": -0.00044533443209858806,
-      "rank": 187
+      "pull": 0.020945398430752278,
+      "rank": 96
     },
     {
       "stage": "pretrain",
@@ -1923,8 +1923,8 @@
       ],
       "snippet": "Australia's systems of primary healthcare - the need for improved coordination and implications for Medicare Locals.\nIn ",
       "above_baseline": -0.002044568622301384,
-      "pull": 0.00021812399622703107,
-      "rank": 48
+      "pull": 0.01910648498971568,
+      "rank": 150
     },
     {
       "stage": "pretrain",
@@ -1952,8 +1952,8 @@
       ],
       "snippet": "Rich playboy, Biff Jackson, is fairly the soiree beast. Each and every 2 months Biff tosses a theme soireeR30;an softcor",
       "above_baseline": 0.0028483969585285616,
-      "pull": -9.72740934375666e-05,
-      "rank": 133
+      "pull": 0.023999450570545627,
+      "rank": 21
     },
     {
       "stage": "pretrain",
@@ -1981,8 +1981,8 @@
       ],
       "snippet": "<?php\n\nnamespace Admin\\Requests;\n\nuse System\\Classes\\FormRequest;\n\nclass Allergen extends FormRequest\n{\n    public funct",
       "above_baseline": -0.004821126370185939,
-      "pull": -0.0003842565805961052,
-      "rank": 179
+      "pull": 0.016329927241831126,
+      "rank": 188
     },
     {
       "stage": "pretrain",
@@ -2010,8 +2010,8 @@
       ],
       "snippet": "Un pav\u00e9 voire un parpaing jet\u00e9 dans la mare du march\u00e9 immobilier par l\u2019UFC Que choisir. Dans une \u00e9tude de 40 pages publi",
       "above_baseline": 0.0028559157082206493,
-      "pull": 0.0002645631162815188,
-      "rank": 39
+      "pull": 0.024006969320237714,
+      "rank": 20
     },
     {
       "stage": "pretrain",
@@ -2039,8 +2039,8 @@
       ],
       "snippet": "Rapid analysis of the essential oil components of dried Zanthoxylum bungeanum Maxim by Fe2O3-magnetic-microsphere-assist",
       "above_baseline": 0.0018302709890683083,
-      "pull": 0.0003912879014988009,
-      "rank": 18
+      "pull": 0.022981324601085373,
+      "rank": 40
     },
     {
       "stage": "pretrain",
@@ -2068,8 +2068,8 @@
       ],
       "snippet": "Gram-negative bacteremia as a clinical marker of occult malignancy.\nGram-negative bacteremia may be a harbinger of occul",
       "above_baseline": -0.0036765212352896717,
-      "pull": -1.3525232631481786e-05,
-      "rank": 105
+      "pull": 0.017474532376727393,
+      "rank": 175
     },
     {
       "stage": "pretrain",
@@ -2097,8 +2097,8 @@
       ],
       "snippet": "U.S. Zika Funding: A Race Against the Rain\n\nHere in Nicaragua, the rains of May have arrived. Five months of intense hea",
       "above_baseline": 0.0008403930044777082,
-      "pull": -0.0001166776334022912,
-      "rank": 140
+      "pull": 0.021991446616494773,
+      "rank": 65
     },
     {
       "stage": "pretrain",
@@ -2126,8 +2126,8 @@
       ],
       "snippet": "\nEnglish: \nWe have the idea that art we only see in museums to see it as something sacred.\nHowever, it can also be somet",
       "above_baseline": 8.377188543072164e-05,
-      "pull": -0.00011947129749969351,
-      "rank": 141
+      "pull": 0.021234825497447787,
+      "rank": 90
     },
     {
       "stage": "pretrain",
@@ -2155,8 +2155,8 @@
       ],
       "snippet": "/*\n * Copyright (c) 2004, 2009, Oracle and/or its affiliates. All rights reserved.\n * DO NOT ALTER OR REMOVE COPYRIGHT N",
       "above_baseline": -0.0012193855915046022,
-      "pull": 0.0002610484882672492,
-      "rank": 41
+      "pull": 0.019931668020512463,
+      "rank": 126
     },
     {
       "stage": "pretrain",
@@ -2184,8 +2184,8 @@
       ],
       "snippet": "Service providers and device manufacturers (e.g., wireless, cellular, etc.) are continually challenged to deliver value ",
       "above_baseline": 0.0024073256674325867,
-      "pull": 0.0005351925938045974,
-      "rank": 6
+      "pull": 0.023558379279449652,
+      "rank": 27
     },
     {
       "stage": "pretrain",
@@ -2213,8 +2213,8 @@
       ],
       "snippet": "It\u2019s day three of my self-isolation. I returned to Aotearoa New Zealand on Monday night from a long-planned family weddi",
       "above_baseline": -0.0032218253337394608,
-      "pull": -0.0001064047247427727,
-      "rank": 136
+      "pull": 0.017929228278277604,
+      "rank": 171
     },
     {
       "stage": "pretrain",
@@ -2242,8 +2242,8 @@
       ],
       "snippet": "---\nauthor:\n- |\n    Bach Q. Ha\\\n    \\\n    ``\n- |\n    Jason D. Hartline\\\n    \\\n    ``\ntitle: |\n    Mechanism Design via\\\n",
       "above_baseline": 0.0005311657900688369,
-      "pull": 0.0012734782010700172,
-      "rank": 1
+      "pull": 0.021682219402085902,
+      "rank": 77
     },
     {
       "stage": "pretrain",
@@ -2271,8 +2271,8 @@
       ],
       "snippet": "New computer ransomware attack needs attention\n\nSome of the companies impacted included international pharmaceutical gia",
       "above_baseline": 4.411246956627715e-05,
-      "pull": 9.094278025468731e-05,
-      "rank": 73
+      "pull": 0.021195166081583342,
+      "rank": 91
     },
     {
       "stage": "pretrain",
@@ -2300,8 +2300,8 @@
       ],
       "snippet": "The overall goal of the Interventions and Translation Core (ITC) is to provide expertise and infrastructure to assist in",
       "above_baseline": -0.004465202409021336,
-      "pull": 0.00042408023207329094,
-      "rank": 13
+      "pull": 0.01668585120299573,
+      "rank": 183
     },
     {
       "stage": "pretrain",
@@ -2329,8 +2329,8 @@
       ],
       "snippet": "Normal repair of gamma radiation-induced single-strand and double-strand DNA breaks in retinoblastoma fibroblasts.\nThe f",
       "above_baseline": 0.0023436228059838388,
-      "pull": 7.291641002722864e-06,
-      "rank": 98
+      "pull": 0.023494676418000904,
+      "rank": 29
     },
     {
       "stage": "pretrain",
@@ -2358,8 +2358,8 @@
       ],
       "snippet": "Iowa Trump Has Slight Edge Over Clinton Grassley leads in Senate re-election bid\n\nWest Long Branch, NJ \u2013 Donald Trump ho",
       "above_baseline": -0.0006085191301393282,
-      "pull": 2.8353816141689283e-05,
-      "rank": 91
+      "pull": 0.020542534481877737,
+      "rank": 105
     },
     {
       "stage": "pretrain",
@@ -2387,8 +2387,8 @@
       ],
       "snippet": "Pound near 5-year high vs dollar as Bank of England hints rates may rise\n\nLONDON (AP) \u2014 The pound jumped on Friday to re",
       "above_baseline": 0.000502980742791391,
-      "pull": 6.163899888415024e-06,
-      "rank": 99
+      "pull": 0.021654034354808456,
+      "rank": 80
     },
     {
       "stage": "pretrain",
@@ -2416,7 +2416,7 @@
       ],
       "snippet": "AROnline: Our cars : Getting to know Keith\u2019s R50 MINI (No replies)\n\n[b]AROnline: Our cars : Getting to know Keith\u2019s R50 ",
       "above_baseline": -0.0011400999694575857,
-      "pull": -6.637145949069432e-05,
+      "pull": 0.02001095364255948,
       "rank": 121
     },
     {
@@ -2445,8 +2445,8 @@
       ],
       "snippet": "Elevated circulatory level of GABA(A)--antagonistic neurosteroids in patients with combat-related post-traumatic stress ",
       "above_baseline": 0.007031820427364686,
-      "pull": 0.0002622053212450626,
-      "rank": 40
+      "pull": 0.02818287403938175,
+      "rank": 6
     },
     {
       "stage": "pretrain",
@@ -2474,8 +2474,8 @@
       ],
       "snippet": "\n124 Cal.Rptr.2d 464 (2002)\n28 Cal.4th 1166\n52 P.3d 648\nThe PEOPLE, Plaintiff and Respondent,\nv.\nArturo GARCIA, Defendan",
       "above_baseline": -0.0012804323717967268,
-      "pull": -0.00016949398869526506,
-      "rank": 151
+      "pull": 0.019870621240220338,
+      "rank": 128
     },
     {
       "stage": "pretrain",
@@ -2503,8 +2503,8 @@
       ],
       "snippet": "Effects of the oral converting enzyme inhibitor, SQ 14225, in a model of low cardiac output in dogs.\nDogs with thoracic ",
       "above_baseline": 0.00027389001188730597,
-      "pull": 1.429888590571915e-05,
-      "rank": 97
+      "pull": 0.02142494362390437,
+      "rank": 86
     },
     {
       "stage": "pretrain",
@@ -2532,8 +2532,8 @@
       ],
       "snippet": "// Copyright 2013 The Chromium Authors. All rights reserved.\n// Use of this source code is governed by a BSD-style licen",
       "above_baseline": -0.0012615109742852987,
-      "pull": -2.893596753595021e-05,
-      "rank": 109
+      "pull": 0.019889542637731766,
+      "rank": 127
     },
     {
       "stage": "pretrain",
@@ -2561,8 +2561,8 @@
       ],
       "snippet": "Australia\u2019s federal science agency and one of the biggest commercial banks in the country say they have completed a succ",
       "above_baseline": -0.0019392121685987487,
-      "pull": 0.000121551322577006,
-      "rank": 65
+      "pull": 0.019211841443418316,
+      "rank": 146
     },
     {
       "stage": "pretrain",
@@ -2590,8 +2590,8 @@
       ],
       "snippet": "Cast Iron Watermain Replacement Program\n\nYoung Investors Driving Confidence\n\nThe president of the Canadian Cattlemen's A",
       "above_baseline": -0.002040005525372049,
-      "pull": 0.00018615251454149822,
-      "rank": 57
+      "pull": 0.019111048086645016,
+      "rank": 149
     },
     {
       "stage": "pretrain",
@@ -2619,8 +2619,8 @@
       ],
       "snippet": "//\n//  Lightning\n//\n//  Created by Otto Suess on 16.07.18.\n//  Copyright \u00a9 2018 Zap. All rights reserved.\n//\n\nimport Fou",
       "above_baseline": 0.0005937608798888029,
-      "pull": 0.0002012116300133751,
-      "rank": 53
+      "pull": 0.021744814491905868,
+      "rank": 74
     },
     {
       "stage": "pretrain",
@@ -2648,8 +2648,8 @@
       ],
       "snippet": "From a79152d1d621ea9d477ecc6862a03cae80b2425b Mon Sep 17 00:00:00 2001\nFrom: Peter Korsgaard <peter@korsgaard.com>\nDate:",
       "above_baseline": 0.0013774543403650558,
-      "pull": -0.00035998715403078344,
-      "rank": 176
+      "pull": 0.02252850795238212,
+      "rank": 52
     },
     {
       "stage": "pretrain",
@@ -2677,8 +2677,8 @@
       ],
       "snippet": "Go to page\n\nI believe that Francis Arinze from Nigeria was the black African cardinal who was considered papabile at the",
       "above_baseline": -0.001343626563508206,
-      "pull": -0.000542945664553967,
-      "rank": 193
+      "pull": 0.01980742704850886,
+      "rank": 130
     },
     {
       "stage": "pretrain",
@@ -2706,8 +2706,8 @@
       ],
       "snippet": "This item has been removed from the community because it violates Steam Community & Content Guidelines. It is only visib",
       "above_baseline": 0.023467670490510684,
-      "pull": 0.0005228635192665084,
-      "rank": 7
+      "pull": 0.04461872410252775,
+      "rank": 2
     },
     {
       "stage": "pretrain",
@@ -2735,8 +2735,8 @@
       ],
       "snippet": "\ufeffusing System;\nusing System.Collections.Generic;\nusing System.IO;\nusing System.Linq;\nusing System.Text.RegularExpression",
       "above_baseline": 0.005545700361306208,
-      "pull": -0.0004067033142006465,
-      "rank": 182
+      "pull": 0.026696753973323273,
+      "rank": 10
     },
     {
       "stage": "pretrain",
@@ -2764,8 +2764,8 @@
       ],
       "snippet": "A fluorescence correlation spectroscopy study of ligand interaction with cytokinin-specific binding protein from mung be",
       "above_baseline": 0.001665973771429092,
-      "pull": -0.0002936813177896881,
-      "rank": 169
+      "pull": 0.022817027383446157,
+      "rank": 47
     },
     {
       "stage": "pretrain",
@@ -2793,8 +2793,8 @@
       ],
       "snippet": "Atle Simonsen\n\nAtle Simonsen  (born 4 November 1988) is a Norwegian politician.\n\nHe was elected deputy representative to",
       "above_baseline": -0.000819057961180706,
-      "pull": -6.135532669276717e-05,
-      "rank": 117
+      "pull": 0.02033199565083636,
+      "rank": 113
     },
     {
       "stage": "pretrain",
@@ -2822,8 +2822,8 @@
       ],
       "snippet": "Streets of Albany, New York\n\nThe streets of Albany, New York have had a long history going back almost 400 years. Many o",
       "above_baseline": 0.0023223368943434894,
-      "pull": -8.145726060019813e-05,
-      "rank": 127
+      "pull": 0.023473390506360554,
+      "rank": 31
     },
     {
       "stage": "pretrain",
@@ -2851,8 +2851,8 @@
       ],
       "snippet": "Q:\n\nIf and only if criterion for something to be a differential ideal\n\nLet $I \\subset \\Omega^*(M)$ be a ($2$-sided) idea",
       "above_baseline": -0.0019255645942863435,
-      "pull": 0.0005388439237911325,
-      "rank": 5
+      "pull": 0.01922548901773072,
+      "rank": 144
     },
     {
       "stage": "pretrain",
@@ -2880,8 +2880,8 @@
       ],
       "snippet": "ORCHARD PARK, N.Y. -- The Buffalo Bills have cleared running back C.J. Spiller (collarbone) to play and he will be added",
       "above_baseline": -0.0008404343193941406,
-      "pull": 5.560069066552396e-05,
-      "rank": 87
+      "pull": 0.020310619292622924,
+      "rank": 114
     },
     {
       "stage": "pretrain",
@@ -2909,8 +2909,8 @@
       ],
       "snippet": "The present invention relates generally to memory devices and in particular the present invention relates to fast access",
       "above_baseline": 0.004136795111011837,
-      "pull": 0.00035439604515483575,
-      "rank": 27
+      "pull": 0.025287848723028902,
+      "rank": 14
     },
     {
       "stage": "pretrain",
@@ -2938,8 +2938,8 @@
       ],
       "snippet": "As Florida authorities work to identify the people who died in Thursday's catastrophic bridge collapse, state and federa",
       "above_baseline": 0.0024800936819059267,
-      "pull": 7.679018658111186e-05,
-      "rank": 78
+      "pull": 0.023631147293922992,
+      "rank": 26
     },
     {
       "stage": "pretrain",
@@ -2967,8 +2967,8 @@
       ],
       "snippet": "An ordinance affecting how large retail and food services employers in Seattle schedule workers is set to take effect Ju",
       "above_baseline": -0.0007847450817318538,
-      "pull": -1.7309180117667586e-05,
-      "rank": 107
+      "pull": 0.02036630853028521,
+      "rank": 111
     },
     {
       "stage": "pretrain",
@@ -2996,8 +2996,8 @@
       ],
       "snippet": "He was a close friend and business partner of Prescott Bush. Mallon attended Yale University where he and Bush both beca",
       "above_baseline": -0.000207606057247723,
-      "pull": 0.00038584777624106023,
-      "rank": 22
+      "pull": 0.020943447554769342,
+      "rank": 97
     },
     {
       "stage": "pretrain",
@@ -3025,8 +3025,8 @@
       ],
       "snippet": "Modelling the effect of structure and base sequence on DNA molecular electronics.\nDNA is a material that has the potenti",
       "above_baseline": -0.0007944514798164624,
-      "pull": -7.883961734629362e-06,
-      "rank": 103
+      "pull": 0.020356602132200603,
+      "rank": 112
     },
     {
       "stage": "pretrain",
@@ -3054,8 +3054,8 @@
       ],
       "snippet": "\u2018Downton Abbey\u2019 The Movie? Laura Carmichael Reveals That It Could Happen\n\nWe NEED this to happen! HollywoodLife.com caug",
       "above_baseline": -0.004113657783368311,
-      "pull": -0.000369909467532933,
-      "rank": 177
+      "pull": 0.017037395828648754,
+      "rank": 182
     },
     {
       "stage": "pretrain",
@@ -3083,8 +3083,8 @@
       ],
       "snippet": "Q:\n\nis this xml a valid one?\n\nMe and my coworker got into an argument about xml validity.\nI'm very confident that xml no",
       "above_baseline": 0.0004705013722668232,
-      "pull": -8.685384198952918e-05,
-      "rank": 129
+      "pull": 0.021621554984283888,
+      "rank": 82
     },
     {
       "stage": "pretrain",
@@ -3112,8 +3112,8 @@
       ],
       "snippet": "\u30b9\u30d7\u30ea\u30c3\u30af\u30b9\u304c\u904b\u55b6\u3059\u308b\u4e2d\u9ad8\u751f\u5411\u3051SNS\u30a2\u30d7\u30ea\u300c\u30b4\u30eb\u30b9\u30bf\u300d\u304c\u708e\u4e0a\u3057\u3066\u3044\u307e\u3059\u3002\u5c11\u3057\u3067\u3082\u904b\u55b6\u3092\u6279\u5224\u3057\u305f\u30e6\u30fc\u30b6\u30fc\u3092\u5373\u5ea7\u306bBAN\uff08\u30a2\u30ab\u30a6\u30f3\u30c8\u505c\u6b62\uff09\u3057\u305f\u308a\u3001\u5fa9\u5e30\u3092\u671b\u3080\u30e6\u30fc\u30b6\u30fc\u306b\u306f\u53cd\u7701\u6587\u3092\u66f8\u304b\u305b\u305f\u308a\u3068\u3001\u305d\u306e\u601d\u60f3\u7d71\u5236\u3076\u308a\u304c\u300c\u307e\u308b\u3067\u30ab\u30eb\u30c8\u5b97\u6559\u306e\u3088\u3046\u3060\u300d\u306a\u3069\u3068",
       "above_baseline": 0.049001121775048895,
-      "pull": 5.334153837235872e-05,
-      "rank": 88
+      "pull": 0.07015217538706596,
+      "rank": 1
     },
     {
       "stage": "pretrain",
@@ -3141,8 +3141,8 @@
       ],
       "snippet": "M?\n8:43 PM\nWhat is 586 minutes before 2:01 PM?\n4:15 AM\nWhat is 373 minutes after 5:04 PM?\n11:17 PM\nHow many minutes are ",
       "above_baseline": -0.007981025203768557,
-      "pull": 2.6042301488144155e-06,
-      "rank": 100
+      "pull": 0.013170028408248508,
+      "rank": 198
     },
     {
       "stage": "pretrain",
@@ -3170,8 +3170,8 @@
       ],
       "snippet": "Prevention of methotrexate cytotoxicity by asparaginase inhibition of methotrexate polyglutamate formation.\nEscherichia ",
       "above_baseline": 0.001657614448422804,
-      "pull": -0.000512345269586234,
-      "rank": 191
+      "pull": 0.02280866806043987,
+      "rank": 48
     },
     {
       "stage": "pretrain",
@@ -3199,8 +3199,8 @@
       ],
       "snippet": "Demand for seeds has soared as more people garden, grow food amid strained supply chains\n\nAgriculture Secretary Sonny Pu",
       "above_baseline": -0.0006072925648027,
-      "pull": -0.000422371633630408,
-      "rank": 183
+      "pull": 0.020543761047214365,
+      "rank": 104
     },
     {
       "stage": "pretrain",
@@ -3228,8 +3228,8 @@
       ],
       "snippet": "Published: February 28, 2019\n\nIntroduction {#sec1}\n============\n\nDuring cell division, the centromere regions of chromos",
       "above_baseline": 0.0015231272341701685,
-      "pull": -6.273533898943045e-05,
-      "rank": 118
+      "pull": 0.022674180846187234,
+      "rank": 50
     },
     {
       "stage": "pretrain",
@@ -3257,8 +3257,8 @@
       ],
       "snippet": "This is an archived article and the information in the article may be outdated. Please look at the time stamp on the sto",
       "above_baseline": 0.0008430532105579078,
-      "pull": -9.762469862247789e-05,
-      "rank": 134
+      "pull": 0.021994106822574973,
+      "rank": 64
     },
     {
       "stage": "pretrain",
@@ -3286,8 +3286,8 @@
       ],
       "snippet": "int abs(int x) {\n  if (x < 0)\n    return -x;\n  return x;\n}\n",
       "above_baseline": -0.007414782150483714,
-      "pull": 0.00011152446694903719,
-      "rank": 67
+      "pull": 0.013736271461533351,
+      "rank": 197
     },
     {
       "stage": "pretrain",
@@ -3315,8 +3315,8 @@
       ],
       "snippet": "Legendary professional wrestler Virgil Runnels Jr., better known as his ring name Dusty Rhodes, died on Thursday at the ",
       "above_baseline": 0.000978345227496364,
-      "pull": -0.0005041697497755197,
-      "rank": 189
+      "pull": 0.02212939883951343,
+      "rank": 60
     },
     {
       "stage": "pretrain",
@@ -3344,8 +3344,8 @@
       ],
       "snippet": "(d) = 7*d - 1. Let o(c) = -13*c + 12. Let v(n) = o(n) + 2*t(n). Suppose 0 = 5*z - 4*b + 9, -27 - 1 = 4*z + 2*b. Calculat",
       "above_baseline": -0.000776736251454687,
-      "pull": 0.00046118259388938535,
-      "rank": 10
+      "pull": 0.020374317360562378,
+      "rank": 110
     },
     {
       "stage": "pretrain",
@@ -3373,8 +3373,8 @@
       ],
       "snippet": "Barzagli steps down from Juventus coaching role\n\nItalian football may be on hold for now, but Andrea Barzagli has decide",
       "above_baseline": -0.0017207414156324395,
-      "pull": -0.00030009777621337416,
-      "rank": 171
+      "pull": 0.019430312196384626,
+      "rank": 143
     },
     {
       "stage": "pretrain",
@@ -3402,8 +3402,8 @@
       ],
       "snippet": "Shower Door Guide\n\nA quick learner from shelby nc says:\n\nSeptember 12, 2016\n\nHello,\n\nI have attached a picture of the Sh",
       "above_baseline": -0.0029175011142593132,
-      "pull": -4.738898899458253e-06,
-      "rank": 102
+      "pull": 0.018233552497757752,
+      "rank": 166
     },
     {
       "stage": "pretrain",
@@ -3431,8 +3431,8 @@
       ],
       "snippet": "Serum uric acid and risk of coronary heart disease: Atherosclerosis Risk in Communities (ARIC) Study.\nApproximately half",
       "above_baseline": -0.002399736760979307,
-      "pull": 2.6048178593138286e-05,
-      "rank": 92
+      "pull": 0.018751316851037758,
+      "rank": 155
     },
     {
       "stage": "pretrain",
@@ -3460,8 +3460,8 @@
       ],
       "snippet": "Three Fishing Harbors\n\nDubai, UAE\n\nDubai Port, Customs and Free Zone Corporation retained Perkins Eastman to design the ",
       "above_baseline": -0.004618349263057396,
-      "pull": 1.7886233966320464e-05,
-      "rank": 95
+      "pull": 0.01653270434895967,
+      "rank": 185
     },
     {
       "stage": "pretrain",
@@ -3489,8 +3489,8 @@
       ],
       "snippet": "Sunday, May 29, 2011\n\nThere are some in the Black community who feel that the controversy ignited after Dr. Cornel West ",
       "above_baseline": -0.0034342898869568796,
-      "pull": 7.729153773520387e-05,
-      "rank": 77
+      "pull": 0.017716763725060185,
+      "rank": 173
     },
     {
       "stage": "pretrain",
@@ -3518,8 +3518,8 @@
       ],
       "snippet": "On March 2, 2004, an ESA space probe named Rosetta embarked on a decade-long, multi-billion-mile journey to rendezvous w",
       "above_baseline": -0.0022683700492815706,
-      "pull": -0.0008677184487151883,
-      "rank": 198
+      "pull": 0.018882683562735494,
+      "rank": 154
     },
     {
       "stage": "pretrain",
@@ -3547,8 +3547,8 @@
       ],
       "snippet": "Background {#Sec1}\n==========\n\nIn 2006, the World Health Organization (WHO) characterized countries that did not have en",
       "above_baseline": -0.0027487734633219393,
-      "pull": 0.00020765660622757407,
-      "rank": 52
+      "pull": 0.018402280148695126,
+      "rank": 161
     },
     {
       "stage": "pretrain",
@@ -3576,8 +3576,8 @@
       ],
       "snippet": "\"Sun dreams of money. Moon dreams of scientific discoveries. When their paths cross with Team Skull, both their plans go",
       "above_baseline": 0.0004991169986588127,
-      "pull": -7.041602454357114e-05,
-      "rank": 122
+      "pull": 0.021650170610675878,
+      "rank": 81
     },
     {
       "stage": "pretrain",
@@ -3605,8 +3605,8 @@
       ],
       "snippet": "Kyrat Intl. Airport\n\nKyrat International (Intl.) Airport is a location within Kyrat in Far Cry 4. It is located at the t",
       "above_baseline": -0.00012937504553429263,
-      "pull": -0.00042517183790931627,
-      "rank": 184
+      "pull": 0.021021678566482772,
+      "rank": 94
     },
     {
       "stage": "pretrain",
@@ -3634,8 +3634,8 @@
       ],
       "snippet": "SPONTANEANATION with Paul F. Tompkins #115\n\nPaul F. Tompkins welcomes everyone to the beginning of a new episode of Spon",
       "above_baseline": -0.000675228401223471,
-      "pull": -4.5559983706002454e-05,
-      "rank": 111
+      "pull": 0.020475825210793594,
+      "rank": 108
     },
     {
       "stage": "pretrain",
@@ -3663,8 +3663,8 @@
       ],
       "snippet": "Histopathological features of ductal adenocarcinoma of the prostate in 1,051 radical prostatectomy specimens.\nDuctal ade",
       "above_baseline": 0.0010348225027779212,
-      "pull": 0.0004664700790231261,
-      "rank": 8
+      "pull": 0.022185876114794986,
+      "rank": 59
     },
     {
       "stage": "pretrain",
@@ -3692,8 +3692,8 @@
       ],
       "snippet": "\n\n<!-- ************ JGroups Protocol Stack Configuration ************** -->\n<!-- generated by XmlConfigurator on Mon Apr",
       "above_baseline": -0.0026312407528698845,
-      "pull": -0.00016154949351613893,
-      "rank": 150
+      "pull": 0.01851981285914718,
+      "rank": 160
     },
     {
       "stage": "pretrain",
@@ -3721,8 +3721,8 @@
       ],
       "snippet": "Last night was the Citymeals-on-Wheels \u201cGlobal Street Food\u201d benefit at Rock Center that we gave away tickets to last wee",
       "above_baseline": -0.0029724033207005757,
-      "pull": -0.00010672051718339413,
-      "rank": 137
+      "pull": 0.01817865029131649,
+      "rank": 168
     },
     {
       "stage": "pretrain",
@@ -3750,8 +3750,8 @@
       ],
       "snippet": "VLF turns Chevy Colorado into Hummer H2-esque off-roader\n\nBelieve it or not but this orange monster comes from a company",
       "above_baseline": 0.0007224599450614926,
-      "pull": 0.000208136068598363,
-      "rank": 51
+      "pull": 0.021873513557078558,
+      "rank": 70
     },
     {
       "stage": "pretrain",
@@ -3779,8 +3779,8 @@
       ],
       "snippet": "26k SHARES Facebook Twitter Whatsapp Pinterest Reddit Print Mail Flipboard\n\nAdvertisements\n\nThe game is truly over for R",
       "above_baseline": 0.001933525477170052,
-      "pull": 0.00045162616401710833,
-      "rank": 12
+      "pull": 0.023084579089187117,
+      "rank": 36
     },
     {
       "stage": "pretrain",
@@ -3808,8 +3808,8 @@
       ],
       "snippet": "Distinction between lipoma and liposarcoma by MDM2 alterations: a case report of simultaneously occurring tumors and rev",
       "above_baseline": -0.0017039486173923979,
-      "pull": 0.00035871495082380304,
-      "rank": 26
+      "pull": 0.019447104994624667,
+      "rank": 142
     },
     {
       "stage": "pretrain",
@@ -3837,8 +3837,8 @@
       ],
       "snippet": "Nancy Beiman\n\nNancy Beiman is a director, character designer, teacher, and animator. She attended the Character Animatio",
       "above_baseline": 0.001675163829020547,
-      "pull": -0.0005533390818645217,
-      "rank": 195
+      "pull": 0.022826217441037612,
+      "rank": 45
     },
     {
       "stage": "pretrain",
@@ -3866,8 +3866,8 @@
       ],
       "snippet": "So last week, when I was driving somewhere with my brother, we were talking about classes and school and stuff when he i",
       "above_baseline": 0.0006545748162697547,
-      "pull": 0.0002934308114406165,
-      "rank": 35
+      "pull": 0.02180562842828682,
+      "rank": 72
     },
     {
       "stage": "pretrain",
@@ -3895,8 +3895,8 @@
       ],
       "snippet": "/*\n * Copyright (c) 2018-2020 Atmosph\u00e8re-NX\n *\n * This program is free software; you can redistribute it and/or modify i",
       "above_baseline": -0.0037857259504713754,
-      "pull": -0.00022237215590683245,
-      "rank": 160
+      "pull": 0.01736532766154569,
+      "rank": 178
     },
     {
       "stage": "pretrain",
@@ -3924,8 +3924,8 @@
       ],
       "snippet": "When word broke that Jussie Smollett was a victim of a brutal hate crime, people across the country were outraged. The a",
       "above_baseline": -0.002111865902911122,
-      "pull": 0.0005996872400067485,
-      "rank": 4
+      "pull": 0.019039187709105943,
+      "rank": 152
     },
     {
       "stage": "pretrain",
@@ -3953,8 +3953,8 @@
       ],
       "snippet": "Islamic Family Law Enactment 1987 (No. 3 of 1987), 20 May 1987.\nThis Islamic Family Law Enactment of Pahang, Malaysia, i",
       "above_baseline": 0.0017884231510722874,
-      "pull": -6.334452786637611e-05,
-      "rank": 120
+      "pull": 0.022939476763089352,
+      "rank": 42
     },
     {
       "stage": "pretrain",
@@ -3982,8 +3982,8 @@
       ],
       "snippet": "What happens when a Bone Thug loses his harmony?\n\nSpidey.\n\nBizzy Bone Gone Berserk? On Wednesday night, an out-of-contro",
       "above_baseline": -0.0019958569739092144,
-      "pull": -0.0005447755200588454,
-      "rank": 194
+      "pull": 0.01915519663810785,
+      "rank": 148
     },
     {
       "stage": "pretrain",
@@ -4011,8 +4011,8 @@
       ],
       "snippet": "White Diamond Billiards, located in Lafayette, LA which opened 13 years ago, is owned and operated by Chris Miller. Chri",
       "above_baseline": -0.00017540828139407313,
-      "pull": -7.326653404178684e-05,
-      "rank": 125
+      "pull": 0.020975645330622992,
+      "rank": 95
     },
     {
       "stage": "pretrain",
@@ -4040,8 +4040,8 @@
       ],
       "snippet": "Ottawa no longer wants to waste time and money trying to lure American tourists to the land of moose, mountains and Moun",
       "above_baseline": -0.0040643792463725195,
-      "pull": -0.0002643219833555163,
-      "rank": 164
+      "pull": 0.017086674365644546,
+      "rank": 181
     },
     {
       "stage": "pretrain",
@@ -4069,8 +4069,8 @@
       ],
       "snippet": "Q:\n\nExcel - Popup Asking for Text w/ Drop Down\n\nIs it possible to have a macro that, when pressed, pops up a message box",
       "above_baseline": -0.0006635777018491155,
-      "pull": 0.0002448169206777764,
-      "rank": 43
+      "pull": 0.02048747591016795,
+      "rank": 107
     },
     {
       "stage": "pretrain",
@@ -4098,8 +4098,8 @@
       ],
       "snippet": "The mainstream media has really been batting a thousand lately. Between anti-climactic tax returns and their constant di",
       "above_baseline": -0.003388118106567438,
-      "pull": 0.00014956026958675645,
-      "rank": 60
+      "pull": 0.017762935505449627,
+      "rank": 172
     },
     {
       "stage": "pretrain",
@@ -4127,8 +4127,8 @@
       ],
       "snippet": "Nikki Hill Gets 2on1 Anal and DP With Rough Sex \u2013 LegalPorno\n\n299 34%",
       "above_baseline": -0.009284947773971751,
-      "pull": -5.6357432673572415e-05,
-      "rank": 114
+      "pull": 0.011866105838045314,
+      "rank": 200
     },
     {
       "stage": "pretrain",
@@ -4156,8 +4156,8 @@
       ],
       "snippet": "Google Maps for iOS Adds Gmail Info Directly to Your Map\n\nGoogle this week rolled an update to its iOS app that introduc",
       "above_baseline": -0.0029844756737118262,
-      "pull": -0.00012984805569444372,
-      "rank": 144
+      "pull": 0.01816657793830524,
+      "rank": 169
     },
     {
       "stage": "pretrain",
@@ -4185,8 +4185,8 @@
       ],
       "snippet": "Mat\u00e9ria atualizada 21/05/19 `as 11:56h.\n\nDenunciado numa mat\u00e9ria da VICE em mar\u00e7o, Dom Vilson de Oliveira renunciou nest",
       "above_baseline": 0.0016484183810493956,
-      "pull": 0.0002837984152579217,
-      "rank": 36
+      "pull": 0.02279947199306646,
+      "rank": 49
     },
     {
       "stage": "pretrain",
@@ -4214,8 +4214,8 @@
       ],
       "snippet": "The influence of age on valve disease in patients with varicose veins analysed by transmission electron microscopy and s",
       "above_baseline": 0.0002401354258036656,
-      "pull": -7.241128011467864e-05,
-      "rank": 124
+      "pull": 0.02139118903782073,
+      "rank": 88
     },
     {
       "stage": "pretrain",
@@ -4243,8 +4243,8 @@
       ],
       "snippet": "Treat-and-extend versus every-other-month regimens with aflibercept in age-related macular degeneration.\nTo compare the ",
       "above_baseline": 0.00293844556862791,
-      "pull": 0.0003867540410835205,
-      "rank": 20
+      "pull": 0.024089499180644975,
+      "rank": 18
     },
     {
       "stage": "pretrain",
@@ -4272,8 +4272,8 @@
       ],
       "snippet": "London Gateway Port in Stanford-le-Hope: Almost half of exports from urban centres go to the EU.\nPhotograph: Bloomberg/B",
       "above_baseline": -0.0016251690399850804,
-      "pull": -0.00026717494039492297,
-      "rank": 165
+      "pull": 0.019525884572031985,
+      "rank": 138
     },
     {
       "stage": "pretrain",
@@ -4301,8 +4301,8 @@
       ],
       "snippet": "The world appears to be in a rough place right now. If you turn on the TV or open up your web browser, you\u2019re almost gua",
       "above_baseline": -0.0016288158211475237,
-      "pull": -9.140592927979074e-05,
-      "rank": 130
+      "pull": 0.01952223779086954,
+      "rank": 139
     },
     {
       "stage": "pretrain",
@@ -4330,8 +4330,8 @@
       ],
       "snippet": "Q:\n\npython saving output from a for iteration and subprocess for checksum\n\nThe purpose of this script is to pull md5 che",
       "above_baseline": -0.0002891210262726887,
-      "pull": 0.00014814483484515642,
-      "rank": 61
+      "pull": 0.020861932585744376,
+      "rank": 99
     },
     {
       "stage": "pretrain",
@@ -4359,8 +4359,8 @@
       ],
       "snippet": "Can-Fite's Phase II/III Psoriasis Study Results Published in Journal of Drugs in Dermatology\n\ncompany with a pipeline of",
       "above_baseline": 0.020660185913185615,
-      "pull": -0.00027651567922437137,
-      "rank": 167
+      "pull": 0.04181123952520268,
+      "rank": 3
     },
     {
       "stage": "pretrain",
@@ -4388,8 +4388,8 @@
       ],
       "snippet": "Q:\n\nHow to build resolution independent website?\n\nHow to write html code that will be resolution independent and it will",
       "above_baseline": -3.515093111960965e-05,
-      "pull": 0.0002591801336398948,
-      "rank": 42
+      "pull": 0.021115902680897455,
+      "rank": 93
     },
     {
       "stage": "pretrain",
@@ -4417,8 +4417,8 @@
       ],
       "snippet": "CASA Art Show\n\nView artistic treasures at the Contemporary Artists of Southern Arizona's (CASA) fall exhibition at Habit",
       "above_baseline": -0.005418554724808296,
-      "pull": -0.0010380339279051503,
-      "rank": 200
+      "pull": 0.01573249888720877,
+      "rank": 192
     },
     {
       "stage": "pretrain",
@@ -4446,8 +4446,8 @@
       ],
       "snippet": "The art of blending \u2026\n\nThe art of blending and the ability to assess individual parts, commit them to memory and create ",
       "above_baseline": -0.0002163595443304793,
-      "pull": -0.00015840340414407313,
-      "rank": 149
+      "pull": 0.020934694067686586,
+      "rank": 98
     },
     {
       "stage": "pretrain",
@@ -4475,8 +4475,8 @@
       ],
       "snippet": "Known as the Herb of Gladness for its exhilarating effect. Try adding chopped young leaves and flowers to salads or summ",
       "above_baseline": -0.0014114968237598988,
-      "pull": -0.0005811155226502283,
-      "rank": 196
+      "pull": 0.019739556788257166,
+      "rank": 133
     },
     {
       "stage": "pretrain",
@@ -4504,8 +4504,8 @@
       ],
       "snippet": "Saturday, March 16, 2013\n\nThe Complicators Are Coming!\n\nWisdom crieth without; she uttereth her voice in the streets: Pr",
       "above_baseline": -0.005334329022900992,
-      "pull": 8.401734194409888e-05,
-      "rank": 76
+      "pull": 0.015816724589116073,
+      "rank": 191
     },
     {
       "stage": "pretrain",
@@ -4533,8 +4533,8 @@
       ],
       "snippet": "The RMS Titanic has been sitting on the ocean floor since 1912, but scientists think we've only really surveyed 50% of t",
       "above_baseline": 0.001728145468559747,
-      "pull": -0.00043620129896101945,
-      "rank": 186
+      "pull": 0.022879199080576812,
+      "rank": 44
     },
     {
       "stage": "pretrain",
@@ -4562,8 +4562,8 @@
       ],
       "snippet": "Q:\n\nHow to pass the current element to a function from html file\n\nI'm trying to reuse a function for different elements,",
       "above_baseline": -0.00041867755080374214,
-      "pull": 0.00010501841594812497,
-      "rank": 71
+      "pull": 0.020732376061213323,
+      "rank": 100
     },
     {
       "stage": "pretrain",
@@ -4591,8 +4591,8 @@
       ],
       "snippet": "spec-issue563.p4(12): [--Werror=type-error] error: a: parameter cannot have type control A\ncontrol C()(A a) {\n          ",
       "above_baseline": -0.0013727279584494247,
-      "pull": -0.00019861202797368676,
-      "rank": 154
+      "pull": 0.01977832565356764,
+      "rank": 132
     },
     {
       "stage": "pretrain",
@@ -4620,8 +4620,8 @@
       ],
       "snippet": "Introduction\n============\n\nApoptotic cell death is a central process in the pathophysiology of a diverse number of disea",
       "above_baseline": -0.0013698428589072817,
-      "pull": 0.00017565315623226715,
-      "rank": 59
+      "pull": 0.019781210753109783,
+      "rank": 131
     },
     {
       "stage": "pretrain",
@@ -4649,8 +4649,8 @@
       ],
       "snippet": "Gamma knife surgery for hypothalamic hamartomas accompanied by medically intractable epilepsy and precocious puberty: ex",
       "above_baseline": -0.0016310206460609274,
-      "pull": -5.701669533629505e-05,
-      "rank": 115
+      "pull": 0.019520032965956138,
+      "rank": 140
     },
     {
       "stage": "pretrain",
@@ -4678,8 +4678,8 @@
       ],
       "snippet": "Directions\n\nCombine baby carrots, mushrooms, cumin, and coriander in a pot. Pour enough water into pot to just cover the",
       "above_baseline": -0.0028350241486099007,
-      "pull": 7.088335474767911e-05,
-      "rank": 80
+      "pull": 0.018316029463407164,
+      "rank": 163
     },
     {
       "stage": "pretrain",
@@ -4707,8 +4707,8 @@
       ],
       "snippet": "Q:\n\nUISplitViewController consistent divider\n\nIn my iPad App I'm using a UISplitViewController with two UINavigationCont",
       "above_baseline": 0.0016708097115528502,
-      "pull": 0.0001051209017462791,
-      "rank": 70
+      "pull": 0.022821863323569915,
+      "rank": 46
     },
     {
       "stage": "pretrain",
@@ -4736,8 +4736,8 @@
       ],
       "snippet": "NEW YORK, Nov. 19, 2018 (GLOBE NEWSWIRE) -- Fusion (NASDAQ: FSNN), a leading provider of cloud services, announced today",
       "above_baseline": 0.0005329889560108311,
-      "pull": 4.181797316557434e-05,
-      "rank": 89
+      "pull": 0.021684042568027896,
+      "rank": 76
     },
     {
       "stage": "pretrain",
@@ -4765,8 +4765,8 @@
       ],
       "snippet": "hmmmm\n\n\n\nscootaloo wants to be brave and fearless like rainbowdash ( thats why she is the cowardly lion)\n\nsweetie belle ",
       "above_baseline": -0.0038283296638723895,
-      "pull": -0.0005868300233644215,
-      "rank": 197
+      "pull": 0.017322723948144676,
+      "rank": 179
     },
     {
       "stage": "pretrain",
@@ -4794,8 +4794,8 @@
       ],
       "snippet": "Q:\n\nxmr-stak-cpu as a service on ubuntu\n\nI'm running Ubuntu 14.04. And I need to run xmr-stak-cpu as a service.\nI tried ",
       "above_baseline": -0.000659570297369648,
-      "pull": -0.0005052719544945483,
-      "rank": 190
+      "pull": 0.020491483314647417,
+      "rank": 106
     },
     {
       "stage": "pretrain",
@@ -4823,8 +4823,8 @@
       ],
       "snippet": "Q:\n\nCompare two images in terms of width and height\n\nEDIT: I believe I didn't state correctly my question, so here is th",
       "above_baseline": 0.0023295584684676768,
-      "pull": -0.0002901344639699406,
-      "rank": 168
+      "pull": 0.023480612080484742,
+      "rank": 30
     },
     {
       "stage": "pretrain",
@@ -4852,8 +4852,8 @@
       ],
       "snippet": "Investors interested in adding Aigang insurance platform into their (crypto)portfolio can refer to the platform and choo",
       "above_baseline": -0.0011420160850943613,
-      "pull": 9.157486784711931e-05,
-      "rank": 72
+      "pull": 0.020009037526922704,
+      "rank": 122
     },
     {
       "stage": "pretrain",
@@ -4881,8 +4881,8 @@
       ],
       "snippet": "[Lysosomal proteinases of the human aortal intima and atherogenesis].\nActivity of lysosomal proteinases cathepsins A, B,",
       "above_baseline": -0.0011816746275402704,
-      "pull": 5.729396640919895e-05,
-      "rank": 85
+      "pull": 0.019969378984476795,
+      "rank": 125
     },
     {
       "stage": "pretrain",
@@ -4910,8 +4910,8 @@
       ],
       "snippet": "Soil biota and invasive plants.\nInteractions between plants and soil biota resist invasion by some nonnative plants and ",
       "above_baseline": 0.0010382291406440328,
-      "pull": -1.0445227651308373e-05,
-      "rank": 104
+      "pull": 0.022189282752661098,
+      "rank": 58
     },
     {
       "stage": "pretrain",
@@ -4939,8 +4939,8 @@
       ],
       "snippet": "Phytotoxic effect of 2-benzoxazolinone (BOA) against some vegetable crops.\nBenzoxazolin-2(3H)-one (BOA) is a well known ",
       "above_baseline": 0.005924600554080128,
-      "pull": -4.9757903026712636e-05,
-      "rank": 113
+      "pull": 0.027075654166097193,
+      "rank": 9
     },
     {
       "stage": "pretrain",
@@ -4968,8 +4968,8 @@
       ],
       "snippet": "Riding on the Jio wave, 2018 will see India gradually move away from being a developing 4G country, overcoming the hiccu",
       "above_baseline": 0.0010740898837799558,
-      "pull": -8.682153863655753e-05,
-      "rank": 128
+      "pull": 0.02222514349579702,
+      "rank": 56
     },
     {
       "stage": "pretrain",
@@ -4997,8 +4997,8 @@
       ],
       "snippet": "How bad does the loss of UConn and Rutgers hurt the BE deal, I think pretty bad. They need to have signed days months ye",
       "above_baseline": 0.002178186988464767,
-      "pull": -9.629072159924576e-05,
-      "rank": 132
+      "pull": 0.023329240600481832,
+      "rank": 33
     },
     {
       "stage": "pretrain",
@@ -5026,8 +5026,8 @@
       ],
       "snippet": "Feb. 21, 2014 \u0097 -- A New York family is getting ready to move to Arizona so that their 9-month-old son can be treated wi",
       "above_baseline": 3.872988344311157e-05,
-      "pull": 8.58957916040742e-05,
-      "rank": 75
+      "pull": 0.021189783495460177,
+      "rank": 92
     },
     {
       "stage": "pretrain",
@@ -5055,8 +5055,8 @@
       ],
       "snippet": "Association of sick sinus and Lown-Ganong-Levine syndromes.\nA 38-year-old woman presented with syncopal attacks for 27 y",
       "above_baseline": -0.003678064376538854,
-      "pull": -7.159191331475928e-05,
-      "rank": 123
+      "pull": 0.01747298923547821,
+      "rank": 176
     },
     {
       "stage": "pretrain",
@@ -5084,7 +5084,7 @@
       ],
       "snippet": "Corn Removal Surgery Video\n\nCorns on the feet can be uncomfortable and downright painful. See a five-minute procedure th",
       "above_baseline": 0.0005044754617312373,
-      "pull": 7.50997353790228e-05,
+      "pull": 0.021655529073748302,
       "rank": 79
     },
     {
@@ -5113,8 +5113,8 @@
       ],
       "snippet": "With all ballots counted, conservative Rafsanjani had more than 6.1 million votes, while the harder-line conservative Ah",
       "above_baseline": -0.0038578787667028006,
-      "pull": -0.0001839292631370883,
-      "rank": 152
+      "pull": 0.017293174845314264,
+      "rank": 180
     },
     {
       "stage": "pretrain",
@@ -5142,8 +5142,8 @@
       ],
       "snippet": "5 tips for success from the most victorious crowdfunding campaigns\n\nSuccessful crowdfunding campaigns do not just happen",
       "above_baseline": -0.003750930722402814,
-      "pull": -0.00032584381747251576,
-      "rank": 173
+      "pull": 0.01740012288961425,
+      "rank": 177
     },
     {
       "stage": "pretrain",
@@ -5171,8 +5171,8 @@
       ],
       "snippet": "Q:\n\nWhy using an equality with a list doesn't work?\n\nI tried for the last hour to do a basic thing with list, but it doe",
       "above_baseline": 0.001071559201105944,
-      "pull": -0.00015006540731215203,
-      "rank": 147
+      "pull": 0.02222261281312301,
+      "rank": 57
     },
     {
       "stage": "pretrain",
@@ -5200,8 +5200,8 @@
       ],
       "snippet": "Acute\nwater shortage in HamirpurHamirpur, July 10Notwithstanding the arrival of the\nmonsoon, people of Hamirpur district",
       "above_baseline": 0.0007057981315432907,
-      "pull": -0.000294051520331926,
-      "rank": 170
+      "pull": 0.021856851743560356,
+      "rank": 71
     },
     {
       "stage": "pretrain",
@@ -5229,8 +5229,8 @@
       ],
       "snippet": "An artist's impression of the sky rail at Murrumbeena station.\n\nAmbitious building projects invariably impact people liv",
       "above_baseline": 0.0007373696975941126,
-      "pull": 0.0002666553272367339,
-      "rank": 37
+      "pull": 0.021888423309611178,
+      "rank": 68
     },
     {
       "stage": "pretrain",
@@ -5258,8 +5258,8 @@
       ],
       "snippet": "Q:\n\nHow to divide column automatically?\n\nI have multiple txt files (close 1000) and I want to import to excel. I used te",
       "above_baseline": -0.00593217938228968,
-      "pull": 0.0004656484808059102,
-      "rank": 9
+      "pull": 0.015218874229727385,
+      "rank": 194
     },
     {
       "stage": "pretrain",
@@ -5287,8 +5287,8 @@
       ],
       "snippet": "\n675 So.2d 918 (1996)\nRobert C. MOSHER and Margaret M. Mosher, Appellants,\nv.\nSPEEDSTAR DIVISION OF AMCA INTERNATIONAL, ",
       "above_baseline": -0.001692224466998734,
-      "pull": 3.199104443234791e-05,
-      "rank": 90
+      "pull": 0.01945882914501833,
+      "rank": 141
     },
     {
       "stage": "pretrain",
@@ -5316,8 +5316,8 @@
       ],
       "snippet": ",\n\n10.07.2018\n\nThe Assad regime is winning the war in Syria not simply by regaining territory, but also by breaking the ",
       "above_baseline": 0.00035650449970016374,
-      "pull": 0.0002114470175383568,
-      "rank": 49
+      "pull": 0.02150755811171723,
+      "rank": 83
     },
     {
       "stage": "pretrain",
@@ -5345,8 +5345,8 @@
       ],
       "snippet": "Color Markers How To Kill Poison Ivy Plants Does Bleach Surefire Way\n\nget rid poison ivy plants safely remove removing w",
       "above_baseline": 0.00029502102548703557,
-      "pull": -0.0008899705369818568,
-      "rank": 199
+      "pull": 0.0214460746375041,
+      "rank": 84
     },
     {
       "stage": "pretrain",
@@ -5374,8 +5374,8 @@
       ],
       "snippet": "A network of groups led by the Islamist preacher Anjem Choudary has become the \u201csingle biggest gateway to terrorism in r",
       "above_baseline": -0.0051027966726976196,
-      "pull": -0.0002528189308569748,
-      "rank": 163
+      "pull": 0.016048256939319445,
+      "rank": 190
     },
     {
       "stage": "pretrain",
@@ -5403,8 +5403,8 @@
       ],
       "snippet": "Q:\n\nformatting output of booleans c++\n\nI am a begginner at programming in c++ and I would like to know if there is a way",
       "above_baseline": 0.0013761674555469172,
-      "pull": -4.5713385273268625e-05,
-      "rank": 112
+      "pull": 0.022527221067563982,
+      "rank": 53
     },
     {
       "stage": "pretrain",
@@ -5432,8 +5432,8 @@
       ],
       "snippet": "We have chronicled the danger of Barrack Hussein Obama to our liberties, our nation and possibly, our very existence as ",
       "above_baseline": 0.0002812575063891806,
-      "pull": 0.0002974858651810369,
-      "rank": 34
+      "pull": 0.021432311118406246,
+      "rank": 85
     },
     {
       "stage": "pretrain",
@@ -5461,8 +5461,8 @@
       ],
       "snippet": "Purchasing a home is a valuable form of investment. Self owned house is a lifetime decision for any individual. A Home L",
       "above_baseline": -0.0005216854179030672,
-      "pull": 5.7055065254209895e-05,
-      "rank": 86
+      "pull": 0.020629368194113998,
+      "rank": 103
     },
     {
       "stage": "pretrain",
@@ -5490,8 +5490,8 @@
       ],
       "snippet": "Favorite Schools\n\nFavorite Teams\n\nSyracuse football: Five statistics-based predictions for the N.C. State game\n\nHunt vs.",
       "above_baseline": -0.0016136152150310196,
-      "pull": -0.00020333942968316955,
-      "rank": 157
+      "pull": 0.019537438396986045,
+      "rank": 137
     },
     {
       "stage": "pretrain",
@@ -5519,8 +5519,8 @@
       ],
       "snippet": "Q:\n\ntool to help create a class registration system\n\nDoes anyone have advise or can recommend a tool or CMS system with ",
       "above_baseline": -0.0046974458450211865,
-      "pull": 0.0003192948108321053,
-      "rank": 30
+      "pull": 0.01645360776699588,
+      "rank": 187
     },
     {
       "stage": "pretrain",
@@ -5548,8 +5548,8 @@
       ],
       "snippet": "Readability of online patient resources for the operative treatment of breast cancer.\nIncreasing use of Internet resourc",
       "above_baseline": 0.001790376472122636,
-      "pull": 6.880166256779732e-05,
-      "rank": 81
+      "pull": 0.0229414300841397,
+      "rank": 41
     },
     {
       "stage": "pretrain",
@@ -5577,7 +5577,7 @@
       ],
       "snippet": "Q:\n\nAdd a Personal Package Archive (PPA)\n\nI cann't Add a Personal Package Archive (PPA) to Software Sources\nwhen I write",
       "above_baseline": 0.0007485003663950766,
-      "pull": 0.00011405262102038599,
+      "pull": 0.02189955397841214,
       "rank": 66
     },
     {
@@ -5606,8 +5606,8 @@
       ],
       "snippet": "BULL'S\nHEAD, symbol of\nthe death penalty, indicating imminent execution\n\nBUN,\nsmall barrel\n\nBUNSUCKEN,\nbound in service ",
       "above_baseline": -0.0024672665269030412,
-      "pull": -0.00035951660476840505,
-      "rank": 175
+      "pull": 0.018683787085114024,
+      "rank": 158
     },
     {
       "stage": "pretrain",
@@ -5635,8 +5635,8 @@
       ],
       "snippet": "Tory high command rallies to defend welfare changes\n\nShare via\n\nSenior figures from across the Conservative Party rallie",
       "above_baseline": -0.0011532720274128362,
-      "pull": 6.757750578616842e-05,
-      "rank": 82
+      "pull": 0.01999778158460423,
+      "rank": 123
     },
     {
       "stage": "pretrain",
@@ -5664,8 +5664,8 @@
       ],
       "snippet": "Oregon State Capitol Foundation\n\nThe Oregon State Capitol Foundation is a 501(c)(3) nonprofit organization. \n\nHistory\n\nT",
       "above_baseline": 0.006812529523136296,
-      "pull": 0.0002093699007156789,
-      "rank": 50
+      "pull": 0.02796358313515336,
+      "rank": 7
     },
     {
       "stage": "pretrain",
@@ -5693,8 +5693,8 @@
       ],
       "snippet": "Influence of restricted diet on the cell cycle in the crypt of mouse small intestine.\nPreviously we reported that the sm",
       "above_baseline": 0.0028026484268692878,
-      "pull": 0.00041669036345796527,
-      "rank": 16
+      "pull": 0.023953702038886353,
+      "rank": 22
     },
     {
       "stage": "pretrain",
@@ -5722,8 +5722,8 @@
       ],
       "snippet": "Q:\n\nWhich is the best way to say that I have substituted for someone in his work tasks?\n\nI am struggling to understand t",
       "above_baseline": 0.0007478769879657177,
-      "pull": 0.00038787132796615415,
-      "rank": 19
+      "pull": 0.021898930599982783,
+      "rank": 67
     },
     {
       "stage": "pretrain",
@@ -5751,8 +5751,8 @@
       ],
       "snippet": "Synchronized time-reversal focusing with application to remote imaging from a distant virtual source array.\nTime-reversi",
       "above_baseline": 0.0008949338055535445,
-      "pull": -0.00026787666112553963,
-      "rank": 166
+      "pull": 0.02204598741757061,
+      "rank": 63
     },
     {
       "stage": "pretrain",
@@ -5780,8 +5780,8 @@
       ],
       "snippet": "Q:\n\nTableView gets laggy with data\n\nSo I am facing a problem\nA table view gets slower (responses slower to scrolling, ta",
       "above_baseline": -0.0028959376740942955,
-      "pull": -0.00013825439858840082,
-      "rank": 145
+      "pull": 0.01825511593792277,
+      "rank": 165
     },
     {
       "stage": "pretrain",
@@ -5809,8 +5809,8 @@
       ],
       "snippet": "\n548 S.W.2d 762 (1977)\nLinda Risinger ROBINSON, Appellant,\nv.\nFrank RISINGER, Appellee.\nNo. 964.\nCourt of Civil Appeals ",
       "above_baseline": -0.001449078173232081,
-      "pull": -0.00010455746792443757,
-      "rank": 135
+      "pull": 0.019701975438784984,
+      "rank": 134
     },
     {
       "stage": "pretrain",
@@ -5838,8 +5838,8 @@
       ],
       "snippet": "Hi, Nothing against those rules because you cooking the omelette you decide how many eggs u will use, but using Polski R",
       "above_baseline": -0.004972372717696842,
-      "pull": 1.978198969678332e-05,
-      "rank": 94
+      "pull": 0.016178680894320223,
+      "rank": 189
     },
     {
       "stage": "pretrain",
@@ -5867,8 +5867,8 @@
       ],
       "snippet": "SOMA, Japan \u2014 The catch from six small fishing boats, the first to resume commercial fishing in the waters off Fukushima",
       "above_baseline": -0.0009240238872793988,
-      "pull": 9.002994010978208e-05,
-      "rank": 74
+      "pull": 0.020227029724737666,
+      "rank": 116
     },
     {
       "stage": "pretrain",
@@ -5896,8 +5896,8 @@
       ],
       "snippet": "Q:\n\nActive Directory, LDAP UserPrincipal\n\nGot this information when I wrote out the DistinguishedName property on UserPr",
       "above_baseline": 0.0041439756793256455,
-      "pull": 0.0008759178181633406,
-      "rank": 2
+      "pull": 0.02529502929134271,
+      "rank": 13
     },
     {
       "stage": "pretrain",
@@ -5925,8 +5925,8 @@
       ],
       "snippet": "This was my first gift exchange and was very excited for it to be snack related as I enjoy sampling foods from around th",
       "above_baseline": -0.0031271407080645797,
-      "pull": -0.00023763595118916217,
-      "rank": 161
+      "pull": 0.018023912903952485,
+      "rank": 170
     },
     {
       "stage": "pretrain",
@@ -5954,8 +5954,8 @@
       ],
       "snippet": "[Immunotherapy in castration resistant prostate cancer.]\nWe review the role of immunotherapy in castration resistant pro",
       "above_baseline": -0.0016041170966776472,
-      "pull": 6.554024693449221e-05,
-      "rank": 84
+      "pull": 0.019546936515339418,
+      "rank": 136
     },
     {
       "stage": "pretrain",
@@ -5983,8 +5983,8 @@
       ],
       "snippet": "Introduction\n============\n\nOlder adults (OAs) at risk of falls are more likely to stop walking when talking at the same ",
       "above_baseline": 0.0034197150220824125,
-      "pull": 0.00018947042364804087,
-      "rank": 56
+      "pull": 0.024570768634099478,
+      "rank": 16
     },
     {
       "stage": "pretrain",
@@ -6012,8 +6012,8 @@
       ],
       "snippet": ".. _egrBytes-label:\n\negrBytes\n---------------------------\n\n================  ==========  ===============================",
       "above_baseline": 0.007266456439515213,
-      "pull": 0.00038387606532976054,
-      "rank": 23
+      "pull": 0.02841751005153228,
+      "rank": 4
     },
     {
       "stage": "pretrain",
@@ -6041,8 +6041,8 @@
       ],
       "snippet": "Q:\n\nHow to get status and song info from iTunes on Mac\n\nThe iPhone has an app that can control iTunes on a Mac, for exam",
       "above_baseline": -0.008890096680829336,
-      "pull": -0.0003164068410292043,
-      "rank": 172
+      "pull": 0.01226095693118773,
+      "rank": 199
     },
     {
       "stage": "pretrain",
@@ -6070,8 +6070,8 @@
       ],
       "snippet": "Vermont residents who don't identify as male or female may soon be able to choose another gender on their licenses.\n\nVer",
       "above_baseline": 0.00322020999215333,
-      "pull": -0.00037325713977237965,
-      "rank": 178
+      "pull": 0.024371263604170395,
+      "rank": 17
     },
     {
       "stage": "pretrain",
@@ -6099,8 +6099,8 @@
       ],
       "snippet": "Why Natchitoches?\n\nWhether for a weekend or a lifetime, you\u2019ll enjoy everything Natchitoches has to offer. The natural s",
       "above_baseline": 0.0023832616998556884,
-      "pull": 0.0003036084359485355,
-      "rank": 32
+      "pull": 0.023534315311872753,
+      "rank": 28
     },
     {
       "stage": "pretrain",
@@ -6128,8 +6128,8 @@
       ],
       "snippet": "[Residues of antibiotics and other inhibitory substances in milk].\nThe aim of the study was determination of the contami",
       "above_baseline": -0.0011216501582943482,
-      "pull": -1.7199424759842366e-05,
-      "rank": 106
+      "pull": 0.020029403453722717,
+      "rank": 120
     },
     {
       "stage": "pretrain",
@@ -6157,8 +6157,8 @@
       ],
       "snippet": "For one that prides itself in its progressive nature, it is no hidden secret that the solar industry has a diversity iss",
       "above_baseline": -0.0006755617324615791,
-      "pull": 0.00024219908791842446,
-      "rank": 45
+      "pull": 0.020475491879555486,
+      "rank": 109
     },
     {
       "stage": "pretrain",
@@ -6186,8 +6186,8 @@
       ],
       "snippet": "Fisherville Animal Hospital - Does not see exotics at this timewww.fishervilleanimalhospital.comDr. George Messenger (re",
       "above_baseline": -0.0004913423361939777,
-      "pull": 0.0004546820279204047,
-      "rank": 11
+      "pull": 0.020659711275823087,
+      "rank": 102
     },
     {
       "stage": "pretrain",
@@ -6215,8 +6215,8 @@
       ],
       "snippet": "Q:\n\nNot able to open Notification bar properly when I execute this thread in the service\n\nI have the following thread wh",
       "above_baseline": 0.0018355956977707914,
-      "pull": 0.00037872178083610866,
-      "rank": 24
+      "pull": 0.022986649309787856,
+      "rank": 39
     }
   ],
   "draws": [
