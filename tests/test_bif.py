@@ -57,20 +57,22 @@ def test_records_with_tool_use_are_skipped_and_counted():
     assert not any(k in t for c in cands for t in c["turns"] for k in bif.STRUCTURED)
 
 
-def test_a_record_with_a_cut_fit_turn_is_incomplete_and_a_cut_prompt_is_not():
+def test_a_record_with_any_cut_turn_is_incomplete():
     cut_answer = [{"role": "user", "text": "q", "chars": 1},
                   {"role": "assistant", "text": "a" * 10, "chars": 4000}]
     assert bif.incomplete(cut_answer)
     cut_reasoning = [{"role": "user", "text": "q", "chars": 1},
                      {"role": "assistant", "text": "a", "chars": 1, "reasoning": {"text": "r", "chars": 99}}]
     assert bif.incomplete(cut_reasoning)
+    # A cut prompt is stored by its head and encoded by its tail, so the text
+    # before the response is not what preceded it; it is refused too.
     cut_prompt = [{"role": "user", "text": "q" * 5, "chars": 4000}, {"role": "assistant", "text": "a", "chars": 1}]
-    assert not bif.incomplete(cut_prompt)
-    # A cut assistant turn in the shared history of a DPO pair is context, not target.
+    assert bif.incomplete(cut_prompt)
     shared = [{"role": "user", "text": "q", "chars": 1}, {"role": "assistant", "text": "a", "chars": 4000},
               {"role": "user", "text": "q2", "chars": 2}, {"role": "assistant", "text": "b", "chars": 1}]
-    assert not bif.incomplete(shared, shared=2)
-    assert bif.incomplete(shared, shared=0)
+    assert bif.incomplete(shared, shared=2) and bif.incomplete(shared, shared=0)
+    whole = [{"role": "user", "text": "q", "chars": 1}, {"role": "assistant", "text": "a", "chars": 1}]
+    assert not bif.incomplete(whole)
 
 
 def test_a_sample_of_another_mix_or_a_straddled_draw_is_a_skip(tmp_path, monkeypatch):

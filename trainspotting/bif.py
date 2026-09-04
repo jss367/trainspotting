@@ -122,18 +122,21 @@ def incomplete(turns, shared: int = 0) -> bool:
     """Whether a stored record is not the example the model was trained on.
 
     Two ways: a turn carries or notes fields this layer cannot rebuild
-    (STRUCTURED), or a turn the loss would be taken over was cut at the context
-    record's 4,000-character field limit. A cut *fit* turn is not a prefix of
-    the training example the way a cut document is: the reasoning of a think
-    turn is closed early and the answer appended after it, a sequence and a
-    conditioning boundary the model never saw. A cut context turn is kept — the
-    front of an example is what `encode` drops anyway.
+    (STRUCTURED), or any turn was cut at the context record's 4,000-character
+    field limit. A cut fit turn is not a prefix of the training example the way
+    a cut document is: the reasoning of a think turn is closed early and the
+    answer appended after it. A cut context turn is no better: the record keeps
+    the *first* 4,000 characters of a prompt, and `encode` keeps the *last*
+    tokens of the example, so what would sit before the response is the middle
+    of the prompt rather than the text that actually preceded it. A 6,551-
+    character user turn in the committed Instruct SFT sample is the case.
+
+    `shared` is the DPO branch point; it is accepted for the caller's
+    convenience and no longer changes the answer, since a cut anywhere counts.
     """
     if any(t.get(k) for t in turns for k in STRUCTURED):
         return True
-    for i, t in enumerate(turns):
-        if i < shared or (t.get("role") or "user") not in FIT_ROLES:
-            continue
+    for t in turns:
         fields = [t] + ([t["reasoning"]] if t.get("reasoning") else [])
         if any((f.get("chars") or 0) > len(f.get("text") or "") for f in fields):
             return True
