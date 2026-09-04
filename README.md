@@ -1346,7 +1346,8 @@ trainspotting bif olmo-3-7b-instruct --match "ChatGPT" --limit 100 --dtype bfloa
 ```
 
 The query is the text the model produced; `--prompt` is what it was replying to,
-scored as context and masked out of the loss. The candidates are the committed
+scored as context and masked out of the loss, and required for a chat model,
+whose template never showed it a reply without the turn it answers. The candidates are the committed
 samples: the context records of each post-training stage and the document
 sample of each pretraining corpus. An SFT example is fit on its assistant turns
 behind the rest of the conversation, rendered through the model's chat template
@@ -1392,7 +1393,7 @@ its commit, every sampler setting, the per-example covariance with its
 across-chain standard error, and the correlation beside it, since covariance
 scales with how much a loss moves and a long high-entropy document moves more
 than a short answer whether or not it has anything to do with the query. The
-report prints the stages ranked by mean partial covariance, the examples at either end
+report prints the stages ranked by mean covariance, the examples at either end
 of the ranking, and two checks on the sampler that come free from the same
 draws: the local learning coefficient `nβ(E[L] - L(w*))`, taken over the
 candidates the posterior was localized on, which is at or below zero when
@@ -1411,16 +1412,21 @@ That shared movement never goes to zero, and at the default step size it is
 most of every covariance: on Pythia-70m at twice the default step size all 200
 documents correlated near 0.85 with the query, at the default near 0.6, and the
 raw ranking was by how far each document's own loss swings rather than by
-anything to do with the query. So the ranking uses the
-*partial* covariance instead: both series are regressed on the per-draw mean
-loss of the *other* candidates and the residuals covaried, which is the part of
-an example's movement that is specific to the query. The candidate being scored
-is left out of its own control, since a lone candidate regressed on itself has
-a residual of exactly zero; with one candidate there is nothing to control on,
-so its partial is the raw covariance and the file says so (`partial_control`).
-The raw covariance, the correlation and
-the query's covariance with the average candidate (`baseline_cov`, and each
-example's `above_baseline`) are all kept beside it. The raw draws are in the
+anything to do with the query. The ranking is still by the covariance, because
+the covariance is the influence: the identity above is about
+`Cov(ℓ_query, ℓ_example)` and nothing else, and a covariance with the other
+candidates regressed out is a different quantity that can shrink or reverse a
+real influence. What the report adds is the means to read it: the query's
+covariance with the average candidate (`baseline_cov`, and each example's
+`above_baseline`), which is the shared part, and the *partial* covariance,
+where both series are regressed on the per-draw mean loss of the *other*
+candidates and the residuals covaried, which is the part of an example's
+movement specific to the query. The candidate being scored is left out of its
+own control, since a lone candidate regressed on itself has a residual of
+exactly zero; with one candidate there is nothing to control on, so its partial
+is the raw covariance and the file says so (`partial_control`). An example high
+on both is one the model's loss on the query moves with in particular; one high
+on covariance alone moves with everything. The raw draws are in the
 file too (`draws[chain][draw]`, the query's loss then each record's), so any
 other statistic can be computed later without re-running the chains.
 

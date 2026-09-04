@@ -2653,9 +2653,16 @@ def cmd_bif(args):
         import transformers  # noqa: F401
     except ImportError:
         sys.exit("this command needs torch and transformers: pip install -e '.[bif]'")
+    tokenizer = bif.load_tokenizer(model_id)
+    if getattr(tokenizer, "chat_template", None) and not args.prompt:
+        sys.exit(
+            f"{model_id} is a chat model: its template renders a reply behind a header and the "
+            "turn it answers, so the query has to be given as a reply — pass --prompt with what "
+            "the model was replying to"
+        )
     device = bif.pick_device(args.device)
     print(f"loading {model_id} on {device} ({args.dtype})", file=sys.stderr)
-    model, tokenizer, revision = bif.load(model_id, device, args.dtype)
+    model, tokenizer, revision = bif.load(model_id, device, args.dtype, tokenizer=tokenizer)
     if model_id != target["hf_model"]:
         print(
             f"note: weighing against {model_id}, not {args.target}'s own checkpoint"

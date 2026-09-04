@@ -496,9 +496,9 @@ def test_summarize_groups_and_ranks_by_mean_covariance():
     stats = [{"cov": 0.1, "corr": 0.5, "partial": 0.2}, {"cov": -0.3, "corr": -0.2, "partial": -0.4},
              {"cov": 0.4, "corr": 0.9, "partial": 0.3}]
     groups = bif.summarize(cands, stats, lambda c: (("stage", c["stage"]), ("side", c["side"])))
-    # The rejected side's +0.3 partial is a pull of -0.3: the pair taught the
-    # model away from the query, so it ranks below the SFT group and counts as
-    # away, not toward.
+    # The rejected side's +0.4 covariance is a pull of -0.4: the pair taught
+    # the model away from the query, so it ranks below the SFT group and counts
+    # as away, not toward. The partial is carried but does not rank.
     assert [g["stage"] for g in groups] == ["sft", "dpo"]
     sft, dpo = groups
     assert sft["n"] == 2 and sft["toward"] == 1
@@ -507,15 +507,15 @@ def test_summarize_groups_and_ranks_by_mean_covariance():
     assert sft["mean_pull"] == pytest.approx(-0.1)
     assert sft["best"]["id"] == "1"
     assert dpo["toward"] == 0 and dpo["mean_partial"] == pytest.approx(0.3)
-    assert dpo["mean_pull"] == pytest.approx(-0.3)
+    assert dpo["mean_pull"] == pytest.approx(-0.4)
 
 
 def test_pull_flips_the_sign_on_a_rejected_side_only():
     s = {"cov": 0.5, "partial": 0.2}
-    assert bif.pull({"side": "chosen"}, s) == 0.2
-    assert bif.pull({"side": "document"}, s) == 0.2
-    assert bif.pull({"side": "rejected"}, s) == -0.2
-    assert bif.pull({"side": "rejected"}, {"cov": 0.5}) == -0.5  # no partial: the covariance
+    # The covariance is the influence; the partial is a diagnostic and does not rank.
+    assert bif.pull({"side": "chosen"}, s) == 0.5
+    assert bif.pull({"side": "document"}, s) == 0.5
+    assert bif.pull({"side": "rejected"}, s) == -0.5
 
 
 # --- Result and rendering -------------------------------------------------------

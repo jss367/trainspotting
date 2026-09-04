@@ -363,7 +363,13 @@ def fit_text(c: dict) -> str:
 
 def query_candidate(query: str, prompt: str | None = None) -> dict:
     """The query as the same shape as a candidate: the text the model produced,
-    fit, behind whatever it was replying to, context."""
+    fit, behind whatever it was replying to, context.
+
+    Without a prompt the query is plain text, which is right for a base model
+    and wrong for a chat one: its template would never have shown the model
+    the reply without a header, so `cmd_bif` requires `--prompt` when the
+    tokenizer has a chat template rather than score a string the model was
+    never fit to in that form."""
     turns = []
     if prompt:
         turns.append({"role": "user", "text": prompt})
@@ -518,12 +524,21 @@ def pick_device(name: str = "auto") -> str:
     return "cpu"
 
 
-def load(model_id: str, device: str, dtype: str):
+def load_tokenizer(model_id: str):
+    """The tokenizer alone: cheap, and what decides whether the query needs a
+    prompt before the weights are worth downloading."""
+    from transformers import AutoTokenizer
+
+    return AutoTokenizer.from_pretrained(model_id)
+
+
+def load(model_id: str, device: str, dtype: str, tokenizer=None):
     """The checkpoint and its tokenizer, and the commit the weights came from."""
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoModelForCausalLM
 
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    if tokenizer is None:
+        tokenizer = load_tokenizer(model_id)
     try:
         model = AutoModelForCausalLM.from_pretrained(model_id, dtype=getattr(torch, dtype))
     except TypeError:
@@ -890,12 +905,16 @@ def summarize(cands: list[dict], stats: list[dict], key) -> list[dict]:
 def pull(c: dict, s: dict) -> float:
     """How hard an example pulls the model toward the query, signed.
 
-    The partial covariance, except on a DPO rejected completion, where training
-    pushed the model off the text: a loss that moves with the query's there is
-    a pair that taught the model away from it, so the sign is flipped. The raw
-    fields are untouched; this is the one number that reads as a direction.
+    The posterior covariance — the Bayesian influence itself — except on a DPO
+    rejected completion, where training pushed the model off the text: a loss
+    that moves with the query's there is a pair that taught the model away from
+    it, so the sign is flipped. The partial covariance is not used here: the
+    identity this layer rests on is about Cov(ℓ_query, ℓ_example), and a
+    covariance with the other candidates regressed out is a different quantity
+    that can shrink or reverse a real influence. It stays beside the ranking as
+    the diagnostic it is, the part of the movement specific to the query.
     """
-    value = s.get("partial", s["cov"])
+    value = s["cov"]
     return -value if c.get("side") == "rejected" else value
 
 
@@ -1055,11 +1074,12 @@ def render(res: dict, top: int = 5) -> list[str]:
         lines.append(
             f"Every loss moves with the chain's excursion from w*, and the query covaries "
             f"{_fmt(res['baseline_cov'])} with the average candidate. The ranking below is by the "
-            f"*partial* covariance, with that shared movement regressed out of both series, so "
-            f"it is the part of each example's movement specific to the query; the raw "
-            f"covariance is shown beside it. On a DPO rejected side the sign is flipped "
-            f"before anything is called toward or away, since training pushed the model off "
-            f"that text (`pull` in the file; the partial itself is kept as is)."
+            f"covariance itself, which is the influence; read it against that line, since most "
+            f"of every value is the shared movement. The *partial* covariance beside it has that "
+            f"movement regressed out of both series and is the part of each example's movement "
+            f"specific to the query — a diagnostic, not the estimator. On a DPO rejected side "
+            f"the sign is flipped before anything is called toward or away, since training "
+            f"pushed the model off that text (`pull` in the file; `cov` itself is kept as is)."
         )
         if res.get("partial_control") == "none":
             lines.append(
@@ -1067,13 +1087,13 @@ def render(res: dict, top: int = 5) -> list[str]:
                 "covariance here is the raw covariance."
             )
     lines.append("")
-    lines.append("| stage | side | n | mean pull | mean partial | mean cov | mean corr | toward |")
+    lines.append("| stage | side | n | mean pull | mean cov | mean partial | mean corr | toward |")
     lines.append("|---|---|---:|---:|---:|---:|---:|---:|")
     for g in res["stages"]:
         partial = g.get("mean_partial", g["mean_cov"])
         lines.append(
-            f"| {g['stage']} | {g['side']} | {g['n']} | {_fmt(g.get('mean_pull', partial))} | "
-            f"{_fmt(partial)} | {_fmt(g['mean_cov'])} | {_fmt(g['mean_corr'], 3)} | "
+            f"| {g['stage']} | {g['side']} | {g['n']} | {_fmt(g.get('mean_pull', g['mean_cov']))} | "
+            f"{_fmt(g['mean_cov'])} | {_fmt(partial)} | {_fmt(g['mean_corr'], 3)} | "
             f"{g['toward']}/{g['n']} |"
         )
     for stage, why in (res.get("skipped") or {}).items():
@@ -1102,16 +1122,16 @@ def render(res: dict, top: int = 5) -> list[str]:
 def _record_line(r: dict) -> str:
     where = " / ".join(x for x in (r["stage"], r["side"], r["source"]) if x)
     partial = r.get("partial", r["cov"])
-    value = r.get("pull", partial)
-    se = r.get("partial_stderr", r.get("cov_stderr"))
+    value = r.get("pull", r["cov"])
+    se = r.get("cov_stderr")
     err = f" ± {se:.4f}" if se is not None else ""
     ident = r["id"] if r["id"] is not None else (f"row {r['row']}" if r["row"] is not None else "")
     flags = "".join(
         f" [{f}]" for f, on in (("truncated", r["truncated"]), ("cut", r["cut"])) if on
     )
-    detail = f"cov {_fmt(r['cov'])}, corr {_fmt(r['corr'], 3)}"
+    detail = f"partial {_fmt(partial)}, corr {_fmt(r['corr'], 3)}"
     if r.get("side") == "rejected":
-        detail = f"rejected side, partial {_fmt(partial)} flipped; {detail}"
+        detail = f"rejected side, cov {_fmt(r['cov'])} flipped; {detail}"
     return (
         f"- {_fmt(value)}{err} ({detail}) {where} {ident}{flags}: "
         f"“{_one_line(r['snippet'])[:SNIPPET]}”"
