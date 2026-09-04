@@ -895,10 +895,11 @@ def result(target_name, model_id, revision, query, prompt, cands, encoded, run, 
         ),
         "trajectory": run["trajectory"],
         "records": records,
-        # The raw draws, so any statistic can be recomputed from the file
-        # without re-running the chains: `draws[chain][draw]` is the query's
-        # loss followed by each record's, in record order.
-        "draws": [[[round(x, 4) for x in d] for d in chain] for chain in run["losses"]],
+        # The raw draws at full precision, so any statistic can be recomputed
+        # from the file and match: `draws[chain][draw]` is the query's loss
+        # followed by each record's, in record order. Rounding them to four
+        # places moved partial covariances that sit below 1e-6.
+        "draws": [[list(d) for d in chain] for chain in run["losses"]],
     }
 
 
@@ -962,16 +963,23 @@ def render(res: dict, top: int = 5) -> list[str]:
     per = ", ".join(f"{x:.1f}" for x in lc["per_chain"])
     drift = lc.get("drift") or []
     climbing = [d for d in drift if d > MAX_DRIFT * lc["loss_at_origin"]]
-    if lc["mean"] <= 0 or any(x <= 0 for x in lc["per_chain"]):
-        verdict = ("at least one chain sits *below* the loss at w*, so the step size or nβ is off "
-                   "and the covariances below are not posterior covariances")
-    elif climbing:
+    if climbing:
         verdict = (f"{len(climbing)} of {len(drift)} chains were still climbing away from w* "
                    f"(minibatch loss up {', '.join(f'{d:+.2f}' for d in climbing)} across the retained "
                    f"steps), so lower --lr before reading the covariances as posterior covariances")
     else:
         drifted = ", ".join(f"{d:+.2f}" for d in drift) if drift else "n/a"
         verdict = f"the chains sat near w* (minibatch loss drift per chain: {drifted})"
+    if lc["mean"] <= 0 or any(x <= 0 for x in lc["per_chain"]):
+        # Not a fault by itself. w* minimizes the training set, not this sample
+        # of a few hundred candidates, so a chain that sampled the posterior
+        # correctly can still sit at a lower loss on the sample than w* does.
+        # The drift check above is what says whether the chain was stationary.
+        verdict += (
+            "; the coefficient is at or below zero, so on the localized sample the chains sat "
+            "at a lower loss than w*, which a posterior localized on a few hundred examples "
+            "rather than the training set can do without anything being wrong"
+        )
     over = lc.get("over")
     scope = (f" over the {over} localized candidates" if over is not None and over < res["candidates"]
              else "")

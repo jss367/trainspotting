@@ -537,6 +537,18 @@ def test_result_ranks_records_and_carries_every_provenance_field():
     # The raw draws travel with the file: chains × draws × (query + records).
     assert len(res["draws"]) == 2 and all(len(c) == 3 for c in res["draws"])
     assert all(len(d) == 3 for c in res["draws"] for d in c)
+
+
+def test_the_stored_draws_keep_full_precision():
+    """Partial covariances in a real run sit below 1e-6; draws rounded to four
+    places recomputed to different numbers than the file recorded."""
+    cands = [{"stage": "pretrain", "kind": "pretrain", "side": "document", "source": None,
+              "id": "d", "row": 1, "cut": False, "turns": [{"role": "text", "text": "doc"}]}]
+    encoded = [{"tokens": 4, "fit_tokens": 3, "truncated": False}]
+    run = {"at_origin": [1.0, 0.5], "losses": [chain([0.123456789, 0.5], [0.987654321, 0.4])],
+           "trajectory": [[1.0, 1.0]], "nbeta": 1.0, "burn_in": 0}
+    res = bif.result("t", "m", None, "q", None, cands, encoded, run, {}, {})
+    assert res["draws"][0][0] == [0.123456789, 0.987654321]
     assert res["skipped"] == {"sft": "no committed context records"}
     assert res["query_loss"]["at_origin"] == 1.0
     assert res["llc"]["mean"] > 0
@@ -574,7 +586,8 @@ def test_render_says_so_when_one_candidate_has_no_control():
 
 def test_render_says_so_when_a_chain_sat_below_the_origin_loss():
     text = "\n".join(bif.render(fake_result(llc_sign=-1.0)))
-    assert "*below* the loss at w*" in text
+    assert "at or below zero" in text and "without anything being wrong" in text
+    assert "not posterior covariances" not in text
 
 
 def test_render_says_so_when_a_chain_was_still_climbing():

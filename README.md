@@ -1391,10 +1391,11 @@ than a short answer whether or not it has anything to do with the query. The
 report prints the stages ranked by mean partial covariance, the examples at either end
 of the ranking, and two checks on the sampler that come free from the same
 draws: the local learning coefficient `nβ(E[L] - L(w*))`, taken over the
-candidates the posterior was localized on (a rejected completion is scored but
-never fit, so it is not part of the loss the chains sampled), which is negative
-when the chains sat below the loss at `w*` and so were not sampling the
-posterior they were asked to, and the drift of each chain's minibatch loss across its
+candidates the posterior was localized on, which is at or below zero when
+the chains sat at a lower loss on that sample than `w*` does (possible
+without fault, since `w*` minimizes the training set and not a few hundred
+sampled examples; the report says so rather than calling the run invalid),
+and the drift of each chain's minibatch loss across its
 retained steps, which catches the failure the coefficient alone does not — a
 chain climbing steadily away from `w*` has a positive coefficient and a doubled
 loss. A run at ten times the default step size did exactly that on Pythia-70m,
@@ -1841,7 +1842,7 @@ truncation drops the prompt rather than the answer, that a chat template's
 rendering is what gets tokenized and a template that cannot render falls back to
 roles, the sign and normalization of the covariance, that chains are averaged
 within rather than pooled, the drift and baseline diagnostics, and what the
-report says when a chain sat below `w*` or was still climbing. The SGLD loop
+report says when a chain was still climbing or sat below `w*`. The SGLD loop
 runs against a toy model when torch is importable — shapes, finite losses, the
 weights restored to `w*` afterwards, padding kept out of the loss — and is
 skipped otherwise.
