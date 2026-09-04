@@ -2670,12 +2670,15 @@ def cmd_bif(args):
             f" {target['hf_model']}; the result file records which",
             file=sys.stderr,
         )
-    encoded, kept, dropped = [], [], 0
+    encoded, kept, dropped, unrenderable = [], [], 0, 0
     for c in cands:
         try:
             e = bif.encode(tokenizer, c["turns"], args.max_tokens)
         except bif.SlowTokenizer as e:
             sys.exit(str(e))
+        except bif.Unrenderable:
+            unrenderable += 1
+            continue
         if e["fit_tokens"] == 0:
             dropped += 1
             continue
@@ -2683,10 +2686,16 @@ def cmd_bif(args):
         encoded.append(e)
     if dropped:
         print(f"{dropped} candidates have no fit tokens after encoding and were dropped", file=sys.stderr)
+    if unrenderable:
+        print(f"{unrenderable} candidates were dropped because {model_id}'s chat template cannot render "
+              f"them turn by turn", file=sys.stderr)
     if not encoded:
         sys.exit("no candidate has any text the model was fit to")
     chat = bool(getattr(tokenizer, "chat_template", None))
-    q = bif.encode(tokenizer, bif.query_candidate(query, args.prompt, chat=chat)["turns"], args.max_tokens)
+    try:
+        q = bif.encode(tokenizer, bif.query_candidate(query, args.prompt, chat=chat)["turns"], args.max_tokens)
+    except bif.Unrenderable as e:
+        sys.exit(f"{e}: the query cannot be rendered through {model_id}'s template")
     if q["fit_tokens"] == 0:
         sys.exit("the query has no tokens to score")
     # The posterior is localized on the text the model was fit *toward*. A DPO
@@ -2734,7 +2743,8 @@ def cmd_bif(args):
     # from the report.
     slug = _filename_part(args.slug) if args.slug else _slug(query)
     res = bif.result(args.target, model_id, revision, query, args.prompt, kept, encoded, run, skipped, settings)
-    res = {"slug": slug, **_stamp(), "dropped": dropped, "incomplete": incomplete, **res}
+    res = {"slug": slug, **_stamp(), "dropped": dropped, "unrenderable": unrenderable,
+           "incomplete": incomplete, **res}
     path = _write_json(RESULTS / f"{args.target}.bif-{slug}.json", res)
     for line in bif.render(res):
         print(line)

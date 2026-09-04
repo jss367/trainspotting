@@ -456,9 +456,11 @@ def pieces(tokenizer, turns: list[dict]) -> list[tuple[str, bool]]:
 
     A chat model is fit to its template's rendering of the turns, not to the raw
     text, so the spans come from rendering the conversation cumulatively and
-    taking each turn as the text the rendering grew by. A base model, or a
-    conversation the template cannot render, gets the turns joined with their
-    roles — the honest fallback, and what a corpus document is anyway.
+    taking each turn as the text the rendering grew by; a conversation its
+    template cannot render that way is refused (Unrenderable) rather than
+    guessed at. A base model has no template, so its chat-shaped candidates are
+    the turns joined with their roles — no trained form exists to match, and a
+    corpus document is a single span either way.
     """
     roles = {t["role"] for t in turns}
     template = getattr(tokenizer, "chat_template", None)
@@ -487,6 +489,14 @@ def pieces(tokenizer, turns: list[dict]) -> list[tuple[str, bool]]:
                 grown = rendered[k][len(rendered[k - 1]):]
                 out.append((grown, fits(t)))
             return out
+        # The template exists and will not render this conversation, or renders
+        # it in a way that cannot be read off turn by turn. Inventing role text
+        # instead would score bytes the checkpoint's template never produced
+        # and report covariances for a different input; the caller drops the
+        # example and counts it.
+        raise Unrenderable(
+            "the checkpoint's chat template cannot render this conversation turn by turn"
+        )
     if roles == {"text"}:
         return [(t["text"], fits(t)) for t in turns]
     out = []
@@ -567,6 +577,10 @@ def encode(tokenizer, turns: list[dict], max_tokens: int) -> dict:
         "fit_tokens": sum(1 for x in labels if x != -100),
         "truncated": truncated,
     }
+
+
+class Unrenderable(ValueError):
+    """A chat template that cannot render a conversation turn by turn."""
 
 
 class SlowTokenizer(ValueError):

@@ -434,9 +434,12 @@ def test_a_slow_tokenizer_is_refused_for_an_example_with_a_boundary_but_not_a_do
     assert e["fit_tokens"] == 5
 
 
-def test_a_template_that_cannot_render_falls_back_to_roles():
+def test_a_template_that_cannot_render_refuses_rather_than_inventing_role_text():
     turns = [{"role": "user", "text": "hi"}, {"role": "assistant", "text": "yo"}]
-    assert bif.pieces(BrokenChatTok(), turns) == bif.pieces(Tok(), turns)
+    with pytest.raises(bif.Unrenderable):
+        bif.pieces(BrokenChatTok(), turns)
+    # A base model has no template, so the role join is the only form there is.
+    assert bif.pieces(Tok(), turns) == [("user: ", False), ("hi\n\n", False), ("assistant: ", False), ("yo\n\n", True)]
 
 
 def test_a_document_never_goes_through_a_chat_template():
