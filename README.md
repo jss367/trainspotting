@@ -1457,7 +1457,7 @@ random-walks about `√(Tε)` in each of tens of millions of directions, and a
 walk comparable to the weights themselves is a chain that has left the model.
 On Pythia-70m over 200 Pile documents, 80 steps at `ε = 1e-6` doubled the loss;
 at `1e-7` the minibatch loss rose 0.75 nats from a start of 3.4, just under the
-line the report draws; at the default `5e-8` it rose about 0.5 with a learning
+line the report draws; at the default `5e-8` it rose about 0.4 with a learning
 coefficient of 2.2, and the four chains agreed with each other to one decimal. A
 bigger model needs a smaller step, and the report says when it does. `nβ`
 defaults to `batch / ln(batch)` as in devinterp, `γ = 100`, four chains of a
