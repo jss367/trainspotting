@@ -124,7 +124,7 @@ def incomplete(turns, shared: int = 0) -> bool:
     Two ways: a turn carries or notes fields this layer cannot rebuild
     (STRUCTURED), or any turn was cut at the context record's 4,000-character
     field limit. A cut fit turn is not a prefix of the training example the way
-    a cut document is: the reasoning of a think turn is closed early and the
+    a prefix would be: the reasoning of a think turn is closed early and the
     answer appended after it. A cut context turn is no better: the record keeps
     the *first* 4,000 characters of a prompt, and `encode` keeps the *last*
     tokens of the example, so what would sit before the response is the middle
@@ -204,8 +204,18 @@ def _context_candidates(target_name: str, stage: dict) -> tuple[list[dict], str 
     return out, None, skipped
 
 
-def _docs_candidates(target_name: str, stage: dict) -> tuple[list[dict], str | None]:
-    """The committed document sample of one pretraining corpus as candidates."""
+def _docs_candidates(target_name: str, stage: dict) -> tuple[list[dict], str | None, int]:
+    """The committed document sample of one pretraining corpus as candidates,
+    with the count of documents skipped.
+
+    A document longer than the sample's budget is stored as `extract.excerpt`
+    leaves it: three spans from across the document joined with an elision
+    marker, so the classifier judges the whole document rather than its opening.
+    That is not a prefix of anything the model saw — the joins and the marker
+    are text no training sequence held — so such a document is skipped and
+    counted rather than scored. On the committed Pythia sample that is 22 of
+    300; on the OLMo long-context sample, 128.
+    """
     name = stage["stage"]
     path = paths.find(f"{target_name}.{name}.docs.json")
     if path is None:
@@ -213,10 +223,14 @@ def _docs_candidates(target_name: str, stage: dict) -> tuple[list[dict], str | N
     data = json.loads(path.read_text())
     why = stale(data, stage.get("sample_dataset"))
     if why:
-        return [], why
+        return [], why, 0
     out = []
+    skipped = 0
     for ordinal, doc in enumerate(data.get("records", [])):
         text = doc.get("text") or ""
+        if (doc.get("chars") or len(text)) > len(text):
+            skipped += 1
+            continue
         out.append({
             "stage": name,
             "kind": "pretrain",
@@ -226,9 +240,9 @@ def _docs_candidates(target_name: str, stage: dict) -> tuple[list[dict], str | N
             "source": doc.get("source") or None,
             "side": "document",
             "turns": [{"role": "text", "text": text}],
-            "cut": (doc.get("chars") or len(text)) > len(text),
+            "cut": False,
         })
-    return out, None
+    return out, None, skipped
 
 
 def _source(meta: dict, stage: dict) -> str | None:
@@ -340,7 +354,9 @@ def candidates(
             if dropped and incomplete is not None:
                 incomplete[name] = dropped
         elif stage.get("sample_dataset"):
-            cands, why = _docs_candidates(target_name, stage)
+            cands, why, dropped = _docs_candidates(target_name, stage)
+            if dropped and incomplete is not None:
+                incomplete[name] = dropped
         else:
             continue  # a facts-only stage: nothing sampled, nothing to weigh
         if why:
@@ -785,7 +801,16 @@ def sample(
                     if m is not p:
                         p.copy_(m.to(p.dtype))
             if step >= burn_in and (step - burn_in) % every == 0:
-                chain_losses.append(batch_losses(model, everything, device, eval_batch))
+                draw = batch_losses(model, everything, device, eval_batch)
+                # The minibatch check above saw the weights before this step's
+                # update; these losses are the first look at the weights after
+                # it, and on the last draw the only one. A NaN here would ride
+                # through every statistic and compare as false to every bound.
+                if not all(math.isfinite(x) for x in draw):
+                    raise RuntimeError(
+                        f"chain {chain} diverged at step {step}: a recorded loss is not finite; lower --lr"
+                    )
+                chain_losses.append(draw)
                 if log:
                     log(f"chain {chain + 1}/{chains}: draw {len(chain_losses)}/{draws}, "
                         f"minibatch loss {chain_traj[-1]:.3f}")

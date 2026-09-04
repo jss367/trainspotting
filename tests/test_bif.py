@@ -48,6 +48,17 @@ def test_post_training_context_yields_a_side_per_fit_text_and_skips_rl_with_a_re
     assert len(bif.fit_text(sft)) < len(bif.candidate_text(sft))
 
 
+def test_excerpted_documents_are_skipped_and_counted():
+    target = registry.resolve("pythia-12b-deduped")
+    incomplete: dict = {}
+    cands, _ = bif.candidates("pythia-12b-deduped", target, incomplete=incomplete)
+    assert incomplete == {"pretrain": 22}
+    assert len(cands) == 278
+    # Every kept document is stored whole (a Pile document can contain the
+    # elision marker as ordinary text, so the length is what is checked).
+    assert not any(c["cut"] for c in cands)
+
+
 def test_records_with_tool_use_are_skipped_and_counted():
     target = registry.resolve("olmo-3-7b-instruct")
     incomplete: dict = {}
@@ -804,6 +815,16 @@ def test_sample_fits_only_the_localized_candidates_and_scores_them_all(monkeypat
             model, [chosen], enc([3, 4], 0), device="cpu", chains=1, draws=1, burn_in=0, every=1,
             lr=1e-3, nbeta=2.0, gamma=10.0, batch=1, eval_batch=1, seed=1, localize=[],
         )
+
+
+@requires_torch
+def test_a_non_finite_recorded_loss_stops_the_chain(monkeypatch):
+    torch.manual_seed(0)
+    model = Toy()
+    monkeypatch.setattr(bif, "batch_losses", lambda *a, **k: [float("nan")] * 3)
+    with pytest.raises(RuntimeError, match="not finite"):
+        bif.sample(model, [enc([1, 2, 3], 1), enc([4, 5], 0)], enc([6, 7], 0), device="cpu", chains=1,
+                   draws=2, burn_in=0, every=1, lr=1e-3, nbeta=1.0, gamma=1.0, batch=1, eval_batch=2, seed=0)
 
 
 @requires_torch

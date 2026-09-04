@@ -2644,8 +2644,9 @@ def cmd_bif(args):
     for stage, why in skipped.items():
         print(f"{stage}: not weighed — {why}", file=sys.stderr)
     for stage, n in incomplete.items():
-        print(f"{stage}: {n} records skipped — the context record does not hold them as the model "
-              f"was trained on them (tool use, or a fit turn cut at 4,000 characters)", file=sys.stderr)
+        print(f"{stage}: {n} records skipped — the stored sample does not hold them as the model "
+              f"was trained on them (tool use, a turn cut at 4,000 characters, or a document "
+              f"stored as an excerpt)", file=sys.stderr)
     if not cands:
         sys.exit("no candidate examples: nothing committed for this target that this layer can weigh")
     try:

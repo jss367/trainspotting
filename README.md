@@ -1378,8 +1378,11 @@ form the model was trained on; 60 of the 300 Instruct SFT records are such. So
 is a record with any turn cut at the context record's 4,000-character field
 limit: a think turn's reasoning closed early with the answer appended is a
 sequence the model never saw, and a prompt stored by its head and encoded by
-its tail puts the wrong text before the response, where a cut document is still
-a prefix of one.
+its tail puts the wrong text before the response. A document longer than the
+sample's budget is stored as an excerpt, three spans joined with an elision
+marker so the classifier judges the whole of it, and is skipped for the same
+reason: 22 of the 300 committed Pythia documents, 128 of the 300 OLMo
+long-context ones.
 That costs the think mixes most of their sample (229 of the 300 Think-7B SFT
 records have cut reasoning), and a fuller `context` store is what would give
 it back. `--match` keeps only candidates
