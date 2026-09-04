@@ -2672,7 +2672,10 @@ def cmd_bif(args):
         )
     encoded, kept, dropped = [], [], 0
     for c in cands:
-        e = bif.encode(tokenizer, c["turns"], args.max_tokens)
+        try:
+            e = bif.encode(tokenizer, c["turns"], args.max_tokens)
+        except bif.SlowTokenizer as e:
+            sys.exit(str(e))
         if e["fit_tokens"] == 0:
             dropped += 1
             continue

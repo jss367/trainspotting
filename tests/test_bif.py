@@ -165,6 +165,13 @@ def test_limit_keeps_both_sides_of_a_dpo_pair_together():
     assert [c["side"] for c in one] == ["chosen", "rejected"]
 
 
+def test_a_missing_document_sample_is_a_skip_naming_the_command():
+    target = registry.resolve("pythia-12b-deduped")
+    cands, skipped = bif.candidates("no-such-target", target)
+    assert cands == []
+    assert "trainspotting pretrain no-such-target --stage pretrain" in skipped["pretrain"]
+
+
 def test_a_missing_context_file_is_a_skip_naming_the_command():
     target = registry.resolve("olmo-3-7b-instruct")
     cands, skipped = bif.candidates("no-such-target", target, stages=["sft"])
@@ -409,6 +416,19 @@ def test_an_empty_think_block_is_put_back_from_the_length_it_left_behind():
     # `chars_raw` when nothing but the truncation happened.
     plain = bif._turns([{"role": "assistant", "text": "ans", "chars": 6, "chars_raw": 6}])
     assert plain[0]["text"] == "ans"
+
+
+class SlowTok(Tok):
+    """A tokenizer that says it has no offsets, as a HF slow tokenizer does."""
+
+    is_fast = False
+
+
+def test_a_slow_tokenizer_is_refused_for_an_example_with_a_boundary_but_not_a_document():
+    with pytest.raises(bif.SlowTokenizer):
+        bif.encode(SlowTok(), [{"role": "user", "text": "ab"}, {"role": "assistant", "text": "yo"}], max_tokens=100)
+    e = bif.encode(SlowTok(), [{"role": "text", "text": "hello"}], max_tokens=100)
+    assert e["fit_tokens"] == 5
 
 
 def test_a_template_that_cannot_render_falls_back_to_roles():

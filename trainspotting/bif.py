@@ -219,7 +219,7 @@ def _docs_candidates(target_name: str, stage: dict) -> tuple[list[dict], str | N
     name = stage["stage"]
     path = paths.find(f"{target_name}.{name}.docs.json")
     if path is None:
-        return [], f"no committed document sample — run `trainspotting pretrain {target_name} --stage {name}`"
+        return [], f"no committed document sample — run `trainspotting pretrain {target_name} --stage {name}`", 0
     data = json.loads(path.read_text())
     why = stale(data, stage.get("sample_dataset"))
     if why:
@@ -526,6 +526,10 @@ def encode(tokenizer, turns: list[dict], max_tokens: int) -> dict:
     }
 
 
+class SlowTokenizer(ValueError):
+    """A tokenizer without offsets asked to mask an example with an internal boundary."""
+
+
 def prepends_bos(tokenizer) -> bool:
     """Whether this tokenizer's own encoding puts its BOS token first.
 
@@ -569,12 +573,15 @@ def _tokenize(tokenizer, spans: list[tuple[str, bool]]) -> tuple[list[int], list
     offsets: a token is a target when any character of it lies in a fit span,
     so the merged boundary token counts as the reply it begins.
 
-    A tokenizer without offsets (a slow one, or a stub) still encodes the whole
-    string once, so the ids are the sequence the model saw; the mask is then
-    aligned by prefix length — a token is a target when its index falls past
-    the token count of the text before the fit span and before that of the
-    text through it. A token that straddles a boundary lands on one side of it;
-    the ids themselves are never wrong.
+    A tokenizer without offsets still encodes the whole string once, so the ids
+    are the sequence the model saw, and aligns the mask by prefix token counts.
+    That is exact only when no token crosses a fit boundary: a header's closing
+    space merged into the first word of the reply can leave a fit span with no
+    token of its own. So a tokenizer that reports itself slow (`is_fast` False)
+    is refused for any example with an internal boundary — every model this
+    layer has been run on ships a fast tokenizer, so the refusal costs nothing
+    — while a standalone document, one span, is encoded either way. A tokenizer
+    that does not report at all is a test stub, and those align exactly.
     """
     fit_ranges = []
     pos = 0
@@ -591,6 +598,11 @@ def _tokenize(tokenizer, spans: list[tuple[str, bool]]) -> tuple[list[int], list
             inside = any(s < hi and e > lo for lo, hi in fit_ranges)
             labels.append(tok if inside else -100)
         return ids, labels
+    if getattr(tokenizer, "is_fast", None) is False and len(spans) > 1:
+        raise SlowTokenizer(
+            "this tokenizer has no character offsets, so the loss mask of an example with a "
+            "prompt cannot be placed exactly; use the model's fast tokenizer"
+        )
     ids = list(tokenizer.encode(full, add_special_tokens=False))
     ranges = []
     for lo, hi in fit_ranges:
