@@ -2685,7 +2685,8 @@ def cmd_bif(args):
         print(f"{dropped} candidates have no fit tokens after encoding and were dropped", file=sys.stderr)
     if not encoded:
         sys.exit("no candidate has any text the model was fit to")
-    q = bif.encode(tokenizer, bif.query_candidate(query, args.prompt)["turns"], args.max_tokens)
+    chat = bool(getattr(tokenizer, "chat_template", None))
+    q = bif.encode(tokenizer, bif.query_candidate(query, args.prompt, chat=chat)["turns"], args.max_tokens)
     if q["fit_tokens"] == 0:
         sys.exit("the query has no tokens to score")
     # The posterior is localized on the text the model was fit *toward*. A DPO

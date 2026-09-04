@@ -423,19 +423,25 @@ def fit_text(c: dict) -> str:
     return "\n".join(t["text"] for t in c["turns"] if fits(t))
 
 
-def query_candidate(query: str, prompt: str | None = None) -> dict:
+def query_candidate(query: str, prompt: str | None = None, chat: bool = True) -> dict:
     """The query as the same shape as a candidate: the text the model produced,
     fit, behind whatever it was replying to, context.
 
-    Without a prompt the query is plain text, which is right for a base model
-    and wrong for a chat one: its template would never have shown the model
-    the reply without a header, so `cmd_bif` requires `--prompt` when the
-    tokenizer has a chat template rather than score a string the model was
-    never fit to in that form."""
+    `chat` says whether the checkpoint has a chat template. With one, a prompt
+    is a user turn and the query an assistant turn, rendered through the
+    template; without a prompt the query cannot be rendered at all, so `cmd_bif`
+    requires `--prompt` there rather than score a string the model was never
+    fit to in that form. Without a template — a base model such as Pythia — the
+    model received the prompt followed directly by its continuation, so the two
+    are raw spans: the prompt as context, the query as target, no role labels
+    and nothing between them."""
     turns = []
-    if prompt:
+    if prompt and chat:
         turns.append({"role": "user", "text": prompt})
         turns.append({"role": "assistant", "text": query})
+    elif prompt:
+        turns.append({"role": "text", "text": prompt, "fit": False})
+        turns.append({"role": "text", "text": query, "fit": True})
     else:
         turns.append({"role": "text", "text": query})
     return {"stage": None, "kind": "query", "side": "query", "turns": turns, "id": None, "row": None,

@@ -448,6 +448,12 @@ def test_the_query_is_fit_text_behind_an_optional_prompt():
     q = bif.query_candidate("said", prompt="asked")
     assert [t["role"] for t in q["turns"]] == ["user", "assistant"]
     assert bif.fit_text(q) == "said"
+    # A base model saw the prompt followed directly by its continuation: raw
+    # spans, the prompt as context and no role labels between them.
+    raw = bif.query_candidate("said", prompt="asked", chat=False)
+    assert bif.pieces(Tok(), raw["turns"]) == [("asked", False), ("said", True)]
+    e = bif.encode(Tok(), raw["turns"], max_tokens=100)
+    assert bytes(i for i, lab in zip(e["ids"], e["labels"]) if lab != -100).decode() == "said"
 
 
 # --- Statistics -----------------------------------------------------------------
