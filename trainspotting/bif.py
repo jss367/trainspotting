@@ -1,65 +1,20 @@
-"""Which sampled training examples a model's behaviour is sensitive to, by Bayesian influence.
+"""Experimental local loss sensitivity on standalone text.
 
-Every other layer counts. `grep` says how many rows of a mix hold a phrase,
-`influence` ranks the stages by that rate, and its docstring says what the rate
-cannot do: weight the stages against each other, because a count does not
-measure how much an example moved the model. This layer measures that, for the
-examples the other layers already found.
+The public command is restricted to Pythia-70m-deduped and corpus documents.
+It samples p(w) proportional to exp(-nbeta * L(w) - gamma/2 * ||w-w*||^2),
+where L is the mean of the supplied standalone texts' mean token losses.
+For the perturbation L + delta * loss_j, the derivative of the posterior
+query-loss expectation is -nbeta * Cov(loss_query, loss_j). This is not an
+estimate of historical training attribution or of a DPO training objective.
 
-The estimator is the Bayesian influence function of Lau, Wang, Baker, Murfet and
-Hoogland (2025). Around the released weights w* there is a local posterior,
+The SGLD loop follows Kreer et al., Bayesian Influence Functions for
+Hessian-Free Data Attribution (2025), https://arxiv.org/abs/2509.26544.
+Recorded draws are retained even when diagnostics are inconclusive. Passing
+finite-sample checks is not proof of convergence or validation on a language
+model; the exact Gaussian validation only checks the sampler and identity.
 
-    p(w) ∝ exp(-nβ · L(w) - γ/2 · ‖w - w*‖²)
-
-where L is the mean loss over the data used to localize it. Upweighting one
-example z_j in that data by ε moves the posterior, and the derivative of the
-expected loss on a query z_q with respect to ε is -nβ · Cov(ℓ_q, ℓ_j) under the
-posterior. So the number reported per example is the posterior covariance of its
-loss with the query's loss, sampled by SGLD: a positive covariance means that
-training harder on the example would lower the loss the model assigns to the
-query, which is to say the example pulls the model *toward* saying it. No Hessian
-is formed or inverted, which is what lets this run at model scale.
-
-Two things bound what the number means. First, the posterior is localized on the
-examples this layer is given — the committed context records and corpus samples,
-a few hundred rows — not on the training set, and the covariances are about that
-sample. Second, the checkpoint is the one named in the result, and the influence
-is of an example on *that* model's loss; an early Pythia checkpoint and the final
-one can disagree about the same document. Both are recorded in every result file
-rather than assumed.
-
-The per-example loss is the mean token loss over the text the example fits the
-model to, with the rest of the example as context and masked out of the loss:
-the assistant turns of an SFT example, the chosen completion of a DPO pair, the
-whole of a corpus document. A think model's response is its reasoning and its
-answer together, in the `<think>` markers it was trained with, so the reasoning
-the context record stores beside the answer is put back before scoring. A DPO
-pair yields two candidates, its chosen and its rejected side, because the two
-carry opposite signs in training: the objective pushes the model off the
-rejected text. The turns the two sides share before they branch are the
-conversation the pair was judged in, not either completion, so an assistant turn
-in that shared history is context on both sides rather than target. The
-posterior is localized on the text the model was fit *toward* — documents, SFT
-responses, chosen completions — and the rejected completions are scored at every
-draw but never put in a minibatch, since fitting the chain to them would localize
-it on the opposite of what training did. Their covariance with the query is
-still the number of interest:
-a positive covariance on a rejected completion is evidence that the pair taught
-the model *away* from the query, where the same number on the chosen side is
-evidence it taught the model toward it. This is a reading of the loss
-covariance, not the influence function of the pairwise DPO objective itself,
-which would need the reference model's log-ratio as well. An RL row stores no
-response and is skipped, and the skip is counted.
-
-The sampler is plain SGLD: w ← w - (ε/2)(nβ ∇L̂(w) + γ(w - w*)) + N(0, ε). Every
-chain starts at w*, discards a burn-in, then records the loss of the query and of
-every candidate at each retained draw. The covariance is taken within a chain and
-averaged across chains, and the spread across chains is the reported uncertainty
-— a chain that wandered somewhere the others did not shows up as a wide interval
-rather than as a confident number. The local learning coefficient nβ(E[L] - L(w*))
-comes out of the same draws and is printed as the sanity check on the step size:
-if it is negative or enormous the chain is not sampling the posterior it was
-asked to.
+The private chat reconstruction helpers are retained for follow-up research;
+they are not reachable through candidate selection in this release.
 """
 
 import json
@@ -69,6 +24,7 @@ import re
 import sys
 
 from . import context, paths, registry, search
+from .bif_diagnostics import diagnostics
 
 # The turn roles whose text is a training target. `text` is a corpus document,
 # which is all target. Anything else — user, system, tool — is context the loss
@@ -87,6 +43,8 @@ THINK_OPEN = "<think>\n"
 THINK_CLOSE = "\n</think>"
 # `<think>` and `</think>` themselves, the fixed part of what the markers cost.
 THINK_MARKERS = len("<think>") + len("</think>")
+
+SUPPORTED_MODEL = "EleutherAI/pythia-70m-deduped"
 
 SNIPPET = 120  # characters of the fit text shown per ranked candidate
 
@@ -118,12 +76,32 @@ def stale(data: dict, dataset: str | None) -> str | None:
     return None
 
 
-def incomplete(turns, shared: int = 0) -> bool:
+def marks_fidelity(records: list[dict]) -> bool:
+    """Whether a context file records how faithfully each turn was stored.
+
+    `context._turns` marks a turn `raw` when it is stored as written and gives
+    it `chars_raw` when only its think markers and whitespace are gone. A turn
+    with neither, in a file that marks others, is structured content — a list
+    of parts, a dict — stored as a Python repr, which is not text the model was
+    scored on. A file with no marks anywhere predates the markers (the committed
+    Instruct samples), and its turns are taken at face value.
+    """
+    for rec in records:
+        turns = list(rec.get("turns") or []) + [
+            t for side in ("chosen", "rejected") for t in ((rec.get(side) or {}).get("turns") or [])
+        ]
+        if any(t.get("raw") or t.get("chars_raw") is not None for t in turns):
+            return True
+    return False
+
+
+def incomplete(turns, shared: int = 0, marked: bool = False) -> bool:
     """Whether a stored record is not the example the model was trained on.
 
-    Two ways: a turn carries or notes fields this layer cannot rebuild
-    (STRUCTURED), or any turn was cut at the context record's 4,000-character
-    field limit. A cut fit turn is not a prefix of the training example the way
+    Three ways: a turn carries or notes fields this layer cannot rebuild
+    (STRUCTURED); any turn was cut at the context record's 4,000-character
+    field limit; or, in a file that marks fidelity (`marked`), a turn carries
+    neither mark, which is structured content stored as its Python repr. A cut fit turn is not a prefix of the training example the way
     a prefix would be: the reasoning of a think turn is closed early and the
     answer appended after it. A cut context turn is no better: the record keeps
     the *first* 4,000 characters of a prompt, and `encode` keeps the *last*
@@ -135,6 +113,8 @@ def incomplete(turns, shared: int = 0) -> bool:
     convenience and no longer changes the answer, since a cut anywhere counts.
     """
     if any(t.get(k) for t in turns for k in STRUCTURED):
+        return True
+    if marked and any(not t.get("raw") and t.get("chars_raw") is None for t in turns):
         return True
     for t in turns:
         fields = [t] + ([t["reasoning"]] if t.get("reasoning") else [])
@@ -172,12 +152,13 @@ def _context_candidates(target_name: str, stage: dict) -> tuple[list[dict], str 
         return [], why, 0
     out = []
     skipped = 0
+    marked = marks_fidelity(data.get("records", []))
     for ordinal, rec in enumerate(data.get("records", [])):
         sides = [rec.get("turns") or []] if kind == "sft" else [
             (rec.get(side) or {}).get("turns") or [] for side in ("chosen", "rejected")
         ]
         shared_turns = context.branch_point(*sides) if kind == "dpo" else 0
-        if any(incomplete(t, shared_turns) for t in sides):
+        if any(incomplete(t, shared_turns, marked) for t in sides):
             skipped += 1
             continue
         base = {
@@ -331,15 +312,10 @@ def candidates(
     seed: int = 0,
     incomplete: dict[str, int] | None = None,
 ) -> tuple[list[dict], dict[str, str]]:
-    """Every candidate example for a target, and the stages that yielded none.
+    """Standalone corpus documents only; deferred stages are skipped explicitly.
 
-    `match` keeps only records whose text holds the regex — either side of a
-    DPO pair, and then both sides of it — which is how a phrase `grep` found is
-    turned into the set of examples to weigh. `limit`
-    caps the records per stage, drawn at random with `seed`, so a run on a big
-    model can be sized to the machine; a DPO pair is one record and keeps both
-    its sides. `incomplete`, if given, is filled with the records per stage
-    skipped for carrying tool use the record cannot hold in trained form.
+    Filtering changes the objective as well as the scored candidates. The
+    sample does not reproduce the original packed pretraining sequences.
     """
     out: list[dict] = []
     skipped: dict[str, str] = {}
@@ -350,9 +326,8 @@ def candidates(
         if stages and name not in stages:
             continue
         if stage.get("hf_dataset"):
-            cands, why, dropped = _context_candidates(target_name, stage)
-            if dropped and incomplete is not None:
-                incomplete[name] = dropped
+            skipped[name] = "post-training and conversation objectives are deferred in this experiment"
+            continue
         elif stage.get("sample_dataset"):
             cands, why, dropped = _docs_candidates(target_name, stage)
             if dropped and incomplete is not None:
@@ -714,13 +689,7 @@ def load(model_id: str, device: str, dtype: str, tokenizer=None):
 
     if tokenizer is None:
         tokenizer = load_tokenizer(model_id)
-    try:
-        model = AutoModelForCausalLM.from_pretrained(model_id, dtype=getattr(torch, dtype))
-    except TypeError:
-        # Transformers before 4.56 knows the precision keyword only as
-        # `torch_dtype`, and hands an unknown `dtype` on to the model's
-        # constructor, which rejects it. The extra's floor is 4.40.
-        model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=getattr(torch, dtype))
+    model = AutoModelForCausalLM.from_pretrained(model_id, dtype=getattr(torch, dtype))
     model.to(device)
     model.train(False)
     revision = getattr(model.config, "_commit_hash", None)
@@ -789,6 +758,7 @@ def sample(
     seed: int,
     localize: list[int] | None = None,
     log=None,
+    loss_fn=None,
 ) -> dict:
     """Run the SGLD chains and record every loss they pass through.
 
@@ -797,14 +767,20 @@ def sample(
     the minibatch loss at every step, and the losses at w* the chains started
     from. Everything downstream is arithmetic on that.
 
-    `localize` is the indices into `encoded` the minibatches are drawn from,
-    which is to say the data the posterior is localized on; every candidate is
-    scored whether or not it is in it. The default is all of them. The caller
-    leaves out what the model was trained *off* rather than toward — a DPO
-    rejected completion — so the chain is not fit to text training pushed away
-    from.
+    `localize` selects which candidates define the mean sampling loss. All
+    candidates are scored. The public text command localizes on all documents;
+    the exact-posterior validation also uses score-only observables.
     """
     import torch
+
+    # A differentiable per-example loss adapter lets the exact-posterior
+    # validation exercise this very loop, including its noise and prior.
+    loss_fn = loss_fn or _losses
+
+    def evaluate(examples):
+        with torch.no_grad():
+            return [float(x) for start in range(0, len(examples), eval_batch)
+                    for x in loss_fn(model, examples[start:start + eval_batch], device)]
 
     if localize is None:
         localize = list(range(len(encoded)))
@@ -839,78 +815,80 @@ def sample(
         return gens[key]
 
     everything = [query, *encoded]
-    at_origin = batch_losses(model, everything, device, eval_batch)
+    at_origin = evaluate(everything)
     losses: list[list[list[float]]] = []
     trajectory: list[list[float]] = []
     # The last retained draw is at step burn_in + (draws - 1) * every; nothing
     # after it reaches a covariance, and steps taken there would still land in
     # the trajectory and could trip the drift check on movement no draw saw.
     steps = burn_in + (draws - 1) * every + 1
-    for chain in range(chains):
-        with torch.no_grad():
-            for p, m, w in zip(params, master, origin):
-                m.copy_(w)
-                if m is not p:
-                    p.copy_(m.to(p.dtype))
-        gens.clear()
-        rng = random.Random(seed * 1000 + chain)
-        chain_losses: list[list[float]] = []
-        chain_traj: list[float] = []
-        for step in range(steps):
-            idx = [rng.choice(localize) for _ in range(batch)]
-            for p in params:
-                p.grad = None
-            # One example per forward and backward pass, gradients accumulated,
-            # rather than one pass over the minibatch. Under gradient tracking
-            # the widened logits of every example in a batch stay alive until
-            # backward runs, and for a 7B model that is a sequence-by-vocabulary
-            # float32 tensor per example held at once; example by example, each
-            # is freed before the next is made. Scaling by 1/batch keeps the
-            # accumulated gradient the minibatch mean's.
-            total = 0.0
-            for i in idx:
-                part = _losses(model, [encoded[i]], device)[0] / batch
-                part.backward()
-                total += float(part.detach())
-            chain_traj.append(total)
-            if not math.isfinite(chain_traj[-1]):
-                raise RuntimeError(
-                    f"chain {chain} diverged at step {step} (loss {chain_traj[-1]}); lower --lr"
-                )
+    try:
+        for chain in range(chains):
             with torch.no_grad():
                 for p, m, w in zip(params, master, origin):
-                    # A parameter the forward pass never reaches has no
-                    # gradient; the prior still pulls it back to w*.
-                    drift = gamma * (m - w.float())
-                    if p.grad is not None:
-                        drift = drift + nbeta * p.grad.float()
-                    gen = generator(m.device, chain)
-                    noise = torch.randn(m.shape, generator=gen, dtype=torch.float32,
-                                        device=gen.device)
-                    if noise.device != m.device:
-                        noise = noise.to(m.device)
-                    m.add_(-0.5 * lr * drift + math.sqrt(lr) * noise)
+                    m.copy_(w)
                     if m is not p:
                         p.copy_(m.to(p.dtype))
-            if step >= burn_in and (step - burn_in) % every == 0:
-                draw = batch_losses(model, everything, device, eval_batch)
-                # The minibatch check above saw the weights before this step's
-                # update; these losses are the first look at the weights after
-                # it, and on the last draw the only one. A NaN here would ride
-                # through every statistic and compare as false to every bound.
-                if not all(math.isfinite(x) for x in draw):
+            gens.clear()
+            rng = random.Random(seed * 1000 + chain)
+            chain_losses: list[list[float]] = []
+            chain_traj: list[float] = []
+            for step in range(steps):
+                idx = [rng.choice(localize) for _ in range(batch)]
+                for p in params:
+                    p.grad = None
+                # One example per forward and backward pass, gradients accumulated,
+                # rather than one pass over the minibatch. Under gradient tracking
+                # the widened logits of every example in a batch stay alive until
+                # backward runs, and for a 7B model that is a sequence-by-vocabulary
+                # float32 tensor per example held at once; example by example, each
+                # is freed before the next is made. Scaling by 1/batch keeps the
+                # accumulated gradient the minibatch mean's.
+                total = 0.0
+                for i in idx:
+                    part = loss_fn(model, [encoded[i]], device)[0] / batch
+                    part.backward()
+                    total += float(part.detach())
+                chain_traj.append(total)
+                if not math.isfinite(chain_traj[-1]):
                     raise RuntimeError(
-                        f"chain {chain} diverged at step {step}: a recorded loss is not finite; lower --lr"
+                        f"chain {chain} diverged at step {step} (loss {chain_traj[-1]}); lower --lr"
                     )
-                chain_losses.append(draw)
-                if log:
-                    log(f"chain {chain + 1}/{chains}: draw {len(chain_losses)}/{draws}, "
-                        f"minibatch loss {chain_traj[-1]:.3f}")
-        losses.append(chain_losses)
-        trajectory.append(chain_traj)
-    with torch.no_grad():
-        for p, w in zip(params, origin):
-            p.copy_(w)
+                with torch.no_grad():
+                    for p, m, w in zip(params, master, origin):
+                        # A parameter the forward pass never reaches has no
+                        # gradient; the prior still pulls it back to w*.
+                        drift = gamma * (m - w.float())
+                        if p.grad is not None:
+                            drift = drift + nbeta * p.grad.float()
+                        gen = generator(m.device, chain)
+                        noise = torch.randn(m.shape, generator=gen, dtype=torch.float32,
+                                            device=gen.device)
+                        if noise.device != m.device:
+                            noise = noise.to(m.device)
+                        m.add_(-0.5 * lr * drift + math.sqrt(lr) * noise)
+                        if m is not p:
+                            p.copy_(m.to(p.dtype))
+                if step >= burn_in and (step - burn_in) % every == 0:
+                    draw = evaluate(everything)
+                    # The minibatch check above saw the weights before this step's
+                    # update; these losses are the first look at the weights after
+                    # it, and on the last draw the only one. A NaN here would ride
+                    # through every statistic and compare as false to every bound.
+                    if not all(math.isfinite(x) for x in draw):
+                        raise RuntimeError(
+                            f"chain {chain} diverged at step {step}: a recorded loss is not finite; lower --lr"
+                        )
+                    chain_losses.append(draw)
+                    if log:
+                        log(f"chain {chain + 1}/{chains}: draw {len(chain_losses)}/{draws}, "
+                            f"minibatch loss {chain_traj[-1]:.3f}")
+            losses.append(chain_losses)
+            trajectory.append(chain_traj)
+    finally:
+        with torch.no_grad():
+            for p, w in zip(params, origin):
+                p.copy_(w)
     # `localized` is the indices themselves, not only their count, because the
     # learning coefficient has to be taken over the same loss the chains were
     # localized on, and a candidate scored but never fit is not part of it.
@@ -971,8 +949,7 @@ def influence(losses: list[list[list[float]]]) -> list[dict]:
     chain's excursion from w*, and on Pythia-70m that one component gave all 200
     documents a correlation near 0.85 with the query and ranked them by how far
     their own loss swings. What is left after removing it is the part of an
-    example's movement that is specific to the query, and that is what the
-    ranking uses.
+    example's movement that is specific to the query, and is a diagnostic only.
 
     The control leaves the candidate being scored out of the mean, because a
     candidate in its own control is partly regressed on itself, and a lone
@@ -1052,12 +1029,6 @@ def llc(run: dict) -> dict:
             "over": len(cols)}
 
 
-# A chain whose loss moved, up or down, by more than this share of the loss at
-# w* between its first and last retained quarter was still travelling, not
-# sampling around a point.
-MAX_DRIFT = 0.25
-
-
 def baseline(losses: list[list[list[float]]]) -> float:
     """The query's covariance with the *average* candidate loss, within chain.
 
@@ -1079,15 +1050,7 @@ def baseline(losses: list[list[list[float]]]) -> float:
 
 
 def summarize(cands: list[dict], stats: list[dict], key) -> list[dict]:
-    """Candidates grouped by `key(c)` — a tuple of (field, value) pairs — with
-    the group's mean covariance, the share pulling toward the query, and its
-    strongest member.
-
-    Direction is read off `pull`, not off the partial covariance: on a DPO
-    rejected side the two have opposite signs, since the objective pushed the
-    model off that text, and a table that counted a positive partial there as
-    "toward" would report the training direction backwards.
-    """
+    """Descriptive covariance summaries; no historical training interpretation."""
     groups: dict = {}
     for c, s in zip(cands, stats):
         groups.setdefault(key(c), []).append((c, s))
@@ -1103,27 +1066,15 @@ def summarize(cands: list[dict], stats: list[dict], key) -> list[dict]:
             "mean_cov": _mean(covs),
             "mean_corr": _mean(s["corr"] for _, s in members),
             "mean_partial": _mean(partials),
-            "mean_pull": _mean(pulls),
-            "toward": sum(1 for x in pulls if x > 0),
-            "best": {"id": best[0]["id"], "row": best[0]["row"], "pull": pull(*best)},
+            "positive_covariances": sum(1 for x in pulls if x > 0),
+            "best": {"id": best[0]["id"], "row": best[0]["row"], "cov": best[1]["cov"]},
         })
-    return sorted(out, key=lambda g: -g["mean_pull"])
+    return sorted(out, key=lambda g: -g["mean_cov"])
 
 
 def pull(c: dict, s: dict) -> float:
-    """How hard an example pulls the model toward the query, signed.
-
-    The posterior covariance — the Bayesian influence itself — except on a DPO
-    rejected completion, where training pushed the model off the text: a loss
-    that moves with the query's there is a pair that taught the model away from
-    it, so the sign is flipped. The partial covariance is not used here: the
-    identity this layer rests on is about Cov(ℓ_query, ℓ_example), and a
-    covariance with the other candidates regressed out is a different quantity
-    that can shrink or reverse a real influence. It stays beside the ranking as
-    the diagnostic it is, the part of the movement specific to the query.
-    """
-    value = s["cov"]
-    return -value if c.get("side") == "rejected" else value
+    """Unmodified sample covariance; no DPO sign interpretation."""
+    return s["cov"]
 
 
 # --- Result ---------------------------------------------------------------------
@@ -1148,15 +1099,19 @@ def result(target_name, model_id, revision, query, prompt, cands, encoded, run, 
             **s,
             "snippet": fit_text(c)[:SNIPPET],
         })
+    diagnostic = diagnostics(run["losses"], run.get("localized"))
     common = baseline(run["losses"])
     for r in records:
         r["above_baseline"] = r["cov"] - common
-        r["pull"] = pull(r, r)
-    ranked = sorted(range(len(records)), key=lambda i: -records[i]["pull"])
+    ranked = sorted(range(len(records)), key=lambda i: -records[i]["cov"])
     for rank, i in enumerate(ranked, start=1):
-        records[i]["rank"] = rank
+        records[i]["rank"] = rank if diagnostic["status"] == "checks_passed" else None
     query_losses = [d[0] for chain in run["losses"] for d in chain]
     return {
+        "schema_version": 2,
+        "experimental": True,
+        "objective": "standalone_text_mean_token_loss",
+        "diagnostics": diagnostic,
         "target": target_name,
         "model": model_id,
         "model_revision": revision,
@@ -1164,10 +1119,9 @@ def result(target_name, model_id, revision, query, prompt, cands, encoded, run, 
         "prompt": prompt,
         "settings": settings,
         "candidates": len(cands),
-        # How many of the candidates the SGLD minibatches were drawn from; the
-        # rest (DPO rejected completions) were scored at every draw but never
-        # fit to.
+        # Keep the exact objective subset for diagnostics and reproducibility.
         "localized_on": run.get("localized_on", len(cands)),
+        "localized": run.get("localized", list(range(len(cands)))),
         "skipped": skipped,
         "llc": llc(run),
         "baseline_cov": common,
@@ -1224,115 +1178,54 @@ def _one_line(text: str) -> str:
 
 
 def render(res: dict, top: int = 5) -> list[str]:
-    """The result as the lines `report` prints: what was measured on which
-    checkpoint, whether the sampler behaved, the stages ranked, and the examples
-    at either end."""
-    lines = [f"### Bayesian influence — {_one_line(res['query'])[:80]!r}", ""]
+    """Recheck raw draws, including older files, before displaying any ranking."""
+    diag = diagnostics(res.get("draws", []), res.get("localized"))
+    legacy = res.get("schema_version") != 2
+    supported = (res.get("model") == SUPPORTED_MODEL
+                 and all(r.get("side") == "document" for r in res["records"]))
+    lines = [f"### Experimental loss sensitivity — {_one_line(res['query'])[:80]!r}", ""]
     rev = res.get("model_revision")
-    lines.append(
-        f"Checkpoint `{res['model']}`" + (f" at `{rev[:12]}`" if rev else "")
-        + f"; {res['candidates']} candidate examples from the committed samples."
-    )
-    localized = res.get("localized_on", res["candidates"])
-    if localized < res["candidates"]:
-        lines.append(
-            f"The posterior is localized on {localized} of them, the text the model was fit toward; "
-            f"the other {res['candidates'] - localized} are DPO rejected completions, scored at every "
-            f"draw but not trained on."
-        )
+    lines.append(f"Checkpoint `{res['model']}`" + (f" at `{rev[:12]}`" if rev else "")
+                 + f"; {res['candidates']} standalone candidate texts.")
     if res.get("prompt"):
-        lines.append(f"Query is the reply to: {_one_line(res['prompt'])[:120]!r}")
+        lines.append(f"Continuation context: {_one_line(res['prompt'])[:120]!r}")
     s = res["settings"]
-    lines.append(
-        f"SGLD: {s['chains']} chains × {s['draws']} draws after {s['burn_in']} burn-in, "
-        f"lr {s['lr']:g}, nβ {s['nbeta']:.3g}, γ {s['gamma']:g}, minibatch {s['batch']}, "
-        f"{s['max_tokens']} tokens per example."
-    )
-    q = res["query_loss"]
-    lines.append(
-        f"Query loss {q['at_origin']:.3f} at w*, {q['posterior_mean']:.3f} ± {q['posterior_std']:.3f} "
-        f"under the posterior."
-    )
-    lc = res["llc"]
-    per = ", ".join(f"{x:.1f}" for x in lc["per_chain"])
-    drift = lc.get("drift") or []
-    # Either direction: a chain still descending into a lower-loss region of
-    # the sample is as far from stationary as one still climbing, and a shared
-    # trend in every loss series makes covariances out of nothing either way.
-    moving = [d for d in drift if abs(d) > MAX_DRIFT * lc["loss_at_origin"]]
-    if moving:
-        verdict = (f"{len(moving)} of {len(drift)} chains were still drifting from w* "
-                   f"(loss over the localized candidates {', '.join(f'{d:+.2f}' for d in moving)} "
-                   f"across the retained draws), so lower --lr before reading the covariances as "
-                   f"posterior covariances")
+    lines.append(f"SGLD: {s['chains']} chains × {s['draws']} retained draws, "
+                 f"{s['burn_in']} burn-in steps, lr {s['lr']:g}, nβ {s['nbeta']:.3g}, "
+                 f"γ {s['gamma']:g}, {s['max_tokens']} tokens per text.")
+    lines.append("Objective: mean token loss on standalone texts, not on the training set "
+                 "or its original packed sequences. Filtering changes this objective.")
+    if legacy:
+        lines.append("Historical run: diagnostics recomputed from the saved draws; stored ranks are ignored.")
+    reasons = list(diag["reasons"])
+    if not supported:
+        reasons.append("this checkpoint or candidate objective is outside the supported experiment")
+    if reasons:
+        lines.extend(["", "**Inconclusive sampling — influence ranking withheld.**", ""])
+        lines.extend(f"- {reason}" for reason in reasons)
+        lines.append("")
+        lines.append("Inspect the saved loss traces; compare longer burn-in, longer sampling, "
+                     "step sizes and independent seeds. Reducing the step size alone does not "
+                     "establish convergence. Raw draws and descriptive covariances remain in the file.")
     else:
-        drifted = ", ".join(f"{d:+.2f}" for d in drift) if drift else "n/a"
-        verdict = f"the chains sat near w* (loss drift per chain over the localized candidates: {drifted})"
-    if lc["mean"] <= 0 or any(x <= 0 for x in lc["per_chain"]):
-        # Not a fault by itself. w* minimizes the training set, not this sample
-        # of a few hundred candidates, so a chain that sampled the posterior
-        # correctly can still sit at a lower loss on the sample than w* does.
-        # The drift check above is what says whether the chain was stationary.
-        verdict += (
-            "; the coefficient is at or below zero, so on the localized sample the chains sat "
-            "at a lower loss than w*, which a posterior localized on a few hundred examples "
-            "rather than the training set can do without anything being wrong"
-        )
-    over = lc.get("over")
-    scope = (f" over the {over} localized candidates" if over is not None and over < res["candidates"]
-             else "")
-    lines.append(f"Local learning coefficient {lc['mean']:.1f}{scope} (per chain: {per}); {verdict}.")
-    lines.append("")
-    lines.append("Positive covariance: training harder on the example would lower the query's loss, "
-                 "so it pulls the model toward the query. On a DPO *rejected* side, which the objective "
-                 "pushed the model off, the same sign reads as evidence the pair taught the model away "
-                 "from it.")
-    if res.get("baseline_cov") is not None:
-        lines.append(
-            f"Every loss moves with the chain's excursion from w*, and the query covaries "
-            f"{_fmt(res['baseline_cov'])} with the average candidate. The ranking below is by the "
-            f"covariance itself, which is the influence; read it against that line, since most "
-            f"of every value is the shared movement. The *partial* covariance beside it has that "
-            f"movement regressed out of both series and is the part of each example's movement "
-            f"specific to the query — a diagnostic, not the estimator. On a DPO rejected side "
-            f"the sign is flipped before anything is called toward or away, since training "
-            f"pushed the model off that text (`pull` in the file; `cov` itself is kept as is)."
-        )
-        if res.get("partial_control") == "none":
-            lines.append(
-                "With one candidate there is no other example to regress on, so its partial "
-                "covariance here is the raw covariance."
-            )
-    lines.append("")
-    lines.append("| stage | side | n | mean pull | mean cov | mean partial | mean corr | toward |")
-    lines.append("|---|---|---:|---:|---:|---:|---:|---:|")
-    for g in res["stages"]:
-        partial = g.get("mean_partial", g["mean_cov"])
-        lines.append(
-            f"| {g['stage']} | {g['side']} | {g['n']} | {_fmt(g.get('mean_pull', g['mean_cov']))} | "
-            f"{_fmt(g['mean_cov'])} | {_fmt(partial)} | {_fmt(g['mean_corr'], 3)} | "
-            f"{g['toward']}/{g['n']} |"
-        )
+        lines.extend(["", "Sampling screens passed; this is still an experimental sensitivity estimate, "
+                      "not proof of convergence or historical training attribution."])
+        lines.append("Positive covariance predicts a lower posterior query loss under the specific "
+                     "perturbation L + δ·loss_example; negative predicts a higher loss. "
+                     "The derivative is -nβ times covariance. Partials are diagnostics only. "
+                     "The ± value is an across-chain standard error and excludes sampling bias.")
+        # Recompute to avoid interpreting stale ranks or sign-flipped legacy fields.
+        stats = influence(res["draws"])
+        records = [{**r, **stat, "pull": stat["cov"]} for r, stat in zip(res["records"], stats)]
+        records.sort(key=lambda r: -r["cov"])
+        for title, subset in (("Largest positive sample covariances", [r for r in records if r["cov"] > 0][:top]),
+                              ("Most negative sample covariances", [r for r in records[::-1] if r["cov"] < 0][:top])):
+            lines.extend(["", title + ":"])
+            lines.extend(_record_line(r) for r in subset)
+            if not subset:
+                lines.append("None in this run.")
     for stage, why in (res.get("skipped") or {}).items():
-        lines.append(f"| {stage} | — | 0 | — | — | — | — | not weighed: {why} |")
-    lines.append("")
-    records = sorted(res["records"], key=lambda r: r["rank"])
-    if records:
-        lines.append(f"Pulls hardest toward the query (top {min(top, len(records))}):")
-        lines.append("")
-        for r in records[:top]:
-            lines.append(_record_line(r))
-        lines.append("")
-        lines.append(f"Pulls hardest away (bottom {min(top, len(records))}):")
-        lines.append("")
-        for r in records[-top:][::-1]:
-            lines.append(_record_line(r))
-        lines.append("")
-    lines.append(
-        "The posterior is localized on these candidates, not on the training set, and the "
-        "covariance is of the loss on this checkpoint. Neither is what the model's trainer "
-        "saw; both are what can be measured from what it published."
-    )
+        lines.append(f"Not analyzed: {_one_line(stage)} — {_one_line(why)}")
     return lines
 
 
@@ -1347,8 +1240,6 @@ def _record_line(r: dict) -> str:
         f" [{f}]" for f, on in (("truncated", r["truncated"]), ("cut", r["cut"])) if on
     )
     detail = f"partial {_fmt(partial)}, corr {_fmt(r['corr'], 3)}"
-    if r.get("side") == "rejected":
-        detail = f"rejected side, cov {_fmt(r['cov'])} flipped; {detail}"
     return (
         f"- {_fmt(value)}{err} ({detail}) {where} {ident}{flags}: "
         f"“{_one_line(r['snippet'])[:SNIPPET]}”"

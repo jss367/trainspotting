@@ -17,10 +17,8 @@ trainspotting = "trainspotting.cli:main"
 # Only the grep layer needs duckdb, and only it needs a query engine at all —
 # every other layer talks to the datasets-server over HTTP.
 grep = ["duckdb>=1.0"]
-# Only the bif layer touches model weights. It samples around a checkpoint with
-# SGLD, so it is the one command that needs torch, transformers and a GPU.
-# 4.57 is the first release that knows the OLMo 3 architecture; it also takes
-# the `dtype` keyword, so no older spelling is needed.
+# Experimental standalone-text sampling on Pythia-70m. Torch also runs the
+# exact-posterior CPU validation; other commands do not import these packages.
 bif = ["torch>=2.2", "transformers>=4.57"]
 # Only the steps layer decodes tokens: Pythia's training order is published as
 # token ids, not text, so reading a batch back means the GPT-NeoX tokenizer.

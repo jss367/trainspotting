@@ -31,21 +31,12 @@ def test_a_pretraining_sample_becomes_whole_document_candidates():
     assert all(bif.fit_text(c) == bif.candidate_text(c) for c in cands)
 
 
-def test_post_training_context_yields_a_side_per_fit_text_and_skips_rl_with_a_reason():
+def test_post_training_objectives_are_explicitly_deferred():
     target = registry.resolve("olmo-3-7b-instruct")
     cands, skipped = bif.candidates("olmo-3-7b-instruct", target, stages=["sft", "dpo", "rlvr"])
-    sides = {(c["stage"], c["side"]) for c in cands}
-    assert ("sft", "response") in sides
-    assert ("dpo", "chosen") in sides and ("dpo", "rejected") in sides
-    assert "rlvr" in skipped and "no response" in skipped["rlvr"]
-    # A DPO pair is two candidates sharing one row, so the two sides can be
-    # read against each other.
-    dpo = [c for c in cands if c["stage"] == "dpo"]
-    assert len({c["row"] for c in dpo}) * 2 == len(dpo)
-    # Only assistant text is fit; the prompt is context.
-    sft = next(c for c in cands if c["stage"] == "sft")
-    assert bif.fit_text(sft)
-    assert len(bif.fit_text(sft)) < len(bif.candidate_text(sft))
+    assert cands == []
+    assert set(skipped) == {"sft", "dpo", "rlvr"}
+    assert all("deferred" in why for why in skipped.values())
 
 
 def test_excerpted_documents_are_skipped_and_counted():
@@ -59,13 +50,12 @@ def test_excerpted_documents_are_skipped_and_counted():
     assert not any(c["cut"] for c in cands)
 
 
-def test_records_with_tool_use_are_skipped_and_counted():
+def test_private_reconstruction_still_skips_incomplete_records():
     target = registry.resolve("olmo-3-7b-instruct")
-    incomplete: dict = {}
-    cands, _ = bif.candidates("olmo-3-7b-instruct", target, stages=["sft"], incomplete=incomplete)
-    assert incomplete["sft"] >= 60  # the 60 with tool use, plus any with a cut fit turn
-    assert len(cands) + incomplete["sft"] == 300
-    assert not any(k in t for c in cands for t in c["turns"] for k in bif.STRUCTURED)
+    stage = next(s for s in target["stages"] if s["stage"] == "sft")
+    cands, why, dropped = bif._context_candidates("olmo-3-7b-instruct", stage)
+    assert dropped >= 60 and why is None
+    assert all(not c["cut"] for c in cands)
 
 
 def test_a_record_with_any_cut_turn_is_incomplete():
@@ -86,19 +76,36 @@ def test_a_record_with_any_cut_turn_is_incomplete():
     assert not bif.incomplete(whole)
 
 
+def test_structured_content_stored_as_a_repr_is_incomplete_where_the_file_marks_fidelity():
+    marked = [{"role": "user", "text": "q", "chars": 1, "raw": True},
+              {"role": "assistant", "text": "[{'type': 'text', 'text': 'a'}]", "chars": 31}]
+    assert bif.incomplete(marked, marked=True)
+    assert not bif.incomplete(marked, marked=False)  # a file from before the markers
+    whole = [{"role": "user", "text": "q", "chars": 1, "raw": True},
+             {"role": "assistant", "text": "a", "chars": 1, "chars_raw": 20}]
+    assert not bif.incomplete(whole, marked=True)
+    assert bif.marks_fidelity([{"turns": marked}]) and not bif.marks_fidelity([{"turns": [marked[1]]}])
+    # The committed Instruct sample predates the markers; the think samples carry them.
+    import json
+    from trainspotting import paths
+    assert not bif.marks_fidelity(json.loads(paths.find("olmo-3-7b-instruct.sft.context.json").read_text())["records"])
+    assert bif.marks_fidelity(json.loads(paths.find("olmo-3-7b-think.sft.context.json").read_text())["records"])
+
+
 def test_a_sample_of_another_mix_or_a_straddled_draw_is_a_skip(tmp_path, monkeypatch):
     target = registry.resolve("olmo-3-7b-instruct")
     stage = next(s for s in target["stages"] if s["stage"] == "sft")
     wrong = tmp_path / "x.sft.context.json"
     wrong.write_text('{"dataset": "allenai/Some-Other-Mix", "records": []}')
     monkeypatch.setattr(bif.paths, "find", lambda name: wrong)
-    cands, skipped = bif.candidates("x", {"stages": [stage]}, stages=["sft"])
+    cands, why, _ = bif._context_candidates("x", stage)
+    skipped = {"sft": why}
     assert cands == [] and "Some-Other-Mix" in skipped["sft"]
     moved = tmp_path / "y.sft.context.json"
     moved.write_text(json.dumps({"dataset": stage["hf_dataset"], "revision_moved_to": "abc", "records": []}))
     monkeypatch.setattr(bif.paths, "find", lambda name: moved)
-    _, skipped = bif.candidates("y", {"stages": [stage]}, stages=["sft"])
-    assert "republish" in skipped["sft"]
+    _, why, _ = bif._context_candidates("y", stage)
+    assert "republish" in why
 
 
 def test_a_conversation_log_is_not_a_candidate():
@@ -153,16 +160,11 @@ def test_records_without_id_or_row_are_still_distinct_records():
     assert len(bif._limit(cands, 1, __import__("random").Random(0))) == 2
 
 
-def test_limit_keeps_both_sides_of_a_dpo_pair_together():
+def test_deferred_stages_do_not_read_context_files(monkeypatch):
     target = registry.resolve("olmo-3-7b-instruct")
-    for seed in range(5):
-        cands, _ = bif.candidates("olmo-3-7b-instruct", target, stages=["dpo"], limit=3, seed=seed)
-        assert len(cands) == 6
-        rows = [c["row"] for c in cands]
-        assert all(rows.count(r) == 2 for r in rows)
-        assert {c["side"] for c in cands} == {"chosen", "rejected"}
-    one, _ = bif.candidates("olmo-3-7b-instruct", target, stages=["dpo"], limit=1, seed=0)
-    assert [c["side"] for c in one] == ["chosen", "rejected"]
+    monkeypatch.setattr(bif.paths, "find", lambda name: pytest.fail("deferred stage read a file"))
+    cands, skipped = bif.candidates("olmo-3-7b-instruct", target, stages=["dpo"], limit=1)
+    assert cands == [] and "deferred" in skipped["dpo"]
 
 
 def test_a_missing_document_sample_is_a_skip_naming_the_command():
@@ -172,11 +174,10 @@ def test_a_missing_document_sample_is_a_skip_naming_the_command():
     assert "trainspotting pretrain no-such-target --stage pretrain" in skipped["pretrain"]
 
 
-def test_a_missing_context_file_is_a_skip_naming_the_command():
+def test_a_deferred_objective_does_not_suggest_fetching_more_context():
     target = registry.resolve("olmo-3-7b-instruct")
     cands, skipped = bif.candidates("no-such-target", target, stages=["sft"])
-    assert cands == []
-    assert "trainspotting context no-such-target --stage sft" in skipped["sft"]
+    assert cands == [] and "deferred" in skipped["sft"]
 
 
 def context_candidates(monkeypatch, tmp_path, kind, records):
@@ -207,6 +208,7 @@ def test_a_think_turn_is_fit_on_its_reasoning_and_its_answer_in_the_trained_form
     # With the length the turn had as written, the markers and whitespace are
     # put back to exactly that length: 18 over the two fields is the common
     # Think SFT form, one newline after the closing marker.
+    rec["turns"][0]["raw"] = True
     rec["turns"][1] = {**think_turn("let me see", "the answer"), "chars_raw": 10 + 10 + 18}
     [c] = context_candidates(monkeypatch, tmp_path, "sft", [rec])
     fit = bif.fit_text(c)
@@ -222,7 +224,7 @@ def test_a_think_turn_is_fit_on_its_reasoning_and_its_answer_in_the_trained_form
     cands, skipped, dropped = bif._context_candidates("t", {"stage": "sft", "kind": "sft"})
     assert cands == [] and skipped is None and dropped == 1
     # A turn without reasoning is what it was before.
-    rec["turns"][1] = {"role": "assistant", "text": "plain", "chars": 5}
+    rec["turns"][1] = {"role": "assistant", "text": "plain", "chars": 5, "raw": True}
     [c] = context_candidates(monkeypatch, tmp_path, "sft", [rec])
     assert bif.fit_text(c) == "plain"
 
@@ -595,26 +597,24 @@ def test_summarize_groups_and_ranks_by_mean_covariance():
     stats = [{"cov": 0.1, "corr": 0.5, "partial": 0.2}, {"cov": -0.3, "corr": -0.2, "partial": -0.4},
              {"cov": 0.4, "corr": 0.9, "partial": 0.3}]
     groups = bif.summarize(cands, stats, lambda c: (("stage", c["stage"]), ("side", c["side"])))
-    # The rejected side's +0.4 covariance is a pull of -0.4: the pair taught
-    # the model away from the query, so it ranks below the SFT group and counts
-    # as away, not toward. The partial is carried but does not rank.
-    assert [g["stage"] for g in groups] == ["sft", "dpo"]
-    sft, dpo = groups
-    assert sft["n"] == 2 and sft["toward"] == 1
+    # Summaries describe covariance signs without interpreting a DPO objective.
+    assert [g["stage"] for g in groups] == ["dpo", "sft"]
+    dpo, sft = groups
+    assert sft["n"] == 2 and sft["positive_covariances"] == 1
     assert sft["mean_cov"] == pytest.approx(-0.1)
     assert sft["mean_partial"] == pytest.approx(-0.1)
-    assert sft["mean_pull"] == pytest.approx(-0.1)
+    assert sft["mean_cov"] == pytest.approx(-0.1)
     assert sft["best"]["id"] == "1"
-    assert dpo["toward"] == 0 and dpo["mean_partial"] == pytest.approx(0.3)
-    assert dpo["mean_pull"] == pytest.approx(-0.4)
+    assert dpo["positive_covariances"] == 1 and dpo["mean_partial"] == pytest.approx(0.3)
+    assert dpo["mean_cov"] == pytest.approx(0.4)
 
 
-def test_pull_flips_the_sign_on_a_rejected_side_only():
+def test_descriptive_covariance_never_flips_a_rejected_side():
     s = {"cov": 0.5, "partial": 0.2}
     # The covariance is the influence; the partial is a diagnostic and does not rank.
     assert bif.pull({"side": "chosen"}, s) == 0.5
     assert bif.pull({"side": "document"}, s) == 0.5
-    assert bif.pull({"side": "rejected"}, s) == -0.5
+    assert bif.pull({"side": "rejected"}, s) == 0.5
 
 
 # --- Result and rendering -------------------------------------------------------
@@ -665,7 +665,8 @@ def test_result_ranks_records_and_carries_every_provenance_field():
     assert res["model"] == "EleutherAI/pythia-70m-deduped"
     assert res["candidates"] == 2
     assert res["localized_on"] == 2  # nothing rejected among documents
-    ranked = sorted(res["records"], key=lambda r: r["rank"])
+    assert all(r["rank"] is None for r in res["records"])
+    ranked = sorted(res["records"], key=lambda r: -r["cov"])
     assert [r["id"] for r in ranked] == ["row-1", "row-2"]
     assert ranked[0]["cov"] > ranked[1]["cov"]
     assert ranked[0]["snippet"].startswith("As an AI")
@@ -694,42 +695,38 @@ def test_the_stored_draws_keep_full_precision():
     assert res["draws"][0][0] == [0.123456789, 0.987654321]
 
 
-def test_render_names_the_checkpoint_the_skip_and_the_ends_of_the_ranking():
+def test_render_names_checkpoint_and_withholds_an_inconclusive_ranking():
     text = "\n".join(bif.render(fake_result()))
     assert "`EleutherAI/pythia-70m-deduped` at `abc123def456`" in text
-    assert "not weighed: no committed context records" in text
-    assert "the chains sat near w*" in text
-    assert "row-1" in text and "row-2" in text
-    assert "[truncated] [cut]" in text
+    assert "Not analyzed: sft" in text
+    assert "Inconclusive sampling" in text
+    assert "row-1" not in text and "row-2" not in text
     assert "not on the training set" in text
 
 
-def test_render_says_which_candidates_the_posterior_was_localized_on():
-    res = fake_result()
-    assert "scored at every draw but not trained on" not in "\n".join(bif.render(res))
-    res["localized_on"] = 1
+def test_render_refuses_legacy_dpo_interpretations():
+    res = stationary_result()
+    res["records"][0]["side"] = "rejected"
     text = "\n".join(bif.render(res))
-    assert "localized on 1 of them" in text
-    assert "the other 1 are DPO rejected completions, scored at every draw but not trained on" in text
+    assert "outside the supported experiment" in text
+    assert "Largest positive" not in text and "taught" not in text
 
 
-def test_render_says_so_when_one_candidate_has_no_control():
+def test_one_candidate_keeps_its_raw_covariance_as_the_partial():
     res = fake_result(one=True)
     assert res["partial_control"] == "none"
     assert res["records"][0]["partial"] == pytest.approx(res["records"][0]["cov"])
-    text = "\n".join(bif.render(res))
-    assert "no other example to regress on" in text
-    assert "no other example to regress on" not in "\n".join(bif.render(fake_result()))
 
 
-def test_render_says_so_when_a_chain_sat_below_the_origin_loss():
-    text = "\n".join(bif.render(fake_result(llc_sign=-1.0)))
-    assert "at or below zero" in text and "without anything being wrong" in text
-    assert "not posterior covariances" not in text
+def test_origin_loss_is_not_a_convergence_test():
+    a = fake_result()
+    b = fake_result(llc_sign=-1)
+    assert a["diagnostics"] == b["diagnostics"]
+    assert "sat near" not in "\n".join(bif.render(a))
 
 
 def test_control_characters_in_a_snippet_or_source_never_reach_the_terminal():
-    res = fake_result()
+    res = stationary_result()
     res["records"][0]["snippet"] = "red \x1b[31mtext\x1b[0m\x07"
     res["records"][0]["source"] = "Pile\x1bCC"
     res["records"][0]["id"] = "bad\x1b[31mid"
@@ -738,15 +735,14 @@ def test_control_characters_in_a_snippet_or_source_never_reach_the_terminal():
     assert "\\x1b[31mtext" in text and "Pile\\x1bCC" in text and "bad\\x1b[31mid" in text
 
 
-def test_render_says_so_when_a_chain_was_still_moving_either_way():
-    text = "\n".join(bif.render(fake_result(llc_sign=0)))
-    assert "1 of 2 chains were still drifting" in text
-    assert "lower --lr" in text
-    res = fake_result()
-    res["llc"]["drift"] = [-0.9, 0.0]  # descending into the sample's lower-loss region
+@pytest.mark.parametrize("direction", [-1, 1])
+def test_render_catches_a_time_trend_even_when_absolute_drift_is_tiny(direction):
+    res = stationary_result()
+    res["draws"] = [[[5 + direction * i * 1e-8, 4 + direction * i * 1e-8,
+                      4 + direction * i * 2e-8] for i in range(200)] for _ in range(4)]
     text = "\n".join(bif.render(res))
-    assert "1 of 2 chains were still drifting" in text and "-0.90" in text
-    assert "covaries" in text and "average candidate" in text
+    assert "Inconclusive sampling" in text and "time trend" in text
+    assert "Largest positive" not in text
 
 
 def test_default_nbeta_is_n_over_log_n_of_the_localized_sample():
@@ -857,7 +853,11 @@ def test_sample_fits_only_the_localized_candidates_and_scores_them_all(monkeypat
 def test_a_non_finite_recorded_loss_stops_the_chain(monkeypatch):
     torch.manual_seed(0)
     model = Toy()
-    monkeypatch.setattr(bif, "batch_losses", lambda *a, **k: [float("nan")] * 3)
+    real = bif._losses
+    def nonfinite(model, chunk, device):
+        values = real(model, chunk, device)
+        return values if torch.is_grad_enabled() else values * float("nan")
+    monkeypatch.setattr(bif, "_losses", nonfinite)
     with pytest.raises(RuntimeError, match="not finite"):
         bif.sample(model, [enc([1, 2, 3], 1), enc([4, 5], 0)], enc([6, 7], 0), device="cpu", chains=1,
                    draws=2, burn_in=0, every=1, lr=1e-3, nbeta=1.0, gamma=1.0, batch=1, eval_batch=2, seed=0)
@@ -906,3 +906,46 @@ def test_a_bfloat16_parameter_moves_by_less_than_its_own_spacing():
     for _ in range(100):
         m += 1e-4
     assert m.to(torch.bfloat16).item() > 1.0
+
+
+def stationary_result():
+    import random
+    rng = random.Random(400)
+    res = fake_result()
+    res["draws"] = []
+    for _ in range(4):
+        chain_draws = []
+        for _ in range(1000):
+            q, a, b = [rng.gauss(0, 1) for _ in range(3)]
+            chain_draws.append([5 + q, 5 + q + a, 5 - q + b])
+        res["draws"].append(chain_draws)
+    res["settings"].update(chains=4, draws=1000)
+    assert bif.diagnostics(res["draws"])["status"] == "checks_passed"
+    return res
+
+
+def test_render_separates_signs_and_does_not_call_small_positive_scores_negative():
+    res = stationary_result()
+    # Make both candidates positively correlated, leaving independent variation.
+    for chain_draws in res["draws"]:
+        for d in chain_draws:
+            d[2] = 10 - d[2]
+    assert bif.diagnostics(res["draws"])["status"] == "checks_passed"
+    text = "\n".join(bif.render(res))
+    assert "Most negative sample covariances:\nNone in this run." in text
+    assert "pulls" not in text.lower() and "away" not in text.lower()
+    assert "row-1" in text and "row-2" in text
+
+
+def test_historical_demo_is_rechecked_even_if_a_stored_status_claims_success():
+    res = bif.committed("pythia-12b-deduped")[0]
+    res["diagnostics"] = {"status": "checks_passed", "reasons": []}
+    text = "\n".join(bif.render(res))
+    assert "Inconclusive sampling" in text and "time trend" in text
+    assert "Largest positive" not in text
+
+
+@pytest.mark.parametrize("draws", [[], [[[1, 2]]], [[[1, float("nan")]]],
+                                  [[[1, 2]] * 200] * 4])
+def test_missing_short_nonfinite_and_constant_runs_are_inconclusive(draws):
+    assert bif.diagnostics(draws)["status"] == "inconclusive"

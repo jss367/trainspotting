@@ -53,13 +53,11 @@ model:
    to, so the stages are on one scale and add up. A share of DPO rows and a
    share of Dolma 3 documents are different denominators; this is where they
    become one number. See [How much training is that?](#how-much-training-is-that).
-10. **Influence** — which of the sampled examples the model's loss on a given
-   text actually moves with, by Bayesian influence function: the posterior
-   covariance between the two losses, sampled by SGLD around the released
-   weights. Every layer above says where a string *is*; this one says how much
-   each example found there pulls the model toward saying the text, which is
-   the weighting the stage ranking declines to guess at. Needs the weights and a
-   GPU. See [Which examples moved the model](#which-examples-moved-the-model).
+10. **Experimental loss sensitivity** — a research command that samples local
+   loss covariances on standalone corpus text using Pythia-70m. It withholds
+   rankings when sampling diagnostics are inconclusive. This does not establish
+   which training examples caused a behavior. See
+   [Experimental loss sensitivity](#experimental-loss-sensitivity).
 
 Every one of those starts from something you can already name — a string to
 search for, or a question you can already phrase. When you start from an
@@ -272,7 +270,7 @@ trainspotting trace olmo-3-7b-instruct \
 # Sample 300 prompts per stage and label each one with Claude
 trainspotting classify olmo-3-7b-instruct --sample 300
 
-# Weigh the committed samples against a text the model produced, by Bayesian
+# Experiment with local loss sensitivity on standalone corpus text, by Bayesian
 # influence: which examples its loss on that text covaries with (needs weights)
 trainspotting bif pythia-12b-deduped --model EleutherAI/pythia-70m-deduped \
   "As an AI language model developed by OpenAI, my knowledge cutoff is September 2021."
@@ -1318,172 +1316,80 @@ compose, on different scales: `trace` narrows to a stage over the whole split,
 `search` says which side of the example a string lands on over a sample of it,
 and `ask` characterizes the fuzzy cases neither can match.
 
-## Which examples moved the model
+## Experimental loss sensitivity
 
-Everything above counts. `grep` says how many rows hold a phrase, the stage
-ranking puts those counts on a rate, and then stops with a caveat: a rate late
-in the pipeline generally moves behaviour more than the same rate in
-pretraining, but by how much is not something counts measure. `bif` measures it,
-for the examples the other layers already have.
-
-It uses the Bayesian influence function (Lau, Wang, Baker, Murfet and Hoogland,
-2025). Around the released weights `w*` there is a local posterior,
-`p(w) ∝ exp(-nβ·L(w) - γ/2·‖w - w*‖²)`, where `L` is the mean loss over the
-examples the posterior is localized on. Upweighting one of those examples by `ε`
-moves the posterior, and the derivative of the expected loss on a query with
-respect to `ε` is `-nβ · Cov(ℓ_query, ℓ_example)` under it. So the number
-reported per example is that covariance, sampled by SGLD: positive means training
-harder on the example would lower the loss the model assigns to the query, which
-is to say the example pulls the model toward saying it. No Hessian is formed or
-inverted, which is what lets this run on a model rather than a toy.
+`trainspotting bif` is a research prototype for **Pythia-70m-deduped on standalone
+corpus text**. Chat, supervised fine-tuning, preference optimization, and other
+checkpoints are deferred. It does not measure which original training examples
+caused a behavior or compare the historical effects of training stages.
 
 ```bash
 pip install -e '.[bif]'
 trainspotting bif pythia-12b-deduped --model EleutherAI/pythia-70m-deduped \
-  "As an AI language model developed by OpenAI, my knowledge cutoff is September 2021."
-trainspotting bif olmo-3-7b-instruct --match "ChatGPT" --limit 100 --dtype bfloat16 \
-  --prompt "Who are you?" "I am ChatGPT, a large language model trained by OpenAI."
+  --limit 200 "As an AI language model developed by OpenAI, my knowledge cutoff is September 2021."
 ```
 
-The query is the text the model produced; `--prompt` is what it was replying to,
-scored as context and masked out of the loss, and required for a chat model,
-whose template never showed it a reply without the turn it answers. The candidates are the committed
-samples: the context records of each post-training stage and the document
-sample of each pretraining corpus. An SFT example is fit on its assistant turns
-behind the rest of the conversation, rendered through the model's chat template
-so the tokens are the ones training saw; a think model's reasoning, which the
-context record stores beside the answer, is put back inside its `<think>`
-markers first, since the model was fit to both and the reasoning is most of it.
-A DPO pair yields *two* candidates, its chosen and its rejected completion,
-because the objective pushes the model off the rejected text. The turns the two
-share before they branch are the conversation the pair was judged in, so an
-assistant turn in that shared history is context on both sides, as it is for
-the fit share above. The posterior is localized on the text the model was fit
-*toward* — documents, SFT responses, chosen completions — and the rejected
-completions are scored at every draw but never drawn into an SGLD minibatch,
-since fitting the chain to them would localize it on the opposite of what
-training did (the result file's `localized_on` counts the fit side). Their
-covariance is still read: a positive covariance on a rejected completion is
-evidence the pair taught the model away from the query, where the same number
-on the chosen side is evidence it taught it toward. That is a reading of the
-loss covariance, not the influence function of the pairwise DPO objective,
-which would also need the reference model's log-ratio. A corpus document is all
-target.
-An RL row stores no response and is skipped, and the skip is printed with its
-reason, as is a stage with no committed sample or one whose sample is of a
-different mix than the stage now names. A record with tool use (a function
-menu on the system turn, a function call in place of an answer) is skipped
-and counted, because the context record does not hold those fields in the
-form the model was trained on; 60 of the 300 Instruct SFT records are such. So
-is a record with any turn cut at the context record's 4,000-character field
-limit: a think turn's reasoning closed early with the answer appended is a
-sequence the model never saw, and a prompt stored by its head and encoded by
-its tail puts the wrong text before the response. A document longer than the
-sample's budget is stored as an excerpt, three spans joined with an elision
-marker so the classifier judges the whole of it, and is skipped for the same
-reason: 22 of the 300 committed Pythia documents, 128 of the 300 OLMo
-long-context ones.
-That costs the think mixes most of their sample (229 of the 300 Think-7B SFT
-records have cut reasoning), and a fuller `context` store is what would give
-it back. `--match` keeps only candidates
-whose text holds a regex, which is how a phrase `grep` found becomes the set of
-examples to weigh; `--limit` caps the records per stage so a run on a big model
-fits the machine, and a DPO pair is one record, so a limit never keeps a
-rejected completion without the chosen one it was scored against.
+The target identifies the committed corpus sample. The explicit `--model`
+identifies the smaller checkpoint being analyzed; this is not a result about
+Pythia-12b. `--prompt` supplies raw continuation context, concatenated directly
+before the query and excluded from its loss. Documents are encoded as standalone
+text; over `--max-tokens`, the front is dropped. Excerpted documents are skipped.
+Neither those sequences nor their context reproduce Pythia's original packed
+training stream. `--match`, `--limit`, and `--stage` change both the candidate set
+and the sampling objective, so results across different selections need not agree.
 
-The committed run (`results/pythia-12b-deduped.bif-as-an-ai-language-model-…json`)
-is the query above against Pythia-70m and 200 sampled Pile documents, and shows
-what a first result looks like: every one of the 200 covariances is positive,
-because every loss moves with the chain's excursion, and the partial
-covariances beneath them split 99 toward to 101 away, the strongest two and a
-half standard errors from zero. A 70-million
-parameter model and a seventeen-token query are a small signal; the point of
-the committed file is that the machinery, the diagnostics and the shape of the
-answer are there to run on a bigger one.
+The objective is the mean of the supplied texts' mean token losses, `L(w)`.
+The sampler targets `p(w) ∝ exp(-nβ·L(w) - γ/2·‖w-w*‖²)` near the checkpoint.
+For the explicitly defined perturbation **`L(w) + δ·loss_example(w)`**, the
+posterior query-loss derivative is `-nβ·Cov(loss_query, loss_example)`.
+This is a local posterior sensitivity identity, not a retraining guarantee.
+See [Kreer et al., Bayesian Influence Functions for Hessian-Free Data Attribution](https://arxiv.org/abs/2509.26544).
 
-The result file (`results/<target>.bif-<slug>.json`) records the checkpoint and
-its commit, every sampler setting, the per-example covariance with its
-across-chain standard error, and the correlation beside it, since covariance
-scales with how much a loss moves and a long high-entropy document moves more
-than a short answer whether or not it has anything to do with the query. The
-report prints the stages ranked by mean covariance, the examples at either end
-of the ranking, and two checks on the sampler that come free from the same
-draws: the local learning coefficient `nβ(E[L] - L(w*))`, taken over the
-candidates the posterior was localized on, which is at or below zero when
-the chains sat at a lower loss on that sample than `w*` does (possible
-without fault, since `w*` minimizes the training set and not a few hundred
-sampled examples; the report says so rather than calling the run invalid),
-and the drift of each chain's loss over the localized candidates, the same
-set at every draw, across its retained draws, which catches the failure the coefficient alone does not — a
-chain climbing steadily away from `w*` has a positive coefficient and a doubled
-loss. A run at ten times the default step size did exactly that on Pythia-70m,
-and reported every candidate as positively correlated with the query for no
-better reason than that everything got worse together. The report says so
-when it happens and says to lower `--lr`.
+Results contain raw draws, checkpoint revision, settings, descriptive covariance,
+and screening diagnostics. Rankings are withheld for missing or non-finite draws,
+fewer than four chains or 100 retained draws per chain, disagreeing chain halves
+(ordinary split R-hat above 1.05), a batch-means effective sample size below 400,
+or a strong time trend (absolute correlation above 0.5). Screens cover the query,
+localized mean, every candidate, and the products used to estimate covariance.
+These are heuristic screens, not proof of convergence; passing them cannot establish
+mixing in every weight direction. The report recomputes them for historical files.
+A failed screen yields **inconclusive sampling**, not an attribution ranking.
+Positive and negative descriptive covariances are displayed separately only when
+screens pass. Partial covariances remain diagnostics and do not determine rank.
 
-That shared movement never goes to zero, and at the default step size it is
-most of every covariance: on Pythia-70m at twice the default step size all 200
-documents correlated near 0.85 with the query, at the default near 0.6, and the
-raw ranking was by how far each document's own loss swings rather than by
-anything to do with the query. The ranking is still by the covariance, because
-the covariance is the influence: the identity above is about
-`Cov(ℓ_query, ℓ_example)` and nothing else, and a covariance with the other
-candidates regressed out is a different quantity that can shrink or reverse a
-real influence. What the report adds is the means to read it: the query's
-covariance with the average candidate (`baseline_cov`, and each example's
-`above_baseline`), which is the shared part, and the *partial* covariance,
-where both series are regressed on the per-draw mean loss of the *other*
-candidates and the residuals covaried, which is the part of an example's
-movement specific to the query. The candidate being scored is left out of its
-own control, since a lone candidate regressed on itself has a residual of
-exactly zero; with one candidate there is nothing to control on, so its partial
-is the raw covariance and the file says so (`partial_control`). An example high
-on both is one the model's loss on the query moves with in particular; one high
-on covariance alone moves with everything. The raw draws are in the
-file too (`draws[chain][draw]`, the query's loss then each record's), so any
-other statistic can be computed later without re-running the chains.
+The initial settings (`lr=5e-8`, `gamma=100`, four chains, 50 burn-in steps,
+100 retained draws) are exploratory, **not calibrated defaults**. Temperature
+`nβ` defaults to `n/ln(n)` over the localized texts. Reducing the step size alone
+can hide drift without reaching the posterior. Compare longer burn-in, longer
+sampling, step sizes, and independent seeds before interpreting a result.
 
-Two things bound what the number means, and both are in the result file rather
-than assumed. A third is stated here: a pretraining document is scored on its
-own, from its first token, where Pythia saw it packed into a 2,049-token
-stream with the tail of the document before it as context. The loss of a
-standalone document is a different loss from the one training took, and the
-covariances over the committed Pythia run are of the former. Rebuilding the
-packed context is possible, since the training order is published and
-indexed (see [Where in training it was seen](#where-in-training-it-was-seen)),
-and is a follow-up rather than part of this layer. The posterior is localized on the candidates — a few hundred
-examples — not on the training set, so the covariances are about that sample.
-And the influence is on the loss of the checkpoint named in the file: pass
-`--model` to weigh a target's samples against a different checkpoint (all Pythia
-sizes saw the same documents in the same order, which is what makes a 70M run
-over the 12B target's Pile sample a sensible thing to do), and the report says
-which checkpoint it ran on.
+### What has been validated
 
-### The defaults, and why
+Run the bounded CPU experiment using the same sampler as the model command:
 
-The step size is the one setting that matters. Each SGLD step adds Gaussian
-noise of standard deviation `√ε` to every parameter, so over `T` steps a chain
-random-walks about `√(Tε)` in each of tens of millions of directions, and a
-walk comparable to the weights themselves is a chain that has left the model.
-On Pythia-70m over 200 Pile documents, 80 steps at `ε = 1e-6` doubled the loss;
-at `1e-7` the minibatch loss rose 0.75 nats from a start of 3.4, just under the
-line the report draws; at the default `5e-8` it rose about 0.4 with a learning
-coefficient of 21 at `nβ = 37.7`, and the four chains agreed with each other
-to within a unit. A
-bigger model needs a smaller step, and the report says when it does. `nβ`
-defaults to `n / ln(n)` with `n` the number of candidates the posterior is
-localized on (devinterp sets it from the minibatch, as a convention for
-comparing coefficients; here a minibatch is a memory setting and must not move
-the posterior), `γ = 100`, four chains of a
-hundred retained draws after fifty burn-in steps. The runtime is `chains ×
-draws × candidates` forward passes plus the SGLD steps: minutes for a 70M model
-over 300 documents on a laptop GPU, and a multi-GPU-hour job for a 7B model,
-which is what `--limit`, `--max-tokens` and `--dtype bfloat16` are for. Memory
-for a reduced-precision run is the model and its gradients in that precision,
-a float32 master copy the chain walks in (the default step is below bfloat16's
-own spacing, so the walk cannot happen in bfloat16), and `w*` in the loaded
-precision: about five times the weights' reduced size, or 70 GB for 7B before
-activations. Noise is drawn on the parameter's own device.
+```bash
+python -m trainspotting.bif_validation \
+  --output results/validation/standalone-text-sensitivity.json
+```
+
+It uses an exactly solvable Gaussian posterior and checks its mean, variance,
+positive and negative loss covariances, and the query-loss change caused by
+reweighting one example. It separately extends burn-in, extends sampling,
+changes the seed, and halves the step size. The settings and tolerances are
+fixed in the runner; it saves failures as well as successes and exits nonzero
+on failure. The results include the loss draws so the calculations are reviewable.
+See the [validation readout](docs/research/standalone-text-sensitivity.md).
+This validates the small analytic problem; it does not validate language-model
+attribution or transfer those sampler settings to Pythia.
+
+The historical Pythia demonstration remains committed as an **inconclusive
+sampling example**. Its four chains' mean candidate losses rise almost linearly
+through the retained draws (time correlations 0.996–0.999). Removing a linear
+time trend removes 88–99% of each chain's average query–candidate covariance.
+That calculation diagnoses shared drift; detrending does not repair the posterior
+estimator. All 200 descriptive covariances are positive, and none should be
+presented as pulling the model away. A stable, intervention-validated language-model
+result remains follow-up research before broader attribution claims are justified.
 
 ## Pretraining data
 
@@ -1869,17 +1775,11 @@ checks each saved Parquet schema against the current one. That is the canary for
 an upstream schema change, which otherwise shows up only as a sampling run that
 quietly labels nothing, or a string search that quietly counts less.
 
-`tests/test_bif.py` pins everything around the sampler that does not need a
-checkpoint: which committed examples become candidates and which stages are
-skipped with a reason, that the loss labels cover the fit text only and
-truncation drops the prompt rather than the answer, that a chat template's
-rendering is what gets tokenized and a template that cannot render falls back to
-roles, the sign and normalization of the covariance, that chains are averaged
-within rather than pooled, the drift and baseline diagnostics, and what the
-report says when a chain was still drifting, in either direction, or sat below `w*`. The SGLD loop
-runs against a toy model when torch is importable — shapes, finite losses, the
-weights restored to `w*` afterwards, padding kept out of the loss — and is
-skipped otherwise.
+`tests/test_bif.py` checks candidate selection, loss masking, covariance
+arithmetic, conservative diagnostics, and withholding unsupported conclusions.
+The sampler tests use a tiny CPU model. A dedicated CI job installs torch and
+runs the exact Gaussian validation; the regular dependency-light test job
+continues to exercise the rest of the command without model downloads.
 
 `steps` is pinned where it would fail silently: the shard layout has to close
 exactly over 143,000 steps or every offset is an address into the wrong text, a
@@ -1921,13 +1821,9 @@ sampling run that quietly labels nothing.
   more; and a pattern present in a stage is not a demonstration that any
   particular behaviour came from it. For "did this exact document train the
   model", use OLMoTrace.
-- `bif` weighs a few hundred sampled examples against one checkpoint's loss,
-  with a posterior localized on those examples rather than on the training set.
-  It ranks the examples the other layers found; it does not find new ones. A
-  covariance from a chain the report flags as still drifting from `w*`, up or down, is
-  not a posterior covariance; a learning coefficient at or below zero is not
-  that flag, since `w*` minimizes the training set and not the few hundred
-  examples the posterior is localized on.
+- `bif` is experimental standalone-text sensitivity on Pythia-70m, not training
+  attribution. Its Gaussian validation does not validate a language model. The
+  committed language-model run is inconclusive and its ranking is withheld.
 - `context` names each RL mix's verifier by matching its `dataset_source`
   against known mixes (math answer match, code unit tests, constraint checker,
   LLM judge). The raw source tag travels with every record, so the inference is

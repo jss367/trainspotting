@@ -2401,22 +2401,13 @@ def cmd_report(args):
 
 
 def _report_influence(target_name: str) -> None:
-    """The committed Bayesian-influence runs, if any.
-
-    Placed after the string traces and before the questions because it answers
-    the caveat the traces end on: a rate says where a phrase is, and this says
-    which of the sampled examples the model's loss on it actually moves with.
-    Nothing prints when nothing has run — the layer needs weights and a GPU, so
-    its absence is the normal state of a checkout rather than an omission.
-    """
+    """Render experimental runs with diagnostics recomputed from saved draws."""
     runs = bif.committed(target_name)
     if not runs:
         return
-    print("\n## Bayesian influence\n")
-    print("Posterior covariance between the model's loss on a query and its loss on each "
-          "committed sampled example, sampled by SGLD around the released weights. "
-          "Positive means training harder on the example would lower the query's loss. "
-          "See `trainspotting bif --help`.\n")
+    print("\n## Experimental loss sensitivity\n")
+    print("Standalone-text sensitivity under a local sampling objective. "
+          "This does not identify the historical cause of a model behavior.\n")
     for res in runs:
         for line in bif.render(res):
             print(line)
@@ -2611,22 +2602,12 @@ def _report_questions(target_name: str, target: dict) -> None:
 
 
 def cmd_bif(args):
-    """Weigh the committed sampled examples against a query by Bayesian influence.
-
-    Everything before the sampler is the same plumbing the other layers use: the
-    candidates are the context records and corpus documents already committed
-    for the target, filtered by `--match` if a phrase is being chased. The
-    sampler needs the checkpoint's weights, so this is the one command that
-    imports torch, and it does so after the candidate set is known — a missing
-    context file is a cheaper thing to find out than a missing GPU.
-    """
+    """Experimental standalone-text sensitivity on the small supported checkpoint."""
     target = registry.resolve(args.target)
     model_id = args.model or target["hf_model"]
-    if not model_id:
-        sys.exit(
-            f"{args.target} is a dataset, not a model: there are no weights to sample around."
-            " Pass --model <hf id> to weigh its examples against some checkpoint anyway."
-        )
+    if model_id != bif.SUPPORTED_MODEL:
+        sys.exit(f"experimental bif supports only {bif.SUPPORTED_MODEL}; pass --model "
+                 f"{bif.SUPPORTED_MODEL}. Other checkpoints and post-training objectives are deferred.")
     query = sys.stdin.read() if args.text == "-" else args.text
     if not query.strip():
         sys.exit("the query is empty")
@@ -2644,9 +2625,7 @@ def cmd_bif(args):
     for stage, why in skipped.items():
         print(f"{stage}: not weighed — {why}", file=sys.stderr)
     for stage, n in incomplete.items():
-        print(f"{stage}: {n} records skipped — the stored sample does not hold them as the model "
-              f"was trained on them (tool use, a turn cut at 4,000 characters, or a document "
-              f"stored as an excerpt)", file=sys.stderr)
+        print(f"{stage}: {n} records skipped — the stored document is incomplete or excerpted", file=sys.stderr)
     if not cands:
         sys.exit("no candidate examples: nothing committed for this target that this layer can weigh")
     try:
@@ -2655,12 +2634,8 @@ def cmd_bif(args):
     except ImportError:
         sys.exit("this command needs torch and transformers: pip install -e '.[bif]'")
     tokenizer = bif.load_tokenizer(model_id)
-    if getattr(tokenizer, "chat_template", None) and not args.prompt:
-        sys.exit(
-            f"{model_id} is a chat model: its template renders a reply behind a header and the "
-            "turn it answers, so the query has to be given as a reply — pass --prompt with what "
-            "the model was replying to"
-        )
+    if getattr(tokenizer, "chat_template", None):
+        sys.exit("chat templates and post-training objectives are deferred in experimental bif")
     device = bif.pick_device(args.device)
     print(f"loading {model_id} on {device} ({args.dtype})", file=sys.stderr)
     model, tokenizer, revision = bif.load(model_id, device, args.dtype, tokenizer=tokenizer)
@@ -2698,16 +2673,7 @@ def cmd_bif(args):
         sys.exit(f"{e}: the query cannot be rendered through {model_id}'s template")
     if q["fit_tokens"] == 0:
         sys.exit("the query has no tokens to score")
-    # The posterior is localized on the text the model was fit *toward*. A DPO
-    # rejected completion is what the objective pushed the model off, so it is
-    # scored at every draw but never drawn into a minibatch: fitting the chain
-    # to it would localize the posterior on the opposite of what training did.
-    localize = [i for i, c in enumerate(kept) if c["side"] != "rejected"]
-    if not localize:
-        sys.exit(
-            "every candidate is a rejected completion, so there is no text the model was fit toward "
-            "to localize the posterior on; widen --match or add a stage"
-        )
+    localize = list(range(len(kept)))
     nbeta = args.nbeta if args.nbeta is not None else bif.default_nbeta(len(localize))
     settings = {
         "chains": args.chains,
@@ -2729,7 +2695,8 @@ def cmd_bif(args):
     }
     print(
         f"{len(encoded)} candidates ({len(localize)} localized on), query {q['fit_tokens']} fit tokens; "
-        f"{args.chains} chains × ({args.burn_in} burn-in + {args.draws} × {args.every} steps)",
+        f"{args.chains} chains × {args.burn_in + (args.draws - 1) * args.every + 1} total steps; "
+        "experimental settings, convergence not established",
         file=sys.stderr,
     )
     run = bif.sample(
@@ -3303,22 +3270,24 @@ def main():
 
     p = sub.add_parser(
         "bif",
-        help="weigh the committed sampled examples against a query by Bayesian influence "
-        "(needs torch, transformers and the model's weights)",
+        help="experimental standalone-text sensitivity on Pythia-70m (needs the bif extra)",
+        description="Experimental standalone-text loss sensitivity on Pythia-70m-deduped only. "
+        "Other checkpoints and post-training objectives are deferred. Sampling diagnostics "
+        "can withhold rankings; passing them does not validate historical training attribution.",
     )
-    p.add_argument("target", help=TARGET_HELP)
-    p.add_argument("text", help="what the model said — the text whose loss is being explained ('-' reads stdin)")
+    p.add_argument("target", help="registered target whose committed corpus documents define the sample")
+    p.add_argument("text", help="query continuation whose loss is measured ('-' reads stdin)")
     p.add_argument("--prompt", help="what it was replying to, scored as context rather than as target")
     p.add_argument("--stage", help="only this stage's committed sample")
     p.add_argument("--match", help="keep only candidates whose text holds this regex (case-insensitive)")
     p.add_argument("--limit", type=_positive_int, help="at most this many candidates per stage, drawn at random")
-    p.add_argument("--model", help="HuggingFace id of the checkpoint to sample around (default: the target's own)")
+    p.add_argument("--model", help="use EleutherAI/pythia-70m-deduped; other checkpoints are deferred")
     p.add_argument("--chains", type=_positive_int, default=4)
     p.add_argument("--draws", type=_draws, default=100, help="retained draws per chain (at least 2)")
     p.add_argument("--burn-in", type=_nonnegative_int, default=50, help="SGLD steps discarded per chain")
     p.add_argument("--every", type=_positive_int, default=1, help="SGLD steps between retained draws")
     p.add_argument("--lr", type=_positive_float, default=5e-8,
-                   help="SGLD step size ε; the report says if the chains climbed away from w*, in which case lower it")
+                   help="SGLD step size ε; experimental, requires sampling diagnostics and stability checks")
     p.add_argument("--nbeta", type=_positive_float,
                    help="inverse temperature nβ (default: n / ln n over the localized candidates)")
     p.add_argument("--gamma", type=_positive_float, default=100.0, help="localization strength γ")
@@ -3326,13 +3295,8 @@ def main():
                    help="candidates per SGLD minibatch (a memory setting; it does not change the posterior)")
     p.add_argument("--eval-batch", type=_positive_int, default=16, help="examples per forward pass when recording losses")
     p.add_argument("--max-tokens", type=_positive_int, default=512, help="tokens kept per example (the front is dropped)")
-    # No float16: its exponent range is narrow enough that small likelihood
-    # gradients underflow in `backward()` before the float32 master ever sees
-    # them, and a chain fed those gradients samples the prior and the noise
-    # rather than the posterior. Curing that needs a loss scaler; bfloat16 has
-    # float32's exponent range and needs none.
-    p.add_argument("--dtype", default="float32", choices=["float32", "bfloat16"],
-                   help="weights precision; bfloat16 halves memory and keeps float32's exponent range")
+    p.add_argument("--dtype", default="float32", choices=["float32"],
+                   help="the small-model experiment uses float32")
     p.add_argument("--device", default="auto", help="cuda, mps, cpu, or auto")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--slug", help="short name for the result file (default: derived from the text)")

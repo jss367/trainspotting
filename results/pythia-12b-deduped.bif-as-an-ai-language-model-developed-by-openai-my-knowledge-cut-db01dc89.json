@@ -63,13 +63,12 @@
       "mean_cov": 0.016019306901397006,
       "mean_corr": 0.7190704761357075,
       "mean_partial": 4.207701053678273e-06,
-      "mean_pull": 0.016019306901397006,
-      "toward": 200,
       "best": {
         "id": "row-130440228",
         "row": 130440228,
-        "pull": 0.05431173046944182
-      }
+        "cov": 0.05431173046944182
+      },
+      "positive_covariances": 200
     }
   ],
   "sources": [
@@ -81,13 +80,12 @@
       "mean_cov": 0.016019306901397006,
       "mean_corr": 0.7190704761357075,
       "mean_partial": 4.207701053678273e-06,
-      "mean_pull": 0.016019306901397006,
-      "toward": 200,
       "best": {
         "id": "row-130440228",
         "row": 130440228,
-        "pull": 0.05431173046944182
-      }
+        "cov": 0.05431173046944182
+      },
+      "positive_covariances": 200
     }
   ],
   "trajectory": [
@@ -447,8 +445,7 @@
       ],
       "snippet": "PUT /clients admin/admin\nContent-Type: application/json\n\n{\n  \"organizationId\" : \"Policy_IPWhitelistTest\",\n  \"clientId\" :",
       "above_baseline": -0.0045670335019722934,
-      "pull": 0.011452273399424713,
-      "rank": 194
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -474,10 +471,9 @@
         0.005527054655997926,
         0.013381616407953061
       ],
-      "snippet": "<?php\n/**\n * Copyright \u00a9 Magento, Inc. All rights reserved.\n * See COPYING.txt for license details.\n */\n?>\n<div class=\"p",
+      "snippet": "<?php\n/**\n * Copyright © Magento, Inc. All rights reserved.\n * See COPYING.txt for license details.\n */\n?>\n<div class=\"p",
       "above_baseline": -0.003132531837505651,
-      "pull": 0.012886775063891355,
-      "rank": 181
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -505,8 +501,7 @@
       ],
       "snippet": "d n.\n36\nLet v = 23 + -31. Let t be 4/(v/2) + 3. Suppose -m - 31 = -5*y, -y + 13 = -t*y + 5*m. Calculate the smallest com",
       "above_baseline": -0.0030891488677217555,
-      "pull": 0.01293015803367525,
-      "rank": 180
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -534,8 +529,7 @@
       ],
       "snippet": "In each of these interviews, we asked the principal players not only to tell their stories, from start to finish, but al",
       "above_baseline": -0.0012094642838081267,
-      "pull": 0.01480984261758888,
-      "rank": 130
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -563,8 +557,7 @@
       ],
       "snippet": "Q:\n\nHow to query this in LINQ? C#\n\nConsidering the following:\npublic class Person\n{\n    public Person(string fName, stri",
       "above_baseline": -0.0015707637411108717,
-      "pull": 0.014448543160286135,
-      "rank": 145
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -590,10 +583,9 @@
         0.006252440803668015,
         0.024267608625159483
       ],
-      "snippet": "package cn.itcast.ssh.domain;\n\nimport java.util.Date;\n\n/**\n * \u8bf7\u5047\u5355\n */\npublic class LeaveBill {\n\tprivate Long id;//\u4e3b\u952eID\n\t",
+      "snippet": "package cn.itcast.ssh.domain;\n\nimport java.util.Date;\n\n/**\n * 请假单\n */\npublic class LeaveBill {\n\tprivate Long id;//主键ID\n\t",
       "above_baseline": -0.0013325901671828282,
-      "pull": 0.014686716734214178,
-      "rank": 133
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -621,8 +613,7 @@
       ],
       "snippet": "Theseplates are Red Eagle high performance clutch plates. These clutches are put through a process where the friction pa",
       "above_baseline": 0.002191025849929716,
-      "pull": 0.018210332751326722,
-      "rank": 27
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -650,8 +641,7 @@
       ],
       "snippet": "Plasma enterolactone or intestinal Bifidobacterium levels do not explain adenoma formation in multiple intestinal neopla",
       "above_baseline": 0.0030654126652961793,
-      "pull": 0.019084719566693185,
-      "rank": 16
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -679,8 +669,7 @@
       ],
       "snippet": "/*\n *  Licensed to the Apache Software Foundation (ASF) under one\n *  or more contributor license agreements.  See the N",
       "above_baseline": -0.0007250059633976506,
-      "pull": 0.015294300937999356,
-      "rank": 118
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -706,10 +695,9 @@
         0.008365606403226412,
         0.022389816697902916
       ],
-      "snippet": "Media\n\nAlan Dershowitz\u2019s new book will counter the #MeToo movement\n\nAlan Dershowitz \u2014 who has been mired in controversy ",
+      "snippet": "Media\n\nAlan Dershowitz’s new book will counter the #MeToo movement\n\nAlan Dershowitz — who has been mired in controversy ",
       "above_baseline": -0.0015062416109766063,
-      "pull": 0.0145130652904204,
-      "rank": 141
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -735,10 +723,9 @@
         0.010592451257700485,
         0.029129269282757376
       ],
-      "snippet": "Associated Press\n\nLANSING \u2014 Michigan\u2019s elections bureau says a ballot drive to legalize marijuana for recreational use i",
+      "snippet": "Associated Press\n\nLANSING — Michigan’s elections bureau says a ballot drive to legalize marijuana for recreational use i",
       "above_baseline": 0.00020890253989806762,
-      "pull": 0.016228209441295074,
-      "rank": 86
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -764,10 +751,9 @@
         0.012723822321096211,
         0.034165340897066014
       ],
-      "snippet": "Can Alt\u0131nt\u0131\u011f\n\nCan Alt\u0131nt\u0131\u011f (born January 1, 1987) is a Turkish professional basketball player who plays for Bah\u00e7e\u015fehir K",
+      "snippet": "Can Altıntığ\n\nCan Altıntığ (born January 1, 1987) is a Turkish professional basketball player who plays for Bahçeşehir K",
       "above_baseline": 0.004579466061283656,
-      "pull": 0.020598772962680662,
-      "rank": 9
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -795,8 +781,7 @@
       ],
       "snippet": "Q:\n\nWhy is my JavaScript code not working?\n\nI have got some code that I got from JSFiddle\n$(function() {\n    $('.toggler",
       "above_baseline": -0.004111672355530307,
-      "pull": 0.0119076345458667,
-      "rank": 190
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -824,8 +809,7 @@
       ],
       "snippet": "FIG. 1 shows a radio or wireless communications system 1 where wireless terminals 2 (also known as mobile stations and/o",
       "above_baseline": 0.0037687476019404274,
-      "pull": 0.019788054503337434,
-      "rank": 14
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -851,10 +835,9 @@
         0.012039853583293916,
         0.026516942799353273
       ],
-      "snippet": "Dallas\n\nAo chegar aos Estados Unidos nesta quarta-feira (15) Jair Bolsonaro afirmou que as manifesta\u00e7\u00f5es que est\u00e3o ocorr",
+      "snippet": "Dallas\n\nAo chegar aos Estados Unidos nesta quarta-feira (15) Jair Bolsonaro afirmou que as manifestações que estão ocorr",
       "above_baseline": 0.0030493292776632326,
-      "pull": 0.01906863617906024,
-      "rank": 17
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -882,8 +865,7 @@
       ],
       "snippet": "Socio-demographic Predictors of Tobacco Use among Women of Nepal: Evidence from Non Communicable Disease Risk Factors ST",
       "above_baseline": -0.0016490148970463303,
-      "pull": 0.014370292004350676,
-      "rank": 150
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -911,8 +893,7 @@
       ],
       "snippet": "Follow us\n\nAccount\n\nMedia: A Moment with Marquis\n\nRobert Ditcham, the new ITV adjudicator, shouldn't pack his CV in the ",
       "above_baseline": -0.0013731271343872167,
-      "pull": 0.01464617976700979,
-      "rank": 135
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -940,8 +921,7 @@
       ],
       "snippet": "Q:\n\nPlone 4 : CalendarWidget to display Year only without Date and Month\n\nIn Plone 4, I am using the CalendarWidget. Is ",
       "above_baseline": 0.0005375542243469152,
-      "pull": 0.01655686112574392,
-      "rank": 76
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -969,8 +949,7 @@
       ],
       "snippet": "import { UnionsOverlap } from '../union/UnionsOverlap';\n\n/**\n * Check if an object type has a certain key.\n * Will not l",
       "above_baseline": 0.0029496964230281177,
-      "pull": 0.018969003324425124,
-      "rank": 20
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -998,8 +977,7 @@
       ],
       "snippet": "nlp\\_architect.nn.torch.modules package\n=======================================\n\nSubmodules\n----------\n\nnlp\\_architect.n",
       "above_baseline": -0.0020130266755916705,
-      "pull": 0.014006280225805336,
-      "rank": 160
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1027,8 +1005,7 @@
       ],
       "snippet": "Q:\n\nDoes a logical system have semantics?\n\nFrom Wikipedia:\n\nA logical system or, for short, logic, is a formal system to",
       "above_baseline": -0.0004511091368748863,
-      "pull": 0.01556819776452212,
-      "rank": 109
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1056,8 +1033,7 @@
       ],
       "snippet": "Brought to you by the makers of the World's Best World Map, MapXL (a subsidiary of Compare Infobase), an organization wi",
       "above_baseline": 0.0010469576800020072,
-      "pull": 0.017066264581399013,
-      "rank": 57
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1085,8 +1061,7 @@
       ],
       "snippet": "Q:\n\nHow to populate DB values in content type field, drupal 7\n\nI have created a content type with 4 field in Drupal 7. O",
       "above_baseline": -0.004481924367991254,
-      "pull": 0.011537382533405752,
-      "rank": 193
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1114,8 +1089,7 @@
       ],
       "snippet": "//* This file is part of the MOOSE framework\n//* https://www.mooseframework.org\n//*\n//* All rights reserved, see COPYRIG",
       "above_baseline": -0.0002977467906866045,
-      "pull": 0.0157215601107104,
-      "rank": 104
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1143,8 +1117,7 @@
       ],
       "snippet": "Get breaking news alerts and special reports. The news and stories that matter, delivered weekday mornings.\n\n\n\n\n\nZaki Ja",
       "above_baseline": -0.0016088657953756257,
-      "pull": 0.01441044110602138,
-      "rank": 148
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1172,8 +1145,7 @@
       ],
       "snippet": "Super-resolution for imagery from integrated microgrid polarimeters.\nImagery from microgrid polarimeters is obtained by ",
       "above_baseline": -0.0005993947612280715,
-      "pull": 0.015419912140168935,
-      "rank": 112
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1201,8 +1173,7 @@
       ],
       "snippet": "Get breaking news alerts and special reports. The news and stories that matter, delivered weekday mornings.\n\nThe relic o",
       "above_baseline": 0.0007796386769488607,
-      "pull": 0.016798945578345867,
-      "rank": 67
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1230,8 +1201,7 @@
       ],
       "snippet": "Warning: Memcache::get() [memcache.get]: No servers added to memcache connection in /home/measured/public_html/libs/phpc",
       "above_baseline": -0.0010091940395445444,
-      "pull": 0.015010112861852462,
-      "rank": 123
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1259,8 +1229,7 @@
       ],
       "snippet": "<!DOCTYPE html >\n<html>\n<head>\n    <link rel=\"stylesheet\" href=\"demos.css\" type=\"text/css\" media=\"screen\" />\n    \n    <s",
       "above_baseline": 0.00302186954173473,
-      "pull": 0.019041176443131736,
-      "rank": 18
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1288,8 +1257,7 @@
       ],
       "snippet": "In industry the use of metal products manufactured by compacting and sintering metal-powder compositions is becoming inc",
       "above_baseline": 0.001861576872526069,
-      "pull": 0.017880883773923075,
-      "rank": 38
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1315,10 +1283,9 @@
         0.00931343768045499,
         0.024450719024853244
       ],
-      "snippet": "Mata\u2019utia is a Tiger!\n\nPosted: Thursday 26th July 2018 - 9:57 AM\n\nCastleford Tigers have landed fullback Peter Mata\u2019utia",
+      "snippet": "Mata’utia is a Tiger!\n\nPosted: Thursday 26th July 2018 - 9:57 AM\n\nCastleford Tigers have landed fullback Peter Mata’utia",
       "above_baseline": -0.001824905953993478,
-      "pull": 0.014194400947403528,
-      "rank": 155
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1346,8 +1313,7 @@
       ],
       "snippet": "Q:\n\nNeed guidance on SQL query\n\nSo the problem is:\nfan(fanID: integer, fanName: string)\nband(bandID: integer, bandName: ",
       "above_baseline": 0.0005507076372219602,
-      "pull": 0.016570014538618966,
-      "rank": 75
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1373,10 +1339,9 @@
         0.01433733707518104,
         0.016277422277207732
       ],
-      "snippet": "Scrappy Carroll\n\nJohn E. \"Scrappy\" Carroll (August 27, 1860 \u2013 November 14, 1942) was an outfielder in Major League Baseb",
+      "snippet": "Scrappy Carroll\n\nJohn E. \"Scrappy\" Carroll (August 27, 1860 – November 14, 1942) was an outfielder in Major League Baseb",
       "above_baseline": -0.0028870931214054346,
-      "pull": 0.013132213779991572,
-      "rank": 177
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1404,8 +1369,7 @@
       ],
       "snippet": "Q:\n\nfacing issue with passport js\n\nI am new to node js and I am trying to make an example for authorization with google ",
       "above_baseline": -0.0020883397556023357,
-      "pull": 0.01393096714579467,
-      "rank": 162
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1433,8 +1397,7 @@
       ],
       "snippet": "The essential elements for creating the perfect bar cart style - it really just comes down to 8 things! Check out the po",
       "above_baseline": 0.0018334899962002653,
-      "pull": 0.01785279689759727,
-      "rank": 39
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1462,8 +1425,7 @@
       ],
       "snippet": "using System;\nusing System.Collections.Generic;\nusing System.Linq;\nusing NLog;\n\nnamespace Improbable.Gdk.CodeGeneration.",
       "above_baseline": 0.0012191068576761326,
-      "pull": 0.01723841375907314,
-      "rank": 50
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1491,8 +1453,7 @@
       ],
       "snippet": "youthlarge's bibimbop\n\nTuesday, October 04, 2005\n\nPark Slope Gastronome #14 - I'm Dining With Elsa\n\nA new addition to ou",
       "above_baseline": 0.00230557157020218,
-      "pull": 0.018324878471599186,
-      "rank": 26
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1520,8 +1481,7 @@
       ],
       "snippet": "Support is horrible. I was suggesting the option to disable prestige and it doesn't work. I contacted on discord and the",
       "above_baseline": 0.0007949245445434509,
-      "pull": 0.016814231445940457,
-      "rank": 64
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1549,8 +1509,7 @@
       ],
       "snippet": "import os.path\nimport numpy as np\nimport itertools\nimport Tools\n\n\n# Those patterns are used for tests and benchmarks.\n# ",
       "above_baseline": 0.005654121150275266,
-      "pull": 0.021673428051672272,
-      "rank": 4
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1578,8 +1537,7 @@
       ],
       "snippet": ".page-manage-owners {\n  b {\n    margin-top: 40px;\n    margin-bottom: 15px;\n    display: inline-block;\n  }\n\n  b:first-of-",
       "above_baseline": -0.0017707135336796648,
-      "pull": 0.014248593367717341,
-      "rank": 153
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1605,10 +1563,9 @@
         0.01202837972972775,
         0.03127655661972767
       ],
-      "snippet": "Rep. Tim Huelskamp (R-TX) today spoke to the Family Research Council\u2019s Tony Perkins and the American Family Association\u2019",
+      "snippet": "Rep. Tim Huelskamp (R-TX) today spoke to the Family Research Council’s Tony Perkins and the American Family Association’",
       "above_baseline": 0.001252741902062933,
-      "pull": 0.01727204880345994,
-      "rank": 49
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1636,8 +1593,7 @@
       ],
       "snippet": "Q:\n\nPointer to auto_ptr instead of a classical double pointer\n\nI'm quite new to smart pointers and was trying to refacto",
       "above_baseline": -0.0015082594133018646,
-      "pull": 0.014511047488095142,
-      "rank": 142
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1665,8 +1621,7 @@
       ],
       "snippet": "Homeowners and builders seeking to renovate or restore existing homes often wish to alter the existing windows or window",
       "above_baseline": -0.0017807811850797245,
-      "pull": 0.014238525716317282,
-      "rank": 154
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1694,8 +1649,7 @@
       ],
       "snippet": "Non-quantal acetylcholine release after cholinesterase inhibition in vivo.\nAfter anticholinesterase treatment in vivo, d",
       "above_baseline": 0.0023984068048191753,
-      "pull": 0.01841771370621618,
-      "rank": 24
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1721,10 +1675,9 @@
         0.011282609463512016,
         0.023017208683972966
       ],
-      "snippet": "The hue and cry from Beacon Hill \u2014 from Governor Charlie Baker and legislative leaders \u2014 at the idea of cafes, pot-enhan",
+      "snippet": "The hue and cry from Beacon Hill — from Governor Charlie Baker and legislative leaders — at the idea of cafes, pot-enhan",
       "above_baseline": -0.0002647486484894518,
-      "pull": 0.015754558252907554,
-      "rank": 102
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1750,10 +1703,9 @@
         0.009751312919926569,
         0.02176440923314658
       ],
-      "snippet": "JACKSONVILLE, Fla. \u2013 Guns and ammunition are hot topics both locally and nationally. And gun dealers say they're still s",
+      "snippet": "JACKSONVILLE, Fla. – Guns and ammunition are hot topics both locally and nationally. And gun dealers say they're still s",
       "above_baseline": -0.0015635167294153068,
-      "pull": 0.0144557901719817,
-      "rank": 144
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1781,8 +1733,7 @@
       ],
       "snippet": "Did you know that Steven Spielberg was actually going to use stop-motion to animate the dinosaurs for his film Jurassic ",
       "above_baseline": 0.0003047672157650283,
-      "pull": 0.016324074117162034,
-      "rank": 84
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1810,8 +1761,7 @@
       ],
       "snippet": "Upcoming Events\n\nAt its Microsoft EDU event in New York City today, the company announced it is bringing Microsoft Offic",
       "above_baseline": -0.00020525230657891108,
-      "pull": 0.015814054594818095,
-      "rank": 97
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1837,10 +1787,9 @@
         0.01002543020870744,
         0.019255499377750313
       ],
-      "snippet": "Strong Recovery of Travel and Tourism expected in 2010\n\n\u201cOur challenge is to see through the pressures of today and prep",
+      "snippet": "Strong Recovery of Travel and Tourism expected in 2010\n\n“Our challenge is to see through the pressures of today and prep",
       "above_baseline": -0.002489394314211706,
-      "pull": 0.0135299125871853,
-      "rank": 169
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1868,8 +1817,7 @@
       ],
       "snippet": "Australia's systems of primary healthcare - the need for improved coordination and implications for Medicare Locals.\nIn ",
       "above_baseline": -0.0014295532186810143,
-      "pull": 0.014589753682715992,
-      "rank": 139
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1897,8 +1845,7 @@
       ],
       "snippet": "Rich playboy, Biff Jackson, is fairly the soiree beast. Each and every 2 months Biff tosses a theme soireeR30;an softcor",
       "above_baseline": 0.002000709091770674,
-      "pull": 0.01802001599316768,
-      "rank": 31
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1926,8 +1873,7 @@
       ],
       "snippet": "<?php\n\nnamespace Admin\\Requests;\n\nuse System\\Classes\\FormRequest;\n\nclass Allergen extends FormRequest\n{\n    public funct",
       "above_baseline": -0.004164471627113387,
-      "pull": 0.01185483527428362,
-      "rank": 191
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1955,8 +1901,7 @@
       ],
       "snippet": "Q:\n\nJavaScript: What is the diff between creating an object via constructor and via object literal?\n\nWhat is the main di",
       "above_baseline": -0.004280044633340965,
-      "pull": 0.011739262268056041,
-      "rank": 192
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -1984,8 +1929,7 @@
       ],
       "snippet": "Effects of the endoparasitoid Cotesia chilonis (Hymenoptera: Braconidae) parasitism, venom, and calyx fluid on cellular ",
       "above_baseline": 0.0019182863127076115,
-      "pull": 0.017937593214104618,
-      "rank": 33
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2013,8 +1957,7 @@
       ],
       "snippet": "Q:\n\nQuestion about placing several itemized lists horizontally one next to the other\n\nThis has undoubtedly been asked a ",
       "above_baseline": 0.0052085525401628086,
-      "pull": 0.021227859441559815,
-      "rank": 5
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2040,10 +1983,9 @@
         0.012992158389186262,
         0.024096793902212994
       ],
-      "snippet": "Un pav\u00e9 voire un parpaing jet\u00e9 dans la mare du march\u00e9 immobilier par l\u2019UFC Que choisir. Dans une \u00e9tude de 40 pages publi",
+      "snippet": "Un pavé voire un parpaing jeté dans la mare du marché immobilier par l’UFC Que choisir. Dans une étude de 40 pages publi",
       "above_baseline": 0.002026080483918797,
-      "pull": 0.018045387385315803,
-      "rank": 30
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2071,8 +2013,7 @@
       ],
       "snippet": "Rapid analysis of the essential oil components of dried Zanthoxylum bungeanum Maxim by Fe2O3-magnetic-microsphere-assist",
       "above_baseline": 0.001334756985119992,
-      "pull": 0.017354063886516998,
-      "rank": 47
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2100,8 +2041,7 @@
       ],
       "snippet": "Ex-Mumbai cop, Telgi aide acquitted in fake stamp scam case\n\nMumbai, Nov 30 (PTI) A special CBI court today acquitted a ",
       "above_baseline": 0.0010272652298943426,
-      "pull": 0.01704657213129135,
-      "rank": 58
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2129,8 +2069,7 @@
       ],
       "snippet": "Gram-negative bacteremia as a clinical marker of occult malignancy.\nGram-negative bacteremia may be a harbinger of occul",
       "above_baseline": -0.0034062729907268323,
-      "pull": 0.012613033910670174,
-      "rank": 183
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2158,8 +2097,7 @@
       ],
       "snippet": "U.S. Zika Funding: A Race Against the Rain\n\nHere in Nicaragua, the rains of May have arrived. Five months of intense hea",
       "above_baseline": 0.00022702103634102827,
-      "pull": 0.016246327937738034,
-      "rank": 85
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2185,10 +2123,9 @@
         0.015149252053801682,
         0.0349816908126104
       ],
-      "snippet": "Roberts Eidemanis\n\nRoberts Eidemanis (, Robert Petrovich Eideman; 1895 \u2013 June 12, 1937) was a Latvian Soviet Komkor, wri",
+      "snippet": "Roberts Eidemanis\n\nRoberts Eidemanis (, Robert Petrovich Eideman; 1895 – June 12, 1937) was a Latvian Soviet Komkor, wri",
       "above_baseline": 0.0018659990540037738,
-      "pull": 0.01788530595540078,
-      "rank": 37
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2214,10 +2151,9 @@
         0.006777815195078438,
         0.013239723942497221
       ],
-      "snippet": "Stewart Lee has revealed that he was a victim of an attempted mugging \u2013 which was made worse because of his experience a",
+      "snippet": "Stewart Lee has revealed that he was a victim of an attempted mugging – which was made worse because of his experience a",
       "above_baseline": -0.005864792345999861,
-      "pull": 0.010154514555397145,
-      "rank": 196
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2245,8 +2181,7 @@
       ],
       "snippet": "/*\n * Copyright (c) 2004, 2009, Oracle and/or its affiliates. All rights reserved.\n * DO NOT ALTER OR REMOVE COPYRIGHT N",
       "above_baseline": -0.001392888386841793,
-      "pull": 0.014626418514555213,
-      "rank": 137
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2274,8 +2209,7 @@
       ],
       "snippet": "---\nauthor:\n- |\n    Bach Q. Ha\\\n    \\\n    ``\n- |\n    Jason D. Hartline\\\n    \\\n    ``\ntitle: |\n    Mechanism Design via\\\n",
       "above_baseline": -4.438266290488629e-06,
-      "pull": 0.016014868635106518,
-      "rank": 90
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2301,10 +2235,9 @@
         0.010106735851092343,
         0.021862483408613118
       ],
-      "snippet": "Producer of hit show, \u201c24\u201d comes home to Carroll\n\nQ: How did you get your job in Hollywood?\nA: I didn\u2019t really know anyo",
+      "snippet": "Producer of hit show, “24” comes home to Carroll\n\nQ: How did you get your job in Hollywood?\nA: I didn’t really know anyo",
       "above_baseline": -0.0006762545664712044,
-      "pull": 0.015343052334925802,
-      "rank": 116
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2332,8 +2265,7 @@
       ],
       "snippet": "The overall goal of the Interventions and Translation Core (ITC) is to provide expertise and infrastructure to assist in",
       "above_baseline": -0.00346310763875984,
-      "pull": 0.012556199262637166,
-      "rank": 184
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2361,8 +2293,7 @@
       ],
       "snippet": "Normal repair of gamma radiation-induced single-strand and double-strand DNA breaks in retinoblastoma fibroblasts.\nThe f",
       "above_baseline": 0.001901678577891485,
-      "pull": 0.01792098547928849,
-      "rank": 35
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2388,10 +2319,9 @@
         0.012720683750691932,
         0.02029006461186782
       ],
-      "snippet": "Iowa Trump Has Slight Edge Over Clinton Grassley leads in Senate re-election bid\n\nWest Long Branch, NJ \u2013 Donald Trump ho",
+      "snippet": "Iowa Trump Has Slight Edge Over Clinton Grassley leads in Senate re-election bid\n\nWest Long Branch, NJ – Donald Trump ho",
       "above_baseline": -0.001128376662150989,
-      "pull": 0.014890930239246017,
-      "rank": 129
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2419,8 +2349,7 @@
       ],
       "snippet": "Obesity remains a serious health problem and it is no secret that many people want to lose weight. Behavioral economists",
       "above_baseline": 0.0003252953270443115,
-      "pull": 0.016344602228441318,
-      "rank": 83
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2446,10 +2375,9 @@
         0.012232478381319743,
         0.03030021828338249
       ],
-      "snippet": "Pound near 5-year high vs dollar as Bank of England hints rates may rise\n\nLONDON (AP) \u2014 The pound jumped on Friday to re",
+      "snippet": "Pound near 5-year high vs dollar as Bank of England hints rates may rise\n\nLONDON (AP) — The pound jumped on Friday to re",
       "above_baseline": 0.0009718259881410334,
-      "pull": 0.01699113288953804,
-      "rank": 59
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2477,8 +2405,7 @@
       ],
       "snippet": "Elevated circulatory level of GABA(A)--antagonistic neurosteroids in patients with combat-related post-traumatic stress ",
       "above_baseline": 0.004559453312837868,
-      "pull": 0.020578760214234874,
-      "rank": 10
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2506,8 +2433,7 @@
       ],
       "snippet": "// Copyright 2013 The Chromium Authors. All rights reserved.\n// Use of this source code is governed by a BSD-style licen",
       "above_baseline": -0.0016861995191473703,
-      "pull": 0.014333107382249636,
-      "rank": 152
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2533,10 +2459,9 @@
         0.012140132517377333,
         0.023499053221260054
       ],
-      "snippet": "Australia\u2019s federal science agency and one of the biggest commercial banks in the country say they have completed a succ",
+      "snippet": "Australia’s federal science agency and one of the biggest commercial banks in the country say they have completed a succ",
       "above_baseline": -0.002406497048339869,
-      "pull": 0.013612809853057137,
-      "rank": 168
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2564,8 +2489,7 @@
       ],
       "snippet": "\n\nDear Lil Peep fans,\n\nGus inspired and encouraged millions to express their lives through music, art, and words.\n\nOne o",
       "above_baseline": -0.001999120663229867,
-      "pull": 0.01402018623816714,
-      "rank": 159
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2593,8 +2517,7 @@
       ],
       "snippet": "Q:\n\nHow can I drain water from a low spot in my garden when I have no lower spot to drain to?\n\nI have a low spot in the ",
       "above_baseline": -0.0016233248661794795,
-      "pull": 0.014395982035217527,
-      "rank": 149
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2620,10 +2543,9 @@
         0.007246136784001829,
         0.027615214542270224
       ],
-      "snippet": "#ThrowBackThursday to Lisa Morgan winning Bathroom Design of the Year 2015 (Under \u00a315k)\n\nIt\u2019s that time of the week agai",
+      "snippet": "#ThrowBackThursday to Lisa Morgan winning Bathroom Design of the Year 2015 (Under £15k)\n\nIt’s that time of the week agai",
       "above_baseline": 0.0015990287903599604,
-      "pull": 0.017618335691756967,
-      "rank": 43
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2651,8 +2573,7 @@
       ],
       "snippet": "From a79152d1d621ea9d477ecc6862a03cae80b2425b Mon Sep 17 00:00:00 2001\nFrom: Peter Korsgaard <peter@korsgaard.com>\nDate:",
       "above_baseline": 0.0015207833715661229,
-      "pull": 0.01754009027296313,
-      "rank": 45
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2680,8 +2601,7 @@
       ],
       "snippet": "Go to page\n\nI believe that Francis Arinze from Nigeria was the black African cardinal who was considered papabile at the",
       "above_baseline": -0.0002739993475067738,
-      "pull": 0.015745307553890232,
-      "rank": 103
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2707,10 +2627,9 @@
         0.01078792520843317,
         0.023803714080363535
       ],
-      "snippet": "Jos\u00e9 Carvallo\n\nJos\u00e9 Aurelio Carvallo Alonso (born 1 March 1986) is a Peruvian footballer who plays as a goalkeeper for U",
+      "snippet": "José Carvallo\n\nJosé Aurelio Carvallo Alonso (born 1 March 1986) is a Peruvian footballer who plays as a goalkeeper for U",
       "above_baseline": -0.0010265471021336514,
-      "pull": 0.014992759799263355,
-      "rank": 124
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2738,8 +2657,7 @@
       ],
       "snippet": "Q:\n\nIf and only if criterion for something to be a differential ideal\n\nLet $I \\subset \\Omega^*(M)$ be a ($2$-sided) idea",
       "above_baseline": -0.0010843387141951048,
-      "pull": 0.014934968187201901,
-      "rank": 127
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2765,10 +2683,9 @@
         0.008980652490731883,
         0.020421771294195423
       ],
-      "snippet": "\u00a9 Jesse D. Garrabrant/NBAE via Getty Images Former NBA player Jason Collins rings the bell prior to a game between the B",
+      "snippet": "© Jesse D. Garrabrant/NBAE via Getty Images Former NBA player Jason Collins rings the bell prior to a game between the B",
       "above_baseline": -0.0006194468222592911,
-      "pull": 0.015399860079137715,
-      "rank": 113
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2796,8 +2713,7 @@
       ],
       "snippet": "ORCHARD PARK, N.Y. -- The Buffalo Bills have cleared running back C.J. Spiller (collarbone) to play and he will be added",
       "above_baseline": -0.0005673910470798387,
-      "pull": 0.015451915854317167,
-      "rank": 111
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2825,8 +2741,7 @@
       ],
       "snippet": "The present invention relates generally to memory devices and in particular the present invention relates to fast access",
       "above_baseline": 0.003728045050299937,
-      "pull": 0.019747351951696943,
-      "rank": 15
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2854,8 +2769,7 @@
       ],
       "snippet": "As Florida authorities work to identify the people who died in Thursday's catastrophic bridge collapse, state and federa",
       "above_baseline": 0.002092290871128756,
-      "pull": 0.018111597772525762,
-      "rank": 29
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2883,8 +2797,7 @@
       ],
       "snippet": "Structure of the G225P/G226P mutant of mouse 3(17)alpha-hydroxysteroid dehydrogenase (AKR1C21) ternary complex: implicat",
       "above_baseline": 0.0024720106719855438,
-      "pull": 0.01849131757338255,
-      "rank": 22
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2910,10 +2823,9 @@
         0.00931301418164894,
         0.02367926386237059
       ],
-      "snippet": "Scientific Expertise and Its Role in Policy Decisions\n\nA recent issue of Science contained a short announcement: \u201cU.S. P",
+      "snippet": "Scientific Expertise and Its Role in Policy Decisions\n\nA recent issue of Science contained a short announcement: “U.S. P",
       "above_baseline": -0.0013707399695830035,
-      "pull": 0.014648566931814003,
-      "rank": 134
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2941,8 +2853,7 @@
       ],
       "snippet": "Modelling the effect of structure and base sequence on DNA molecular electronics.\nDNA is a material that has the potenti",
       "above_baseline": -8.733703328628675e-05,
-      "pull": 0.01593196986811072,
-      "rank": 93
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2968,10 +2879,9 @@
         0.0074091776785291585,
         0.01865177285806567
       ],
-      "snippet": "\u2018Downton Abbey\u2019 The Movie? Laura Carmichael Reveals That It Could Happen\n\nWe NEED this to happen! HollywoodLife.com caug",
+      "snippet": "‘Downton Abbey’ The Movie? Laura Carmichael Reveals That It Could Happen\n\nWe NEED this to happen! HollywoodLife.com caug",
       "above_baseline": -0.0028635314017540683,
-      "pull": 0.013155775499642938,
-      "rank": 176
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -2999,8 +2909,7 @@
       ],
       "snippet": "Q:\n\nis this xml a valid one?\n\nMe and my coworker got into an argument about xml validity.\nI'm very confident that xml no",
       "above_baseline": -0.00012266248817189435,
-      "pull": 0.015896644413225112,
-      "rank": 94
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3028,8 +2937,7 @@
       ],
       "snippet": "Duhamel, 36, and Fergie exchanged vows during a 30-minute ceremony in front of about 200 to 300 guests that included Mar",
       "above_baseline": -0.002943034893592161,
-      "pull": 0.013076272007804845,
-      "rank": 178
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3057,8 +2965,7 @@
       ],
       "snippet": "Bill Gardner (author)\n\nBill Gardner is an American business owner, graphic designer, speaker and author who founded Gard",
       "above_baseline": -0.0010516066079590321,
-      "pull": 0.014967700293437974,
-      "rank": 125
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3084,10 +2991,9 @@
         0.012857556601841498,
         0.07627576274527655
       ],
-      "snippet": "\u30b9\u30d7\u30ea\u30c3\u30af\u30b9\u304c\u904b\u55b6\u3059\u308b\u4e2d\u9ad8\u751f\u5411\u3051SNS\u30a2\u30d7\u30ea\u300c\u30b4\u30eb\u30b9\u30bf\u300d\u304c\u708e\u4e0a\u3057\u3066\u3044\u307e\u3059\u3002\u5c11\u3057\u3067\u3082\u904b\u55b6\u3092\u6279\u5224\u3057\u305f\u30e6\u30fc\u30b6\u30fc\u3092\u5373\u5ea7\u306bBAN\uff08\u30a2\u30ab\u30a6\u30f3\u30c8\u505c\u6b62\uff09\u3057\u305f\u308a\u3001\u5fa9\u5e30\u3092\u671b\u3080\u30e6\u30fc\u30b6\u30fc\u306b\u306f\u53cd\u7701\u6587\u3092\u66f8\u304b\u305b\u305f\u308a\u3068\u3001\u305d\u306e\u601d\u60f3\u7d71\u5236\u3076\u308a\u304c\u300c\u307e\u308b\u3067\u30ab\u30eb\u30c8\u5b97\u6559\u306e\u3088\u3046\u3060\u300d\u306a\u3069\u3068",
+      "snippet": "スプリックスが運営する中高生向けSNSアプリ「ゴルスタ」が炎上しています。少しでも運営を批判したユーザーを即座にBAN（アカウント停止）したり、復帰を望むユーザーには反省文を書かせたりと、その思想統制ぶりが「まるでカルト宗教のようだ」などと",
       "above_baseline": 0.03829242356804481,
-      "pull": 0.05431173046944182,
-      "rank": 1
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3115,8 +3021,7 @@
       ],
       "snippet": "Demand for seeds has soared as more people garden, grow food amid strained supply chains\n\nAgriculture Secretary Sonny Pu",
       "above_baseline": -0.00021171704248739223,
-      "pull": 0.015807589858909614,
-      "rank": 98
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3144,8 +3049,7 @@
       ],
       "snippet": "c Lyapunov exponent\nc see  H. Kantz, T. Schreiber, Nonlinear Time Series Analysis, Cambridge\nc      University Press (19",
       "above_baseline": 0.0024187110174532025,
-      "pull": 0.01843801791885021,
-      "rank": 23
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3173,8 +3077,7 @@
       ],
       "snippet": "This is an archived article and the information in the article may be outdated. Please look at the time stamp on the sto",
       "above_baseline": 0.0011498851268881179,
-      "pull": 0.017169192028285124,
-      "rank": 55
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3202,8 +3105,7 @@
       ],
       "snippet": "/* macros and inlines to manipulate path names OS-specifically in libtimidity.\n * written by O. Sezer <sezero@users.sour",
       "above_baseline": -0.0025244612140001184,
-      "pull": 0.013494845687396888,
-      "rank": 171
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3231,8 +3133,7 @@
       ],
       "snippet": "int abs(int x) {\n  if (x < 0)\n    return -x;\n  return x;\n}\n",
       "above_baseline": -0.00751676261536364,
-      "pull": 0.008502544286033366,
-      "rank": 198
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3260,8 +3161,7 @@
       ],
       "snippet": "Changing cloth to be a mahout suit and training a basic of elephant training course.\n\n-\n\nMeet the elephants, interact an",
       "above_baseline": -0.002360291406113159,
-      "pull": 0.013659015495283847,
-      "rank": 167
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3289,8 +3189,7 @@
       ],
       "snippet": "Legendary professional wrestler Virgil Runnels Jr., better known as his ring name Dusty Rhodes, died on Thursday at the ",
       "above_baseline": 0.0012731838500693975,
-      "pull": 0.017292490751466404,
-      "rank": 48
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3318,8 +3217,7 @@
       ],
       "snippet": "(d) = 7*d - 1. Let o(c) = -13*c + 12. Let v(n) = o(n) + 2*t(n). Suppose 0 = 5*z - 4*b + 9, -27 - 1 = 4*z + 2*b. Calculat",
       "above_baseline": 0.00013825843085617587,
-      "pull": 0.016157565332253182,
-      "rank": 87
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3347,8 +3245,7 @@
       ],
       "snippet": "Barzagli steps down from Juventus coaching role\n\nItalian football may be on hold for now, but Andrea Barzagli has decide",
       "above_baseline": -0.0013256265988445936,
-      "pull": 0.014693680302552413,
-      "rank": 132
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3376,8 +3273,7 @@
       ],
       "snippet": "1. Field of the Invention\nThe invention relates to a power transmission apparatus for a vehicle, which includes an elect",
       "above_baseline": 0.002971634211040866,
-      "pull": 0.018990941112437872,
-      "rank": 19
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3405,8 +3301,7 @@
       ],
       "snippet": "Shower Door Guide\n\nA quick learner from shelby nc says:\n\nSeptember 12, 2016\n\nHello,\n\nI have attached a picture of the Sh",
       "above_baseline": -0.0015516804504014173,
-      "pull": 0.014467626450995589,
-      "rank": 143
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3434,8 +3329,7 @@
       ],
       "snippet": "Extracted Text\n\nThe following text was automatically extracted from the image on this page using optical character recog",
       "above_baseline": 0.0009328311038570673,
-      "pull": 0.016952138005254073,
-      "rank": 61
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3463,8 +3357,7 @@
       ],
       "snippet": "Three Fishing Harbors\n\nDubai, UAE\n\nDubai Port, Customs and Free Zone Corporation retained Perkins Eastman to design the ",
       "above_baseline": -0.00265252496767069,
-      "pull": 0.013366781933726316,
-      "rank": 173
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3492,8 +3385,7 @@
       ],
       "snippet": "Photo: Irv Steinberg/Globe Photos\n\nThe seventies-era golden age of American film has been so exhaustively romanticized t",
       "above_baseline": -0.0006590425164321075,
-      "pull": 0.015360264384964899,
-      "rank": 115
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3521,8 +3413,7 @@
       ],
       "snippet": "constant buffering and redirect loops\n\ni'm spending more time buffering than i am watching, haven't even made it through",
       "above_baseline": -0.002970853364103807,
-      "pull": 0.0130484535372932,
-      "rank": 179
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3550,8 +3441,7 @@
       ],
       "snippet": "Sunday, May 29, 2011\n\nThere are some in the Black community who feel that the controversy ignited after Dr. Cornel West ",
       "above_baseline": -0.0028509486939329084,
-      "pull": 0.013168358207464098,
-      "rank": 175
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3579,8 +3469,7 @@
       ],
       "snippet": "On March 2, 2004, an ESA space probe named Rosetta embarked on a decade-long, multi-billion-mile journey to rendezvous w",
       "above_baseline": -0.0020795230129934065,
-      "pull": 0.0139397838884036,
-      "rank": 161
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3608,8 +3497,7 @@
       ],
       "snippet": "It seems like if one person is in there then more people will come. The last time I was there it was just me and rob. By",
       "above_baseline": -0.0004697193256367957,
-      "pull": 0.01554958757576021,
-      "rank": 110
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3637,8 +3525,7 @@
       ],
       "snippet": "\"Sun dreams of money. Moon dreams of scientific discoveries. When their paths cross with Team Skull, both their plans go",
       "above_baseline": 0.001134696052520319,
-      "pull": 0.017154002953917325,
-      "rank": 56
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3666,8 +3553,7 @@
       ],
       "snippet": "Kyrat Intl. Airport\n\nKyrat International (Intl.) Airport is a location within Kyrat in Far Cry 4. It is located at the t",
       "above_baseline": 0.0005844838963770735,
-      "pull": 0.01660379079777408,
-      "rank": 73
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3695,8 +3581,7 @@
       ],
       "snippet": "SPONTANEANATION with Paul F. Tompkins #115\n\nPaul F. Tompkins welcomes everyone to the beginning of a new episode of Spon",
       "above_baseline": 0.0008603904009559897,
-      "pull": 0.016879697302352996,
-      "rank": 63
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3722,10 +3607,9 @@
         0.014008636400018804,
         0.035962172781828484
       ],
-      "snippet": "Awareness of G-d, humility before His Presence and speaking with sincer\u00adity, lead to a real experi\u00adence of the Divine.[2",
+      "snippet": "Awareness of G-d, humility before His Presence and speaking with sincer­ity, lead to a real experi­ence of the Divine.[2",
       "above_baseline": 0.004861120500869235,
-      "pull": 0.02088042740226624,
-      "rank": 7
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3753,8 +3637,7 @@
       ],
       "snippet": "Histopathological features of ductal adenocarcinoma of the prostate in 1,051 radical prostatectomy specimens.\nDuctal ade",
       "above_baseline": 0.000381454098636113,
-      "pull": 0.01640076100003312,
-      "rank": 81
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3782,8 +3665,7 @@
       ],
       "snippet": "\n\n<!-- ************ JGroups Protocol Stack Configuration ************** -->\n<!-- generated by XmlConfigurator on Mon Apr",
       "above_baseline": -0.002229940438660089,
-      "pull": 0.013789366462736917,
-      "rank": 164
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3809,10 +3691,9 @@
         0.007844991757575553,
         0.025155101216028014
       ],
-      "snippet": "Last night was the Citymeals-on-Wheels \u201cGlobal Street Food\u201d benefit at Rock Center that we gave away tickets to last wee",
+      "snippet": "Last night was the Citymeals-on-Wheels “Global Street Food” benefit at Rock Center that we gave away tickets to last wee",
       "above_baseline": -0.0019294374131745683,
-      "pull": 0.014089869488222438,
-      "rank": 157
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3840,8 +3721,7 @@
       ],
       "snippet": "26k SHARES Facebook Twitter Whatsapp Pinterest Reddit Print Mail Flipboard\n\nAdvertisements\n\nThe game is truly over for R",
       "above_baseline": 0.00189424093850811,
-      "pull": 0.017913547839905116,
-      "rank": 36
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3869,8 +3749,7 @@
       ],
       "snippet": "Q:\n\nGitHub: How to avoid exceeding search limit while searching for account's details of users who contribute to some re",
       "above_baseline": -0.0019948583083215284,
-      "pull": 0.014024448593075478,
-      "rank": 158
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3898,8 +3777,7 @@
       ],
       "snippet": "Distinction between lipoma and liposarcoma by MDM2 alterations: a case report of simultaneously occurring tumors and rev",
       "above_baseline": -0.0023599763798505657,
-      "pull": 0.01365933052154644,
-      "rank": 166
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3927,8 +3805,7 @@
       ],
       "snippet": "Nancy Beiman\n\nNancy Beiman is a director, character designer, teacher, and animator. She attended the Character Animatio",
       "above_baseline": 0.00040167287732309834,
-      "pull": 0.016420979778720105,
-      "rank": 80
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3956,8 +3833,7 @@
       ],
       "snippet": "Not sure if someone is being nice or is developing an obsession with me\n\n245 shares",
       "above_baseline": 0.008342243906532366,
-      "pull": 0.024361550807929372,
-      "rank": 3
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -3985,8 +3861,7 @@
       ],
       "snippet": "Megachile phenacopyga\n\nMegachile phenacopyga is a species of bee in the family Megachilidae. It was described by Theodor",
       "above_baseline": -0.0001442727872624644,
-      "pull": 0.015875034114134542,
-      "rank": 95
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4014,8 +3889,7 @@
       ],
       "snippet": "When word broke that Jussie Smollett was a victim of a brutal hate crime, people across the country were outraged. The a",
       "above_baseline": -0.0010679216745705933,
-      "pull": 0.014951385226826413,
-      "rank": 126
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4043,8 +3917,7 @@
       ],
       "snippet": "Islamic Family Law Enactment 1987 (No. 3 of 1987), 20 May 1987.\nThis Islamic Family Law Enactment of Pahang, Malaysia, i",
       "above_baseline": 0.0007853421152936024,
-      "pull": 0.01680464901669061,
-      "rank": 66
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4072,8 +3945,7 @@
       ],
       "snippet": "Thank you, Papi\n\nWith runners at first and second and two outs, Cody Allen delivered to Travis Shaw.\n\nShaw got under the",
       "above_baseline": -0.0014891933351311379,
-      "pull": 0.014530113566265868,
-      "rank": 140
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4101,8 +3973,7 @@
       ],
       "snippet": "What happens when a Bone Thug loses his harmony?\n\nSpidey.\n\nBizzy Bone Gone Berserk? On Wednesday night, an out-of-contro",
       "above_baseline": -0.001597008023962402,
-      "pull": 0.014422298877434604,
-      "rank": 147
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4130,8 +4001,7 @@
       ],
       "snippet": "Autumn Term Commences Wednesday 6th September\n\nThe Autumn Term commences on Wednesday 6th September at 08.30 for all pup",
       "above_baseline": -0.0026922714020717955,
-      "pull": 0.01332703549932521,
-      "rank": 174
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4159,8 +4029,7 @@
       ],
       "snippet": "Ottawa no longer wants to waste time and money trying to lure American tourists to the land of moose, mountains and Moun",
       "above_baseline": -0.0035997440364244383,
-      "pull": 0.012419562864972568,
-      "rank": 185
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4188,8 +4057,7 @@
       ],
       "snippet": "The mainstream media has really been batting a thousand lately. Between anti-climactic tax returns and their constant di",
       "above_baseline": -0.0026514426084987084,
-      "pull": 0.013367864292898298,
-      "rank": 172
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4215,10 +4083,9 @@
         0.008954188492540198,
         0.027289277874651817
       ],
-      "snippet": "Nikki Hill Gets 2on1 Anal and DP With Rough Sex \u2013 LegalPorno\n\n299 34%",
+      "snippet": "Nikki Hill Gets 2on1 Anal and DP With Rough Sex – LegalPorno\n\n299 34%",
       "above_baseline": -0.007624861829853292,
-      "pull": 0.008394445071543714,
-      "rank": 199
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4246,8 +4113,7 @@
       ],
       "snippet": "Google Maps for iOS Adds Gmail Info Directly to Your Map\n\nGoogle this week rolled an update to its iOS app that introduc",
       "above_baseline": -0.0033155740180376442,
-      "pull": 0.012703732883359362,
-      "rank": 182
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4273,10 +4139,9 @@
         0.012897259126960308,
         0.022547334615928775
       ],
-      "snippet": "Mat\u00e9ria atualizada 21/05/19 `as 11:56h.\n\nDenunciado numa mat\u00e9ria da VICE em mar\u00e7o, Dom Vilson de Oliveira renunciou nest",
+      "snippet": "Matéria atualizada 21/05/19 `as 11:56h.\n\nDenunciado numa matéria da VICE em março, Dom Vilson de Oliveira renunciou nest",
       "above_baseline": 0.0011811293059111605,
-      "pull": 0.017200436207308167,
-      "rank": 54
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4304,8 +4169,7 @@
       ],
       "snippet": "The influence of age on valve disease in patients with varicose veins analysed by transmission electron microscopy and s",
       "above_baseline": 0.000480449284983038,
-      "pull": 0.016499756186380044,
-      "rank": 78
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4333,8 +4197,7 @@
       ],
       "snippet": "Treat-and-extend versus every-other-month regimens with aflibercept in age-related macular degeneration.\nTo compare the ",
       "above_baseline": 0.0023973682979454604,
-      "pull": 0.018416675199342467,
-      "rank": 25
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4362,8 +4225,7 @@
       ],
       "snippet": "London Gateway Port in Stanford-le-Hope: Almost half of exports from urban centres go to the EU.\nPhotograph: Bloomberg/B",
       "above_baseline": -0.000911985609622282,
-      "pull": 0.015107321291774724,
-      "rank": 121
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4391,8 +4253,7 @@
       ],
       "snippet": "Q:\n\npython saving output from a for iteration and subprocess for checksum\n\nThe purpose of this script is to pull md5 che",
       "above_baseline": -8.603729111535813e-05,
-      "pull": 0.015933269610281648,
-      "rank": 92
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4420,8 +4281,7 @@
       ],
       "snippet": "Can-Fite's Phase II/III Psoriasis Study Results Published in Journal of Drugs in Dermatology\n\ncompany with a pipeline of",
       "above_baseline": 0.015904294962810917,
-      "pull": 0.03192360186420792,
-      "rank": 2
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4449,8 +4309,7 @@
       ],
       "snippet": "Q:\n\nHow to build resolution independent website?\n\nHow to write html code that will be resolution independent and it will",
       "above_baseline": -0.00032163807951536214,
-      "pull": 0.015697668821881644,
-      "rank": 105
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4478,8 +4337,7 @@
       ],
       "snippet": "CASA Art Show\n\nView artistic treasures at the Contemporary Artists of Southern Arizona's (CASA) fall exhibition at Habit",
       "above_baseline": -0.005421420401810139,
-      "pull": 0.010597886499586867,
-      "rank": 195
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4505,10 +4363,9 @@
         0.011212863954180283,
         0.0272619573324846
       ],
-      "snippet": "The art of blending \u2026\n\nThe art of blending and the ability to assess individual parts, commit them to memory and create ",
+      "snippet": "The art of blending …\n\nThe art of blending and the ability to assess individual parts, commit them to memory and create ",
       "above_baseline": 8.786208310931909e-05,
-      "pull": 0.016107168984506325,
-      "rank": 88
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4536,8 +4393,7 @@
       ],
       "snippet": "Known as the Herb of Gladness for its exhilarating effect. Try adding chopped young leaves and flowers to salads or summ",
       "above_baseline": -0.0018348182895461668,
-      "pull": 0.01418448861185084,
-      "rank": 156
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4565,8 +4421,7 @@
       ],
       "snippet": "Saturday, March 16, 2013\n\nThe Complicators Are Coming!\n\nWisdom crieth without; she uttereth her voice in the streets: Pr",
       "above_baseline": -0.0038613113474113402,
-      "pull": 0.012157995553985666,
-      "rank": 187
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4594,8 +4449,7 @@
       ],
       "snippet": "\n2004 UT App 469\nRonald Rex Ivie, Plaintiff and Appellant,\nv.\nSen. John William Hickman, Rep. Stephen H. Urquhart, State",
       "above_baseline": 0.0006403668228791189,
-      "pull": 0.016659673724276125,
-      "rank": 72
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4623,8 +4477,7 @@
       ],
       "snippet": "The RMS Titanic has been sitting on the ocean floor since 1912, but scientists think we've only really surveyed 50% of t",
       "above_baseline": 0.0007907481067847277,
-      "pull": 0.016810055008181734,
-      "rank": 65
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4652,8 +4505,7 @@
       ],
       "snippet": "spec-issue563.p4(12): [--Werror=type-error] error: a: parameter cannot have type control A\ncontrol C()(A a) {\n          ",
       "above_baseline": -0.0015734583335915726,
-      "pull": 0.014445848567805434,
-      "rank": 146
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4679,10 +4531,9 @@
         0.005832327666452147,
         0.03275385216616087
       ],
-      "snippet": "The oldest saying in the world is probably, \u201cIt takes money to make money.\u201d While that may be true, the history books ar",
+      "snippet": "The oldest saying in the world is probably, “It takes money to make money.” While that may be true, the history books ar",
       "above_baseline": 7.971417937643888e-05,
-      "pull": 0.016099021080773445,
-      "rank": 89
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4710,8 +4561,7 @@
       ],
       "snippet": "Q:\n\nHow to download CSV using a href with a # (number sign) in Chrome?\n\nChrome 72+ is now truncating our data at the fir",
       "above_baseline": 0.00035181194442122227,
-      "pull": 0.01637111884581823,
-      "rank": 82
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4739,8 +4589,7 @@
       ],
       "snippet": "Gamma knife surgery for hypothalamic hamartomas accompanied by medically intractable epilepsy and precocious puberty: ex",
       "above_baseline": -0.001238329994095972,
-      "pull": 0.014780976907301034,
-      "rank": 131
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4768,8 +4617,7 @@
       ],
       "snippet": "Directions\n\nCombine baby carrots, mushrooms, cumin, and coriander in a pot. Pour enough water into pot to just cover the",
       "above_baseline": -0.0009173749934376779,
-      "pull": 0.015101931907959328,
-      "rank": 122
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4797,8 +4645,7 @@
       ],
       "snippet": "Q:\n\nUISplitViewController consistent divider\n\nIn my iPad App I'm using a UISplitViewController with two UINavigationCont",
       "above_baseline": 0.001911405590475413,
-      "pull": 0.01793071249187242,
-      "rank": 34
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4826,8 +4673,7 @@
       ],
       "snippet": "hmmmm\n\n\n\nscootaloo wants to be brave and fearless like rainbowdash ( thats why she is the cowardly lion)\n\nsweetie belle ",
       "above_baseline": -0.002499844183341142,
-      "pull": 0.013519462718055864,
-      "rank": 170
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4855,8 +4701,7 @@
       ],
       "snippet": "Q:\n\nxmr-stak-cpu as a service on ubuntu\n\nI'm running Ubuntu 14.04. And I need to run xmr-stak-cpu as a service.\nI tried ",
       "above_baseline": -0.0002173999711446023,
-      "pull": 0.015801906930252404,
-      "rank": 99
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4884,8 +4729,7 @@
       ],
       "snippet": "Q:\n\n\"Could not resolve type name: Sitecore.Analytics.Pipelines.Initialize.ShowXdbInfo, Sitecore.Analytics\" during Upgrad",
       "above_baseline": 0.0012059949130373906,
-      "pull": 0.017225301814434397,
-      "rank": 51
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4913,8 +4757,7 @@
       ],
       "snippet": "Q:\n\nCompare two images in terms of width and height\n\nEDIT: I believe I didn't state correctly my question, so here is th",
       "above_baseline": 0.00167009721049707,
-      "pull": 0.017689404111894076,
-      "rank": 41
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4942,8 +4785,7 @@
       ],
       "snippet": "Q:\n\nAngularJS app does not load on iPad / iPhone Safari (works only after page refresh / second load and afterwards)\n\nI ",
       "above_baseline": 0.00119518320823319,
-      "pull": 0.017214490109630196,
-      "rank": 52
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -4971,8 +4813,7 @@
       ],
       "snippet": "Investors interested in adding Aigang insurance platform into their (crypto)portfolio can refer to the platform and choo",
       "above_baseline": 0.0006781204608826696,
-      "pull": 0.016697427362279676,
-      "rank": 70
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5000,8 +4841,7 @@
       ],
       "snippet": "[Lysosomal proteinases of the human aortal intima and atherogenesis].\nActivity of lysosomal proteinases cathepsins A, B,",
       "above_baseline": -0.0007555064085694157,
-      "pull": 0.01526380049282759,
-      "rank": 119
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5029,8 +4869,7 @@
       ],
       "snippet": "MN App\n\nSubscribe to Newsletter\n\nSubscribe to my newsletter we will keep you up-to-date. New articles, new videos, what ",
       "above_baseline": -0.0006846221577378013,
-      "pull": 0.015334684743659205,
-      "rank": 117
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5058,8 +4897,7 @@
       ],
       "snippet": "Soil biota and invasive plants.\nInteractions between plants and soil biota resist invasion by some nonnative plants and ",
       "above_baseline": -0.00018274752128425928,
-      "pull": 0.015836559380112747,
-      "rank": 96
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5087,8 +4925,7 @@
       ],
       "snippet": "Phytotoxic effect of 2-benzoxazolinone (BOA) against some vegetable crops.\nBenzoxazolin-2(3H)-one (BOA) is a well known ",
       "above_baseline": 0.0044490583284616525,
-      "pull": 0.02046836522985866,
-      "rank": 11
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5116,8 +4953,7 @@
       ],
       "snippet": "Riding on the Jio wave, 2018 will see India gradually move away from being a developing 4G country, overcoming the hiccu",
       "above_baseline": 0.0009427448815605352,
-      "pull": 0.01696205178295754,
-      "rank": 60
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5145,8 +4981,7 @@
       ],
       "snippet": "How bad does the loss of UConn and Rutgers hurt the BE deal, I think pretty bad. They need to have signed days months ye",
       "above_baseline": 0.0015611296236558853,
-      "pull": 0.01758043652505289,
-      "rank": 44
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5172,10 +5007,9 @@
         0.009285288537727684,
         0.02458548466443972
       ],
-      "snippet": "Feb. 21, 2014 \u0097 -- A New York family is getting ready to move to Arizona so that their 9-month-old son can be treated wi",
+      "snippet": "Feb. 21, 2014  -- A New York family is getting ready to move to Arizona so that their 9-month-old son can be treated wi",
       "above_baseline": 0.00047687435243760207,
-      "pull": 0.016496181253834608,
-      "rank": 79
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5203,8 +5037,7 @@
       ],
       "snippet": "Association of sick sinus and Lown-Ganong-Levine syndromes.\nA 38-year-old woman presented with syncopal attacks for 27 y",
       "above_baseline": -0.0039860233004064705,
-      "pull": 0.012033283600990536,
-      "rank": 188
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5232,8 +5065,7 @@
       ],
       "snippet": "Q:\n\nWhy using an equality with a list doesn't work?\n\nI tried for the last hour to do a basic thing with list, but it doe",
       "above_baseline": 0.00048506259407696956,
-      "pull": 0.016504369495473976,
-      "rank": 77
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5261,8 +5093,7 @@
       ],
       "snippet": "An artist's impression of the sky rail at Murrumbeena station.\n\nAmbitious building projects invariably impact people liv",
       "above_baseline": 0.0006535630196897423,
-      "pull": 0.01667286992108675,
-      "rank": 71
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5290,8 +5121,7 @@
       ],
       "snippet": "\n675 So.2d 918 (1996)\nRobert C. MOSHER and Margaret M. Mosher, Appellants,\nv.\nSPEEDSTAR DIVISION OF AMCA INTERNATIONAL, ",
       "above_baseline": -0.0013913736670736702,
-      "pull": 0.014627933234323336,
-      "rank": 136
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5319,8 +5149,7 @@
       ],
       "snippet": "Color Markers How To Kill Poison Ivy Plants Does Bleach Surefire Way\n\nget rid poison ivy plants safely remove removing w",
       "above_baseline": -0.00036153849623559234,
-      "pull": 0.015657768405161414,
-      "rank": 106
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5348,8 +5177,7 @@
       ],
       "snippet": "539 U.S. 906\nBui Phu Xuanv.Cockrell, Director, Texas Department of Criminal Justice, Institutional Division.\nNo. 02-9899",
       "above_baseline": 0.004329984733008899,
-      "pull": 0.020349291634405905,
-      "rank": 12
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5377,8 +5205,7 @@
       ],
       "snippet": "Santa Clara County Bird List Discussion Archive 2016\n\nCompiled by: Brooke Miller. Please email additions, corrections, o",
       "above_baseline": 0.00118727947518045,
-      "pull": 0.017206586376577456,
-      "rank": 53
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5406,8 +5233,7 @@
       ],
       "snippet": "Benbros\n\nBenbros (London) Ltd was a British toy company in existence from the late 1940s to 1965.\n\nThe company was found",
       "above_baseline": -0.00039119819260002506,
-      "pull": 0.01562810870879698,
-      "rank": 107
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5435,8 +5261,7 @@
       ],
       "snippet": "We have chronicled the danger of Barrack Hussein Obama to our liberties, our nation and possibly, our very existence as ",
       "above_baseline": 0.0005748457942473494,
-      "pull": 0.016594152695644356,
-      "rank": 74
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5464,8 +5289,7 @@
       ],
       "snippet": "Purchasing a home is a valuable form of investment. Self owned house is a lifetime decision for any individual. A Home L",
       "above_baseline": 0.0007364129918405217,
-      "pull": 0.016755719893237528,
-      "rank": 68
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5493,8 +5317,7 @@
       ],
       "snippet": "The Michigan's Best team -- that's us, Amy Sherman and John Gonzalez -- spent the afternoon soaking up the rays and talk",
       "above_baseline": -0.0059888915629704425,
-      "pull": 0.010030415338426564,
-      "rank": 197
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5522,8 +5345,7 @@
       ],
       "snippet": "Favorite Schools\n\nFavorite Teams\n\nSyracuse football: Five statistics-based predictions for the N.C. State game\n\nHunt vs.",
       "above_baseline": -0.0014077954671840032,
-      "pull": 0.014611511434213003,
-      "rank": 138
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5551,8 +5373,7 @@
       ],
       "snippet": "Q:\n\ntool to help create a class registration system\n\nDoes anyone have advise or can recommend a tool or CMS system with ",
       "above_baseline": -0.004003264810176262,
-      "pull": 0.012016042091220744,
-      "rank": 189
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5580,8 +5401,7 @@
       ],
       "snippet": "Readability of online patient resources for the operative treatment of breast cancer.\nIncreasing use of Internet resourc",
       "above_baseline": 0.0014714498990148449,
-      "pull": 0.01749075680041185,
-      "rank": 46
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5609,8 +5429,7 @@
       ],
       "snippet": "Q:\n\nAdd a Personal Package Archive (PPA)\n\nI cann't Add a Personal Package Archive (PPA) to Software Sources\nwhen I write",
       "above_baseline": 0.0009057750468316854,
-      "pull": 0.01692508194822869,
-      "rank": 62
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5638,8 +5457,7 @@
       ],
       "snippet": "Tory high command rallies to defend welfare changes\n\nShare via\n\nSenior figures from across the Conservative Party rallie",
       "above_baseline": -0.0006345068121240797,
-      "pull": 0.015384800089272926,
-      "rank": 114
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5667,8 +5485,7 @@
       ],
       "snippet": "Oregon State Capitol Foundation\n\nThe Oregon State Capitol Foundation is a 501(c)(3) nonprofit organization. \n\nHistory\n\nT",
       "above_baseline": 0.004754324904887988,
-      "pull": 0.020773631806284994,
-      "rank": 8
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5696,8 +5513,7 @@
       ],
       "snippet": "Influence of restricted diet on the cell cycle in the crypt of mouse small intestine.\nPreviously we reported that the sm",
       "above_baseline": 0.002713034940717344,
-      "pull": 0.01873234184211435,
-      "rank": 21
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5725,8 +5541,7 @@
       ],
       "snippet": "Q:\n\nWhich is the best way to say that I have substituted for someone in his work tasks?\n\nI am struggling to understand t",
       "above_baseline": -0.0002582555472448178,
-      "pull": 0.01576105135415219,
-      "rank": 101
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5754,8 +5569,7 @@
       ],
       "snippet": "In general, the systems used to control the friction brakes on vehicles, be they railway trains, aircraft or automobiles",
       "above_baseline": -1.9345696700961285e-05,
-      "pull": 0.015999961204696045,
-      "rank": 91
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5783,8 +5597,7 @@
       ],
       "snippet": "Hi, Nothing against those rules because you cooking the omelette you decide how many eggs u will use, but using Polski R",
       "above_baseline": -0.0022420626559810745,
-      "pull": 0.013777244245415932,
-      "rank": 165
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5810,10 +5623,9 @@
         0.011110000850002506,
         0.02505928374999712
       ],
-      "snippet": "SOMA, Japan \u2014 The catch from six small fishing boats, the first to resume commercial fishing in the waters off Fukushima",
+      "snippet": "SOMA, Japan — The catch from six small fishing boats, the first to resume commercial fishing in the waters off Fukushima",
       "above_baseline": -0.0004176447610633495,
-      "pull": 0.015601662140333657,
-      "rank": 108
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5841,8 +5653,7 @@
       ],
       "snippet": "Q:\n\nActive Directory, LDAP UserPrincipal\n\nGot this information when I wrote out the DistinguishedName property on UserPr",
       "above_baseline": 0.003986471234948743,
-      "pull": 0.02000577813634575,
-      "rank": 13
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5870,8 +5681,7 @@
       ],
       "snippet": "This was my first gift exchange and was very excited for it to be snack related as I enjoy sampling foods from around th",
       "above_baseline": -0.002222045349909361,
-      "pull": 0.013797261551487645,
-      "rank": 163
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5899,8 +5709,7 @@
       ],
       "snippet": "[Immunotherapy in castration resistant prostate cancer.]\nWe review the role of immunotherapy in castration resistant pro",
       "above_baseline": -0.0016744677706972497,
-      "pull": 0.014344839130699756,
-      "rank": 151
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5928,8 +5737,7 @@
       ],
       "snippet": ".. _egrBytes-label:\n\negrBytes\n---------------------------\n\n================  ==========  ===============================",
       "above_baseline": 0.005152601104091211,
-      "pull": 0.021171908005488217,
-      "rank": 6
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5957,8 +5765,7 @@
       ],
       "snippet": "Q:\n\nHow to get status and song info from iTunes on Mac\n\nThe iPhone has an app that can control iTunes on a Mac, for exam",
       "above_baseline": -0.00792966465744192,
-      "pull": 0.008089642243955086,
-      "rank": 200
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -5986,8 +5793,7 @@
       ],
       "snippet": "Vermont residents who don't identify as male or female may soon be able to choose another gender on their licenses.\n\nVer",
       "above_baseline": 0.00196531168271628,
-      "pull": 0.017984618584113286,
-      "rank": 32
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -6015,8 +5821,7 @@
       ],
       "snippet": "A Proggie-run first aid class reveals the shocking level of ignorance, innumeracy, and illogical thinking behind their a",
       "above_baseline": -0.000784318571383967,
-      "pull": 0.015234988330013039,
-      "rank": 120
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -6044,8 +5849,7 @@
       ],
       "snippet": "I just bought My '04 VN750 for $2300 last week. Shes got 6k miles on her and looks great. I did however change the seat ",
       "above_baseline": 0.0017774258232736116,
-      "pull": 0.017796732724670618,
-      "rank": 40
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -6071,10 +5875,9 @@
         0.009571672559799663,
         0.02631036739594947
       ],
-      "snippet": "Why Natchitoches?\n\nWhether for a weekend or a lifetime, you\u2019ll enjoy everything Natchitoches has to offer. The natural s",
+      "snippet": "Why Natchitoches?\n\nWhether for a weekend or a lifetime, you’ll enjoy everything Natchitoches has to offer. The natural s",
       "above_baseline": 0.0021311242785667373,
-      "pull": 0.018150431179963743,
-      "rank": 28
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -6102,8 +5905,7 @@
       ],
       "snippet": "This is my personal blog, not a venue for saleable images. In fact, because it's here that I share things that are impor",
       "above_baseline": 0.0007189393939638321,
-      "pull": 0.016738246295360838,
-      "rank": 69
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -6131,8 +5933,7 @@
       ],
       "snippet": " w(z). Factor x(h).\n-h**3*(h - 1)/5\nFactor -3/2*s**4 + 0 + 9/2*s**2 + 3*s + 0*s**3.\n-3*s*(s - 2)*(s + 1)**2/2\nLet q(p) =",
       "above_baseline": -0.0036256200978907437,
-      "pull": 0.012393686803506263,
-      "rank": 186
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -6160,8 +5961,7 @@
       ],
       "snippet": "Fisherville Animal Hospital - Does not see exotics at this timewww.fishervilleanimalhospital.comDr. George Messenger (re",
       "above_baseline": -0.00025577286685755235,
-      "pull": 0.015763534034539454,
-      "rank": 100
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -6189,8 +5989,7 @@
       ],
       "snippet": "Q:\n\nNot able to open Notification bar properly when I execute this thread in the service\n\nI have the following thread wh",
       "above_baseline": 0.0016214758601838103,
-      "pull": 0.017640782761580816,
-      "rank": 42
+      "rank": null
     },
     {
       "stage": "pretrain",
@@ -6216,10 +6015,9 @@
         0.015350711421402138,
         0.027578640255194388
       ],
-      "snippet": "/*******************************\nCopyright (c) 2016-2020 Gr\ufffdgoire Angerand\n\nPermission is hereby granted, free of charge",
+      "snippet": "/*******************************\nCopyright (c) 2016-2020 Gr�goire Angerand\n\nPermission is hereby granted, free of charge",
       "above_baseline": -0.001128329138018679,
-      "pull": 0.014890977763378327,
-      "rank": 128
+      "rank": null
     }
   ],
   "draws": [
@@ -46831,5 +46629,2440 @@
         2.9998230934143066
       ]
     ]
-  ]
+  ],
+  "schema_version": 1,
+  "experimental": true,
+  "objective": "standalone_text_mean_token_loss",
+  "diagnostics": {
+    "version": 1,
+    "status": "inconclusive",
+    "thresholds": {
+      "min_chains": 4,
+      "min_draws": 100,
+      "max_split_rhat": 1.05,
+      "min_batch_ess": 400,
+      "max_time_correlation": 0.5
+    },
+    "reasons": [
+      "at least 4 chains and 100 retained draws per chain are needed for the screens",
+      "degenerate or disagreeing chain halves (split R-hat > 1.05): query, localized_mean, candidate_0, covariance_0 and 393 more",
+      "insufficient effective draws (batch means estimate < 400): query, localized_mean, candidate_0, covariance_0 and 398 more",
+      "strong retained-draw time trend (absolute correlation > 0.5): query, localized_mean, candidate_0, candidate_1 and 199 more"
+    ],
+    "observables": [
+      {
+        "name": "query",
+        "split_rhat": 2.149406996707069,
+        "batch_ess": 29.778236828100848,
+        "max_time_correlation": 0.9365711574715107
+      },
+      {
+        "name": "localized_mean",
+        "split_rhat": 2.0954886953575023,
+        "batch_ess": 28.72974349051721,
+        "max_time_correlation": 0.999094362377106
+      },
+      {
+        "name": "candidate_0",
+        "split_rhat": 2.251465562417609,
+        "batch_ess": 28.76725838682135,
+        "max_time_correlation": 0.9789465201835306
+      },
+      {
+        "name": "covariance_0",
+        "split_rhat": 1.1536110413496439,
+        "batch_ess": 36.18449442915304,
+        "max_time_correlation": 0.4895735119318882
+      },
+      {
+        "name": "candidate_1",
+        "split_rhat": 2.5446416280233755,
+        "batch_ess": 29.163181069860382,
+        "max_time_correlation": 0.9706476027875008
+      },
+      {
+        "name": "covariance_1",
+        "split_rhat": 1.172028281041418,
+        "batch_ess": 35.90820267230065,
+        "max_time_correlation": 0.5625021503029869
+      },
+      {
+        "name": "candidate_2",
+        "split_rhat": 2.2145928811078126,
+        "batch_ess": 29.236033044825366,
+        "max_time_correlation": 0.9789022974062416
+      },
+      {
+        "name": "covariance_2",
+        "split_rhat": 1.0784878169746015,
+        "batch_ess": 41.365788716689856,
+        "max_time_correlation": 0.3185439023770501
+      },
+      {
+        "name": "candidate_3",
+        "split_rhat": 2.2165773854432698,
+        "batch_ess": 28.9208131256116,
+        "max_time_correlation": 0.9911354071057286
+      },
+      {
+        "name": "covariance_3",
+        "split_rhat": 1.1270663858508718,
+        "batch_ess": 37.327250115389525,
+        "max_time_correlation": 0.1825171123171628
+      },
+      {
+        "name": "candidate_4",
+        "split_rhat": 2.197624977252872,
+        "batch_ess": 28.94539691096887,
+        "max_time_correlation": 0.9890355483859277
+      },
+      {
+        "name": "covariance_4",
+        "split_rhat": 1.1417023994424988,
+        "batch_ess": 36.478707811696495,
+        "max_time_correlation": 0.269998711657678
+      },
+      {
+        "name": "candidate_5",
+        "split_rhat": 2.084357475504852,
+        "batch_ess": 28.98726390276767,
+        "max_time_correlation": 0.9844011168922576
+      },
+      {
+        "name": "covariance_5",
+        "split_rhat": 1.1452447811250506,
+        "batch_ess": 35.70814596822874,
+        "max_time_correlation": 0.29553970087807874
+      },
+      {
+        "name": "candidate_6",
+        "split_rhat": 2.431781023466514,
+        "batch_ess": 28.643770952365053,
+        "max_time_correlation": 0.9781099114862339
+      },
+      {
+        "name": "covariance_6",
+        "split_rhat": 1.1525568115110572,
+        "batch_ess": 36.48044882454736,
+        "max_time_correlation": 0.2008263214861349
+      },
+      {
+        "name": "candidate_7",
+        "split_rhat": 2.1413018377912696,
+        "batch_ess": 28.469310223733505,
+        "max_time_correlation": 0.9935458932818374
+      },
+      {
+        "name": "covariance_7",
+        "split_rhat": 1.1251336755659183,
+        "batch_ess": 35.64359546533935,
+        "max_time_correlation": 0.17377485818209998
+      },
+      {
+        "name": "candidate_8",
+        "split_rhat": 2.224469973319855,
+        "batch_ess": 28.958001949695888,
+        "max_time_correlation": 0.9890098069329192
+      },
+      {
+        "name": "covariance_8",
+        "split_rhat": 1.1669528142024703,
+        "batch_ess": 36.64912967488669,
+        "max_time_correlation": 0.233684077878839
+      },
+      {
+        "name": "candidate_9",
+        "split_rhat": 2.0658177777353215,
+        "batch_ess": 28.713510439403144,
+        "max_time_correlation": 0.9923501431063404
+      },
+      {
+        "name": "covariance_9",
+        "split_rhat": 1.1014368389678884,
+        "batch_ess": 36.118625396414515,
+        "max_time_correlation": 0.21558781311992464
+      },
+      {
+        "name": "candidate_10",
+        "split_rhat": 1.9617154740877616,
+        "batch_ess": 29.02177567722735,
+        "max_time_correlation": 0.9918637281076791
+      },
+      {
+        "name": "covariance_10",
+        "split_rhat": 1.1349052901808245,
+        "batch_ess": 35.86981559416323,
+        "max_time_correlation": 0.1346618752285466
+      },
+      {
+        "name": "candidate_11",
+        "split_rhat": 1.784582865765737,
+        "batch_ess": 31.815139571086245,
+        "max_time_correlation": 0.9879530911286822
+      },
+      {
+        "name": "covariance_11",
+        "split_rhat": 1.1256968204606284,
+        "batch_ess": 41.3635576421462,
+        "max_time_correlation": 0.24969162393057448
+      },
+      {
+        "name": "candidate_12",
+        "split_rhat": 2.134732242111393,
+        "batch_ess": 29.386102706682724,
+        "max_time_correlation": 0.9936379441678861
+      },
+      {
+        "name": "covariance_12",
+        "split_rhat": 1.1334444720997625,
+        "batch_ess": 37.554037005059286,
+        "max_time_correlation": 0.17937184299354136
+      },
+      {
+        "name": "candidate_13",
+        "split_rhat": 2.2417279018681397,
+        "batch_ess": 28.548253696365386,
+        "max_time_correlation": 0.9941633006400953
+      },
+      {
+        "name": "covariance_13",
+        "split_rhat": 1.111707704499193,
+        "batch_ess": 37.032106104172556,
+        "max_time_correlation": 0.25662854707985183
+      },
+      {
+        "name": "candidate_14",
+        "split_rhat": 2.0568182071588645,
+        "batch_ess": 28.939962587253085,
+        "max_time_correlation": 0.9923571628481686
+      },
+      {
+        "name": "covariance_14",
+        "split_rhat": 1.1137484640028854,
+        "batch_ess": 37.69470154692341,
+        "max_time_correlation": 0.2789978628710295
+      },
+      {
+        "name": "candidate_15",
+        "split_rhat": 2.159322357765317,
+        "batch_ess": 28.90857756089806,
+        "max_time_correlation": 0.9814339554570719
+      },
+      {
+        "name": "covariance_15",
+        "split_rhat": 1.1193202688579893,
+        "batch_ess": 37.10407913050403,
+        "max_time_correlation": 0.2842798564124469
+      },
+      {
+        "name": "candidate_16",
+        "split_rhat": 2.1782876108388973,
+        "batch_ess": 28.942425475286864,
+        "max_time_correlation": 0.987118066101279
+      },
+      {
+        "name": "covariance_16",
+        "split_rhat": 1.1492022691518329,
+        "batch_ess": 36.971689741335695,
+        "max_time_correlation": 0.295115491534968
+      },
+      {
+        "name": "candidate_17",
+        "split_rhat": 2.0488867524727867,
+        "batch_ess": 28.811302050221666,
+        "max_time_correlation": 0.9937511343437858
+      },
+      {
+        "name": "covariance_17",
+        "split_rhat": 1.1043483494076756,
+        "batch_ess": 36.54559123364105,
+        "max_time_correlation": 0.24581308130059518
+      },
+      {
+        "name": "candidate_18",
+        "split_rhat": 2.3778768935450416,
+        "batch_ess": 29.023771468219373,
+        "max_time_correlation": 0.982130484893182
+      },
+      {
+        "name": "covariance_18",
+        "split_rhat": 1.1771275753610264,
+        "batch_ess": 38.612635467080445,
+        "max_time_correlation": 0.31198180024366423
+      },
+      {
+        "name": "candidate_19",
+        "split_rhat": 2.3562356139599197,
+        "batch_ess": 28.6961966784553,
+        "max_time_correlation": 0.9832217986843286
+      },
+      {
+        "name": "covariance_19",
+        "split_rhat": 1.1217605167911358,
+        "batch_ess": 38.217908295525184,
+        "max_time_correlation": 0.21374382283868074
+      },
+      {
+        "name": "candidate_20",
+        "split_rhat": 2.0844068639392703,
+        "batch_ess": 29.034996423064,
+        "max_time_correlation": 0.9920551809751375
+      },
+      {
+        "name": "covariance_20",
+        "split_rhat": 1.1099408066345269,
+        "batch_ess": 37.109062947049516,
+        "max_time_correlation": 0.19059274065427068
+      },
+      {
+        "name": "candidate_21",
+        "split_rhat": 2.0218002775854216,
+        "batch_ess": 29.154327333809455,
+        "max_time_correlation": 0.9701992938042696
+      },
+      {
+        "name": "covariance_21",
+        "split_rhat": 1.0303063642501387,
+        "batch_ess": 42.00278242665897,
+        "max_time_correlation": 0.12340951245716303
+      },
+      {
+        "name": "candidate_22",
+        "split_rhat": 2.2109903819262673,
+        "batch_ess": 29.087924380395773,
+        "max_time_correlation": 0.9881778730086915
+      },
+      {
+        "name": "covariance_22",
+        "split_rhat": 1.0800289140773667,
+        "batch_ess": 39.476196063413305,
+        "max_time_correlation": 0.2655780333120242
+      },
+      {
+        "name": "candidate_23",
+        "split_rhat": 2.3852708083880336,
+        "batch_ess": 28.01042434798526,
+        "max_time_correlation": 0.9748918079056933
+      },
+      {
+        "name": "covariance_23",
+        "split_rhat": 1.113898302398621,
+        "batch_ess": 34.203460958549535,
+        "max_time_correlation": 0.4616626023037489
+      },
+      {
+        "name": "candidate_24",
+        "split_rhat": 2.2670426728461606,
+        "batch_ess": 28.44303921179571,
+        "max_time_correlation": 0.992333867286212
+      },
+      {
+        "name": "covariance_24",
+        "split_rhat": 1.1135463333152062,
+        "batch_ess": 37.24275040386456,
+        "max_time_correlation": 0.21112508179834444
+      },
+      {
+        "name": "candidate_25",
+        "split_rhat": 2.013929632684192,
+        "batch_ess": 28.64466788503618,
+        "max_time_correlation": 0.9877815383400889
+      },
+      {
+        "name": "covariance_25",
+        "split_rhat": 1.0907530453444492,
+        "batch_ess": 37.354139857423675,
+        "max_time_correlation": 0.2533863338481146
+      },
+      {
+        "name": "candidate_26",
+        "split_rhat": 2.1513812992836865,
+        "batch_ess": 28.60197750927202,
+        "max_time_correlation": 0.9960769925445967
+      },
+      {
+        "name": "covariance_26",
+        "split_rhat": 1.1279720252069816,
+        "batch_ess": 36.58166441632473,
+        "max_time_correlation": 0.17801315159781722
+      },
+      {
+        "name": "candidate_27",
+        "split_rhat": 2.020097372965371,
+        "batch_ess": 28.58708787009585,
+        "max_time_correlation": 0.9874490794001262
+      },
+      {
+        "name": "covariance_27",
+        "split_rhat": 1.0805531336186402,
+        "batch_ess": 37.618801254998736,
+        "max_time_correlation": 0.20536514923141755
+      },
+      {
+        "name": "candidate_28",
+        "split_rhat": 2.2521109490115,
+        "batch_ess": 28.818666861825147,
+        "max_time_correlation": 0.9952060385903633
+      },
+      {
+        "name": "covariance_28",
+        "split_rhat": 1.1834336060909718,
+        "batch_ess": 35.38034170257779,
+        "max_time_correlation": 0.22584385466260817
+      },
+      {
+        "name": "candidate_29",
+        "split_rhat": 2.1529904385226097,
+        "batch_ess": 28.881279845959344,
+        "max_time_correlation": 0.9922111034577621
+      },
+      {
+        "name": "covariance_29",
+        "split_rhat": 1.1906682695582291,
+        "batch_ess": 34.78789866856976,
+        "max_time_correlation": 0.1912277379243575
+      },
+      {
+        "name": "candidate_30",
+        "split_rhat": 2.0049021627425834,
+        "batch_ess": 29.409301669440993,
+        "max_time_correlation": 0.991475873133985
+      },
+      {
+        "name": "covariance_30",
+        "split_rhat": 1.1170440937801467,
+        "batch_ess": 38.258773496371916,
+        "max_time_correlation": 0.24820195027451983
+      },
+      {
+        "name": "candidate_31",
+        "split_rhat": 2.041034233938169,
+        "batch_ess": 29.69998306720967,
+        "max_time_correlation": 0.9850888324335444
+      },
+      {
+        "name": "covariance_31",
+        "split_rhat": 1.1245667177014222,
+        "batch_ess": 38.24307170478067,
+        "max_time_correlation": 0.34385741033641026
+      },
+      {
+        "name": "candidate_32",
+        "split_rhat": 2.135968702111528,
+        "batch_ess": 28.783881564732372,
+        "max_time_correlation": 0.9917136765215288
+      },
+      {
+        "name": "covariance_32",
+        "split_rhat": 1.0696460576833224,
+        "batch_ess": 40.62706282689404,
+        "max_time_correlation": 0.23982939624446833
+      },
+      {
+        "name": "candidate_33",
+        "split_rhat": 1.951963513817751,
+        "batch_ess": 28.768155965508036,
+        "max_time_correlation": 0.9912036818992671
+      },
+      {
+        "name": "covariance_33",
+        "split_rhat": 1.1072573920531361,
+        "batch_ess": 36.783669343476966,
+        "max_time_correlation": 0.2394957055234179
+      },
+      {
+        "name": "candidate_34",
+        "split_rhat": 2.488722006519745,
+        "batch_ess": 28.2014506976118,
+        "max_time_correlation": 0.9924188712651885
+      },
+      {
+        "name": "covariance_34",
+        "split_rhat": 1.1848120328944602,
+        "batch_ess": 34.95636910225884,
+        "max_time_correlation": 0.22370072767886037
+      },
+      {
+        "name": "candidate_35",
+        "split_rhat": 2.156284582275861,
+        "batch_ess": 28.94862868841806,
+        "max_time_correlation": 0.9961072296899472
+      },
+      {
+        "name": "covariance_35",
+        "split_rhat": 1.0755525295924624,
+        "batch_ess": 39.63295732393286,
+        "max_time_correlation": 0.27520634719443227
+      },
+      {
+        "name": "candidate_36",
+        "split_rhat": 2.1764863348738617,
+        "batch_ess": 28.638134756256072,
+        "max_time_correlation": 0.9950907348033524
+      },
+      {
+        "name": "covariance_36",
+        "split_rhat": 1.1485030250289359,
+        "batch_ess": 35.32772050977584,
+        "max_time_correlation": 0.21527652570555192
+      },
+      {
+        "name": "candidate_37",
+        "split_rhat": 2.155951464214396,
+        "batch_ess": 28.698579700993363,
+        "max_time_correlation": 0.989856049180272
+      },
+      {
+        "name": "covariance_37",
+        "split_rhat": 1.123009633279877,
+        "batch_ess": 36.065141368768316,
+        "max_time_correlation": 0.3016605770491398
+      },
+      {
+        "name": "candidate_38",
+        "split_rhat": 2.411234886006274,
+        "batch_ess": 28.74997112246137,
+        "max_time_correlation": 0.9847891578471883
+      },
+      {
+        "name": "covariance_38",
+        "split_rhat": 1.1623448290668672,
+        "batch_ess": 36.199023910900415,
+        "max_time_correlation": 0.3453922615436851
+      },
+      {
+        "name": "candidate_39",
+        "split_rhat": 2.1177471745305114,
+        "batch_ess": 28.894276150338023,
+        "max_time_correlation": 0.9912094994074071
+      },
+      {
+        "name": "covariance_39",
+        "split_rhat": 1.0933031016501433,
+        "batch_ess": 37.5294704412359,
+        "max_time_correlation": 0.331154877769214
+      },
+      {
+        "name": "candidate_40",
+        "split_rhat": 2.3660509538406123,
+        "batch_ess": 28.58942563575563,
+        "max_time_correlation": 0.9954416606398413
+      },
+      {
+        "name": "covariance_40",
+        "split_rhat": 1.1163465158273247,
+        "batch_ess": 36.77241867514381,
+        "max_time_correlation": 0.22026080087464248
+      },
+      {
+        "name": "candidate_41",
+        "split_rhat": 1.9428645668381264,
+        "batch_ess": 29.37252667716169,
+        "max_time_correlation": 0.9857693013328654
+      },
+      {
+        "name": "covariance_41",
+        "split_rhat": 1.074681155675396,
+        "batch_ess": 39.02646426691212,
+        "max_time_correlation": 0.283408505070548
+      },
+      {
+        "name": "candidate_42",
+        "split_rhat": 2.130386274716929,
+        "batch_ess": 28.843612768004487,
+        "max_time_correlation": 0.9903181531941952
+      },
+      {
+        "name": "covariance_42",
+        "split_rhat": 1.0922645913190148,
+        "batch_ess": 37.268962972156736,
+        "max_time_correlation": 0.1363989396506476
+      },
+      {
+        "name": "candidate_43",
+        "split_rhat": 2.8925063069013928,
+        "batch_ess": 28.381846726815546,
+        "max_time_correlation": 0.9769288675262497
+      },
+      {
+        "name": "covariance_43",
+        "split_rhat": 1.1837715088279586,
+        "batch_ess": 36.34214378786714,
+        "max_time_correlation": 0.12535623914519475
+      },
+      {
+        "name": "candidate_44",
+        "split_rhat": 2.1156539624334503,
+        "batch_ess": 28.739114039324296,
+        "max_time_correlation": 0.9904989925402131
+      },
+      {
+        "name": "covariance_44",
+        "split_rhat": 1.1163472136525965,
+        "batch_ess": 37.486666863581924,
+        "max_time_correlation": 0.21711586205457326
+      },
+      {
+        "name": "candidate_45",
+        "split_rhat": 2.072857400701157,
+        "batch_ess": 28.572406630528157,
+        "max_time_correlation": 0.9924684869960804
+      },
+      {
+        "name": "covariance_45",
+        "split_rhat": 1.1491165387914637,
+        "batch_ess": 35.65873507715052,
+        "max_time_correlation": 0.19033419353214084
+      },
+      {
+        "name": "candidate_46",
+        "split_rhat": 2.341891841850555,
+        "batch_ess": 28.576423526752745,
+        "max_time_correlation": 0.9906273316693118
+      },
+      {
+        "name": "covariance_46",
+        "split_rhat": 1.1584725456102314,
+        "batch_ess": 35.05162863802222,
+        "max_time_correlation": 0.18533249981746894
+      },
+      {
+        "name": "candidate_47",
+        "split_rhat": 2.0013505339806748,
+        "batch_ess": 29.03626143208996,
+        "max_time_correlation": 0.9894547594212111
+      },
+      {
+        "name": "covariance_47",
+        "split_rhat": 1.0955630251857158,
+        "batch_ess": 38.46329475075301,
+        "max_time_correlation": 0.2038910882878484
+      },
+      {
+        "name": "candidate_48",
+        "split_rhat": 1.8813791721444217,
+        "batch_ess": 29.04080481269815,
+        "max_time_correlation": 0.9875418577144546
+      },
+      {
+        "name": "covariance_48",
+        "split_rhat": 1.1170362610419877,
+        "batch_ess": 37.68374559984247,
+        "max_time_correlation": 0.31503157160257433
+      },
+      {
+        "name": "candidate_49",
+        "split_rhat": 2.0703878201436208,
+        "batch_ess": 29.429620088101313,
+        "max_time_correlation": 0.9895221267648683
+      },
+      {
+        "name": "covariance_49",
+        "split_rhat": 1.1228455016358574,
+        "batch_ess": 37.23300284650884,
+        "max_time_correlation": 0.34000352634770165
+      },
+      {
+        "name": "candidate_50",
+        "split_rhat": 2.2081085662328404,
+        "batch_ess": 28.65214396985931,
+        "max_time_correlation": 0.9900799887250056
+      },
+      {
+        "name": "covariance_50",
+        "split_rhat": 1.15471840104144,
+        "batch_ess": 34.08438050660551,
+        "max_time_correlation": 0.23506054964279804
+      },
+      {
+        "name": "candidate_51",
+        "split_rhat": 2.4360468325325737,
+        "batch_ess": 28.23588395996529,
+        "max_time_correlation": 0.9852089745151585
+      },
+      {
+        "name": "covariance_51",
+        "split_rhat": 1.1308757194924455,
+        "batch_ess": 36.14542638225995,
+        "max_time_correlation": 0.27399484971135735
+      },
+      {
+        "name": "candidate_52",
+        "split_rhat": 1.863721328835581,
+        "batch_ess": 29.376992070745743,
+        "max_time_correlation": 0.9874011079431413
+      },
+      {
+        "name": "covariance_52",
+        "split_rhat": 1.0712227226463353,
+        "batch_ess": 37.89529195439803,
+        "max_time_correlation": 0.26454712740853054
+      },
+      {
+        "name": "candidate_53",
+        "split_rhat": 2.1247804557136276,
+        "batch_ess": 28.687450995112805,
+        "max_time_correlation": 0.9899451168454605
+      },
+      {
+        "name": "covariance_53",
+        "split_rhat": 1.0264859616556818,
+        "batch_ess": 41.23122949099914,
+        "max_time_correlation": 0.19753019626489007
+      },
+      {
+        "name": "candidate_54",
+        "split_rhat": 2.245078718278763,
+        "batch_ess": 29.067604079355757,
+        "max_time_correlation": 0.9892478922376706
+      },
+      {
+        "name": "covariance_54",
+        "split_rhat": 1.1809821135740608,
+        "batch_ess": 36.04115134831671,
+        "max_time_correlation": 0.2805863349725739
+      },
+      {
+        "name": "candidate_55",
+        "split_rhat": 2.2470261922769543,
+        "batch_ess": 28.446393560852908,
+        "max_time_correlation": 0.9928553413764906
+      },
+      {
+        "name": "covariance_55",
+        "split_rhat": 1.1406193232835322,
+        "batch_ess": 36.11802998402603,
+        "max_time_correlation": 0.2739433443022081
+      },
+      {
+        "name": "candidate_56",
+        "split_rhat": 2.457730292456817,
+        "batch_ess": 28.359423232515503,
+        "max_time_correlation": 0.9825873673506063
+      },
+      {
+        "name": "covariance_56",
+        "split_rhat": 1.1969115506442882,
+        "batch_ess": 35.47002041187724,
+        "max_time_correlation": 0.1838697768204966
+      },
+      {
+        "name": "candidate_57",
+        "split_rhat": 2.057658083217504,
+        "batch_ess": 28.731222942845573,
+        "max_time_correlation": 0.9922557515883691
+      },
+      {
+        "name": "covariance_57",
+        "split_rhat": 1.1347361298467267,
+        "batch_ess": 35.89342952271693,
+        "max_time_correlation": 0.27787583869217924
+      },
+      {
+        "name": "candidate_58",
+        "split_rhat": 2.2264985034585774,
+        "batch_ess": 29.288844467195965,
+        "max_time_correlation": 0.9938005608053262
+      },
+      {
+        "name": "covariance_58",
+        "split_rhat": 1.0828320605789994,
+        "batch_ess": 40.199205479319076,
+        "max_time_correlation": 0.22649871068457647
+      },
+      {
+        "name": "candidate_59",
+        "split_rhat": 2.0112732140028124,
+        "batch_ess": 28.820639775461878,
+        "max_time_correlation": 0.9887538219409971
+      },
+      {
+        "name": "covariance_59",
+        "split_rhat": 1.0922249904908423,
+        "batch_ess": 36.979674280872196,
+        "max_time_correlation": 0.16413833701782748
+      },
+      {
+        "name": "candidate_60",
+        "split_rhat": 2.121031533461855,
+        "batch_ess": 28.82949517780625,
+        "max_time_correlation": 0.9932597352987476
+      },
+      {
+        "name": "covariance_60",
+        "split_rhat": 1.1297815625415646,
+        "batch_ess": 36.4309609497671,
+        "max_time_correlation": 0.20290494889021718
+      },
+      {
+        "name": "candidate_61",
+        "split_rhat": 2.1244837102569902,
+        "batch_ess": 28.835238062748353,
+        "max_time_correlation": 0.991994645072741
+      },
+      {
+        "name": "covariance_61",
+        "split_rhat": 1.1325775430341258,
+        "batch_ess": 37.861770196480606,
+        "max_time_correlation": 0.2693352277553877
+      },
+      {
+        "name": "candidate_62",
+        "split_rhat": 2.4047344104676247,
+        "batch_ess": 29.172786983042638,
+        "max_time_correlation": 0.9881051097435969
+      },
+      {
+        "name": "covariance_62",
+        "split_rhat": 1.0610192479352343,
+        "batch_ess": 42.754521615131814,
+        "max_time_correlation": 0.26269674638756435
+      },
+      {
+        "name": "candidate_63",
+        "split_rhat": 1.9523624773227206,
+        "batch_ess": 29.790524679560395,
+        "max_time_correlation": 0.9735612746751902
+      },
+      {
+        "name": "covariance_63",
+        "split_rhat": 1.125430223484384,
+        "batch_ess": 39.51941424982636,
+        "max_time_correlation": 0.34199049455659813
+      },
+      {
+        "name": "candidate_64",
+        "split_rhat": 2.108352489948275,
+        "batch_ess": 28.572876565707734,
+        "max_time_correlation": 0.9894712679276422
+      },
+      {
+        "name": "covariance_64",
+        "split_rhat": 1.138434262007094,
+        "batch_ess": 35.34164015706694,
+        "max_time_correlation": 0.16131478118483636
+      },
+      {
+        "name": "candidate_65",
+        "split_rhat": 2.134693746665496,
+        "batch_ess": 28.654516299902266,
+        "max_time_correlation": 0.988288166118514
+      },
+      {
+        "name": "covariance_65",
+        "split_rhat": 1.0856667694503443,
+        "batch_ess": 38.80407724836702,
+        "max_time_correlation": 0.3566051174475401
+      },
+      {
+        "name": "candidate_66",
+        "split_rhat": 2.2844544408992484,
+        "batch_ess": 28.762417259916436,
+        "max_time_correlation": 0.9926158927367962
+      },
+      {
+        "name": "covariance_66",
+        "split_rhat": 1.168161947047498,
+        "batch_ess": 35.110470609502435,
+        "max_time_correlation": 0.165776795387646
+      },
+      {
+        "name": "candidate_67",
+        "split_rhat": 1.9782662615379214,
+        "batch_ess": 29.234927945337876,
+        "max_time_correlation": 0.989183718842826
+      },
+      {
+        "name": "covariance_67",
+        "split_rhat": 1.0767323821807442,
+        "batch_ess": 38.73026179532447,
+        "max_time_correlation": 0.26674382207357367
+      },
+      {
+        "name": "candidate_68",
+        "split_rhat": 1.9925589423221162,
+        "batch_ess": 28.90775739763964,
+        "max_time_correlation": 0.9934394596802593
+      },
+      {
+        "name": "covariance_68",
+        "split_rhat": 1.1307984182141506,
+        "batch_ess": 36.64177093886742,
+        "max_time_correlation": 0.258682691931013
+      },
+      {
+        "name": "candidate_69",
+        "split_rhat": 2.1173461247863545,
+        "batch_ess": 28.671218411338746,
+        "max_time_correlation": 0.9921648311862928
+      },
+      {
+        "name": "covariance_69",
+        "split_rhat": 1.1350645546875016,
+        "batch_ess": 36.23942358188834,
+        "max_time_correlation": 0.1635874914001217
+      },
+      {
+        "name": "candidate_70",
+        "split_rhat": 2.1606035000447514,
+        "batch_ess": 29.218035262661076,
+        "max_time_correlation": 0.9948395936952599
+      },
+      {
+        "name": "covariance_70",
+        "split_rhat": 1.064310798160355,
+        "batch_ess": 39.442894516357306,
+        "max_time_correlation": 0.2403622287955868
+      },
+      {
+        "name": "candidate_71",
+        "split_rhat": 2.118909982806176,
+        "batch_ess": 29.019844168298988,
+        "max_time_correlation": 0.989295869085596
+      },
+      {
+        "name": "covariance_71",
+        "split_rhat": 1.087323027988062,
+        "batch_ess": 38.294939267512085,
+        "max_time_correlation": 0.23553279476942124
+      },
+      {
+        "name": "candidate_72",
+        "split_rhat": 1.9784120493593764,
+        "batch_ess": 29.58986843956672,
+        "max_time_correlation": 0.9830991057444903
+      },
+      {
+        "name": "covariance_72",
+        "split_rhat": 1.1049743466391815,
+        "batch_ess": 38.02951580296359,
+        "max_time_correlation": 0.1957328380395521
+      },
+      {
+        "name": "candidate_73",
+        "split_rhat": 1.8229002000558294,
+        "batch_ess": 29.600158748569214,
+        "max_time_correlation": 0.993383719746881
+      },
+      {
+        "name": "covariance_73",
+        "split_rhat": 1.0866049855315336,
+        "batch_ess": 38.559994128699046,
+        "max_time_correlation": 0.153749928660949
+      },
+      {
+        "name": "candidate_74",
+        "split_rhat": 1.922541949596069,
+        "batch_ess": 29.368414853873922,
+        "max_time_correlation": 0.9910582993018452
+      },
+      {
+        "name": "covariance_74",
+        "split_rhat": 1.0900381223263458,
+        "batch_ess": 38.971372977325814,
+        "max_time_correlation": 0.2711540061513917
+      },
+      {
+        "name": "candidate_75",
+        "split_rhat": 2.3777936222609366,
+        "batch_ess": 28.39970146484183,
+        "max_time_correlation": 0.991536827695045
+      },
+      {
+        "name": "covariance_75",
+        "split_rhat": 1.2281185585296075,
+        "batch_ess": 34.42666778110436,
+        "max_time_correlation": 0.2124280249447894
+      },
+      {
+        "name": "candidate_76",
+        "split_rhat": 2.052376051580603,
+        "batch_ess": 28.695136310432947,
+        "max_time_correlation": 0.9857563295410445
+      },
+      {
+        "name": "covariance_76",
+        "split_rhat": 1.1398297248224745,
+        "batch_ess": 33.825386230047016,
+        "max_time_correlation": 0.3033582264222834
+      },
+      {
+        "name": "candidate_77",
+        "split_rhat": 1.9408294350335427,
+        "batch_ess": 28.70574087459938,
+        "max_time_correlation": 0.9910598637038968
+      },
+      {
+        "name": "covariance_77",
+        "split_rhat": 1.1760503676511262,
+        "batch_ess": 35.00947092490805,
+        "max_time_correlation": 0.22429505654478457
+      },
+      {
+        "name": "candidate_78",
+        "split_rhat": 2.17776682568388,
+        "batch_ess": 28.753694138064898,
+        "max_time_correlation": 0.9875265878019398
+      },
+      {
+        "name": "covariance_78",
+        "split_rhat": 1.114266550147398,
+        "batch_ess": 36.26114341104012,
+        "max_time_correlation": 0.17032191873140157
+      },
+      {
+        "name": "candidate_79",
+        "split_rhat": 2.302235547422863,
+        "batch_ess": 28.41186752793969,
+        "max_time_correlation": 0.9824748113298473
+      },
+      {
+        "name": "covariance_79",
+        "split_rhat": 1.1081851035789028,
+        "batch_ess": 38.29681496713174,
+        "max_time_correlation": 0.2962158897546754
+      },
+      {
+        "name": "candidate_80",
+        "split_rhat": 1.9687395164596506,
+        "batch_ess": 29.114158784332258,
+        "max_time_correlation": 0.980358401492657
+      },
+      {
+        "name": "covariance_80",
+        "split_rhat": 1.1234623541408661,
+        "batch_ess": 38.40575093996877,
+        "max_time_correlation": 0.24454586824503574
+      },
+      {
+        "name": "candidate_81",
+        "split_rhat": 2.044720403991945,
+        "batch_ess": 28.71966457225799,
+        "max_time_correlation": 0.9889348252402005
+      },
+      {
+        "name": "covariance_81",
+        "split_rhat": 1.1057270588396,
+        "batch_ess": 37.301400019926994,
+        "max_time_correlation": 0.22057772806321357
+      },
+      {
+        "name": "candidate_82",
+        "split_rhat": 2.146716131259544,
+        "batch_ess": 28.797864662457076,
+        "max_time_correlation": 0.9888639092454591
+      },
+      {
+        "name": "covariance_82",
+        "split_rhat": 1.1784314686329618,
+        "batch_ess": 35.637966868941234,
+        "max_time_correlation": 0.2463920260812674
+      },
+      {
+        "name": "candidate_83",
+        "split_rhat": 2.0100806989482316,
+        "batch_ess": 29.232983696644023,
+        "max_time_correlation": 0.9963108654531022
+      },
+      {
+        "name": "covariance_83",
+        "split_rhat": 1.1674864679648758,
+        "batch_ess": 36.338148576867255,
+        "max_time_correlation": 0.2691888944632764
+      },
+      {
+        "name": "candidate_84",
+        "split_rhat": 2.150182051430903,
+        "batch_ess": 29.39625342911416,
+        "max_time_correlation": 0.9905080262312598
+      },
+      {
+        "name": "covariance_84",
+        "split_rhat": 1.1546836894276729,
+        "batch_ess": 36.87448140823223,
+        "max_time_correlation": 0.24356235418605213
+      },
+      {
+        "name": "candidate_85",
+        "split_rhat": 1.974124654772892,
+        "batch_ess": 29.117813691710666,
+        "max_time_correlation": 0.9883259811468732
+      },
+      {
+        "name": "covariance_85",
+        "split_rhat": 1.118308372070285,
+        "batch_ess": 36.7089550231557,
+        "max_time_correlation": 0.18969951572334123
+      },
+      {
+        "name": "candidate_86",
+        "split_rhat": 2.371892945134065,
+        "batch_ess": 28.68150731381744,
+        "max_time_correlation": 0.9953990087277516
+      },
+      {
+        "name": "covariance_86",
+        "split_rhat": 1.1735853192527594,
+        "batch_ess": 34.91694388688148,
+        "max_time_correlation": 0.26971199061378964
+      },
+      {
+        "name": "candidate_87",
+        "split_rhat": 1.9463657829920553,
+        "batch_ess": 28.65747196907333,
+        "max_time_correlation": 0.9889027402568735
+      },
+      {
+        "name": "covariance_87",
+        "split_rhat": 1.1298461042919983,
+        "batch_ess": 35.5622156974992,
+        "max_time_correlation": 0.17332177507472324
+      },
+      {
+        "name": "candidate_88",
+        "split_rhat": 2.0565107547931087,
+        "batch_ess": 28.996638440896135,
+        "max_time_correlation": 0.989492609036919
+      },
+      {
+        "name": "covariance_88",
+        "split_rhat": 1.1167326057011981,
+        "batch_ess": 38.358005185314376,
+        "max_time_correlation": 0.21002103497134078
+      },
+      {
+        "name": "candidate_89",
+        "split_rhat": 1.7494792082895763,
+        "batch_ess": 29.768283409087772,
+        "max_time_correlation": 0.9752558657523063
+      },
+      {
+        "name": "covariance_89",
+        "split_rhat": 1.1060983428534261,
+        "batch_ess": 36.90684486509908,
+        "max_time_correlation": 0.45553126934515287
+      },
+      {
+        "name": "candidate_90",
+        "split_rhat": 1.8559708697402073,
+        "batch_ess": 29.438060949874146,
+        "max_time_correlation": 0.9963758478224098
+      },
+      {
+        "name": "covariance_90",
+        "split_rhat": 1.132286649509405,
+        "batch_ess": 35.636320556864234,
+        "max_time_correlation": 0.2363998407107901
+      },
+      {
+        "name": "candidate_91",
+        "split_rhat": 2.458605493337183,
+        "batch_ess": 29.132847767714246,
+        "max_time_correlation": 0.9906412038751911
+      },
+      {
+        "name": "covariance_91",
+        "split_rhat": 1.3334165361106736,
+        "batch_ess": 34.08467499696865,
+        "max_time_correlation": 0.1807485630003479
+      },
+      {
+        "name": "candidate_92",
+        "split_rhat": 2.085581169453641,
+        "batch_ess": 28.607062614315364,
+        "max_time_correlation": 0.991169504580073
+      },
+      {
+        "name": "covariance_92",
+        "split_rhat": 1.134807762248799,
+        "batch_ess": 35.492243349134014,
+        "max_time_correlation": 0.10998992851687063
+      },
+      {
+        "name": "candidate_93",
+        "split_rhat": 2.5663811140510715,
+        "batch_ess": 28.510137452993973,
+        "max_time_correlation": 0.9870389987118411
+      },
+      {
+        "name": "covariance_93",
+        "split_rhat": 1.179040685911391,
+        "batch_ess": 34.27033978915124,
+        "max_time_correlation": 0.25916986546972554
+      },
+      {
+        "name": "candidate_94",
+        "split_rhat": 2.0985994072506826,
+        "batch_ess": 29.18192641949224,
+        "max_time_correlation": 0.9914740221402535
+      },
+      {
+        "name": "covariance_94",
+        "split_rhat": 1.1326659421394616,
+        "batch_ess": 37.859647327237305,
+        "max_time_correlation": 0.17165192812078273
+      },
+      {
+        "name": "candidate_95",
+        "split_rhat": 2.002645457957281,
+        "batch_ess": 28.977497640665415,
+        "max_time_correlation": 0.9933695633386422
+      },
+      {
+        "name": "covariance_95",
+        "split_rhat": 1.073042272526528,
+        "batch_ess": 38.17778960314299,
+        "max_time_correlation": 0.23383801476679292
+      },
+      {
+        "name": "candidate_96",
+        "split_rhat": 2.277995228110517,
+        "batch_ess": 29.09457739795855,
+        "max_time_correlation": 0.9912317583135823
+      },
+      {
+        "name": "covariance_96",
+        "split_rhat": 1.124477533110502,
+        "batch_ess": 42.42964632420206,
+        "max_time_correlation": 0.39235649342591905
+      },
+      {
+        "name": "candidate_97",
+        "split_rhat": 2.073165309887414,
+        "batch_ess": 28.916216408766285,
+        "max_time_correlation": 0.98899481319821
+      },
+      {
+        "name": "covariance_97",
+        "split_rhat": 1.1081325306952472,
+        "batch_ess": 36.359239796117365,
+        "max_time_correlation": 0.15273823915335982
+      },
+      {
+        "name": "candidate_98",
+        "split_rhat": 1.9285871647912303,
+        "batch_ess": 29.28075376155032,
+        "max_time_correlation": 0.9921835773317786
+      },
+      {
+        "name": "covariance_98",
+        "split_rhat": 1.0969823393970746,
+        "batch_ess": 37.95906569578989,
+        "max_time_correlation": 0.16233867004918465
+      },
+      {
+        "name": "candidate_99",
+        "split_rhat": 2.2202836417813607,
+        "batch_ess": 29.4168005537586,
+        "max_time_correlation": 0.976526220741103
+      },
+      {
+        "name": "covariance_99",
+        "split_rhat": 1.2172811855265977,
+        "batch_ess": 35.9664258068708,
+        "max_time_correlation": 0.330730291906048
+      },
+      {
+        "name": "candidate_100",
+        "split_rhat": 2.211040712776166,
+        "batch_ess": 28.624040509639176,
+        "max_time_correlation": 0.9936815629464674
+      },
+      {
+        "name": "covariance_100",
+        "split_rhat": 1.1520098628862738,
+        "batch_ess": 35.3549111755196,
+        "max_time_correlation": 0.07926090044839472
+      },
+      {
+        "name": "candidate_101",
+        "split_rhat": 2.4505440645585974,
+        "batch_ess": 28.530580619006216,
+        "max_time_correlation": 0.9918456546014096
+      },
+      {
+        "name": "covariance_101",
+        "split_rhat": 1.2177548951203576,
+        "batch_ess": 34.108718179901075,
+        "max_time_correlation": 0.11033513916207975
+      },
+      {
+        "name": "candidate_102",
+        "split_rhat": 2.066855404018561,
+        "batch_ess": 28.81626132026798,
+        "max_time_correlation": 0.9928086961562044
+      },
+      {
+        "name": "covariance_102",
+        "split_rhat": 1.1197653217305867,
+        "batch_ess": 35.867121838324934,
+        "max_time_correlation": 0.22305581779779832
+      },
+      {
+        "name": "candidate_103",
+        "split_rhat": 1.8923145063540951,
+        "batch_ess": 29.184621946315094,
+        "max_time_correlation": 0.9938298106317628
+      },
+      {
+        "name": "covariance_103",
+        "split_rhat": 1.089936605465294,
+        "batch_ess": 38.83469225688066,
+        "max_time_correlation": 0.2095661593527358
+      },
+      {
+        "name": "candidate_104",
+        "split_rhat": 2.2049796580114362,
+        "batch_ess": 29.100762858676916,
+        "max_time_correlation": 0.9681354399338814
+      },
+      {
+        "name": "covariance_104",
+        "split_rhat": 1.1166602536356804,
+        "batch_ess": 36.53853399859645,
+        "max_time_correlation": 0.09662312541041274
+      },
+      {
+        "name": "candidate_105",
+        "split_rhat": 2.086187414058949,
+        "batch_ess": 29.042597295116174,
+        "max_time_correlation": 0.9962760438565829
+      },
+      {
+        "name": "covariance_105",
+        "split_rhat": 1.0775464658484248,
+        "batch_ess": 38.466281837863356,
+        "max_time_correlation": 0.3139086174528375
+      },
+      {
+        "name": "candidate_106",
+        "split_rhat": 2.483019885149764,
+        "batch_ess": 28.534675687259696,
+        "max_time_correlation": 0.9831571495702198
+      },
+      {
+        "name": "covariance_106",
+        "split_rhat": 1.1874595532076262,
+        "batch_ess": 34.733737129340476,
+        "max_time_correlation": 0.12531165492654636
+      },
+      {
+        "name": "candidate_107",
+        "split_rhat": 2.102388966051191,
+        "batch_ess": 28.801722881244146,
+        "max_time_correlation": 0.9901797251855193
+      },
+      {
+        "name": "covariance_107",
+        "split_rhat": 1.0746965405729194,
+        "batch_ess": 37.44571981503984,
+        "max_time_correlation": 0.25014227263184785
+      },
+      {
+        "name": "candidate_108",
+        "split_rhat": 2.109066974573968,
+        "batch_ess": 28.75406820501946,
+        "max_time_correlation": 0.9892326475478238
+      },
+      {
+        "name": "covariance_108",
+        "split_rhat": 1.091299225250438,
+        "batch_ess": 37.14384255275031,
+        "max_time_correlation": 0.17237436057535452
+      },
+      {
+        "name": "candidate_109",
+        "split_rhat": 2.079246871186009,
+        "batch_ess": 29.251061028603026,
+        "max_time_correlation": 0.9901509481174728
+      },
+      {
+        "name": "covariance_109",
+        "split_rhat": 1.0616274978381846,
+        "batch_ess": 38.337349832308796,
+        "max_time_correlation": 0.20296316082284133
+      },
+      {
+        "name": "candidate_110",
+        "split_rhat": 2.0309040998119814,
+        "batch_ess": 29.654025797192535,
+        "max_time_correlation": 0.9890114585510654
+      },
+      {
+        "name": "covariance_110",
+        "split_rhat": 1.1696163768572077,
+        "batch_ess": 37.18033177627111,
+        "max_time_correlation": 0.20564222715519714
+      },
+      {
+        "name": "candidate_111",
+        "split_rhat": 2.1094973851674483,
+        "batch_ess": 28.926235384839707,
+        "max_time_correlation": 0.9900459791508955
+      },
+      {
+        "name": "covariance_111",
+        "split_rhat": 1.1515909079506543,
+        "batch_ess": 34.69614263935196,
+        "max_time_correlation": 0.14724984921522186
+      },
+      {
+        "name": "candidate_112",
+        "split_rhat": 2.009839574836757,
+        "batch_ess": 28.702851259376484,
+        "max_time_correlation": 0.9961823336754563
+      },
+      {
+        "name": "covariance_112",
+        "split_rhat": 1.1471887373711558,
+        "batch_ess": 35.328528636497694,
+        "max_time_correlation": 0.20097148410893892
+      },
+      {
+        "name": "candidate_113",
+        "split_rhat": 2.1487608535143745,
+        "batch_ess": 28.421859248965692,
+        "max_time_correlation": 0.9937934562259879
+      },
+      {
+        "name": "covariance_113",
+        "split_rhat": 1.1467401719644224,
+        "batch_ess": 34.751799935229776,
+        "max_time_correlation": 0.179596439632229
+      },
+      {
+        "name": "candidate_114",
+        "split_rhat": 2.3130766958838693,
+        "batch_ess": 28.549285052650752,
+        "max_time_correlation": 0.9910263310134058
+      },
+      {
+        "name": "covariance_114",
+        "split_rhat": 1.111068714153285,
+        "batch_ess": 36.33398129526064,
+        "max_time_correlation": 0.312873500430398
+      },
+      {
+        "name": "candidate_115",
+        "split_rhat": 2.1391606058588857,
+        "batch_ess": 28.734019362184437,
+        "max_time_correlation": 0.9839331639632064
+      },
+      {
+        "name": "covariance_115",
+        "split_rhat": 1.1656843771329737,
+        "batch_ess": 35.034932359659315,
+        "max_time_correlation": 0.22688031997164373
+      },
+      {
+        "name": "candidate_116",
+        "split_rhat": 2.5005626353461192,
+        "batch_ess": 28.14583639935415,
+        "max_time_correlation": 0.9933519022160974
+      },
+      {
+        "name": "covariance_116",
+        "split_rhat": 1.199559639151634,
+        "batch_ess": 34.10838289280199,
+        "max_time_correlation": 0.18543210481820457
+      },
+      {
+        "name": "candidate_117",
+        "split_rhat": 2.1649047585266716,
+        "batch_ess": 28.902350890530116,
+        "max_time_correlation": 0.9877976672099611
+      },
+      {
+        "name": "covariance_117",
+        "split_rhat": 1.1608989827231764,
+        "batch_ess": 36.22977935351069,
+        "max_time_correlation": 0.19397102502265257
+      },
+      {
+        "name": "candidate_118",
+        "split_rhat": 2.1475234053710617,
+        "batch_ess": 28.93786296146006,
+        "max_time_correlation": 0.9914642749302868
+      },
+      {
+        "name": "covariance_118",
+        "split_rhat": 1.0914875147409129,
+        "batch_ess": 38.867190549664976,
+        "max_time_correlation": 0.18061683973794507
+      },
+      {
+        "name": "candidate_119",
+        "split_rhat": 2.2317563812808463,
+        "batch_ess": 29.61203292378904,
+        "max_time_correlation": 0.9905789228418261
+      },
+      {
+        "name": "covariance_119",
+        "split_rhat": 1.1298111747582813,
+        "batch_ess": 38.66293840963838,
+        "max_time_correlation": 0.2569940439599672
+      },
+      {
+        "name": "candidate_120",
+        "split_rhat": 2.2412040526543406,
+        "batch_ess": 28.683838339752413,
+        "max_time_correlation": 0.9955319648180819
+      },
+      {
+        "name": "covariance_120",
+        "split_rhat": 1.0633809366010218,
+        "batch_ess": 40.2334751922755,
+        "max_time_correlation": 0.1839866577559877
+      },
+      {
+        "name": "candidate_121",
+        "split_rhat": 2.6146818565539256,
+        "batch_ess": 28.869235867162686,
+        "max_time_correlation": 0.9781193358209382
+      },
+      {
+        "name": "covariance_121",
+        "split_rhat": 1.2489579201607275,
+        "batch_ess": 35.90956236025452,
+        "max_time_correlation": 0.36671770955574107
+      },
+      {
+        "name": "candidate_122",
+        "split_rhat": 2.2665700984555306,
+        "batch_ess": 28.9425477355855,
+        "max_time_correlation": 0.9824086361776125
+      },
+      {
+        "name": "covariance_122",
+        "split_rhat": 1.1020112184629132,
+        "batch_ess": 37.73269527891155,
+        "max_time_correlation": 0.45628262796719726
+      },
+      {
+        "name": "candidate_123",
+        "split_rhat": 1.989186462281123,
+        "batch_ess": 29.41512388445632,
+        "max_time_correlation": 0.9861838066819778
+      },
+      {
+        "name": "covariance_123",
+        "split_rhat": 1.1370819871779065,
+        "batch_ess": 37.82904481046073,
+        "max_time_correlation": 0.24064002023309292
+      },
+      {
+        "name": "candidate_124",
+        "split_rhat": 2.1944204189466032,
+        "batch_ess": 28.587928131541076,
+        "max_time_correlation": 0.9877706468360488
+      },
+      {
+        "name": "covariance_124",
+        "split_rhat": 1.1154473264860336,
+        "batch_ess": 36.724084922839424,
+        "max_time_correlation": 0.21739808366134813
+      },
+      {
+        "name": "candidate_125",
+        "split_rhat": 2.2721637516277164,
+        "batch_ess": 28.812375166500736,
+        "max_time_correlation": 0.9949069587917342
+      },
+      {
+        "name": "covariance_125",
+        "split_rhat": 1.1049509518677025,
+        "batch_ess": 37.42599980223842,
+        "max_time_correlation": 0.2109332322001937
+      },
+      {
+        "name": "candidate_126",
+        "split_rhat": 2.2561053607219828,
+        "batch_ess": 28.310464436947303,
+        "max_time_correlation": 0.9877259172136759
+      },
+      {
+        "name": "covariance_126",
+        "split_rhat": 1.1650973039287242,
+        "batch_ess": 35.116244419665016,
+        "max_time_correlation": 0.11578636303239757
+      },
+      {
+        "name": "candidate_127",
+        "split_rhat": 3.238306202916311,
+        "batch_ess": 28.163933053106128,
+        "max_time_correlation": 0.9818446784179864
+      },
+      {
+        "name": "covariance_127",
+        "split_rhat": 1.023606613567378,
+        "batch_ess": 42.52485681700369,
+        "max_time_correlation": 0.18163018267285674
+      },
+      {
+        "name": "candidate_128",
+        "split_rhat": 2.0916705564999534,
+        "batch_ess": 28.72772999151749,
+        "max_time_correlation": 0.9874623298480598
+      },
+      {
+        "name": "covariance_128",
+        "split_rhat": 1.0749819867587729,
+        "batch_ess": 37.27028489248943,
+        "max_time_correlation": 0.1451976301401985
+      },
+      {
+        "name": "candidate_129",
+        "split_rhat": 2.2928655084523286,
+        "batch_ess": 28.594518578923363,
+        "max_time_correlation": 0.9906805803511817
+      },
+      {
+        "name": "covariance_129",
+        "split_rhat": 1.1407273042465191,
+        "batch_ess": 37.15728697258393,
+        "max_time_correlation": 0.20107543247924656
+      },
+      {
+        "name": "candidate_130",
+        "split_rhat": 3.014919917212426,
+        "batch_ess": 28.423815740793962,
+        "max_time_correlation": 0.9523954048578603
+      },
+      {
+        "name": "covariance_130",
+        "split_rhat": 1.180396706276682,
+        "batch_ess": 35.22575548395527,
+        "max_time_correlation": 0.3609343674060419
+      },
+      {
+        "name": "candidate_131",
+        "split_rhat": 2.1773131006438615,
+        "batch_ess": 28.952614371143948,
+        "max_time_correlation": 0.9939300388404073
+      },
+      {
+        "name": "covariance_131",
+        "split_rhat": 1.0806416634433451,
+        "batch_ess": 38.11113087206837,
+        "max_time_correlation": 0.1909901388644618
+      },
+      {
+        "name": "candidate_132",
+        "split_rhat": 2.124767612938188,
+        "batch_ess": 28.872144271562444,
+        "max_time_correlation": 0.9870649212276941
+      },
+      {
+        "name": "covariance_132",
+        "split_rhat": 1.106878648766594,
+        "batch_ess": 37.94237758596009,
+        "max_time_correlation": 0.30508362839337666
+      },
+      {
+        "name": "candidate_133",
+        "split_rhat": 2.0164735346728615,
+        "batch_ess": 28.90481746629958,
+        "max_time_correlation": 0.9915212210807486
+      },
+      {
+        "name": "covariance_133",
+        "split_rhat": 1.1159958773367646,
+        "batch_ess": 36.43209578326657,
+        "max_time_correlation": 0.19304257914273143
+      },
+      {
+        "name": "candidate_134",
+        "split_rhat": 2.319990275432469,
+        "batch_ess": 29.011679276638464,
+        "max_time_correlation": 0.9889786872616178
+      },
+      {
+        "name": "covariance_134",
+        "split_rhat": 1.1145400482869174,
+        "batch_ess": 37.088858849025044,
+        "max_time_correlation": 0.23560608301147035
+      },
+      {
+        "name": "candidate_135",
+        "split_rhat": 2.1183722662158853,
+        "batch_ess": 28.84575037945161,
+        "max_time_correlation": 0.9945259818135855
+      },
+      {
+        "name": "covariance_135",
+        "split_rhat": 1.1456108748395375,
+        "batch_ess": 35.50218906874875,
+        "max_time_correlation": 0.20278406075243766
+      },
+      {
+        "name": "candidate_136",
+        "split_rhat": 2.5789075332417886,
+        "batch_ess": 28.289999330189538,
+        "max_time_correlation": 0.9885268789882692
+      },
+      {
+        "name": "covariance_136",
+        "split_rhat": 1.1489748422056367,
+        "batch_ess": 36.800705233778494,
+        "max_time_correlation": 0.28736650251027607
+      },
+      {
+        "name": "candidate_137",
+        "split_rhat": 2.237128103292605,
+        "batch_ess": 29.043164610001753,
+        "max_time_correlation": 0.9933485464742263
+      },
+      {
+        "name": "covariance_137",
+        "split_rhat": 1.1185637128914496,
+        "batch_ess": 35.872073052703904,
+        "max_time_correlation": 0.21272600697109711
+      },
+      {
+        "name": "candidate_138",
+        "split_rhat": 2.187348389806423,
+        "batch_ess": 29.023777219856836,
+        "max_time_correlation": 0.9915456898758073
+      },
+      {
+        "name": "covariance_138",
+        "split_rhat": 1.0940451382988268,
+        "batch_ess": 37.59819600247558,
+        "max_time_correlation": 0.2734471604396168
+      },
+      {
+        "name": "candidate_139",
+        "split_rhat": 2.4550036295023934,
+        "batch_ess": 28.532597761025876,
+        "max_time_correlation": 0.9885403022729975
+      },
+      {
+        "name": "covariance_139",
+        "split_rhat": 1.2236075768166146,
+        "batch_ess": 36.24768623749894,
+        "max_time_correlation": 0.3809864709600526
+      },
+      {
+        "name": "candidate_140",
+        "split_rhat": 2.0509599603026842,
+        "batch_ess": 28.886118158526507,
+        "max_time_correlation": 0.9919303804765088
+      },
+      {
+        "name": "covariance_140",
+        "split_rhat": 1.1272525773738915,
+        "batch_ess": 36.14217199004612,
+        "max_time_correlation": 0.22371017997497122
+      },
+      {
+        "name": "candidate_141",
+        "split_rhat": 1.8235567775838286,
+        "batch_ess": 29.58897302117047,
+        "max_time_correlation": 0.9766091558088129
+      },
+      {
+        "name": "covariance_141",
+        "split_rhat": 1.10102531559938,
+        "batch_ess": 37.439770107515216,
+        "max_time_correlation": 0.2742085427772734
+      },
+      {
+        "name": "candidate_142",
+        "split_rhat": 1.872564109141446,
+        "batch_ess": 29.17308022140794,
+        "max_time_correlation": 0.9871547040477295
+      },
+      {
+        "name": "covariance_142",
+        "split_rhat": 1.0881066218366249,
+        "batch_ess": 37.60351900008283,
+        "max_time_correlation": 0.23791097207354192
+      },
+      {
+        "name": "candidate_143",
+        "split_rhat": 2.3053018676260373,
+        "batch_ess": 28.341303158934018,
+        "max_time_correlation": 0.9922771762221737
+      },
+      {
+        "name": "covariance_143",
+        "split_rhat": 1.1367838761686118,
+        "batch_ess": 35.868938087656595,
+        "max_time_correlation": 0.240848301281244
+      },
+      {
+        "name": "candidate_144",
+        "split_rhat": 1.987002632981213,
+        "batch_ess": 28.901473634919377,
+        "max_time_correlation": 0.9936734115086342
+      },
+      {
+        "name": "covariance_144",
+        "split_rhat": 1.1062279938428863,
+        "batch_ess": 35.93500428946754,
+        "max_time_correlation": 0.23940287763111115
+      },
+      {
+        "name": "candidate_145",
+        "split_rhat": 2.0943566159423135,
+        "batch_ess": 29.962131948645144,
+        "max_time_correlation": 0.9603486947108897
+      },
+      {
+        "name": "covariance_145",
+        "split_rhat": 1.0913754381915795,
+        "batch_ess": 39.877747865964935,
+        "max_time_correlation": 0.3426343743194405
+      },
+      {
+        "name": "candidate_146",
+        "split_rhat": 2.7332801055858695,
+        "batch_ess": 28.085313836743275,
+        "max_time_correlation": 0.9802942629358972
+      },
+      {
+        "name": "covariance_146",
+        "split_rhat": 1.1773660552185117,
+        "batch_ess": 36.04605147175426,
+        "max_time_correlation": 0.40656863302795404
+      },
+      {
+        "name": "candidate_147",
+        "split_rhat": 2.034557363375972,
+        "batch_ess": 28.91246288567617,
+        "max_time_correlation": 0.9910074254399196
+      },
+      {
+        "name": "covariance_147",
+        "split_rhat": 1.1378291756578212,
+        "batch_ess": 34.7467456446576,
+        "max_time_correlation": 0.23311895742555833
+      },
+      {
+        "name": "candidate_148",
+        "split_rhat": 2.2051653435089125,
+        "batch_ess": 28.52230936519226,
+        "max_time_correlation": 0.9908621197374112
+      },
+      {
+        "name": "covariance_148",
+        "split_rhat": 1.1596438565925904,
+        "batch_ess": 36.26171218496766,
+        "max_time_correlation": 0.2262872714194381
+      },
+      {
+        "name": "candidate_149",
+        "split_rhat": 2.4199693975367715,
+        "batch_ess": 28.626839740402232,
+        "max_time_correlation": 0.9840008306270689
+      },
+      {
+        "name": "covariance_149",
+        "split_rhat": 1.1404384498386049,
+        "batch_ess": 37.193623272596746,
+        "max_time_correlation": 0.24728450558997483
+      },
+      {
+        "name": "candidate_150",
+        "split_rhat": 2.0589830919622885,
+        "batch_ess": 29.103294212627446,
+        "max_time_correlation": 0.9892847082504015
+      },
+      {
+        "name": "covariance_150",
+        "split_rhat": 1.1148342881618047,
+        "batch_ess": 37.69086084182729,
+        "max_time_correlation": 0.24454795069491178
+      },
+      {
+        "name": "candidate_151",
+        "split_rhat": 2.2118417910775476,
+        "batch_ess": 28.961404911268563,
+        "max_time_correlation": 0.9823985607585576
+      },
+      {
+        "name": "covariance_151",
+        "split_rhat": 1.1846221785344666,
+        "batch_ess": 36.31368508273969,
+        "max_time_correlation": 0.34223821069259003
+      },
+      {
+        "name": "candidate_152",
+        "split_rhat": 2.9834520024847335,
+        "batch_ess": 28.34264622883861,
+        "max_time_correlation": 0.987141620757264
+      },
+      {
+        "name": "covariance_152",
+        "split_rhat": 1.2188867567323907,
+        "batch_ess": 35.00753506578128,
+        "max_time_correlation": 0.21197727368426217
+      },
+      {
+        "name": "candidate_153",
+        "split_rhat": 1.95592124797549,
+        "batch_ess": 28.95261198366859,
+        "max_time_correlation": 0.9884799350878485
+      },
+      {
+        "name": "covariance_153",
+        "split_rhat": 1.0701860376593544,
+        "batch_ess": 36.67632484768552,
+        "max_time_correlation": 0.3079845377037094
+      },
+      {
+        "name": "candidate_154",
+        "split_rhat": 2.2010816428773703,
+        "batch_ess": 28.786058913499353,
+        "max_time_correlation": 0.9942566972813085
+      },
+      {
+        "name": "covariance_154",
+        "split_rhat": 1.1054735176819932,
+        "batch_ess": 36.768040613973774,
+        "max_time_correlation": 0.24793092914551246
+      },
+      {
+        "name": "candidate_155",
+        "split_rhat": 2.5460637767022978,
+        "batch_ess": 28.72657357281909,
+        "max_time_correlation": 0.9937635368461571
+      },
+      {
+        "name": "covariance_155",
+        "split_rhat": 1.1268138023349055,
+        "batch_ess": 38.2090911545463,
+        "max_time_correlation": 0.25830299084967795
+      },
+      {
+        "name": "candidate_156",
+        "split_rhat": 2.0590300141304114,
+        "batch_ess": 29.08274500850284,
+        "max_time_correlation": 0.9874017157021068
+      },
+      {
+        "name": "covariance_156",
+        "split_rhat": 1.171280154690242,
+        "batch_ess": 35.884617023481695,
+        "max_time_correlation": 0.2497588709621614
+      },
+      {
+        "name": "candidate_157",
+        "split_rhat": 2.2897593044218114,
+        "batch_ess": 29.380341326213365,
+        "max_time_correlation": 0.9856700014694457
+      },
+      {
+        "name": "covariance_157",
+        "split_rhat": 1.0806792848337798,
+        "batch_ess": 39.76750046777386,
+        "max_time_correlation": 0.2438134419900283
+      },
+      {
+        "name": "candidate_158",
+        "split_rhat": 2.2848820894928283,
+        "batch_ess": 28.524370108442692,
+        "max_time_correlation": 0.9833153754752217
+      },
+      {
+        "name": "covariance_158",
+        "split_rhat": 1.0748847041046081,
+        "batch_ess": 37.51879614595814,
+        "max_time_correlation": 0.2458688119246647
+      },
+      {
+        "name": "candidate_159",
+        "split_rhat": 2.2386163008591455,
+        "batch_ess": 28.677585445502203,
+        "max_time_correlation": 0.984811934124984
+      },
+      {
+        "name": "covariance_159",
+        "split_rhat": 1.0587860657560682,
+        "batch_ess": 41.50452692150941,
+        "max_time_correlation": 0.2177349468715035
+      },
+      {
+        "name": "candidate_160",
+        "split_rhat": 2.297245751546794,
+        "batch_ess": 28.360905346851197,
+        "max_time_correlation": 0.990921961764153
+      },
+      {
+        "name": "covariance_160",
+        "split_rhat": 1.1260903448664963,
+        "batch_ess": 36.102094411613216,
+        "max_time_correlation": 0.24313462743586334
+      },
+      {
+        "name": "candidate_161",
+        "split_rhat": 2.070896350847717,
+        "batch_ess": 28.978210445032033,
+        "max_time_correlation": 0.9951645178920889
+      },
+      {
+        "name": "covariance_161",
+        "split_rhat": 1.1425115907604158,
+        "batch_ess": 36.75918337842851,
+        "max_time_correlation": 0.21704925523146873
+      },
+      {
+        "name": "candidate_162",
+        "split_rhat": 2.106384591629353,
+        "batch_ess": 28.632122352998724,
+        "max_time_correlation": 0.9950655186118896
+      },
+      {
+        "name": "covariance_162",
+        "split_rhat": 1.1196231196669515,
+        "batch_ess": 35.40562647472399,
+        "max_time_correlation": 0.17948155103250096
+      },
+      {
+        "name": "candidate_163",
+        "split_rhat": 2.162190802501471,
+        "batch_ess": 28.854284338485858,
+        "max_time_correlation": 0.98980541143165
+      },
+      {
+        "name": "covariance_163",
+        "split_rhat": 1.139081692982455,
+        "batch_ess": 35.66661598302864,
+        "max_time_correlation": 0.22906138653104796
+      },
+      {
+        "name": "candidate_164",
+        "split_rhat": 2.0735377854165145,
+        "batch_ess": 29.311227295803064,
+        "max_time_correlation": 0.9773231641555314
+      },
+      {
+        "name": "covariance_164",
+        "split_rhat": 1.0345385905621207,
+        "batch_ess": 42.636533892485176,
+        "max_time_correlation": 0.260435311027044
+      },
+      {
+        "name": "candidate_165",
+        "split_rhat": 2.0518284684568755,
+        "batch_ess": 29.133327629436387,
+        "max_time_correlation": 0.9906603752979551
+      },
+      {
+        "name": "covariance_165",
+        "split_rhat": 1.1235979435864498,
+        "batch_ess": 37.68008076144779,
+        "max_time_correlation": 0.18996555778058635
+      },
+      {
+        "name": "candidate_166",
+        "split_rhat": 2.1027014969721143,
+        "batch_ess": 28.850448076263365,
+        "max_time_correlation": 0.992726315847435
+      },
+      {
+        "name": "covariance_166",
+        "split_rhat": 1.0998861158767137,
+        "batch_ess": 38.21172882514608,
+        "max_time_correlation": 0.2562599420518578
+      },
+      {
+        "name": "candidate_167",
+        "split_rhat": 2.3374183460181697,
+        "batch_ess": 28.40815574190883,
+        "max_time_correlation": 0.9779040724719712
+      },
+      {
+        "name": "covariance_167",
+        "split_rhat": 1.1036027701318802,
+        "batch_ess": 39.03194065999206,
+        "max_time_correlation": 0.22680914557578472
+      },
+      {
+        "name": "candidate_168",
+        "split_rhat": 2.3969014272246243,
+        "batch_ess": 28.225381964292605,
+        "max_time_correlation": 0.9733008796564189
+      },
+      {
+        "name": "covariance_168",
+        "split_rhat": 1.0412541547976382,
+        "batch_ess": 38.58330547617865,
+        "max_time_correlation": 0.18301422706753617
+      },
+      {
+        "name": "candidate_169",
+        "split_rhat": 2.0596080550507323,
+        "batch_ess": 28.986632164198216,
+        "max_time_correlation": 0.9910047474285703
+      },
+      {
+        "name": "covariance_169",
+        "split_rhat": 1.1634347833733052,
+        "batch_ess": 33.505000715117056,
+        "max_time_correlation": 0.20760230820121242
+      },
+      {
+        "name": "candidate_170",
+        "split_rhat": 1.947125540941023,
+        "batch_ess": 29.102457866675067,
+        "max_time_correlation": 0.9965338164550142
+      },
+      {
+        "name": "covariance_170",
+        "split_rhat": 1.097661704830452,
+        "batch_ess": 37.39881149312741,
+        "max_time_correlation": 0.20213247797573347
+      },
+      {
+        "name": "candidate_171",
+        "split_rhat": 2.0793571718572887,
+        "batch_ess": 28.865918275596893,
+        "max_time_correlation": 0.9868449569756395
+      },
+      {
+        "name": "covariance_171",
+        "split_rhat": 1.1200395343435467,
+        "batch_ess": 36.46611574731939,
+        "max_time_correlation": 0.22782904780524008
+      },
+      {
+        "name": "candidate_172",
+        "split_rhat": 1.9299347181973776,
+        "batch_ess": 29.476525895865382,
+        "max_time_correlation": 0.9904578770103039
+      },
+      {
+        "name": "covariance_172",
+        "split_rhat": 1.11680647041009,
+        "batch_ess": 37.31744094969625,
+        "max_time_correlation": 0.20279133445183112
+      },
+      {
+        "name": "candidate_173",
+        "split_rhat": 2.0720086094478383,
+        "batch_ess": 29.303799411695778,
+        "max_time_correlation": 0.9940878596118269
+      },
+      {
+        "name": "covariance_173",
+        "split_rhat": 1.175223288722423,
+        "batch_ess": 35.037433425072386,
+        "max_time_correlation": 0.11258874750661368
+      },
+      {
+        "name": "candidate_174",
+        "split_rhat": 1.9494146720723349,
+        "batch_ess": 29.42862323401644,
+        "max_time_correlation": 0.9774988567063414
+      },
+      {
+        "name": "covariance_174",
+        "split_rhat": 1.127764596545849,
+        "batch_ess": 38.265022051145834,
+        "max_time_correlation": 0.25481550440661865
+      },
+      {
+        "name": "candidate_175",
+        "split_rhat": 2.1383364286313515,
+        "batch_ess": 28.569658816979633,
+        "max_time_correlation": 0.9901636848379306
+      },
+      {
+        "name": "covariance_175",
+        "split_rhat": 1.1013196898920763,
+        "batch_ess": 35.84633756467243,
+        "max_time_correlation": 0.2388029572195195
+      },
+      {
+        "name": "candidate_176",
+        "split_rhat": 2.006904498642589,
+        "batch_ess": 29.430463768681804,
+        "max_time_correlation": 0.9849724541268297
+      },
+      {
+        "name": "covariance_176",
+        "split_rhat": 1.086365178383024,
+        "batch_ess": 38.44977493485064,
+        "max_time_correlation": 0.255497072135581
+      },
+      {
+        "name": "candidate_177",
+        "split_rhat": 2.265376099686509,
+        "batch_ess": 28.832759949142098,
+        "max_time_correlation": 0.9953067364089226
+      },
+      {
+        "name": "covariance_177",
+        "split_rhat": 1.1354092867778312,
+        "batch_ess": 37.108358869385334,
+        "max_time_correlation": 0.2123436586777049
+      },
+      {
+        "name": "candidate_178",
+        "split_rhat": 1.9788657553898064,
+        "batch_ess": 29.120797618981257,
+        "max_time_correlation": 0.9906090500625143
+      },
+      {
+        "name": "covariance_178",
+        "split_rhat": 1.195342119798544,
+        "batch_ess": 35.298033578382444,
+        "max_time_correlation": 0.27319820416246027
+      },
+      {
+        "name": "candidate_179",
+        "split_rhat": 2.123455953857103,
+        "batch_ess": 28.83665878811402,
+        "max_time_correlation": 0.995674782738646
+      },
+      {
+        "name": "covariance_179",
+        "split_rhat": 1.109924211440213,
+        "batch_ess": 36.94527045628555,
+        "max_time_correlation": 0.24196023861374238
+      },
+      {
+        "name": "candidate_180",
+        "split_rhat": 2.224199450884715,
+        "batch_ess": 28.66396651233448,
+        "max_time_correlation": 0.993314776079427
+      },
+      {
+        "name": "covariance_180",
+        "split_rhat": 1.1210538380443704,
+        "batch_ess": 36.955988164518985,
+        "max_time_correlation": 0.2282902658259665
+      },
+      {
+        "name": "candidate_181",
+        "split_rhat": 2.1475383450668635,
+        "batch_ess": 28.9559173216864,
+        "max_time_correlation": 0.9871682119788576
+      },
+      {
+        "name": "covariance_181",
+        "split_rhat": 1.1229315278601466,
+        "batch_ess": 36.6269308823755,
+        "max_time_correlation": 0.2955945482642778
+      },
+      {
+        "name": "candidate_182",
+        "split_rhat": 1.7813493917155385,
+        "batch_ess": 29.447483436826893,
+        "max_time_correlation": 0.9876830125519498
+      },
+      {
+        "name": "covariance_182",
+        "split_rhat": 1.0772777021115858,
+        "batch_ess": 39.33217122268974,
+        "max_time_correlation": 0.20693135201172677
+      },
+      {
+        "name": "candidate_183",
+        "split_rhat": 2.415707754373346,
+        "batch_ess": 28.593470782121837,
+        "max_time_correlation": 0.9921805952499806
+      },
+      {
+        "name": "covariance_183",
+        "split_rhat": 1.1505997152629512,
+        "batch_ess": 36.439395473436484,
+        "max_time_correlation": 0.1939669496615443
+      },
+      {
+        "name": "candidate_184",
+        "split_rhat": 2.094863606129375,
+        "batch_ess": 29.448897457349062,
+        "max_time_correlation": 0.9697004362163417
+      },
+      {
+        "name": "covariance_184",
+        "split_rhat": 1.1888139553177237,
+        "batch_ess": 36.136826400265555,
+        "max_time_correlation": 0.19604571628161563
+      },
+      {
+        "name": "candidate_185",
+        "split_rhat": 2.278470303952311,
+        "batch_ess": 28.549499987468447,
+        "max_time_correlation": 0.992873701561715
+      },
+      {
+        "name": "covariance_185",
+        "split_rhat": 1.123739441567923,
+        "batch_ess": 36.70177505320279,
+        "max_time_correlation": 0.22178005504031026
+      },
+      {
+        "name": "candidate_186",
+        "split_rhat": 1.9632163535990654,
+        "batch_ess": 28.63362178731035,
+        "max_time_correlation": 0.9775333075561984
+      },
+      {
+        "name": "covariance_186",
+        "split_rhat": 1.1535310465562822,
+        "batch_ess": 34.55031362982943,
+        "max_time_correlation": 0.3208972035836136
+      },
+      {
+        "name": "candidate_187",
+        "split_rhat": 1.9750971182818375,
+        "batch_ess": 28.875089002915338,
+        "max_time_correlation": 0.992064970547033
+      },
+      {
+        "name": "covariance_187",
+        "split_rhat": 1.1287048689723778,
+        "batch_ess": 36.28758931524593,
+        "max_time_correlation": 0.28185629578594257
+      },
+      {
+        "name": "candidate_188",
+        "split_rhat": 2.275396897724907,
+        "batch_ess": 28.410466701935313,
+        "max_time_correlation": 0.9918469684695518
+      },
+      {
+        "name": "covariance_188",
+        "split_rhat": 1.0866697793477922,
+        "batch_ess": 38.44913015794802,
+        "max_time_correlation": 0.14247226438162824
+      },
+      {
+        "name": "candidate_189",
+        "split_rhat": 2.4694478645259395,
+        "batch_ess": 28.437856292757182,
+        "max_time_correlation": 0.9895527303846157
+      },
+      {
+        "name": "covariance_189",
+        "split_rhat": 1.1118329265546756,
+        "batch_ess": 37.282427890957365,
+        "max_time_correlation": 0.23913024882561004
+      },
+      {
+        "name": "candidate_190",
+        "split_rhat": 2.18474877517227,
+        "batch_ess": 28.744144686804262,
+        "max_time_correlation": 0.9845617710810601
+      },
+      {
+        "name": "covariance_190",
+        "split_rhat": 1.0536155810215282,
+        "batch_ess": 37.039915867988874,
+        "max_time_correlation": 0.1870928642705856
+      },
+      {
+        "name": "candidate_191",
+        "split_rhat": 2.39409897663584,
+        "batch_ess": 28.123652008252666,
+        "max_time_correlation": 0.9907943051070619
+      },
+      {
+        "name": "covariance_191",
+        "split_rhat": 1.0817156476522993,
+        "batch_ess": 37.1034852705227,
+        "max_time_correlation": 0.24117817512158166
+      },
+      {
+        "name": "candidate_192",
+        "split_rhat": 1.993234664171287,
+        "batch_ess": 28.898819262070415,
+        "max_time_correlation": 0.9824682580681559
+      },
+      {
+        "name": "covariance_192",
+        "split_rhat": 1.1264148390582702,
+        "batch_ess": 35.995490307409796,
+        "max_time_correlation": 0.14053238744147278
+      },
+      {
+        "name": "candidate_193",
+        "split_rhat": 1.984455774494508,
+        "batch_ess": 29.04498452267273,
+        "max_time_correlation": 0.9922393495188957
+      },
+      {
+        "name": "covariance_193",
+        "split_rhat": 1.075767353169191,
+        "batch_ess": 38.378692699882194,
+        "max_time_correlation": 0.2478194514074616
+      },
+      {
+        "name": "candidate_194",
+        "split_rhat": 2.225393011454952,
+        "batch_ess": 28.95595162536998,
+        "max_time_correlation": 0.9948335214839695
+      },
+      {
+        "name": "covariance_194",
+        "split_rhat": 1.1819692823571744,
+        "batch_ess": 35.16182937751188,
+        "max_time_correlation": 0.19458082441363414
+      },
+      {
+        "name": "candidate_195",
+        "split_rhat": 1.9853615704681724,
+        "batch_ess": 28.700985126933112,
+        "max_time_correlation": 0.9933723280957485
+      },
+      {
+        "name": "covariance_195",
+        "split_rhat": 1.1498014702850659,
+        "batch_ess": 35.214508209409516,
+        "max_time_correlation": 0.18996769273614536
+      },
+      {
+        "name": "candidate_196",
+        "split_rhat": 2.1926412711113468,
+        "batch_ess": 28.849279083317686,
+        "max_time_correlation": 0.989415515104176
+      },
+      {
+        "name": "covariance_196",
+        "split_rhat": 1.162358451393395,
+        "batch_ess": 34.630634066531776,
+        "max_time_correlation": 0.2536567455384923
+      },
+      {
+        "name": "candidate_197",
+        "split_rhat": 2.2272966379645838,
+        "batch_ess": 28.657595341432494,
+        "max_time_correlation": 0.9961332447500424
+      },
+      {
+        "name": "covariance_197",
+        "split_rhat": 1.1193235244801647,
+        "batch_ess": 37.16129320319346,
+        "max_time_correlation": 0.28026369795465206
+      },
+      {
+        "name": "candidate_198",
+        "split_rhat": 2.1813860327196024,
+        "batch_ess": 28.56995840844857,
+        "max_time_correlation": 0.9921741856830195
+      },
+      {
+        "name": "covariance_198",
+        "split_rhat": 1.160428996688111,
+        "batch_ess": 35.519361067636645,
+        "max_time_correlation": 0.3102299162738083
+      },
+      {
+        "name": "candidate_199",
+        "split_rhat": 2.279821836819781,
+        "batch_ess": 28.559671120375743,
+        "max_time_correlation": 0.9910789491585626
+      },
+      {
+        "name": "covariance_199",
+        "split_rhat": 1.0979137262480645,
+        "batch_ess": 37.22274544913541,
+        "max_time_correlation": 0.3020302857893004
+      }
+    ]
+  },
+  "analysis_note": "Historical Pythia demonstration: sampling is inconclusive. Raw draws are preserved; attribution ranks are withheld."
 }
