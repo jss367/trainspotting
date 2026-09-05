@@ -1,0 +1,951 @@
+"""The Bayesian-influence layer, everywhere it can be checked without a checkpoint.
+
+The sampler needs weights and a GPU, so what is pinned here is everything
+around it: which committed examples become candidates and which are skipped
+with a reason, that the loss is masked to the text the model was fit to and
+truncation keeps that text rather than the prompt, that the covariance
+arithmetic gives the signs it claims, and that the rendered result names the
+checkpoint and says when the chains did not behave. The SGLD loop itself runs
+against a toy model when torch is importable, which checks the plumbing (shapes,
+restoring w*, finite losses) rather than the physics.
+"""
+
+import json
+import importlib.util
+import math
+
+import pytest
+
+from trainspotting import bif, registry
+
+# --- Candidates -----------------------------------------------------------------
+
+
+def test_a_pretraining_sample_becomes_whole_document_candidates():
+    target = registry.resolve("pythia-12b-deduped")
+    cands, skipped = bif.candidates("pythia-12b-deduped", target)
+    assert skipped == {}
+    assert cands, "the committed Pile sample should yield candidates"
+    assert {c["side"] for c in cands} == {"document"}
+    assert all(c["turns"][0]["role"] == "text" for c in cands)
+    assert all(bif.fit_text(c) == bif.candidate_text(c) for c in cands)
+
+
+def test_post_training_objectives_are_explicitly_deferred():
+    target = registry.resolve("olmo-3-7b-instruct")
+    cands, skipped = bif.candidates("olmo-3-7b-instruct", target, stages=["sft", "dpo", "rlvr"])
+    assert cands == []
+    assert set(skipped) == {"sft", "dpo", "rlvr"}
+    assert all("deferred" in why for why in skipped.values())
+
+
+def test_excerpted_documents_are_skipped_and_counted():
+    target = registry.resolve("pythia-12b-deduped")
+    incomplete: dict = {}
+    cands, _ = bif.candidates("pythia-12b-deduped", target, incomplete=incomplete)
+    assert incomplete == {"pretrain": 22}
+    assert len(cands) == 278
+    # Every kept document is stored whole (a Pile document can contain the
+    # elision marker as ordinary text, so the length is what is checked).
+    assert not any(c["cut"] for c in cands)
+
+
+def test_private_reconstruction_still_skips_incomplete_records():
+    target = registry.resolve("olmo-3-7b-instruct")
+    stage = next(s for s in target["stages"] if s["stage"] == "sft")
+    cands, why, dropped = bif._context_candidates("olmo-3-7b-instruct", stage)
+    assert dropped >= 60 and why is None
+    assert all(not c["cut"] for c in cands)
+
+
+def test_a_record_with_any_cut_turn_is_incomplete():
+    cut_answer = [{"role": "user", "text": "q", "chars": 1},
+                  {"role": "assistant", "text": "a" * 10, "chars": 4000}]
+    assert bif.incomplete(cut_answer)
+    cut_reasoning = [{"role": "user", "text": "q", "chars": 1},
+                     {"role": "assistant", "text": "a", "chars": 1, "reasoning": {"text": "r", "chars": 99}}]
+    assert bif.incomplete(cut_reasoning)
+    # A cut prompt is stored by its head and encoded by its tail, so the text
+    # before the response is not what preceded it; it is refused too.
+    cut_prompt = [{"role": "user", "text": "q" * 5, "chars": 4000}, {"role": "assistant", "text": "a", "chars": 1}]
+    assert bif.incomplete(cut_prompt)
+    shared = [{"role": "user", "text": "q", "chars": 1}, {"role": "assistant", "text": "a", "chars": 4000},
+              {"role": "user", "text": "q2", "chars": 2}, {"role": "assistant", "text": "b", "chars": 1}]
+    assert bif.incomplete(shared, shared=2) and bif.incomplete(shared, shared=0)
+    whole = [{"role": "user", "text": "q", "chars": 1}, {"role": "assistant", "text": "a", "chars": 1}]
+    assert not bif.incomplete(whole)
+
+
+def test_structured_content_stored_as_a_repr_is_incomplete_where_the_file_marks_fidelity():
+    marked = [{"role": "user", "text": "q", "chars": 1, "raw": True},
+              {"role": "assistant", "text": "[{'type': 'text', 'text': 'a'}]", "chars": 31}]
+    assert bif.incomplete(marked, marked=True)
+    assert not bif.incomplete(marked, marked=False)  # a file from before the markers
+    whole = [{"role": "user", "text": "q", "chars": 1, "raw": True},
+             {"role": "assistant", "text": "a", "chars": 1, "chars_raw": 20}]
+    assert not bif.incomplete(whole, marked=True)
+    assert bif.marks_fidelity([{"turns": marked}]) and not bif.marks_fidelity([{"turns": [marked[1]]}])
+    # The committed Instruct sample predates the markers; the think samples carry them.
+    import json
+    from trainspotting import paths
+    assert not bif.marks_fidelity(json.loads(paths.find("olmo-3-7b-instruct.sft.context.json").read_text())["records"])
+    assert bif.marks_fidelity(json.loads(paths.find("olmo-3-7b-think.sft.context.json").read_text())["records"])
+
+
+def test_a_sample_of_another_mix_or_a_straddled_draw_is_a_skip(tmp_path, monkeypatch):
+    target = registry.resolve("olmo-3-7b-instruct")
+    stage = next(s for s in target["stages"] if s["stage"] == "sft")
+    wrong = tmp_path / "x.sft.context.json"
+    wrong.write_text('{"dataset": "allenai/Some-Other-Mix", "records": []}')
+    monkeypatch.setattr(bif.paths, "find", lambda name: wrong)
+    cands, why, _ = bif._context_candidates("x", stage)
+    skipped = {"sft": why}
+    assert cands == [] and "Some-Other-Mix" in skipped["sft"]
+    moved = tmp_path / "y.sft.context.json"
+    moved.write_text(json.dumps({"dataset": stage["hf_dataset"], "revision_moved_to": "abc", "records": []}))
+    monkeypatch.setattr(bif.paths, "find", lambda name: moved)
+    _, why, _ = bif._context_candidates("y", stage)
+    assert "republish" in why
+
+
+def test_a_conversation_log_is_not_a_candidate():
+    target = registry.resolve("wildchat-1m")
+    cands, skipped = bif.candidates("wildchat-1m", target)
+    assert cands == []
+    assert "chat" in skipped
+
+
+def test_match_filters_and_an_empty_match_is_a_skip_not_silence():
+    target = registry.resolve("pythia-12b-deduped")
+    all_cands, _ = bif.candidates("pythia-12b-deduped", target)
+    some, skipped = bif.candidates("pythia-12b-deduped", target, match=r"\bthe\b")
+    assert 0 < len(some) < len(all_cands)
+    assert all(" the " in bif.candidate_text(c).lower() or "the" in bif.candidate_text(c).lower() for c in some)
+    none, skipped = bif.candidates("pythia-12b-deduped", target, match="zqxjkvbnm-not-in-any-doc")
+    assert none == []
+    assert "pretrain" in skipped and "matches" in skipped["pretrain"]
+
+
+def test_limit_caps_per_stage_deterministically():
+    target = registry.resolve("pythia-12b-deduped")
+    a, _ = bif.candidates("pythia-12b-deduped", target, limit=7, seed=3)
+    b, _ = bif.candidates("pythia-12b-deduped", target, limit=7, seed=3)
+    c, _ = bif.candidates("pythia-12b-deduped", target, limit=7, seed=4)
+    assert len(a) == 7
+    assert [x["row"] for x in a] == [x["row"] for x in b]
+    assert [x["row"] for x in a] != [x["row"] for x in c]
+
+
+def test_match_keeps_both_sides_of_a_pair_when_either_side_holds_the_pattern():
+    import re
+
+    def pair(side, text):
+        return {"id": "p", "row": 7, "side": side, "turns": [{"role": "assistant", "text": text}]}
+
+    other = {"id": "q", "row": 8, "side": "chosen", "turns": [{"role": "assistant", "text": "nothing here"}]}
+    cands = [pair("chosen", "plain answer"), pair("rejected", "I am ChatGPT"), other]
+    kept = bif._matching(cands, re.compile("chatgpt", re.IGNORECASE))
+    assert [(c["id"], c["side"]) for c in kept] == [("p", "chosen"), ("p", "rejected")]
+
+
+def test_records_without_id_or_row_are_still_distinct_records():
+    import re
+
+    def side(rec, side, text):
+        return {"rec": rec, "id": None, "row": None, "side": side,
+                "turns": [{"role": "assistant", "text": text}]}
+    cands = [side(0, "chosen", "alpha"), side(0, "rejected", "beta"),
+             side(1, "chosen", "gamma"), side(1, "rejected", "delta")]
+    assert [c["rec"] for c in bif._matching(cands, re.compile("alpha"))] == [0, 0]
+    assert len(bif._limit(cands, 1, __import__("random").Random(0))) == 2
+
+
+def test_deferred_stages_do_not_read_context_files(monkeypatch):
+    target = registry.resolve("olmo-3-7b-instruct")
+    monkeypatch.setattr(bif.paths, "find", lambda name: pytest.fail("deferred stage read a file"))
+    cands, skipped = bif.candidates("olmo-3-7b-instruct", target, stages=["dpo"], limit=1)
+    assert cands == [] and "deferred" in skipped["dpo"]
+
+
+def test_a_missing_document_sample_is_a_skip_naming_the_command():
+    target = registry.resolve("pythia-12b-deduped")
+    cands, skipped = bif.candidates("no-such-target", target)
+    assert cands == []
+    assert "trainspotting pretrain no-such-target --stage pretrain" in skipped["pretrain"]
+
+
+def test_a_deferred_objective_does_not_suggest_fetching_more_context():
+    target = registry.resolve("olmo-3-7b-instruct")
+    cands, skipped = bif.candidates("no-such-target", target, stages=["sft"])
+    assert cands == [] and "deferred" in skipped["sft"]
+
+
+def context_candidates(monkeypatch, tmp_path, kind, records):
+    """Candidates from a constructed context file for one stage of `kind`."""
+    path = tmp_path / f"t.{kind}.context.json"
+    path.write_text(json.dumps({"records": records}))
+    monkeypatch.setattr(bif.paths, "find", lambda name: path if name == path.name else None)
+    cands, skipped, _ = bif._context_candidates("t", {"stage": kind, "kind": kind})
+    assert skipped is None
+    return cands
+
+
+def think_turn(reasoning, text, reasoning_chars=None):
+    return {"role": "assistant", "text": text, "chars": len(text),
+            "reasoning": {"text": reasoning, "chars": reasoning_chars or len(reasoning)}}
+
+
+def test_a_think_turn_is_fit_on_its_reasoning_and_its_answer_in_the_trained_form(monkeypatch, tmp_path):
+    # `context` stores the reasoning beside the answer with the markers
+    # stripped; the model was fit to the whole response.
+    rec = {"id": "r", "row": 1, "turns": [{"role": "user", "text": "q", "chars": 1},
+                                          think_turn("let me see", "the answer")]}
+    [c] = context_candidates(monkeypatch, tmp_path, "sft", [rec])
+    fit = bif.fit_text(c)
+    # No recorded raw length: the record predates it, and the turn is left as
+    # its answer rather than guessed at.
+    assert fit == "the answer"
+    # With the length the turn had as written, the markers and whitespace are
+    # put back to exactly that length: 18 over the two fields is the common
+    # Think SFT form, one newline after the closing marker.
+    rec["turns"][0]["raw"] = True
+    rec["turns"][1] = {**think_turn("let me see", "the answer"), "chars_raw": 10 + 10 + 18}
+    [c] = context_candidates(monkeypatch, tmp_path, "sft", [rec])
+    fit = bif.fit_text(c)
+    assert fit == "<think>\nlet me see\n</think>\nthe answer"
+    assert len(fit) == 38 and c["cut"] is False
+    # A reasoning field the record shortened is a cut fit turn: the block would
+    # close early with the answer appended, a sequence the model never saw, so
+    # the record is skipped and counted rather than kept with a flag.
+    rec["turns"][1] = think_turn("let me see", "the answer", reasoning_chars=5000)
+    path = tmp_path / "t.sft.context.json"
+    path.write_text(json.dumps({"records": [rec]}))
+    monkeypatch.setattr(bif.paths, "find", lambda name: path if name == path.name else None)
+    cands, skipped, dropped = bif._context_candidates("t", {"stage": "sft", "kind": "sft"})
+    assert cands == [] and skipped is None and dropped == 1
+    # A turn without reasoning is what it was before.
+    rec["turns"][1] = {"role": "assistant", "text": "plain", "chars": 5, "raw": True}
+    [c] = context_candidates(monkeypatch, tmp_path, "sft", [rec])
+    assert bif.fit_text(c) == "plain"
+
+
+def test_a_dpo_pair_is_fit_only_past_the_turn_where_its_sides_branch(monkeypatch, tmp_path):
+    # A multi-turn pair shares its first three turns; the assistant turn among
+    # them is the conversation the pair was judged in, not either completion.
+    history = [{"role": "user", "text": "a", "chars": 1}, {"role": "assistant", "text": "b", "chars": 1},
+               {"role": "user", "text": "c", "chars": 1}]
+    rec = {"id": "p", "row": 2,
+           "chosen": {"turns": history + [{"role": "assistant", "text": "yes", "chars": 3}]},
+           "rejected": {"turns": history + [{"role": "assistant", "text": "no", "chars": 2}]}}
+    chosen, rejected = context_candidates(monkeypatch, tmp_path, "dpo", [rec])
+    assert [t["fit"] for t in chosen["turns"]] == [False, False, False, True]
+    assert [t["fit"] for t in rejected["turns"]] == [False, False, False, True]
+    assert bif.fit_text(chosen) == "yes" and bif.fit_text(rejected) == "no"
+    # The encoding reads the flag, not the role: only the final answer is a label.
+    e = bif.encode(Tok(), chosen["turns"], max_tokens=200)
+    fit_ids = [i for i, lab in zip(e["ids"], e["labels"]) if lab != -100]
+    assert bytes(fit_ids).decode() == "yes\n\n"
+    # A single-turn pair is fit on its one assistant turn, as before.
+    single = {"id": "s", "row": 3,
+              "chosen": {"turns": history[:1] + [{"role": "assistant", "text": "yes", "chars": 3}]},
+              "rejected": {"turns": history[:1] + [{"role": "assistant", "text": "no", "chars": 2}]}}
+    chosen, rejected = context_candidates(monkeypatch, tmp_path, "dpo", [single])
+    assert bif.fit_text(chosen) == "yes" and bif.fit_text(rejected) == "no"
+
+
+# --- Encoding -------------------------------------------------------------------
+
+
+class Tok:
+    """A tokenizer that gives every character its own id, so spans are countable."""
+
+    bos_token_id = 1
+    bos_token = "<s>"
+    chat_template = None
+
+    def encode(self, text, add_special_tokens=False):
+        # Prepends its BOS when asked for special tokens, as a Llama-style
+        # tokenizer does; `NoBosTok` below is the Pythia shape.
+        return ([self.bos_token_id] if add_special_tokens else []) + [ord(ch) for ch in text]
+
+
+class NoBosTok(Tok):
+    """Names a BOS id but never prepends it, as Pythia's tokenizer does."""
+
+    def encode(self, text, add_special_tokens=False):
+        return [ord(ch) for ch in text]
+
+
+class ChatTok(Tok):
+    chat_template = "yes"
+
+    def apply_chat_template(self, msgs, tokenize=False, add_generation_prompt=False):
+        s = "<s>"
+        for m in msgs:
+            s += f"<{m['role']}>{m['content']}</>"
+        if add_generation_prompt:
+            s += "<assistant>"
+        return s
+
+
+class BrokenChatTok(ChatTok):
+    def apply_chat_template(self, *a, **k):
+        raise ValueError("no")
+
+
+def test_only_fit_spans_are_labels_and_the_first_token_never_is():
+    turns = [{"role": "user", "text": "ab"}, {"role": "assistant", "text": "xyz"}]
+    e = bif.encode(Tok(), turns, max_tokens=100)
+    assert e["ids"][0] == 1  # BOS added, since the text does not start with it
+    assert e["labels"][0] == -100
+    # "user: " and "ab" and "assistant: " are context; "xyz\n\n" is fit.
+    assert e["fit_tokens"] == len("xyz\n\n")
+    fit_ids = [i for i, lab in zip(e["ids"], e["labels"]) if lab != -100]
+    assert bytes(fit_ids).decode() == "xyz\n\n"
+    assert e["truncated"] is False
+
+
+def test_a_document_is_all_target_but_its_first_token():
+    e = bif.encode(Tok(), [{"role": "text", "text": "hello"}], max_tokens=100)
+    assert e["tokens"] == 6  # BOS + 5
+    assert e["fit_tokens"] == 5
+
+
+def test_bos_follows_the_tokenizer_policy_not_the_existence_of_an_id():
+    assert bif.prepends_bos(Tok()) is True
+    assert bif.prepends_bos(NoBosTok()) is False
+    e = bif.encode(NoBosTok(), [{"role": "text", "text": "hello"}], max_tokens=100)
+    assert e["ids"] == [ord(c) for c in "hello"]  # no BOS in front
+    assert e["fit_tokens"] == 4  # the first token is never a target
+
+
+def test_truncation_drops_the_front_and_keeps_the_fit_text():
+    turns = [{"role": "user", "text": "p" * 50}, {"role": "assistant", "text": "r" * 10}]
+    e = bif.encode(Tok(), turns, max_tokens=20)
+    assert e["truncated"] is True
+    assert e["tokens"] == 20
+    assert e["fit_tokens"] == len("r" * 10 + "\n\n")
+    assert e["ids"][-1] == ord("\n")
+
+
+def test_a_chat_template_renders_the_turns_and_fits_the_assistant_span_only():
+    turns = [{"role": "user", "text": "hi"}, {"role": "assistant", "text": "yo"}]
+    spans = bif.pieces(ChatTok(), turns)
+    assert spans == [("<s><user>hi</><assistant>", False), ("yo</>", True)]
+    e = bif.encode(ChatTok(), turns, max_tokens=100)
+    # The template already put the BOS text first, so none is added.
+    assert e["ids"][0] == ord("<")
+    assert bytes(i for i, lab in zip(e["ids"], e["labels"]) if lab != -100).decode() == "yo</>"
+
+
+def test_a_system_turn_before_the_user_keeps_the_template_rendering():
+    # Each prefix rendering has to start with the one before it. A generation
+    # prompt after the system turn would put the assistant header ahead of the
+    # user turn and break that, sending the example to the role fallback.
+    turns = [{"role": "system", "text": "be"}, {"role": "user", "text": "hi"},
+             {"role": "assistant", "text": "yo"}]
+    spans = bif.pieces(ChatTok(), turns)
+    assert spans == [("<s><system>be</>", False), ("<user>hi</><assistant>", False), ("yo</>", True)]
+    e = bif.encode(ChatTok(), turns, max_tokens=100)
+    assert bytes(i for i, lab in zip(e["ids"], e["labels"]) if lab != -100).decode() == "yo</>"
+
+
+class ThinkTok(ChatTok):
+    """A think model's template: the assistant header ends with the open
+    marker, as OLMo 3 Think's does, so the response is expected to start
+    inside it."""
+
+    def apply_chat_template(self, msgs, tokenize=False, add_generation_prompt=False):
+        s = super().apply_chat_template(msgs, tokenize=False, add_generation_prompt=False)
+        return s + "<assistant><think>" if add_generation_prompt else s
+
+
+def test_a_think_response_with_its_markers_restored_renders_through_the_template():
+    # 23 as written: "<think>\nhmm\n</think>\nyo", the common Think SFT form.
+    turns = bif._turns([{"role": "user", "text": "hi"}, {**think_turn("hmm", "yo"), "chars_raw": 23}])
+    spans = bif.pieces(ThinkTok(), turns)
+    # The open marker is the header's, so it is context; everything the
+    # response grew the rendering by, reasoning and answer, is fit.
+    assert spans == [("<s><user>hi</><assistant><think>", False), ("\nhmm\n</think>\nyo</>", True)]
+    # A reply without the marker — what the model decodes after its generation
+    # prompt, or a query typed as one — gets the prompt's missing tail put back
+    # in front, as context, so it still renders through the template.
+    bare = [{"role": "user", "text": "hi"}, {"role": "assistant", "text": "yo"}]
+    assert bif.pieces(ThinkTok(), bare) == [("<s><user>hi</><assistant><think>", False), ("yo</>", True)]
+    e = bif.encode(ThinkTok(), bare, max_tokens=100)
+    assert bytes(i for i, lab in zip(e["ids"], e["labels"]) if lab != -100).decode() == "yo</>"
+
+
+class OffsetTok(Tok):
+    """A fast-style tokenizer: words with the space before them attached, so a
+    token straddles the boundary between a header ending in a space and the
+    first word of the reply, which is where span-by-span encoding goes wrong."""
+
+    is_fast = True
+
+    def __call__(self, text, add_special_tokens=False, return_offsets_mapping=False):
+        import re
+
+        ids, offsets = [], []
+        for m in re.finditer(r"\s*\S+|\s+$", text):
+            ids.append(hash(m.group()) & 0xFFFF)
+            offsets.append((m.start(), m.end()))
+        return {"input_ids": ids, "offset_mapping": offsets}
+
+
+def test_the_whole_rendering_is_tokenized_once_and_labels_follow_offsets():
+    turns = [{"role": "user", "text": "ab"}, {"role": "assistant", "text": "yo there"}]
+    tok = OffsetTok()
+    e = bif.encode(tok, turns, max_tokens=100)
+    full = "".join(text for text, _ in bif.pieces(tok, turns))
+    whole = tok(full)["input_ids"]
+    assert e["ids"] == [1, *whole]  # BOS, then exactly the one-shot encoding
+    # "assistant: " ends in a space that the tokenizer glues to "yo"; that token
+    # is part of the reply and is a target. "ab" and the headers are not.
+    fit = [tok_id for tok_id, lab in zip(e["ids"], e["labels"]) if lab != -100]
+    assert fit == tok(" yo there\n\n")["input_ids"]
+    assert e["fit_tokens"] == 3  # " yo", " there", and the closing newlines
+
+
+def test_an_empty_think_block_is_put_back_from_the_length_it_left_behind():
+    # `context._turns` stores no reasoning field for an empty span, only that
+    # the turn as written was longer than its answer.
+    turns = [{"role": "user", "text": "q", "chars": 1, "raw": True},
+             {"role": "assistant", "text": "answer", "chars": 6, "chars_raw": 25}]
+    out = bif._turns(turns)
+    # 25 written, 6 of answer: the markers are 15, one newline each side of
+    # the (empty) reasoning, and two after the closing marker.
+    assert out[1]["text"] == "<think>\n\n</think>\n\nanswer"
+    assert len(out[1]["text"]) == 25
+    # A cut field alone does not: `chars` is the true length, so it equals
+    # `chars_raw` when nothing but the truncation happened.
+    plain = bif._turns([{"role": "assistant", "text": "ans", "chars": 6, "chars_raw": 6}])
+    assert plain[0]["text"] == "ans"
+
+
+class SlowTok(Tok):
+    """A tokenizer that says it has no offsets, as a HF slow tokenizer does."""
+
+    is_fast = False
+
+
+def test_a_slow_tokenizer_is_refused_for_an_example_with_a_boundary_but_not_a_document():
+    with pytest.raises(bif.SlowTokenizer):
+        bif.encode(SlowTok(), [{"role": "user", "text": "ab"}, {"role": "assistant", "text": "yo"}], max_tokens=100)
+    e = bif.encode(SlowTok(), [{"role": "text", "text": "hello"}], max_tokens=100)
+    assert e["fit_tokens"] == 5
+
+
+def test_a_template_that_cannot_render_refuses_rather_than_inventing_role_text():
+    turns = [{"role": "user", "text": "hi"}, {"role": "assistant", "text": "yo"}]
+    with pytest.raises(bif.Unrenderable):
+        bif.pieces(BrokenChatTok(), turns)
+    # A base model has no template, so the role join is the only form there is.
+    assert bif.pieces(Tok(), turns) == [("user: ", False), ("hi\n\n", False), ("assistant: ", False), ("yo\n\n", True)]
+
+
+def test_a_document_never_goes_through_a_chat_template():
+    assert bif.pieces(ChatTok(), [{"role": "text", "text": "doc"}]) == [("doc", True)]
+
+
+def test_the_query_is_fit_text_behind_an_optional_prompt():
+    assert bif.query_candidate("said")["turns"] == [{"role": "text", "text": "said"}]
+    q = bif.query_candidate("said", prompt="asked")
+    assert [t["role"] for t in q["turns"]] == ["user", "assistant"]
+    assert bif.fit_text(q) == "said"
+    # A base model saw the prompt followed directly by its continuation: raw
+    # spans, the prompt as context and no role labels between them.
+    raw = bif.query_candidate("said", prompt="asked", chat=False)
+    assert bif.pieces(Tok(), raw["turns"]) == [("asked", False), ("said", True)]
+    e = bif.encode(Tok(), raw["turns"], max_tokens=100)
+    assert bytes(i for i, lab in zip(e["ids"], e["labels"]) if lab != -100).decode() == "said"
+
+
+# --- Statistics -----------------------------------------------------------------
+
+
+def chain(query, *cands):
+    """One chain's draws from per-series lists: draw d is [query[d], cand_0[d], ...]."""
+    return [[q, *[c[d] for c in cands]] for d, q in enumerate(query)]
+
+
+def test_covariance_has_the_sign_of_the_relationship_and_correlation_is_normalized():
+    q = [1.0, 2.0, 3.0, 4.0]
+    same = [1.0, 2.0, 3.0, 4.0]
+    twice = [2.0, 4.0, 6.0, 8.0]
+    opposite = [4.0, 3.0, 2.0, 1.0]
+    flat = [5.0, 5.0, 5.0, 5.0]
+    stats = bif.influence([chain(q, same, twice, opposite, flat)])
+    assert stats[0]["cov"] == pytest.approx(1.25)
+    assert stats[0]["corr"] == pytest.approx(1.0)
+    assert stats[1]["cov"] == pytest.approx(2.5)
+    assert stats[1]["corr"] == pytest.approx(1.0)
+    assert stats[2]["cov"] == pytest.approx(-1.25)
+    assert stats[2]["corr"] == pytest.approx(-1.0)
+    assert stats[3]["cov"] == 0.0 and stats[3]["corr"] == 0.0
+    # One chain has no spread to report.
+    assert all(s["cov_stderr"] is None for s in stats)
+
+
+def test_the_estimate_averages_within_chain_covariances_and_reports_their_spread():
+    a = chain([1.0, 2.0, 3.0], [1.0, 2.0, 3.0])          # cov 2/3
+    b = chain([10.0, 20.0, 30.0], [3.0, 2.0, 1.0])       # cov -20/3
+    stats = bif.influence([a, b])
+    assert stats[0]["cov"] == pytest.approx((2 / 3 - 20 / 3) / 2)
+    assert stats[0]["chain_covs"] == pytest.approx([2 / 3, -20 / 3])
+    assert stats[0]["cov_stderr"] is not None and stats[0]["cov_stderr"] > 0
+    # Pooling the chains would have found a large positive covariance from
+    # chain b's higher query losses alone; within-chain does not.
+    assert stats[0]["cov"] < 0
+
+
+def test_partial_covariance_removes_what_moves_with_the_sample_average():
+    # The query and every candidate ride one common excursion `m`; candidate 0
+    # is nothing but that excursion, candidate 1 adds a component the query
+    # shares, candidate 2 adds one the query opposes.
+    m = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+    extra = [1.0, -1.0, 1.0, -1.0, 1.0, -1.0]
+    q = [mm + e for mm, e in zip(m, extra)]
+    c0 = [2 * mm for mm in m]
+    c1 = [mm + 0.5 * e for mm, e in zip(m, extra)]
+    c2 = [mm - 0.5 * e for mm, e in zip(m, extra)]
+    stats = bif.influence([chain(q, c0, c1, c2)])
+    # Raw covariance calls all three positive and the pure common mode largest.
+    assert stats[0]["cov"] > stats[1]["cov"] > 0 and stats[2]["cov"] > 0
+    # Partial covariance sees through it. The control for candidate 0 is the
+    # mean of the other two, which is `m` exactly, so nothing of it is left.
+    assert stats[0]["partial"] == pytest.approx(0.0, abs=1e-9)
+    assert stats[1]["partial"] > 0
+    assert stats[2]["partial"] < 0
+    # The two are not exact mirrors: each is controlled on the other two, and
+    # candidate 1's control carries a little of candidate 2's opposing component
+    # where candidate 2's carries a little of candidate 1's. The signs are the
+    # finding; the magnitudes depend on what else is in the sample.
+    assert all(s["partial_control"] == "leave-one-out" for s in stats)
+
+
+def test_a_lone_candidate_is_not_its_own_control():
+    # Regressed on itself the residual would be zero and the partial an exact,
+    # meaningless zero however the candidate covaries with the query.
+    q = [1.0, 2.0, 3.0, 4.0]
+    c = [1.0, 3.0, 2.0, 4.0]
+    [s] = bif.influence([chain(q, c)])
+    assert s["cov"] != 0
+    assert s["partial"] == pytest.approx(s["cov"])
+    assert s["partial_control"] == "none"
+
+
+def test_llc_is_taken_over_the_localized_candidates_only():
+    # Candidate 0 is what the chains were fit to; candidate 1 is a rejected
+    # side, scored at every draw but never localized on, whose loss sits far
+    # above its loss at w*. It must not move the coefficient.
+    fit_only = {"at_origin": [0.5, 1.0], "losses": [chain([0.5, 0.5], [1.5, 1.5])], "nbeta": 4.0,
+                "localized": [0]}
+    with_rejected = {"at_origin": [0.5, 1.0, 1.0], "losses": [chain([0.5, 0.5], [1.5, 1.5], [40.0, 40.0])],
+                     "nbeta": 4.0, "localized": [0]}
+    assert bif.llc(with_rejected)["per_chain"] == pytest.approx(bif.llc(fit_only)["per_chain"])
+    assert bif.llc(with_rejected)["loss_at_origin"] == 1.0
+    assert bif.llc(with_rejected)["over"] == 1
+    # Without the indices recorded, every candidate counts, and the rejected
+    # side would have dominated.
+    legacy = bif.llc({k: v for k, v in with_rejected.items() if k != "localized"})
+    assert legacy["over"] == 2 and legacy["mean"] > 10 * bif.llc(fit_only)["mean"]
+
+
+def test_llc_is_positive_when_the_posterior_sits_above_the_loss_at_origin():
+    run = {
+        "at_origin": [0.5, 1.0, 2.0],
+        "losses": [chain([0.5, 0.5], [1.5, 1.5], [2.5, 2.5])],
+        "nbeta": 4.0,
+    }
+    lc = bif.llc(run)
+    assert lc["loss_at_origin"] == 1.5
+    assert lc["per_chain"] == pytest.approx([4.0 * 0.5])
+    below = bif.llc({**run, "losses": [chain([0.5], [0.5], [1.5])]})
+    assert below["mean"] < 0
+
+
+def test_drift_is_read_off_the_localized_loss_at_the_draws_not_the_minibatches():
+    # The localized candidate's loss rises across the draws; the minibatch
+    # trajectory, a fresh random draw each step, says the opposite and is
+    # ignored. A rejected side scored but not localized on does not count.
+    run = {
+        "at_origin": [0.5, 1.0, 1.0],
+        "losses": [chain([0.5] * 8, [1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0], [40.0] * 8)],
+        "nbeta": 1.0,
+        "localized": [0],
+        "trajectory": [[9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0]],
+        "burn_in": 2,
+    }
+    assert bif.llc(run)["drift"] == pytest.approx([4.0 - 1.0])
+
+
+def test_baseline_is_the_covariance_with_the_average_candidate():
+    q = [1.0, 2.0, 3.0]
+    losses = [chain(q, [1.0, 2.0, 3.0], [3.0, 2.0, 1.0])]  # average candidate is flat
+    assert bif.baseline(losses) == pytest.approx(0.0)
+    losses = [chain(q, [1.0, 2.0, 3.0], [1.0, 2.0, 3.0])]
+    assert bif.baseline(losses) == pytest.approx(2 / 3)
+
+
+def test_summarize_groups_and_ranks_by_mean_covariance():
+    cands = [
+        {"stage": "sft", "side": "response", "source": "a", "id": "1", "row": 1},
+        {"stage": "sft", "side": "response", "source": "b", "id": "2", "row": 2},
+        {"stage": "dpo", "side": "rejected", "source": "a", "id": "3", "row": 3},
+    ]
+    stats = [{"cov": 0.1, "corr": 0.5, "partial": 0.2}, {"cov": -0.3, "corr": -0.2, "partial": -0.4},
+             {"cov": 0.4, "corr": 0.9, "partial": 0.3}]
+    groups = bif.summarize(cands, stats, lambda c: (("stage", c["stage"]), ("side", c["side"])))
+    # Summaries describe covariance signs without interpreting a DPO objective.
+    assert [g["stage"] for g in groups] == ["dpo", "sft"]
+    dpo, sft = groups
+    assert sft["n"] == 2 and sft["positive_covariances"] == 1
+    assert sft["mean_cov"] == pytest.approx(-0.1)
+    assert sft["mean_partial"] == pytest.approx(-0.1)
+    assert sft["mean_cov"] == pytest.approx(-0.1)
+    assert sft["best"]["id"] == "1"
+    assert dpo["positive_covariances"] == 1 and dpo["mean_partial"] == pytest.approx(0.3)
+    assert dpo["mean_cov"] == pytest.approx(0.4)
+
+
+def test_descriptive_covariance_never_flips_a_rejected_side():
+    s = {"cov": 0.5, "partial": 0.2}
+    # The covariance is the influence; the partial is a diagnostic and does not rank.
+    assert bif.pull({"side": "chosen"}, s) == 0.5
+    assert bif.pull({"side": "document"}, s) == 0.5
+    assert bif.pull({"side": "rejected"}, s) == 0.5
+
+
+# --- Result and rendering -------------------------------------------------------
+
+
+def fake_result(llc_sign=1.0, one=False):
+    cands = [
+        {"stage": "pretrain", "kind": "pretrain", "side": "document", "source": "Pile-CC",
+         "id": "row-1", "row": 1, "cut": False, "turns": [{"role": "text", "text": "As an AI language model I"}]},
+        {"stage": "pretrain", "kind": "pretrain", "side": "document", "source": "GitHub",
+         "id": "row-2", "row": 2, "cut": True, "turns": [{"role": "text", "text": "def f(): pass"}]},
+    ]
+    encoded = [
+        {"tokens": 10, "fit_tokens": 9, "truncated": False},
+        {"tokens": 512, "fit_tokens": 511, "truncated": True},
+    ]
+    q = [1.0, 2.0, 3.0]
+    run = {
+        # Candidates sit at 0.5 at w* and average 2.0 under the posterior, so
+        # the chains did rise off the origin, as a sampler that behaved would.
+        "at_origin": [1.0, 0.5, 0.5],
+        # Each chain's mean candidate loss is flat across the draws (2.0), so
+        # neither drifts; the individual series still move for the covariances.
+        "losses": [chain(q, [1.0, 2.0, 3.0], [3.0, 2.0, 1.0]),
+                   chain(q, [2.0, 3.0, 4.0], [2.0, 1.0, 0.0])],
+        "trajectory": [[2.0, 2.1, 2.1, 2.1], [2.0, 2.2, 2.2, 2.2]],
+        "nbeta": 3.0,
+        "burn_in": 1,
+    }
+    if llc_sign < 0:
+        run["at_origin"] = [1.0, 20.0, 30.0]
+    if llc_sign == 0:
+        # Chain b's mean candidate loss climbs from 2.0 to 4.5 across the draws.
+        run["losses"][1] = chain(q, [2.0, 3.0, 9.0], [2.0, 1.0, 0.0])
+    if one:
+        cands, encoded = cands[:1], encoded[:1]
+        run["at_origin"] = run["at_origin"][:2]
+        run["losses"] = [[d[:2] for d in c] for c in run["losses"]]
+    settings = {"chains": 2, "draws": 3, "burn_in": 1, "lr": 1e-5, "nbeta": 3.0, "gamma": 100.0,
+                "batch": 8, "max_tokens": 512}
+    return bif.result("pythia-12b-deduped", "EleutherAI/pythia-70m-deduped", "abc123def456789",
+                      "As an AI language model", None, cands, encoded, run,
+                      {"sft": "no committed context records"}, settings)
+
+
+def test_result_ranks_records_and_carries_every_provenance_field():
+    res = fake_result()
+    assert res["model"] == "EleutherAI/pythia-70m-deduped"
+    assert res["candidates"] == 2
+    assert res["localized_on"] == 2  # nothing rejected among documents
+    assert all(r["rank"] is None for r in res["records"])
+    ranked = sorted(res["records"], key=lambda r: -r["cov"])
+    assert [r["id"] for r in ranked] == ["row-1", "row-2"]
+    assert ranked[0]["cov"] > ranked[1]["cov"]
+    assert ranked[0]["snippet"].startswith("As an AI")
+    assert ranked[1]["truncated"] and ranked[1]["cut"]
+    assert all(r["above_baseline"] == pytest.approx(r["cov"] - res["baseline_cov"]) for r in ranked)
+    assert all("partial" in r for r in ranked)
+    # The raw draws travel with the file: chains × draws × (query + records).
+    assert len(res["draws"]) == 2 and all(len(c) == 3 for c in res["draws"])
+    assert all(len(d) == 3 for c in res["draws"] for d in c)
+    assert res["skipped"] == {"sft": "no committed context records"}
+    assert res["query_loss"]["at_origin"] == 1.0
+    assert res["llc"]["mean"] > 0
+    assert res["stages"][0]["n"] == 2
+    assert {g["source"] for g in res["sources"]} == {"Pile-CC", "GitHub"}
+
+
+def test_the_stored_draws_keep_full_precision():
+    """Partial covariances in a real run sit below 1e-6; draws rounded to four
+    places recomputed to different numbers than the file recorded."""
+    cands = [{"stage": "pretrain", "kind": "pretrain", "side": "document", "source": None,
+              "id": "d", "row": 1, "cut": False, "turns": [{"role": "text", "text": "doc"}]}]
+    encoded = [{"tokens": 4, "fit_tokens": 3, "truncated": False}]
+    run = {"at_origin": [1.0, 0.5], "losses": [chain([0.123456789, 0.5], [0.987654321, 0.4])],
+           "trajectory": [[1.0, 1.0]], "nbeta": 1.0, "burn_in": 0}
+    res = bif.result("t", "m", None, "q", None, cands, encoded, run, {}, {})
+    assert res["draws"][0][0] == [0.123456789, 0.987654321]
+
+
+def test_render_names_checkpoint_and_withholds_an_inconclusive_ranking():
+    text = "\n".join(bif.render(fake_result()))
+    assert "`EleutherAI/pythia-70m-deduped` at `abc123def456`" in text
+    assert "Not analyzed: sft" in text
+    assert "Inconclusive sampling" in text
+    assert "row-1" not in text and "row-2" not in text
+    assert "not on the training set" in text
+
+
+def test_render_refuses_legacy_dpo_interpretations():
+    res = stationary_result()
+    res["records"][0]["side"] = "rejected"
+    text = "\n".join(bif.render(res))
+    assert "outside the supported experiment" in text
+    assert "Largest positive" not in text and "taught" not in text
+
+
+def test_one_candidate_keeps_its_raw_covariance_as_the_partial():
+    res = fake_result(one=True)
+    assert res["partial_control"] == "none"
+    assert res["records"][0]["partial"] == pytest.approx(res["records"][0]["cov"])
+
+
+def test_origin_loss_is_not_a_convergence_test():
+    a = fake_result()
+    b = fake_result(llc_sign=-1)
+    assert a["diagnostics"] == b["diagnostics"]
+    assert "sat near" not in "\n".join(bif.render(a))
+
+
+def test_control_characters_in_a_snippet_or_source_never_reach_the_terminal():
+    res = stationary_result()
+    res["records"][0]["snippet"] = "red \x1b[31mtext\x1b[0m\x07"
+    res["records"][0]["source"] = "Pile\x1bCC"
+    res["records"][0]["id"] = "bad\x1b[31mid"
+    text = "\n".join(bif.render(res))
+    assert "\x1b" not in text and "\x07" not in text
+    assert "\\x1b[31mtext" in text and "Pile\\x1bCC" in text and "bad\\x1b[31mid" in text
+
+
+@pytest.mark.parametrize("direction", [-1, 1])
+def test_render_catches_a_time_trend_even_when_absolute_drift_is_tiny(direction):
+    res = stationary_result()
+    res["draws"] = [[[5 + direction * i * 1e-8, 4 + direction * i * 1e-8,
+                      4 + direction * i * 2e-8] for i in range(200)] for _ in range(4)]
+    text = "\n".join(bif.render(res))
+    assert "Inconclusive sampling" in text and "time trend" in text
+    assert "Largest positive" not in text
+
+
+def test_default_nbeta_is_n_over_log_n_of_the_localized_sample():
+    assert bif.default_nbeta(200) == pytest.approx(200 / math.log(200))
+    assert bif.default_nbeta(1) == 1.0
+
+
+# --- The sampler, on a toy ------------------------------------------------------
+
+# A module-level `importorskip` would skip this whole file: pytest imports a
+# test module as one unit, so the line's position does not limit its reach, and
+# the candidate, encoding and statistics tests above need no torch at all.
+torch = importlib.import_module("torch") if importlib.util.find_spec("torch") else None
+requires_torch = pytest.mark.skipif(torch is None, reason="the SGLD loop needs torch")
+
+if torch is not None:
+
+    class Toy(torch.nn.Module):
+        """The smallest thing with the causal-LM interface `sample` reads."""
+
+        def __init__(self, vocab=16, dim=8, dtype=None, unused=False):
+            super().__init__()
+            self.emb = torch.nn.Embedding(vocab, dim)
+            self.out = torch.nn.Linear(dim, vocab)
+            # A parameter the forward pass never touches, so it never gets a
+            # gradient: the shape of a tied or dormant weight in a real model.
+            self.unused = torch.nn.Parameter(torch.zeros(3)) if unused else None
+            if dtype is not None:
+                self.to(dtype)
+
+        def forward(self, input_ids, attention_mask=None):
+            class Out:
+                pass
+
+            o = Out()
+            o.logits = self.out(self.emb(input_ids))
+            return o
+
+
+def enc(ids, fit_from):
+    labels = [-100] * fit_from + ids[fit_from:]
+    labels[0] = -100
+    return {"ids": ids, "labels": labels, "tokens": len(ids), "fit_tokens": sum(1 for x in labels if x != -100),
+            "truncated": False}
+
+
+@requires_torch
+def test_sample_records_every_loss_and_puts_the_weights_back():
+    torch.manual_seed(0)
+    model = Toy()
+    before = [p.detach().clone() for p in model.parameters()]
+    cands = [enc([1, 2, 3, 4, 5], 2), enc([6, 7, 8], 1), enc([9, 10, 11, 12], 0)]
+    query = enc([3, 4, 5], 0)
+    run = bif.sample(
+        model, cands, query, device="cpu", chains=2, draws=4, burn_in=2, every=2,
+        lr=1e-3, nbeta=2.0, gamma=10.0, batch=2, eval_batch=2, seed=1,
+    )
+    assert len(run["at_origin"]) == 4
+    assert len(run["losses"]) == 2 and all(len(c) == 4 for c in run["losses"])
+    assert all(len(d) == 4 for c in run["losses"] for d in c)
+    # Two burn-in steps, then draws at steps 2, 4, 6, 8: the loop stops at the
+    # last retained draw rather than running `every - 1` steps past it.
+    assert all(len(t) == 2 + 3 * 2 + 1 for t in run["trajectory"])
+    assert all(math.isfinite(x) for c in run["losses"] for d in c for x in d)
+    for p, w in zip(model.parameters(), before):
+        assert torch.equal(p.detach(), w)
+    stats = bif.influence(run["losses"])
+    assert len(stats) == 3
+    assert all(s["cov_stderr"] is not None for s in stats)
+
+
+@requires_torch
+def test_sample_fits_only_the_localized_candidates_and_scores_them_all(monkeypatch):
+    torch.manual_seed(0)
+    model = Toy()
+    chosen, rejected, doc = enc([1, 2, 3, 4], 1), enc([1, 2, 9, 9], 1), enc([5, 6, 7], 0)
+    fitted = []
+    real = bif._losses
+
+    def spy(model, chunk, device):
+        # A minibatch step runs with grad; every scoring pass is under no_grad.
+        if torch.is_grad_enabled():
+            assert len(chunk) == 1, "a gradient pass takes one example at a time"
+            fitted.extend(id(e) for e in chunk)
+        return real(model, chunk, device)
+
+    monkeypatch.setattr(bif, "_losses", spy)
+    run = bif.sample(
+        model, [chosen, rejected, doc], enc([3, 4], 0), device="cpu", chains=2, draws=3,
+        burn_in=1, every=1, lr=1e-3, nbeta=2.0, gamma=10.0, batch=2, eval_batch=4, seed=1,
+        localize=[0, 2],
+    )
+    assert fitted and set(fitted) <= {id(chosen), id(doc)}
+    assert run["localized_on"] == 2 and run["localized"] == [0, 2]
+    # Steps: 2 chains × (1 burn-in + 3 draws) × a minibatch of 2, one example
+    # per gradient pass, so nothing widened for one example outlives it.
+    assert len(fitted) == 2 * 4 * 2
+    # The rejected side is still in every draw, so its covariance is reported.
+    assert all(len(d) == 4 for c in run["losses"] for d in c)
+    with pytest.raises(ValueError):
+        bif.sample(
+            model, [chosen], enc([3, 4], 0), device="cpu", chains=1, draws=1, burn_in=0, every=1,
+            lr=1e-3, nbeta=2.0, gamma=10.0, batch=1, eval_batch=1, seed=1, localize=[],
+        )
+
+
+@requires_torch
+def test_a_non_finite_recorded_loss_stops_the_chain(monkeypatch):
+    torch.manual_seed(0)
+    model = Toy()
+    real = bif._losses
+    def nonfinite(model, chunk, device):
+        values = real(model, chunk, device)
+        return values if torch.is_grad_enabled() else values * float("nan")
+    monkeypatch.setattr(bif, "_losses", nonfinite)
+    with pytest.raises(RuntimeError, match="not finite"):
+        bif.sample(model, [enc([1, 2, 3], 1), enc([4, 5], 0)], enc([6, 7], 0), device="cpu", chains=1,
+                   draws=2, burn_in=0, every=1, lr=1e-3, nbeta=1.0, gamma=1.0, batch=1, eval_batch=2, seed=0)
+
+
+@requires_torch
+def test_batch_losses_are_per_example_means_over_fit_tokens_only():
+    torch.manual_seed(0)
+    model = Toy()
+    short = enc([1, 2, 3], 0)
+    # The same tokens with the first two masked: a different mean, over one token.
+    masked = enc([1, 2, 3], 2)
+    padded = bif.batch_losses(model, [short, masked, enc([4, 5, 6, 7, 8, 9], 0)], "cpu", batch=3)
+    alone = bif.batch_losses(model, [short], "cpu", batch=1)
+    assert padded[0] == pytest.approx(alone[0], rel=1e-5)  # padding does not leak into the loss
+    assert padded[1] != pytest.approx(padded[0])
+
+
+@requires_torch
+def test_reduced_precision_walks_in_float32_and_an_unused_parameter_has_no_gradient():
+    torch.manual_seed(0)
+    model = Toy(dtype=torch.bfloat16, unused=True)
+    before = [p.detach().clone() for p in model.parameters()]
+    cands = [enc([1, 2, 3, 4, 5], 2), enc([6, 7, 8], 1)]
+    run = bif.sample(
+        model, cands, enc([3, 4, 5], 0), device="cpu", chains=1, draws=2, burn_in=1, every=1,
+        lr=1e-3, nbeta=2.0, gamma=10.0, batch=2, eval_batch=2, seed=1,
+    )
+    assert all(math.isfinite(x) for c in run["losses"] for d in c for x in d)
+    # The unused parameter never gets a gradient and the step still runs; and
+    # every parameter, bfloat16 included, is back at w* afterwards.
+    for p, w in zip(model.parameters(), before):
+        assert p.dtype == w.dtype
+        assert torch.equal(p.detach(), w)
+
+
+def test_a_bfloat16_parameter_moves_by_less_than_its_own_spacing():
+    """The reason for the float32 master: a step of 1e-4 on a weight near 1.0
+    is below bfloat16's spacing there (about 7.8e-3), so applied in bfloat16 it
+    rounds to nothing, and accumulated in float32 it is kept."""
+    if torch is None:
+        pytest.skip("needs torch")
+    w = torch.tensor([1.0], dtype=torch.bfloat16)
+    assert torch.equal(w + torch.tensor([1e-4], dtype=torch.bfloat16), w)
+    m = w.float()
+    for _ in range(100):
+        m += 1e-4
+    assert m.to(torch.bfloat16).item() > 1.0
+
+
+def stationary_result():
+    import random
+    rng = random.Random(400)
+    res = fake_result()
+    res["draws"] = []
+    for _ in range(4):
+        chain_draws = []
+        for _ in range(1000):
+            q, a, b = [rng.gauss(0, 1) for _ in range(3)]
+            chain_draws.append([5 + q, 5 + q + a, 5 - q + b])
+        res["draws"].append(chain_draws)
+    res["settings"].update(chains=4, draws=1000)
+    assert bif.diagnostics(res["draws"])["status"] == "checks_passed"
+    return res
+
+
+def test_render_separates_signs_and_does_not_call_small_positive_scores_negative():
+    res = stationary_result()
+    # Make both candidates positively correlated, leaving independent variation.
+    for chain_draws in res["draws"]:
+        for d in chain_draws:
+            d[2] = 10 - d[2]
+    assert bif.diagnostics(res["draws"])["status"] == "checks_passed"
+    text = "\n".join(bif.render(res))
+    assert "Most negative sample covariances:\nNone in this run." in text
+    assert "pulls" not in text.lower() and "away" not in text.lower()
+    assert "row-1" in text and "row-2" in text
+
+
+def test_historical_demo_is_rechecked_even_if_a_stored_status_claims_success():
+    res = bif.committed("pythia-12b-deduped")[0]
+    res["diagnostics"] = {"status": "checks_passed", "reasons": []}
+    text = "\n".join(bif.render(res))
+    assert "Inconclusive sampling" in text and "time trend" in text
+    assert "Largest positive" not in text
+
+
+@pytest.mark.parametrize("draws", [[], [[[1, 2]]], [[[1, float("nan")]]],
+                                  [[[1, 2]] * 200] * 4])
+def test_missing_short_nonfinite_and_constant_runs_are_inconclusive(draws):
+    assert bif.diagnostics(draws)["status"] == "inconclusive"

@@ -22,6 +22,25 @@ permissions:
   contents: read
 
 jobs:
+  sampler-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e '.[dev]'
+      - run: pip install 'torch>=2.2' --index-url https://download.pytorch.org/whl/cpu
+      - run: pytest -q tests/test_bif.py tests/test_bif_validation.py
+      - run: python -m trainspotting.bif_validation --output /tmp/standalone-text-sensitivity.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sampler-validation
+          path: /tmp/standalone-text-sensitivity.json
+
   test:
     runs-on: ubuntu-latest
     steps:

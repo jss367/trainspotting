@@ -1,6 +1,7 @@
 import argparse
 import hashlib
 import json
+import math
 import re
 import sys
 import urllib.parse
@@ -10,6 +11,7 @@ from pathlib import Path
 from . import (
     behavior,
     benchmarks,
+    bif,
     budget,
     casestudy,
     classify,
@@ -80,6 +82,31 @@ def _probe_words(value: str) -> int:
             "window matches by chance, and a chance match reads as contamination"
         )
     return n
+
+
+def _draws(value: str) -> int:
+    """argparse type for `bif --draws`. One retained draw is a series of one
+    observation: centering it gives every covariance, correlation and partial
+    exactly zero, and the file written would rank the candidates in an arbitrary
+    tie and look like a result."""
+    n = _positive_int(value)
+    if n < 2:
+        raise argparse.ArgumentTypeError(
+            f"a covariance needs at least 2 retained draws, got {n}"
+        )
+    return n
+
+
+def _positive_float(value: str) -> float:
+    """argparse type for the sampler's real-valued settings. A negative or
+    non-finite step size reaches `math.sqrt` inside the sampler after the
+    checkpoint has been loaded; a negative γ makes the prior repulsive and a
+    negative nβ drives the chain up the loss, and either writes a result for a
+    distribution that is not the documented posterior."""
+    x = float(value)
+    if not (x > 0 and math.isfinite(x)):
+        raise argparse.ArgumentTypeError(f"must be a positive finite number, got {value}")
+    return x
 
 
 def _nonnegative_int(value: str) -> int:
@@ -2273,6 +2300,7 @@ def cmd_report(args):
         # corpus stage and a training-budget rollup over them, so returning at
         # this point would drop the one audit layer a base model *can* support
         # from the very report that just recommended running it.
+        _report_influence(args.target)
         _report_questions(args.target, target)
         return
     # The same seven labels mean different things by kind, and the heading is
@@ -2368,7 +2396,22 @@ def cmd_report(args):
                 for line in influence.render(trace, args.target):
                     print(line)
 
+    _report_influence(args.target)
     _report_questions(args.target, target)
+
+
+def _report_influence(target_name: str) -> None:
+    """Render experimental runs with diagnostics recomputed from saved draws."""
+    runs = bif.committed(target_name)
+    if not runs:
+        return
+    print("\n## Experimental loss sensitivity\n")
+    print("Standalone-text sensitivity under a local sampling objective. "
+          "This does not identify the historical cause of a model behavior.\n")
+    for res in runs:
+        for line in bif.render(res):
+            print(line)
+        print()
 
 
 def _report_questions(target_name: str, target: dict) -> None:
@@ -2556,6 +2599,123 @@ def _report_questions(target_name: str, target: dict) -> None:
                 " the share above is over the stages that could be"
             )
         print()
+
+
+def cmd_bif(args):
+    """Experimental standalone-text sensitivity on the small supported checkpoint."""
+    target = registry.resolve(args.target)
+    model_id = args.model or target["hf_model"]
+    if model_id != bif.SUPPORTED_MODEL:
+        sys.exit(f"experimental bif supports only {bif.SUPPORTED_MODEL}; pass --model "
+                 f"{bif.SUPPORTED_MODEL}. Other checkpoints and post-training objectives are deferred.")
+    query = sys.stdin.read() if args.text == "-" else args.text
+    if not query.strip():
+        sys.exit("the query is empty")
+    if args.match:
+        try:
+            re.compile(args.match)
+        except re.error as e:
+            sys.exit(f"--match {args.match!r} is not a valid regex: {e}")
+    stages = [args.stage] if args.stage else None
+    incomplete: dict[str, int] = {}
+    cands, skipped = bif.candidates(
+        args.target, target, stages=stages, match=args.match, limit=args.limit, seed=args.seed,
+        incomplete=incomplete,
+    )
+    for stage, why in skipped.items():
+        print(f"{stage}: not weighed — {why}", file=sys.stderr)
+    for stage, n in incomplete.items():
+        print(f"{stage}: {n} records skipped — the stored document is incomplete or excerpted", file=sys.stderr)
+    if not cands:
+        sys.exit("no candidate examples: nothing committed for this target that this layer can weigh")
+    try:
+        import torch  # noqa: F401
+        import transformers  # noqa: F401
+    except ImportError:
+        sys.exit("this command needs torch and transformers: pip install -e '.[bif]'")
+    tokenizer = bif.load_tokenizer(model_id)
+    if getattr(tokenizer, "chat_template", None):
+        sys.exit("chat templates and post-training objectives are deferred in experimental bif")
+    device = bif.pick_device(args.device)
+    print(f"loading {model_id} on {device} ({args.dtype})", file=sys.stderr)
+    model, tokenizer, revision = bif.load(model_id, device, args.dtype, tokenizer=tokenizer)
+    if model_id != target["hf_model"]:
+        print(
+            f"note: weighing against {model_id}, not {args.target}'s own checkpoint"
+            f" {target['hf_model']}; the result file records which",
+            file=sys.stderr,
+        )
+    encoded, kept, dropped, unrenderable = [], [], 0, 0
+    for c in cands:
+        try:
+            e = bif.encode(tokenizer, c["turns"], args.max_tokens)
+        except bif.SlowTokenizer as e:
+            sys.exit(str(e))
+        except bif.Unrenderable:
+            unrenderable += 1
+            continue
+        if e["fit_tokens"] == 0:
+            dropped += 1
+            continue
+        kept.append(c)
+        encoded.append(e)
+    if dropped:
+        print(f"{dropped} candidates have no fit tokens after encoding and were dropped", file=sys.stderr)
+    if unrenderable:
+        print(f"{unrenderable} candidates were dropped because {model_id}'s chat template cannot render "
+              f"them turn by turn", file=sys.stderr)
+    if not encoded:
+        sys.exit("no candidate has any text the model was fit to")
+    chat = bool(getattr(tokenizer, "chat_template", None))
+    try:
+        q = bif.encode(tokenizer, bif.query_candidate(query, args.prompt, chat=chat)["turns"], args.max_tokens)
+    except bif.Unrenderable as e:
+        sys.exit(f"{e}: the query cannot be rendered through {model_id}'s template")
+    if q["fit_tokens"] == 0:
+        sys.exit("the query has no tokens to score")
+    localize = list(range(len(kept)))
+    nbeta = args.nbeta if args.nbeta is not None else bif.default_nbeta(len(localize))
+    settings = {
+        "chains": args.chains,
+        "draws": args.draws,
+        "burn_in": args.burn_in,
+        "every": args.every,
+        "lr": args.lr,
+        "nbeta": nbeta,
+        "gamma": args.gamma,
+        "batch": args.batch,
+        "eval_batch": args.eval_batch,
+        "max_tokens": args.max_tokens,
+        "dtype": args.dtype,
+        "device": device,
+        "seed": args.seed,
+        "match": args.match,
+        "limit": args.limit,
+        "stage": args.stage,
+    }
+    print(
+        f"{len(encoded)} candidates ({len(localize)} localized on), query {q['fit_tokens']} fit tokens; "
+        f"{args.chains} chains × {args.burn_in + (args.draws - 1) * args.every + 1} total steps; "
+        "experimental settings, convergence not established",
+        file=sys.stderr,
+    )
+    run = bif.sample(
+        model, encoded, q, device=device, chains=args.chains, draws=args.draws,
+        burn_in=args.burn_in, every=args.every, lr=args.lr, nbeta=nbeta, gamma=args.gamma,
+        batch=args.batch, eval_batch=args.eval_batch, seed=args.seed, localize=localize,
+        log=lambda m: print(m, file=sys.stderr),
+    )
+    # Through `_filename_part` like every other explicit slug: a slash in it
+    # would write a file `bif.committed` never globs, and the run would vanish
+    # from the report.
+    slug = _filename_part(args.slug) if args.slug else _slug(query)
+    res = bif.result(args.target, model_id, revision, query, args.prompt, kept, encoded, run, skipped, settings)
+    res = {"slug": slug, **_stamp(), "dropped": dropped, "unrenderable": unrenderable,
+           "incomplete": incomplete, **res}
+    path = _write_json(RESULTS / f"{args.target}.bif-{slug}.json", res)
+    for line in bif.render(res):
+        print(line)
+    print(f"-> {path}", file=sys.stderr)
 
 
 def cmd_lookup(args):
@@ -3107,6 +3267,40 @@ def main():
         help="most distinctive phrases to extract and search for",
     )
     p.set_defaults(fn=cmd_trace)
+
+    p = sub.add_parser(
+        "bif",
+        help="experimental standalone-text sensitivity on Pythia-70m (needs the bif extra)",
+        description="Experimental standalone-text loss sensitivity on Pythia-70m-deduped only. "
+        "Other checkpoints and post-training objectives are deferred. Sampling diagnostics "
+        "can withhold rankings; passing them does not validate historical training attribution.",
+    )
+    p.add_argument("target", help="registered target whose committed corpus documents define the sample")
+    p.add_argument("text", help="query continuation whose loss is measured ('-' reads stdin)")
+    p.add_argument("--prompt", help="what it was replying to, scored as context rather than as target")
+    p.add_argument("--stage", help="only this stage's committed sample")
+    p.add_argument("--match", help="keep only candidates whose text holds this regex (case-insensitive)")
+    p.add_argument("--limit", type=_positive_int, help="at most this many candidates per stage, drawn at random")
+    p.add_argument("--model", help="use EleutherAI/pythia-70m-deduped; other checkpoints are deferred")
+    p.add_argument("--chains", type=_positive_int, default=4)
+    p.add_argument("--draws", type=_draws, default=100, help="retained draws per chain (at least 2)")
+    p.add_argument("--burn-in", type=_nonnegative_int, default=50, help="SGLD steps discarded per chain")
+    p.add_argument("--every", type=_positive_int, default=1, help="SGLD steps between retained draws")
+    p.add_argument("--lr", type=_positive_float, default=5e-8,
+                   help="SGLD step size ε; experimental, requires sampling diagnostics and stability checks")
+    p.add_argument("--nbeta", type=_positive_float,
+                   help="inverse temperature nβ (default: n / ln n over the localized candidates)")
+    p.add_argument("--gamma", type=_positive_float, default=100.0, help="localization strength γ")
+    p.add_argument("--batch", type=_positive_int, default=8,
+                   help="candidates per SGLD minibatch (a memory setting; it does not change the posterior)")
+    p.add_argument("--eval-batch", type=_positive_int, default=16, help="examples per forward pass when recording losses")
+    p.add_argument("--max-tokens", type=_positive_int, default=512, help="tokens kept per example (the front is dropped)")
+    p.add_argument("--dtype", default="float32", choices=["float32"],
+                   help="the small-model experiment uses float32")
+    p.add_argument("--device", default="auto", help="cuda, mps, cpu, or auto")
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--slug", help="short name for the result file (default: derived from the text)")
+    p.set_defaults(fn=cmd_bif)
 
     p = sub.add_parser("pretrain", help="sample documents from a model's pretraining corpora")
     p.add_argument("target", help=TARGET_HELP)

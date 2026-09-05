@@ -34,6 +34,7 @@ COMMANDS = [
     ("classify", "cmd_classify", ["classify", "olmo-3-7b-instruct"]),
     ("contaminate", "cmd_contaminate", ["contaminate", "olmo-3-7b-instruct", "gsm8k"]),
     ("steps", "cmd_steps", ["steps", "pythia-12b-deduped", "a string"]),
+    ("bif", "cmd_bif", ["bif", "pythia-12b-deduped", "some text the model said"]),
 ]
 
 
@@ -125,3 +126,31 @@ def test_the_targetless_commands_are_the_ones_this_expects():
     for _, _, argv in COMMANDS:
         if len(argv) > 1 and argv[0] not in targetless:
             assert registry.resolve(argv[1])
+
+
+@pytest.mark.parametrize("bad", [["--draws", "1"], ["--lr", "-1e-8"], ["--lr", "nan"], ["--lr", "0"],
+                                 ["--nbeta", "nan"], ["--nbeta", "-1"], ["--gamma", "0"], ["--gamma", "nan"]])
+def test_bif_rejects_a_step_size_or_draw_count_the_sampler_cannot_use(bad, monkeypatch):
+    """One retained draw makes every covariance exactly zero and a negative step
+    reaches `math.sqrt` after the checkpoint has loaded; both are usage errors."""
+    called = []
+    monkeypatch.setattr(cli, "cmd_bif", lambda args: called.append(args))
+    monkeypatch.setattr(sys, "argv", ["trainspotting", "bif", "pythia-12b-deduped", "text", *bad])
+    with pytest.raises(SystemExit):
+        cli.main()
+    assert not called
+
+
+def test_bif_refuses_other_checkpoints_before_loading_weights(monkeypatch):
+    monkeypatch.setattr(cli.bif, "load", lambda *a, **k: pytest.fail("loaded unsupported weights"))
+    monkeypatch.setattr(sys, "argv", ["trainspotting", "bif", "olmo-3-7b-instruct", "text"])
+    with pytest.raises(SystemExit, match="supports only EleutherAI/pythia-70m-deduped"):
+        cli.main()
+
+
+def test_bif_defers_post_training_before_loading_weights(monkeypatch):
+    monkeypatch.setattr(cli.bif, "load", lambda *a, **k: pytest.fail("loaded weights for a deferred objective"))
+    monkeypatch.setattr(sys, "argv", ["trainspotting", "bif", "olmo-3-7b-instruct", "text",
+                                     "--model", "EleutherAI/pythia-70m-deduped", "--stage", "dpo"])
+    with pytest.raises(SystemExit, match="no candidate examples"):
+        cli.main()

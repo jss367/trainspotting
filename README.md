@@ -4,11 +4,12 @@ Spot what's in a model's training data. Audits what a fully open model was
 trained on — the OLMo 3 pipelines (Ai2), whose pretraining (Dolma 3) and
 post-training (Dolci) data are public, and Pythia (EleutherAI), whose
 pretraining corpus is public and which has no post-training at all — and, with
-the same layers, any dataset on its own. The tool answers nine kinds of
+the same layers, any dataset on its own. The tool answers ten kinds of
 question. The first five go in increasing order of depth; the sixth and seventh
 are lookups rather than estimates, and differ in how much of the mix they can
-see; the eighth reads a whole example rather than its prompt, and the ninth puts
-every stage's answer on one scale:
+see; the eighth reads a whole example rather than its prompt, the ninth puts
+every stage's answer on one scale, and the tenth is the only one that opens the
+model:
 
 1. **Facts** — stage sizes for a model's whole training pipeline (pretrain →
    midtrain → long-context → SFT → DPO → RLVR), hardcoded in a registry.
@@ -52,6 +53,11 @@ every stage's answer on one scale:
    to, so the stages are on one scale and add up. A share of DPO rows and a
    share of Dolma 3 documents are different denominators; this is where they
    become one number. See [How much training is that?](#how-much-training-is-that).
+10. **Experimental loss sensitivity** — a research command that samples local
+   loss covariances on standalone corpus text using Pythia-70m. It withholds
+   rankings when sampling diagnostics are inconclusive. This does not establish
+   which training examples caused a behavior. See
+   [Experimental loss sensitivity](#experimental-loss-sensitivity).
 
 Every one of those starts from something you can already name — a string to
 search for, or a question you can already phrase. When you start from an
@@ -243,7 +249,9 @@ pip install -e .
 ```
 
 The `values` layer needs an Anthropic API key (`ANTHROPIC_API_KEY`). The `grep`
-layer needs DuckDB (`pip install -e '.[grep]'`); nothing else does.
+layer needs DuckDB (`pip install -e '.[grep]'`). The `bif` layer needs torch and
+transformers (`pip install -e '.[bif]'`) and downloads the model's weights;
+nothing else touches a model.
 
 ## Usage
 
@@ -261,6 +269,11 @@ trainspotting trace olmo-3-7b-instruct \
 
 # Sample 300 prompts per stage and label each one with Claude
 trainspotting classify olmo-3-7b-instruct --sample 300
+
+# Experiment with local loss sensitivity on standalone corpus text, by Bayesian
+# influence: which examples its loss on that text covaries with (needs weights)
+trainspotting bif pythia-12b-deduped --model EleutherAI/pythia-70m-deduped \
+  "As an AI language model developed by OpenAI, my knowledge cutoff is September 2021."
 
 # Combined markdown report: sampled rates with Wilson 95% CIs, and every
 # committed string trace ranked by which stage most plausibly taught it
@@ -1303,6 +1316,81 @@ compose, on different scales: `trace` narrows to a stage over the whole split,
 `search` says which side of the example a string lands on over a sample of it,
 and `ask` characterizes the fuzzy cases neither can match.
 
+## Experimental loss sensitivity
+
+`trainspotting bif` is a research prototype for **Pythia-70m-deduped on standalone
+corpus text**. Chat, supervised fine-tuning, preference optimization, and other
+checkpoints are deferred. It does not measure which original training examples
+caused a behavior or compare the historical effects of training stages.
+
+```bash
+pip install -e '.[bif]'
+trainspotting bif pythia-12b-deduped --model EleutherAI/pythia-70m-deduped \
+  --limit 200 "As an AI language model developed by OpenAI, my knowledge cutoff is September 2021."
+```
+
+The target identifies the committed corpus sample. The explicit `--model`
+identifies the smaller checkpoint being analyzed; this is not a result about
+Pythia-12b. `--prompt` supplies raw continuation context, concatenated directly
+before the query and excluded from its loss. Documents are encoded as standalone
+text; over `--max-tokens`, the front is dropped. Excerpted documents are skipped.
+Neither those sequences nor their context reproduce Pythia's original packed
+training stream. `--match`, `--limit`, and `--stage` change both the candidate set
+and the sampling objective, so results across different selections need not agree.
+
+The objective is the mean of the supplied texts' mean token losses, `L(w)`.
+The sampler targets `p(w) ∝ exp(-nβ·L(w) - γ/2·‖w-w*‖²)` near the checkpoint.
+For the explicitly defined perturbation **`L(w) + δ·loss_example(w)`**, the
+posterior query-loss derivative is `-nβ·Cov(loss_query, loss_example)`.
+This is a local posterior sensitivity identity, not a retraining guarantee.
+See [Kreer et al., Bayesian Influence Functions for Hessian-Free Data Attribution](https://arxiv.org/abs/2509.26544).
+
+Results contain raw draws, checkpoint revision, settings, descriptive covariance,
+and screening diagnostics. Rankings are withheld for missing or non-finite draws,
+fewer than four chains or 100 retained draws per chain, disagreeing chain halves
+(ordinary split R-hat above 1.05), a batch-means effective sample size below 400,
+or a strong time trend (absolute correlation above 0.5). Screens cover the query,
+localized mean, every candidate, and the products used to estimate covariance.
+These are heuristic screens, not proof of convergence; passing them cannot establish
+mixing in every weight direction. The report recomputes them for historical files.
+A failed screen yields **inconclusive sampling**, not an attribution ranking.
+Positive and negative descriptive covariances are displayed separately only when
+screens pass. Partial covariances remain diagnostics and do not determine rank.
+
+The initial settings (`lr=5e-8`, `gamma=100`, four chains, 50 burn-in steps,
+100 retained draws) are exploratory, **not calibrated defaults**. Temperature
+`nβ` defaults to `n/ln(n)` over the localized texts. Reducing the step size alone
+can hide drift without reaching the posterior. Compare longer burn-in, longer
+sampling, step sizes, and independent seeds before interpreting a result.
+
+### What has been validated
+
+Run the bounded CPU experiment using the same sampler as the model command:
+
+```bash
+python -m trainspotting.bif_validation \
+  --output results/validation/standalone-text-sensitivity.json
+```
+
+It uses an exactly solvable Gaussian posterior and checks its mean, variance,
+positive and negative loss covariances, and the query-loss change caused by
+reweighting one example. It separately extends burn-in, extends sampling,
+changes the seed, and halves the step size. The settings and tolerances are
+fixed in the runner; it saves failures as well as successes and exits nonzero
+on failure. The results include the loss draws so the calculations are reviewable.
+See the [validation readout](docs/research/standalone-text-sensitivity.md).
+This validates the small analytic problem; it does not validate language-model
+attribution or transfer those sampler settings to Pythia.
+
+The historical Pythia demonstration remains committed as an **inconclusive
+sampling example**. Its four chains' mean candidate losses rise almost linearly
+through the retained draws (time correlations 0.996–0.999). Removing a linear
+time trend removes 88–99% of each chain's average query–candidate covariance.
+That calculation diagnoses shared drift; detrending does not repair the posterior
+estimator. All 200 descriptive covariances are positive, and none should be
+presented as pulling the model away. A stable, intervention-validated language-model
+result remains follow-up research before broader attribution claims are justified.
+
 ## Pretraining data
 
 Dolma 3 is on the Hub, but the dataset viewer cannot sample it. It indexes only
@@ -1687,6 +1775,12 @@ checks each saved Parquet schema against the current one. That is the canary for
 an upstream schema change, which otherwise shows up only as a sampling run that
 quietly labels nothing, or a string search that quietly counts less.
 
+`tests/test_bif.py` checks candidate selection, loss masking, covariance
+arithmetic, conservative diagnostics, and withholding unsupported conclusions.
+The sampler tests use a tiny CPU model. A dedicated CI job installs torch and
+runs the exact Gaussian validation; the regular dependency-light test job
+continues to exercise the rest of the command without model downloads.
+
 `steps` is pinned where it would fail silently: the shard layout has to close
 exactly over 143,000 steps or every offset is an address into the wrong text, a
 step straddling a shard seam has to come back as two contiguous ranges, the draw
@@ -1727,6 +1821,9 @@ sampling run that quietly labels nothing.
   more; and a pattern present in a stage is not a demonstration that any
   particular behaviour came from it. For "did this exact document train the
   model", use OLMoTrace.
+- `bif` is experimental standalone-text sensitivity on Pythia-70m, not training
+  attribution. Its Gaussian validation does not validate a language model. The
+  committed language-model run is inconclusive and its ranking is withheld.
 - `context` names each RL mix's verifier by matching its `dataset_source`
   against known mixes (math answer match, code unit tests, constraint checker,
   LLM judge). The raw source tag travels with every record, so the inference is
