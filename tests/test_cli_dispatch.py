@@ -15,7 +15,7 @@ import sys
 
 import pytest
 
-from trainspotting import cli, registry
+from trainspotting import bif, cli, registry
 
 # Handler attribute per subcommand, and the minimum argv that reaches it. The
 # handlers are patched out: this is a test of dispatch, not of what they do.
@@ -142,14 +142,14 @@ def test_bif_rejects_a_step_size_or_draw_count_the_sampler_cannot_use(bad, monke
 
 
 def test_bif_refuses_other_checkpoints_before_loading_weights(monkeypatch):
-    monkeypatch.setattr(cli.bif, "load", lambda *a, **k: pytest.fail("loaded unsupported weights"))
+    monkeypatch.setattr(bif, "load", lambda *a, **k: pytest.fail("loaded unsupported weights"))
     monkeypatch.setattr(sys, "argv", ["trainspotting", "bif", "olmo-3-7b-instruct", "text"])
     with pytest.raises(SystemExit, match="supports only EleutherAI/pythia-70m-deduped"):
         cli.main()
 
 
 def test_bif_defers_post_training_before_loading_weights(monkeypatch):
-    monkeypatch.setattr(cli.bif, "load", lambda *a, **k: pytest.fail("loaded weights for a deferred objective"))
+    monkeypatch.setattr(bif, "load", lambda *a, **k: pytest.fail("loaded weights for a deferred objective"))
     monkeypatch.setattr(sys, "argv", ["trainspotting", "bif", "olmo-3-7b-instruct", "text",
                                      "--model", "EleutherAI/pythia-70m-deduped", "--stage", "dpo"])
     with pytest.raises(SystemExit, match="no candidate examples"):

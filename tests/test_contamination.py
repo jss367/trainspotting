@@ -398,7 +398,7 @@ def test_an_item_with_a_part_the_server_cut_is_settled_only_by_a_hit():
 
 
 def test_the_probe_cutter_names_the_items_with_a_cut_part():
-    from trainspotting import cli
+    from trainspotting.commands import contaminate as cli
 
     spec = {"question": "q", "choices": None, "answer": "a"}
     items = [
@@ -503,7 +503,7 @@ def test_corpus_side_defaults_to_a_pretraining_only_index():
 def test_a_run_with_no_side_left_to_measure_is_refused():
     from types import SimpleNamespace
 
-    from trainspotting import cli
+    from trainspotting.commands import contaminate as cli
 
     def args(**kw):
         return SimpleNamespace(**{"target": "t", "corpus_only": False, "no_corpus": False, **kw})
@@ -530,7 +530,8 @@ def test_a_dataset_cannot_be_given_a_corpus_index():
     must not be a way around it."""
     from types import SimpleNamespace
 
-    from trainspotting import cli, registry
+    from trainspotting import registry
+    from trainspotting.commands import contaminate as cli
 
     def args(target, index=None):
         return SimpleNamespace(target=target, index=index)
@@ -577,7 +578,7 @@ def test_the_corpus_caveat_is_about_the_target_not_just_the_index():
 
 
 def test_corpus_only_leaves_every_stage_unscanned():
-    from trainspotting import cli
+    from trainspotting.commands import contaminate as cli
 
     stages = [{"stage": "sft"}, {"stage": "dpo"}, {"stage": "rlvr"}]
     # A --stage selection scans one and names the rest.

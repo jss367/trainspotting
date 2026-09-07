@@ -962,9 +962,9 @@ def test_an_explicit_slug_cannot_escape_the_results_directory(slug, expected):
     """`_write_json` creates parent directories, so a raw `--slug` in the path
     would file a multi-gigabyte scan where neither the report nor the site export
     looks — and `../..` would write outside results/ entirely."""
-    from trainspotting import cli
-    assert cli._filename_part(slug) == expected
-    assert "/" not in cli._filename_part(slug)
+    from trainspotting.commands import common
+    assert common._filename_part(slug) == expected
+    assert "/" not in common._filename_part(slug)
 
 
 def test_the_recompute_script_pins_the_parquet_revision():

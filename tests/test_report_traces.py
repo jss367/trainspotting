@@ -8,7 +8,8 @@ under whichever pattern sorted first is a wrong answer with no visible symptom.
 
 import json
 
-from trainspotting import cli
+from trainspotting import cli, registry
+from trainspotting.commands import report as report_cmd
 
 
 def write(tmp_path, model, stage, slug, **over):
@@ -25,8 +26,8 @@ def write(tmp_path, model, stage, slug, **over):
 
 
 def traces(tmp_path, monkeypatch, model="olmo-3-7b-think"):
-    monkeypatch.setattr(cli, "RESULTS", tmp_path)
-    return cli._grep_traces(model, cli.registry.resolve(model))
+    monkeypatch.setattr(report_cmd, "RESULTS", tmp_path)
+    return report_cmd._grep_traces(model, registry.resolve(model))
 
 
 def test_stages_of_one_search_are_grouped_together(tmp_path, monkeypatch):
@@ -107,7 +108,7 @@ def test_another_model_s_runs_are_not_folded_in(tmp_path, monkeypatch):
 
 def test_the_preamble_does_not_claim_full_coverage_for_a_partial_conversion(tmp_path, monkeypatch, capsys):
     write(tmp_path, "olmo-3-7b-think", "dpo", "chatgpt", partial=True)
-    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    monkeypatch.setattr(report_cmd, "RESULTS", tmp_path)
     cli.cmd_report(type("A", (), {"target": "olmo-3-7b-think"})())
     out = capsys.readouterr().out
     assert "converted only part of dpo ('ChatGPT')" in out
@@ -116,7 +117,7 @@ def test_the_preamble_does_not_claim_full_coverage_for_a_partial_conversion(tmp_
 
 def test_the_qualifier_is_absent_when_every_conversion_is_complete(tmp_path, monkeypatch, capsys):
     write(tmp_path, "olmo-3-7b-think", "dpo", "chatgpt")
-    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    monkeypatch.setattr(report_cmd, "RESULTS", tmp_path)
     cli.cmd_report(type("A", (), {"target": "olmo-3-7b-think"})())
     assert "converted subset alone" not in capsys.readouterr().out
 
@@ -173,7 +174,7 @@ def test_an_uncontested_slug_is_not_marked(tmp_path, monkeypatch):
 
 def test_the_section_heading_does_not_claim_exactness_it_may_not_have(tmp_path, monkeypatch, capsys):
     write(tmp_path, "olmo-3-7b-think", "dpo", "chatgpt", partial=True)
-    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    monkeypatch.setattr(report_cmd, "RESULTS", tmp_path)
     cli.cmd_report(type("A", (), {"target": "olmo-3-7b-think"})())
     out = capsys.readouterr().out
     assert "## String traces\n" in out

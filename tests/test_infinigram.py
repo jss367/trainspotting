@@ -58,7 +58,7 @@ def test_phrase_slug_distinctness():
     Normalization is lossy every which way — case and punctuation fold,
     non-ASCII drops, length truncates — so distinct phrases on either side of
     any of those folds must still get distinct slugs."""
-    from trainspotting.cli import _phrase_slug
+    from trainspotting.commands.find import _phrase_slug
 
     # Case matters to an exact-match search: different tokens, different count.
     assert _phrase_slug("Climate change") != _phrase_slug("climate-change")
@@ -76,7 +76,7 @@ def test_phrase_slug_distinctness():
 def test_filename_part_stays_in_results():
     """--slug and --index are user input headed into a filename; separators
     and dot-runs must not survive into path components."""
-    from trainspotting.cli import _filename_part
+    from trainspotting.commands.common import _filename_part
 
     assert _filename_part("../../report") == "report"
     assert _filename_part("v4_olmo-2-0325-32b-instruct_llama") == "v4_olmo-2-0325-32b-instruct_llama"

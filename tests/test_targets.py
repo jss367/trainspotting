@@ -13,6 +13,7 @@ import pytest
 from conftest import row_fixture
 
 from trainspotting import classify, context, extract, registry
+from trainspotting.commands import common
 
 
 def test_a_model_resolves_to_its_own_stages():
@@ -148,7 +149,7 @@ def test_a_sampled_row_travels_with_its_index():
     """The index is what a result record stores to address its training example.
     Joining on the prompt cannot separate two rows that open with the same 400
     characters — rare in a curated mix, routine in a chat log."""
-    from trainspotting import cli, hf
+    from trainspotting import hf
 
     stage = registry.post_training_stages(registry.resolve("wildchat-1m"))[0]
     rows = [
@@ -159,8 +160,8 @@ def test_a_sampled_row_travels_with_its_index():
     original = hf.sample_rows_with_index
     hf.sample_rows_with_index = lambda *a, **k: rows
     try:
-        got = cli._sample_rows(stage, 3, 0)
-        prompts = cli._sample_prompts(stage, 3, 0)
+        got = common._sample_rows(stage, 3, 0)
+        prompts = common._sample_prompts(stage, 3, 0)
     finally:
         hf.sample_rows_with_index = original
 

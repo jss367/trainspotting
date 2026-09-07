@@ -13,7 +13,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from trainspotting import cli, registry, steps
+from trainspotting import cli, pretrain, registry, steps
+from trainspotting.commands import steps as steps_cmd
 
 ORDER = registry.PYTHIA_TRAINING_ORDER
 
@@ -304,7 +305,7 @@ def test_explicit_steps_are_read_but_do_not_enter_population_estimates(
     monkeypatch.setattr(steps, "draw_steps", lambda total, n, seed, at=(): [1, 2, *at])
     monkeypatch.setattr(steps, "decoder", lambda order, revision: lambda rows: rows)
     monkeypatch.setattr(steps, "resolve_tokenizer_revision", lambda repo: "token-rev")
-    monkeypatch.setattr(cli.pretrain, "resolve_revision", lambda dataset: "data-rev")
+    monkeypatch.setattr(pretrain, "resolve_revision", lambda dataset: "data-rev")
     monkeypatch.setattr(
         steps,
         "scan",
@@ -318,7 +319,7 @@ def test_explicit_steps_are_read_but_do_not_enter_population_estimates(
         captured.update(payload)
         return tmp_path / path.name
 
-    monkeypatch.setattr(cli, "_write_json", write)
+    monkeypatch.setattr(steps_cmd, "_write_json", write)
     cli.cmd_steps(args)
 
     assert captured["sample"] == 2

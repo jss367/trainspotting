@@ -4,7 +4,7 @@ A slug that collapses two different runs to one name overwrites a result
 silently, which is the one failure a result file cannot report.
 """
 
-from trainspotting.cli import _slug
+from trainspotting.commands.common import _slug
 
 
 def test_a_plain_pattern_keeps_its_readable_name():
@@ -37,21 +37,21 @@ def test_a_long_slug_stays_a_filename():
 def test_a_regex_keeps_the_punctuation_that_changes_what_it_matches():
     """`a.b` and `a+b` are different searches that reduce to the same `a-b`;
     prose spelled two ways is one question, a regex punctuated two ways is not."""
-    from trainspotting.cli import _pattern_slug
+    from trainspotting.commands.common import _pattern_slug
 
     assert _pattern_slug("a.b") != _pattern_slug("a+b")
     assert _pattern_slug("I cannot") != _pattern_slug("I  cannot")
 
 
 def test_a_pattern_that_is_already_its_own_slug_keeps_the_readable_name():
-    from trainspotting.cli import _pattern_slug
+    from trainspotting.commands.common import _pattern_slug
 
     assert _pattern_slug("i-cannot") == "i-cannot"
 
 
 def test_a_pattern_slug_is_disambiguated_once_not_twice():
     """One hash, whichever reduction lost the information."""
-    from trainspotting.cli import _pattern_slug
+    from trainspotting.commands.common import _pattern_slug
 
     assert _pattern_slug("").count("-") == 1
     assert len(_pattern_slug("我是ChatGPT").split("-")) == 2
@@ -61,7 +61,7 @@ def test_a_pattern_slug_is_disambiguated_once_not_twice():
 def test_case_sensitivity_names_a_different_run():
     """The same pattern with and without --case-sensitive is two regexes, so it
     cannot be two writes to one file."""
-    from trainspotting.cli import _pattern_slug
+    from trainspotting.commands.common import _pattern_slug
 
     assert _pattern_slug("ChatGPT") != _pattern_slug("ChatGPT", case_sensitive=True)
     assert _pattern_slug("i-cannot") == "i-cannot"
@@ -71,7 +71,7 @@ def test_case_sensitivity_names_a_different_run():
 def test_literal_and_regex_modes_name_different_runs():
     """The same punctuation is data in one mode and syntax in the other, so
     neither run may silently overwrite the other after an expensive scan."""
-    from trainspotting.cli import _pattern_slug
+    from trainspotting.commands.common import _pattern_slug
 
     assert _pattern_slug("a.b") != _pattern_slug("a.b", regex=True)
     assert _pattern_slug("i-cannot") != _pattern_slug("i-cannot", regex=True)
@@ -81,7 +81,7 @@ def test_a_long_plain_pattern_is_still_a_filename():
     """A 300-character literal is its own slug, so the readable shortcut would
     hand back a basename no filesystem accepts — after the whole sampling run
     had already been paid for."""
-    from trainspotting.cli import MAX_SLUG_CHARS, _pattern_slug
+    from trainspotting.commands.common import MAX_SLUG_CHARS, _pattern_slug
 
     long_a, longer_a = _pattern_slug("a" * 300), _pattern_slug("a" * 301)
 
@@ -92,7 +92,7 @@ def test_a_long_plain_pattern_is_still_a_filename():
 def test_a_contamination_run_at_the_defaults_is_named_for_its_benchmark():
     """The committed runs keep their names, and a run whose settings cut
     different probes or read a different side cannot write over them."""
-    from trainspotting.cli import CONTAM_DEFAULTS, _contam_slug
+    from trainspotting.commands.contaminate import CONTAM_DEFAULTS, _contam_slug
 
     assert _contam_slug("gsm8k", dict(CONTAM_DEFAULTS)) == "gsm8k"
 
@@ -108,7 +108,7 @@ def test_a_contamination_run_at_the_defaults_is_named_for_its_benchmark():
 def test_contamination_settings_do_not_depend_on_how_the_fields_were_spelt():
     from types import SimpleNamespace
 
-    from trainspotting.cli import _contam_settings
+    from trainspotting.commands.contaminate import _contam_settings
 
     def ns(field):
         return SimpleNamespace(items=200, seed=0, words=13, field=field, case_sensitive=False)

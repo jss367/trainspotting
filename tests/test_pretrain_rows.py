@@ -14,6 +14,8 @@ import json
 import pytest
 
 from trainspotting import classify, cli, hf, paths, pretrain, registry
+from trainspotting.commands import labeling, pretrain as pretrain_cmd
+from trainspotting.stats import cluster_wilson as _cluster_wilson
 
 
 def test_a_stage_declares_its_route_and_shards_is_the_default():
@@ -80,7 +82,8 @@ def test_the_page_is_the_rows_route_cluster_and_survives_to_the_written_record(
     name — but it is not a cluster identity, and `_cluster_wilson` groups on one.
     Writing the sample without the page collapsed all 300 Pile documents into a
     single cluster and reported n_effective = 1 at any sample size."""
-    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    monkeypatch.setattr(pretrain_cmd, "RESULTS", tmp_path)
+    monkeypatch.setattr(labeling, "RESULTS", tmp_path)
     monkeypatch.setattr(hf, "num_rows", lambda *a, **k: 1_000)
     monkeypatch.setattr(hf, "dataset_revision", lambda *a, **k: "deadbeef")
     monkeypatch.setattr(
@@ -112,7 +115,8 @@ def test_a_shard_document_keeps_the_shard_as_its_only_cluster_identity(tmp_path,
     """A shard sample must not grow a second field naming the same thing. The
     committed Olmo samples have no `cluster`, and the interval reads `shard`
     for them exactly as it did before this field existed."""
-    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    monkeypatch.setattr(pretrain_cmd, "RESULTS", tmp_path)
+    monkeypatch.setattr(labeling, "RESULTS", tmp_path)
     monkeypatch.setattr(pretrain, "list_shards", lambda *a, **k: ([{"size": 1}], "cafe123"))
     monkeypatch.setattr(pretrain, "group_sizes", lambda *a, **k: {"common_crawl/art": 1})
     monkeypatch.setattr(
@@ -173,7 +177,8 @@ def test_a_rows_sample_does_not_collapse_to_one_effective_observation(tmp_path, 
     n_effective = 1 and a 5–95% interval over 300 documents, because every one of
     them carried the same empty `shard`. Thirty pages that mostly agree are worth
     far more than one observation, and the file has to say so."""
-    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    monkeypatch.setattr(pretrain_cmd, "RESULTS", tmp_path)
+    monkeypatch.setattr(labeling, "RESULTS", tmp_path)
     monkeypatch.setattr(paths, "RESULTS", tmp_path)
     monkeypatch.setattr(paths, "SITE_DATA", tmp_path)
     # Thirty pages of ten, the shape a 300-document draw actually has. Matches
@@ -208,7 +213,7 @@ def test_a_rows_sample_does_not_collapse_to_one_effective_observation(tmp_path, 
     )
     args = type("A", (), {"target": "pythia-12b-deduped", "classifier": "test-model"})()
 
-    cli._label_pretrain_docs(args, "does this mention anything?", "slug")
+    labeling._label_pretrain_docs(args, "does this mention anything?", "slug")
 
     scored = json.loads((tmp_path / "pythia-12b-deduped.pretrain.ask-slug.json").read_text())
     lo, hi = scored["ci"]
@@ -218,13 +223,14 @@ def test_a_rows_sample_does_not_collapse_to_one_effective_observation(tmp_path, 
     assert hi - lo < 0.15
     # And the cluster identity is what did it — the same records clustered by
     # their (empty) shard are the bug this test exists for.
-    assert cli._cluster_wilson(scored["records"], key="shard")[2] == pytest.approx(1.0)
+    assert _cluster_wilson(scored["records"], key="shard")[2] == pytest.approx(1.0)
 
 
 def test_a_shard_sample_still_clusters_by_shard_without_a_cluster_field(tmp_path, monkeypatch):
     """The committed Olmo samples predate `cluster`, and the interval they show
     on the site must not move. `shard` is the fallback, so it does not."""
-    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    monkeypatch.setattr(pretrain_cmd, "RESULTS", tmp_path)
+    monkeypatch.setattr(labeling, "RESULTS", tmp_path)
     monkeypatch.setattr(paths, "RESULTS", tmp_path)
     monkeypatch.setattr(paths, "SITE_DATA", tmp_path)
     records = [
@@ -253,7 +259,7 @@ def test_a_shard_sample_still_clusters_by_shard_without_a_cluster_field(tmp_path
     )
     args = type("A", (), {"target": "olmo-3-7b-think", "classifier": "test-model"})()
 
-    cli._label_pretrain_docs(args, "q", "slug")
+    labeling._label_pretrain_docs(args, "q", "slug")
 
     scored = json.loads((tmp_path / "olmo-3-7b-think.pretrain.ask-slug.json").read_text())
     # Four shards of five, two unanimously matching: deff = 20/3, so twenty
@@ -267,7 +273,8 @@ def test_a_shard_sample_still_clusters_by_shard_without_a_cluster_field(tmp_path
 def test_a_rows_run_writes_the_corpus_size_and_not_shard_facts(tmp_path, monkeypatch):
     """`shards: 0`, `bytes: 0` or `groups: {}` would read on the site as a
     measured result rather than as a breakdown this route cannot produce."""
-    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    monkeypatch.setattr(pretrain_cmd, "RESULTS", tmp_path)
+    monkeypatch.setattr(labeling, "RESULTS", tmp_path)
     monkeypatch.setattr(hf, "num_rows", lambda *a, **k: 100)
     monkeypatch.setattr(hf, "dataset_revision", lambda *a, **k: "deadbeef")
     monkeypatch.setattr(
@@ -313,7 +320,8 @@ def test_sources_on_a_base_only_model_fails_instead_of_writing_an_empty_audit(
     with --json write `{}` — an audit file the site would serve as a measured
     empty breakdown. Every other prompt-reading command fails through
     `_select_stages`; this one now does too."""
-    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    monkeypatch.setattr(pretrain_cmd, "RESULTS", tmp_path)
+    monkeypatch.setattr(labeling, "RESULTS", tmp_path)
     args = type("A", (), {"target": "pythia-12b-deduped", "json": as_json})()
 
     with pytest.raises(SystemExit, match="no post-training stages"):
@@ -541,7 +549,8 @@ def test_an_ask_run_carries_its_samples_route_and_moved_revision(tmp_path, monke
     which is the whole content of the site's "may come from either tree" warning
     on the run's revision link.
     """
-    monkeypatch.setattr(cli, "RESULTS", tmp_path)
+    monkeypatch.setattr(pretrain_cmd, "RESULTS", tmp_path)
+    monkeypatch.setattr(labeling, "RESULTS", tmp_path)
     monkeypatch.setattr(paths, "RESULTS", tmp_path)
     monkeypatch.setattr(paths, "SITE_DATA", tmp_path)
     monkeypatch.setattr(classify, "classify_prompts", lambda prompts, **k: (["yes"], {}))
@@ -568,7 +577,7 @@ def test_an_ask_run_carries_its_samples_route_and_moved_revision(tmp_path, monke
     )
     args = type("A", (), {"target": "pythia-12b-deduped", "classifier": "test-model"})()
 
-    cli._label_pretrain_docs(args, "q", "slug")
+    labeling._label_pretrain_docs(args, "q", "slug")
 
     scored = json.loads((tmp_path / "pythia-12b-deduped.pretrain.ask-slug.json").read_text())
     assert scored["route"] == "rows"
@@ -580,7 +589,7 @@ def test_an_ask_run_carries_its_samples_route_and_moved_revision(tmp_path, monke
     _write_docs(
         tmp_path / "pythia-12b-deduped.pretrain.docs.json", records, route="shards"
     )
-    cli._label_pretrain_docs(args, "q", "slug")
+    labeling._label_pretrain_docs(args, "q", "slug")
     scored = json.loads((tmp_path / "pythia-12b-deduped.pretrain.ask-slug.json").read_text())
     assert scored["route"] == "shards"
     assert "revision_moved_to" not in scored
@@ -599,16 +608,16 @@ def test_a_rows_draw_records_a_revision_that_moved_under_it(monkeypatch):
     seen = iter(["a" * 40, "b" * 40])
     monkeypatch.setattr(hf_mod, "dataset_revision", lambda ds: next(seen))
     monkeypatch.setattr(
-        cli.pretrain, "sample_rows_documents", lambda *a, **k: ([], 134_318_121)
+        pretrain, "sample_rows_documents", lambda *a, **k: ([], 134_318_121)
     )
     args = type("A", (), {"sample": 300, "seed": 0})()
-    _, facts = cli._pretrain_rows(args, {"text_column": "text"}, "x/y")
+    _, facts = pretrain_cmd._pretrain_rows(args, {"text_column": "text"}, "x/y")
     assert facts["revision"] == "a" * 40
     assert facts["revision_moved_to"] == "b" * 40
 
     # A tree that did not move stamps nothing, so the field means what it says.
     monkeypatch.setattr(hf_mod, "dataset_revision", lambda ds: "a" * 40)
-    _, facts = cli._pretrain_rows(args, {"text_column": "text"}, "x/y")
+    _, facts = pretrain_cmd._pretrain_rows(args, {"text_column": "text"}, "x/y")
     assert "revision_moved_to" not in facts
 
 
