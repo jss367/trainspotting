@@ -1200,7 +1200,7 @@ def test_an_rl_source_prompt_is_prompt_throughout():
 
 
 class TestTheReadmeTranscript:
-    """The `grep` example in the README, held to the run it claims to be.
+    """The `grep` example in docs/commands.md, held to the run it claims to be.
 
     It is a transcript of one committed run, and it went stale the moment DPO
     grew `chosen` and `rejected` groups: the plan line still said
@@ -1215,7 +1215,8 @@ class TestTheReadmeTranscript:
     RESULT = Path(__file__).resolve().parent.parent / "results" / (
         "olmo-3-7b-think.dpo.grep-chatgpt.json"
     )
-    README = Path(__file__).resolve().parent.parent / "README.md"
+    # The transcript moved with the rest of the long-form docs.
+    README = Path(__file__).resolve().parent.parent / "docs" / "commands.md"
 
     @pytest.fixture(scope="class")
     def transcript(self):
