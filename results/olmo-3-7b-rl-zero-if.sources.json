@@ -1,0 +1,12 @@
+{
+  "rlvr": {
+    "dataset": "allenai/Dolci-RL-Zero-IF-7B",
+    "generated": "2026-09-07T23:31:21+00:00",
+    "revision": "c96e4e424c0a5d416f725c488ec7c61b7f758d85",
+    "total": 13179,
+    "counted": 13179,
+    "partial": false,
+    "columns": {},
+    "links": {}
+  }
+}

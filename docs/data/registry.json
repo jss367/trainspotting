@@ -227,6 +227,586 @@
       }
     ]
   },
+  "olmo-3-7b-rl-zero-code": {
+    "target": "olmo-3-7b-rl-zero-code",
+    "is_model": true,
+    "hf_model": "allenai/Olmo-3-7B-RL-Zero-Code",
+    "stages": [
+      {
+        "stage": "pretrain",
+        "name": "Dolma 3 Mix",
+        "tokens": 5930000000000,
+        "note": "5.93T tokens over 3.87B documents, sampled (with upsampling of the smaller sources) from the ~9.3T-token Dolma 3 pool. Three quarters of pretraining is Common Crawl web text.",
+        "hf": "allenai/dolma3_mix-6T-1025-7B",
+        "sample_dataset": "allenai/dolma3_mix-6T-1025-7B",
+        "sample_scope": "The exact mix used to pretrain Olmo 3 7B. Some olmOCR science PDFs were redacted to `[REMOVED]` after training, so a few documents here show a placeholder where the model saw real text.",
+        "composition": [
+          {
+            "name": "Common Crawl (web)",
+            "tokens": 4510000000000
+          },
+          {
+            "name": "olmOCR science PDFs",
+            "tokens": 805000000000
+          },
+          {
+            "name": "Stack-Edu (code)",
+            "tokens": 409000000000
+          },
+          {
+            "name": "FineMath 3+ (math)",
+            "tokens": 151000000000
+          },
+          {
+            "name": "arXiv (proof-pile)",
+            "tokens": 50900000000
+          },
+          {
+            "name": "Wikipedia & Wikibooks",
+            "tokens": 2510000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "midtrain",
+        "name": "Dolma 3 Dolmino Mix",
+        "tokens": 100000000000,
+        "note": "Curated to boost math, code, QA, instruction following, and thinking \u2014 much of it synthetic (reasoning traces, generated QA, Flan/Tulu instructions) alongside the highest-quality web and PDF data from pretraining.",
+        "hf": "allenai/dolma3_dolmino_mix-100B-1025",
+        "sample_dataset": "allenai/dolma3_dolmino_mix-100B-1025",
+        "sample_scope": "The 100B-token Dolmino mix itself.",
+        "composition": [
+          {
+            "name": "web pages",
+            "tokens": 28000000000
+          },
+          {
+            "name": "code",
+            "tokens": 20000000000
+          },
+          {
+            "name": "math",
+            "tokens": 19000000000
+          },
+          {
+            "name": "QA",
+            "tokens": 14000000000
+          },
+          {
+            "name": "thinking / reasoning traces",
+            "tokens": 8000000000
+          },
+          {
+            "name": "instruction following",
+            "tokens": 6000000000
+          },
+          {
+            "name": "science PDFs",
+            "tokens": 5000000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "long-context",
+        "name": "Dolma 3 Longmino Mix",
+        "tokens": 50000000000,
+        "note": "Extends context length: two thirds replays the midtraining mix, one third is long science PDFs (real and synthetic, 8K\u201364K tokens).",
+        "hf": "allenai/dolma3_longmino_mix-50B-1025",
+        "sample_dataset": "allenai/dolma3_longmino_mix-50B-1025",
+        "sample_scope": "The 50B-token Longmino mix the 7B run used.",
+        "composition": [
+          {
+            "name": "midtraining data (replay)",
+            "tokens": 33000000000
+          },
+          {
+            "name": "long science PDFs (8K\u201364K)",
+            "tokens": 8930000000
+          },
+          {
+            "name": "synthetic long PDFs",
+            "tokens": 8020000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "rlvr",
+        "name": "Dolci RL-Zero Code 7B",
+        "hf_dataset": "allenai/Dolci-RL-Zero-Code-7B",
+        "prompt_path": "prompt",
+        "source_columns": [],
+        "note": "RL-Zero: RLVR applied directly to the Olmo 3 7B base, with no SFT or DPO stage before it. One verifier for the whole mix."
+      }
+    ]
+  },
+  "olmo-3-7b-rl-zero-general": {
+    "target": "olmo-3-7b-rl-zero-general",
+    "is_model": true,
+    "hf_model": "allenai/Olmo-3-7B-RL-Zero-General",
+    "stages": [
+      {
+        "stage": "pretrain",
+        "name": "Dolma 3 Mix",
+        "tokens": 5930000000000,
+        "note": "5.93T tokens over 3.87B documents, sampled (with upsampling of the smaller sources) from the ~9.3T-token Dolma 3 pool. Three quarters of pretraining is Common Crawl web text.",
+        "hf": "allenai/dolma3_mix-6T-1025-7B",
+        "sample_dataset": "allenai/dolma3_mix-6T-1025-7B",
+        "sample_scope": "The exact mix used to pretrain Olmo 3 7B. Some olmOCR science PDFs were redacted to `[REMOVED]` after training, so a few documents here show a placeholder where the model saw real text.",
+        "composition": [
+          {
+            "name": "Common Crawl (web)",
+            "tokens": 4510000000000
+          },
+          {
+            "name": "olmOCR science PDFs",
+            "tokens": 805000000000
+          },
+          {
+            "name": "Stack-Edu (code)",
+            "tokens": 409000000000
+          },
+          {
+            "name": "FineMath 3+ (math)",
+            "tokens": 151000000000
+          },
+          {
+            "name": "arXiv (proof-pile)",
+            "tokens": 50900000000
+          },
+          {
+            "name": "Wikipedia & Wikibooks",
+            "tokens": 2510000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "midtrain",
+        "name": "Dolma 3 Dolmino Mix",
+        "tokens": 100000000000,
+        "note": "Curated to boost math, code, QA, instruction following, and thinking \u2014 much of it synthetic (reasoning traces, generated QA, Flan/Tulu instructions) alongside the highest-quality web and PDF data from pretraining.",
+        "hf": "allenai/dolma3_dolmino_mix-100B-1025",
+        "sample_dataset": "allenai/dolma3_dolmino_mix-100B-1025",
+        "sample_scope": "The 100B-token Dolmino mix itself.",
+        "composition": [
+          {
+            "name": "web pages",
+            "tokens": 28000000000
+          },
+          {
+            "name": "code",
+            "tokens": 20000000000
+          },
+          {
+            "name": "math",
+            "tokens": 19000000000
+          },
+          {
+            "name": "QA",
+            "tokens": 14000000000
+          },
+          {
+            "name": "thinking / reasoning traces",
+            "tokens": 8000000000
+          },
+          {
+            "name": "instruction following",
+            "tokens": 6000000000
+          },
+          {
+            "name": "science PDFs",
+            "tokens": 5000000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "long-context",
+        "name": "Dolma 3 Longmino Mix",
+        "tokens": 50000000000,
+        "note": "Extends context length: two thirds replays the midtraining mix, one third is long science PDFs (real and synthetic, 8K\u201364K tokens).",
+        "hf": "allenai/dolma3_longmino_mix-50B-1025",
+        "sample_dataset": "allenai/dolma3_longmino_mix-50B-1025",
+        "sample_scope": "The 50B-token Longmino mix the 7B run used.",
+        "composition": [
+          {
+            "name": "midtraining data (replay)",
+            "tokens": 33000000000
+          },
+          {
+            "name": "long science PDFs (8K\u201364K)",
+            "tokens": 8930000000
+          },
+          {
+            "name": "synthetic long PDFs",
+            "tokens": 8020000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "rlvr",
+        "name": "Dolci RL-Zero General 7B",
+        "hf_dataset": "allenai/Dolci-RL-Zero-General-7B",
+        "prompt_path": "prompt",
+        "source_columns": [],
+        "note": "RL-Zero: RLVR applied directly to the Olmo 3 7B base, with no SFT or DPO stage before it. One verifier for the whole mix."
+      }
+    ]
+  },
+  "olmo-3-7b-rl-zero-if": {
+    "target": "olmo-3-7b-rl-zero-if",
+    "is_model": true,
+    "hf_model": "allenai/Olmo-3-7B-RL-Zero-IF",
+    "stages": [
+      {
+        "stage": "pretrain",
+        "name": "Dolma 3 Mix",
+        "tokens": 5930000000000,
+        "note": "5.93T tokens over 3.87B documents, sampled (with upsampling of the smaller sources) from the ~9.3T-token Dolma 3 pool. Three quarters of pretraining is Common Crawl web text.",
+        "hf": "allenai/dolma3_mix-6T-1025-7B",
+        "sample_dataset": "allenai/dolma3_mix-6T-1025-7B",
+        "sample_scope": "The exact mix used to pretrain Olmo 3 7B. Some olmOCR science PDFs were redacted to `[REMOVED]` after training, so a few documents here show a placeholder where the model saw real text.",
+        "composition": [
+          {
+            "name": "Common Crawl (web)",
+            "tokens": 4510000000000
+          },
+          {
+            "name": "olmOCR science PDFs",
+            "tokens": 805000000000
+          },
+          {
+            "name": "Stack-Edu (code)",
+            "tokens": 409000000000
+          },
+          {
+            "name": "FineMath 3+ (math)",
+            "tokens": 151000000000
+          },
+          {
+            "name": "arXiv (proof-pile)",
+            "tokens": 50900000000
+          },
+          {
+            "name": "Wikipedia & Wikibooks",
+            "tokens": 2510000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "midtrain",
+        "name": "Dolma 3 Dolmino Mix",
+        "tokens": 100000000000,
+        "note": "Curated to boost math, code, QA, instruction following, and thinking \u2014 much of it synthetic (reasoning traces, generated QA, Flan/Tulu instructions) alongside the highest-quality web and PDF data from pretraining.",
+        "hf": "allenai/dolma3_dolmino_mix-100B-1025",
+        "sample_dataset": "allenai/dolma3_dolmino_mix-100B-1025",
+        "sample_scope": "The 100B-token Dolmino mix itself.",
+        "composition": [
+          {
+            "name": "web pages",
+            "tokens": 28000000000
+          },
+          {
+            "name": "code",
+            "tokens": 20000000000
+          },
+          {
+            "name": "math",
+            "tokens": 19000000000
+          },
+          {
+            "name": "QA",
+            "tokens": 14000000000
+          },
+          {
+            "name": "thinking / reasoning traces",
+            "tokens": 8000000000
+          },
+          {
+            "name": "instruction following",
+            "tokens": 6000000000
+          },
+          {
+            "name": "science PDFs",
+            "tokens": 5000000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "long-context",
+        "name": "Dolma 3 Longmino Mix",
+        "tokens": 50000000000,
+        "note": "Extends context length: two thirds replays the midtraining mix, one third is long science PDFs (real and synthetic, 8K\u201364K tokens).",
+        "hf": "allenai/dolma3_longmino_mix-50B-1025",
+        "sample_dataset": "allenai/dolma3_longmino_mix-50B-1025",
+        "sample_scope": "The 50B-token Longmino mix the 7B run used.",
+        "composition": [
+          {
+            "name": "midtraining data (replay)",
+            "tokens": 33000000000
+          },
+          {
+            "name": "long science PDFs (8K\u201364K)",
+            "tokens": 8930000000
+          },
+          {
+            "name": "synthetic long PDFs",
+            "tokens": 8020000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "rlvr",
+        "name": "Dolci RL-Zero IF 7B",
+        "hf_dataset": "allenai/Dolci-RL-Zero-IF-7B",
+        "prompt_path": "prompt",
+        "source_columns": [],
+        "note": "RL-Zero: RLVR applied directly to the Olmo 3 7B base, with no SFT or DPO stage before it. One verifier for the whole mix."
+      }
+    ]
+  },
+  "olmo-3-7b-rl-zero-math": {
+    "target": "olmo-3-7b-rl-zero-math",
+    "is_model": true,
+    "hf_model": "allenai/Olmo-3-7B-RL-Zero-Math",
+    "stages": [
+      {
+        "stage": "pretrain",
+        "name": "Dolma 3 Mix",
+        "tokens": 5930000000000,
+        "note": "5.93T tokens over 3.87B documents, sampled (with upsampling of the smaller sources) from the ~9.3T-token Dolma 3 pool. Three quarters of pretraining is Common Crawl web text.",
+        "hf": "allenai/dolma3_mix-6T-1025-7B",
+        "sample_dataset": "allenai/dolma3_mix-6T-1025-7B",
+        "sample_scope": "The exact mix used to pretrain Olmo 3 7B. Some olmOCR science PDFs were redacted to `[REMOVED]` after training, so a few documents here show a placeholder where the model saw real text.",
+        "composition": [
+          {
+            "name": "Common Crawl (web)",
+            "tokens": 4510000000000
+          },
+          {
+            "name": "olmOCR science PDFs",
+            "tokens": 805000000000
+          },
+          {
+            "name": "Stack-Edu (code)",
+            "tokens": 409000000000
+          },
+          {
+            "name": "FineMath 3+ (math)",
+            "tokens": 151000000000
+          },
+          {
+            "name": "arXiv (proof-pile)",
+            "tokens": 50900000000
+          },
+          {
+            "name": "Wikipedia & Wikibooks",
+            "tokens": 2510000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "midtrain",
+        "name": "Dolma 3 Dolmino Mix",
+        "tokens": 100000000000,
+        "note": "Curated to boost math, code, QA, instruction following, and thinking \u2014 much of it synthetic (reasoning traces, generated QA, Flan/Tulu instructions) alongside the highest-quality web and PDF data from pretraining.",
+        "hf": "allenai/dolma3_dolmino_mix-100B-1025",
+        "sample_dataset": "allenai/dolma3_dolmino_mix-100B-1025",
+        "sample_scope": "The 100B-token Dolmino mix itself.",
+        "composition": [
+          {
+            "name": "web pages",
+            "tokens": 28000000000
+          },
+          {
+            "name": "code",
+            "tokens": 20000000000
+          },
+          {
+            "name": "math",
+            "tokens": 19000000000
+          },
+          {
+            "name": "QA",
+            "tokens": 14000000000
+          },
+          {
+            "name": "thinking / reasoning traces",
+            "tokens": 8000000000
+          },
+          {
+            "name": "instruction following",
+            "tokens": 6000000000
+          },
+          {
+            "name": "science PDFs",
+            "tokens": 5000000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "long-context",
+        "name": "Dolma 3 Longmino Mix",
+        "tokens": 50000000000,
+        "note": "Extends context length: two thirds replays the midtraining mix, one third is long science PDFs (real and synthetic, 8K\u201364K tokens).",
+        "hf": "allenai/dolma3_longmino_mix-50B-1025",
+        "sample_dataset": "allenai/dolma3_longmino_mix-50B-1025",
+        "sample_scope": "The 50B-token Longmino mix the 7B run used.",
+        "composition": [
+          {
+            "name": "midtraining data (replay)",
+            "tokens": 33000000000
+          },
+          {
+            "name": "long science PDFs (8K\u201364K)",
+            "tokens": 8930000000
+          },
+          {
+            "name": "synthetic long PDFs",
+            "tokens": 8020000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "rlvr",
+        "name": "Dolci RL-Zero Math 7B",
+        "hf_dataset": "allenai/Dolci-RL-Zero-Math-7B",
+        "prompt_path": "prompt",
+        "source_columns": [
+          "dataset"
+        ],
+        "note": "RL-Zero: RLVR applied directly to the Olmo 3 7B base, with no SFT or DPO stage before it. One verifier for the whole mix."
+      }
+    ]
+  },
+  "olmo-3-7b-rl-zero-mix": {
+    "target": "olmo-3-7b-rl-zero-mix",
+    "is_model": true,
+    "hf_model": "allenai/Olmo-3-7B-RL-Zero-Mix",
+    "stages": [
+      {
+        "stage": "pretrain",
+        "name": "Dolma 3 Mix",
+        "tokens": 5930000000000,
+        "note": "5.93T tokens over 3.87B documents, sampled (with upsampling of the smaller sources) from the ~9.3T-token Dolma 3 pool. Three quarters of pretraining is Common Crawl web text.",
+        "hf": "allenai/dolma3_mix-6T-1025-7B",
+        "sample_dataset": "allenai/dolma3_mix-6T-1025-7B",
+        "sample_scope": "The exact mix used to pretrain Olmo 3 7B. Some olmOCR science PDFs were redacted to `[REMOVED]` after training, so a few documents here show a placeholder where the model saw real text.",
+        "composition": [
+          {
+            "name": "Common Crawl (web)",
+            "tokens": 4510000000000
+          },
+          {
+            "name": "olmOCR science PDFs",
+            "tokens": 805000000000
+          },
+          {
+            "name": "Stack-Edu (code)",
+            "tokens": 409000000000
+          },
+          {
+            "name": "FineMath 3+ (math)",
+            "tokens": 151000000000
+          },
+          {
+            "name": "arXiv (proof-pile)",
+            "tokens": 50900000000
+          },
+          {
+            "name": "Wikipedia & Wikibooks",
+            "tokens": 2510000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "midtrain",
+        "name": "Dolma 3 Dolmino Mix",
+        "tokens": 100000000000,
+        "note": "Curated to boost math, code, QA, instruction following, and thinking \u2014 much of it synthetic (reasoning traces, generated QA, Flan/Tulu instructions) alongside the highest-quality web and PDF data from pretraining.",
+        "hf": "allenai/dolma3_dolmino_mix-100B-1025",
+        "sample_dataset": "allenai/dolma3_dolmino_mix-100B-1025",
+        "sample_scope": "The 100B-token Dolmino mix itself.",
+        "composition": [
+          {
+            "name": "web pages",
+            "tokens": 28000000000
+          },
+          {
+            "name": "code",
+            "tokens": 20000000000
+          },
+          {
+            "name": "math",
+            "tokens": 19000000000
+          },
+          {
+            "name": "QA",
+            "tokens": 14000000000
+          },
+          {
+            "name": "thinking / reasoning traces",
+            "tokens": 8000000000
+          },
+          {
+            "name": "instruction following",
+            "tokens": 6000000000
+          },
+          {
+            "name": "science PDFs",
+            "tokens": 5000000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "long-context",
+        "name": "Dolma 3 Longmino Mix",
+        "tokens": 50000000000,
+        "note": "Extends context length: two thirds replays the midtraining mix, one third is long science PDFs (real and synthetic, 8K\u201364K tokens).",
+        "hf": "allenai/dolma3_longmino_mix-50B-1025",
+        "sample_dataset": "allenai/dolma3_longmino_mix-50B-1025",
+        "sample_scope": "The 50B-token Longmino mix the 7B run used.",
+        "composition": [
+          {
+            "name": "midtraining data (replay)",
+            "tokens": 33000000000
+          },
+          {
+            "name": "long science PDFs (8K\u201364K)",
+            "tokens": 8930000000
+          },
+          {
+            "name": "synthetic long PDFs",
+            "tokens": 8020000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "rlvr",
+        "name": "Dolci RL-Zero Mix 7B",
+        "hf_dataset": "allenai/Dolci-RL-Zero-Mix-7B",
+        "prompt_path": "messages",
+        "source_columns": [
+          "dataset",
+          "source_dataset"
+        ],
+        "note": "RL-Zero: RLVR applied directly to the Olmo 3 7B base, with no SFT or DPO stage before it. One verifier for the whole mix."
+      }
+    ]
+  },
   "olmo-3-7b-think": {
     "target": "olmo-3-7b-think",
     "is_model": true,
@@ -363,10 +943,383 @@
       }
     ]
   },
+  "olmo-3.1-32b-instruct": {
+    "target": "olmo-3.1-32b-instruct",
+    "is_model": true,
+    "hf_model": "allenai/Olmo-3.1-32B-Instruct",
+    "stages": [
+      {
+        "stage": "pretrain",
+        "name": "Dolma 3 Mix",
+        "tokens": 5500000000000,
+        "note": "5.50T tokens of the same Dolma 3 Mix recipe as the 7B run (the paper's Table 4 mix applies to both); shares below are the mix's own proportions.",
+        "hf": "allenai/dolma3_mix-6T",
+        "sample_dataset": "allenai/dolma3_mix-6T",
+        "sample_scope": "The primary Dolma 3 6T mix, used to pretrain Olmo 3 32B. No redactions.",
+        "composition": [
+          {
+            "name": "Common Crawl (web)",
+            "tokens": 4510000000000
+          },
+          {
+            "name": "olmOCR science PDFs",
+            "tokens": 805000000000
+          },
+          {
+            "name": "Stack-Edu (code)",
+            "tokens": 409000000000
+          },
+          {
+            "name": "FineMath 3+ (math)",
+            "tokens": 151000000000
+          },
+          {
+            "name": "arXiv (proof-pile)",
+            "tokens": 50900000000
+          },
+          {
+            "name": "Wikipedia & Wikibooks",
+            "tokens": 2510000000
+          }
+        ],
+        "hf_dataset": null
+      },
+      {
+        "stage": "midtrain",
+        "name": "Dolma 3 Dolmino Mix \u00d72",
+        "tokens": 200000000000,
+        "note": "Two separate 100B Dolmino runs (web, code, math, QA, thinking, instruction, PDFs \u2014 heavily synthetic) whose checkpoints were model-merged before the long-context stage.",
+        "hf": "allenai/dolma3_dolmino_mix-100B-1125",
+        "sample_dataset": "allenai/dolma3_dolmino_mix-100B-1125",
+        "sample_scope": "The 100B-token Dolmino mix itself.",
+        "hf_dataset": null
+      },
+      {
+        "stage": "long-context",
+        "name": "Dolma 3 Longmino Mix",
+        "tokens": 100000000000,
+        "note": "Extends context length: midtraining-data replay plus long science PDFs.",
+        "hf": "allenai/dolma3_longmino_mix-100B-1125",
+        "sample_dataset": "allenai/dolma3_longmino_mix-100B-1125",
+        "sample_scope": "The 100B-token Longmino mix.",
+        "hf_dataset": null
+      },
+      {
+        "stage": "sft",
+        "name": "Dolci Instruct SFT",
+        "hf_dataset": "allenai/Dolci-Instruct-SFT",
+        "prompt_path": "messages",
+        "source_columns": [
+          "domain",
+          "source_dataset"
+        ]
+      },
+      {
+        "stage": "dpo",
+        "name": "Dolci Instruct DPO",
+        "hf_dataset": "allenai/Dolci-Instruct-DPO",
+        "prompt_path": "chosen_messages",
+        "source_columns": [
+          "preference_type"
+        ]
+      },
+      {
+        "stage": "rlvr",
+        "name": "Dolci Instruct RL",
+        "hf_dataset": "allenai/Dolci-Instruct-RL",
+        "prompt_path": "prompt",
+        "source_columns": [
+          "dataset_source",
+          "data_source"
+        ]
+      }
+    ]
+  },
   "pythia-12b-deduped": {
     "target": "pythia-12b-deduped",
     "is_model": true,
     "hf_model": "EleutherAI/pythia-12b-deduped",
+    "stages": [
+      {
+        "stage": "pretrain",
+        "name": "The Pile (deduplicated)",
+        "tokens": 299892736000,
+        "note": "22 curated sources \u2014 web, books, code, papers, law, patents, subtitles, email \u2014 assembled by EleutherAI in 2020 and released whole. The deduplicated release is about 207B tokens, so Pythia's 299.9B-token budget is roughly 1.5 passes over it rather than one. There is no midtraining, no long-context stage and no post-training: EleutherAI built Pythia to study how a model changes during pretraining, and stopped at the base model.",
+        "hf": "EleutherAI/the_pile_deduplicated",
+        "sample_dataset": "EleutherAI/the_pile_deduplicated",
+        "sample_via": "rows",
+        "text_column": "text",
+        "sample_scope": "The deduplicated Pile, which is what every `-deduped` Pythia saw. The plain Pythia models trained on the non-deduplicated Pile, whose original distribution is no longer downloadable.",
+        "composition": [
+          {
+            "name": "Pile-CC (web)",
+            "bytes": 243868243066
+          },
+          {
+            "name": "Books3",
+            "bytes": 108404974551
+          },
+          {
+            "name": "GitHub",
+            "bytes": 102177271971
+          },
+          {
+            "name": "PubMed Central",
+            "bytes": 96926674452
+          },
+          {
+            "name": "OpenWebText2",
+            "bytes": 67398774292
+          },
+          {
+            "name": "arXiv",
+            "bytes": 60355027927
+          },
+          {
+            "name": "FreeLaw",
+            "bytes": 54921894297
+          },
+          {
+            "name": "Stack Exchange",
+            "bytes": 34574486732
+          },
+          {
+            "name": "USPTO Backgrounds",
+            "bytes": 24588687769
+          },
+          {
+            "name": "PubMed Abstracts",
+            "bytes": 20680267530
+          },
+          {
+            "name": "OpenSubtitles",
+            "bytes": 13937168875
+          },
+          {
+            "name": "Gutenberg (PG-19)",
+            "bytes": 11682311045
+          },
+          {
+            "name": "DM Mathematics",
+            "bytes": 8321499136
+          },
+          {
+            "name": "Wikipedia (en)",
+            "bytes": 6850472837
+          },
+          {
+            "name": "BookCorpus2",
+            "bytes": 6764573491
+          },
+          {
+            "name": "Ubuntu IRC",
+            "bytes": 5927054868
+          },
+          {
+            "name": "EuroParl",
+            "bytes": 4928474972
+          },
+          {
+            "name": "HackerNews",
+            "bytes": 4187593113
+          },
+          {
+            "name": "YouTube Subtitles",
+            "bytes": 4005057003
+          },
+          {
+            "name": "PhilPapers",
+            "bytes": 2555505541
+          },
+          {
+            "name": "NIH ExPorter",
+            "bytes": 2029372047
+          },
+          {
+            "name": "Enron Emails",
+            "bytes": 944892805
+          }
+        ],
+        "composition_unit": "bytes",
+        "composition_scope": "EleutherAI published this breakdown for the Pile as assembled, before deduplication. Dedup removed about 30% of the bytes and did not remove them evenly, so these are the shares of the corpus this one was derived from, not of the corpus sampled below.",
+        "training_order": {
+          "dataset": "EleutherAI/pile-deduped-pythia-preshuffled",
+          "file": "document-{shard:05d}-of-00020.bin",
+          "shards": 21,
+          "shard_bytes": 30000000000,
+          "last_shard_bytes": 78336000,
+          "dtype_bytes": 2,
+          "sequence_tokens": 2049,
+          "sequences_per_step": 1024,
+          "steps": 143000,
+          "corpus_tokens": 207000000000,
+          "tokenizer": "EleutherAI/pythia-12b-deduped",
+          "checkpoints": [
+            0,
+            1,
+            2,
+            4,
+            8,
+            16,
+            32,
+            64,
+            128,
+            256,
+            512,
+            1000,
+            2000,
+            3000,
+            4000,
+            5000,
+            6000,
+            7000,
+            8000,
+            9000,
+            10000,
+            11000,
+            12000,
+            13000,
+            14000,
+            15000,
+            16000,
+            17000,
+            18000,
+            19000,
+            20000,
+            21000,
+            22000,
+            23000,
+            24000,
+            25000,
+            26000,
+            27000,
+            28000,
+            29000,
+            30000,
+            31000,
+            32000,
+            33000,
+            34000,
+            35000,
+            36000,
+            37000,
+            38000,
+            39000,
+            40000,
+            41000,
+            42000,
+            43000,
+            44000,
+            45000,
+            46000,
+            47000,
+            48000,
+            49000,
+            50000,
+            51000,
+            52000,
+            53000,
+            54000,
+            55000,
+            56000,
+            57000,
+            58000,
+            59000,
+            60000,
+            61000,
+            62000,
+            63000,
+            64000,
+            65000,
+            66000,
+            67000,
+            68000,
+            69000,
+            70000,
+            71000,
+            72000,
+            73000,
+            74000,
+            75000,
+            76000,
+            77000,
+            78000,
+            79000,
+            80000,
+            81000,
+            82000,
+            83000,
+            84000,
+            85000,
+            86000,
+            87000,
+            88000,
+            89000,
+            90000,
+            91000,
+            92000,
+            93000,
+            94000,
+            95000,
+            96000,
+            97000,
+            98000,
+            99000,
+            100000,
+            101000,
+            102000,
+            103000,
+            104000,
+            105000,
+            106000,
+            107000,
+            108000,
+            109000,
+            110000,
+            111000,
+            112000,
+            113000,
+            114000,
+            115000,
+            116000,
+            117000,
+            118000,
+            119000,
+            120000,
+            121000,
+            122000,
+            123000,
+            124000,
+            125000,
+            126000,
+            127000,
+            128000,
+            129000,
+            130000,
+            131000,
+            132000,
+            133000,
+            134000,
+            135000,
+            136000,
+            137000,
+            138000,
+            139000,
+            140000,
+            141000,
+            142000,
+            143000
+          ]
+        },
+        "hf_dataset": null
+      }
+    ],
+    "infinigram_index": "v4_piletrain_llama"
+  },
+  "pythia-70m-deduped": {
+    "target": "pythia-70m-deduped",
+    "is_model": true,
+    "hf_model": "EleutherAI/pythia-70m-deduped",
     "stages": [
       {
         "stage": "pretrain",

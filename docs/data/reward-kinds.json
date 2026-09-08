@@ -71,6 +71,22 @@
     "saurabh5/code_rlvr_mixture_dpo": {
       "kind": "unit tests",
       "subject": "code"
+    },
+    "TTTXXX01/MATH_3000_Filtered": {
+      "kind": "exact answer match",
+      "subject": "math"
+    },
+    "hamishivi/synthetic2-rlvr-code-compressed_filtered": {
+      "kind": "unit tests",
+      "subject": "code"
+    },
+    "hamishivi/klear-code-rlvr_filtered": {
+      "kind": "unit tests",
+      "subject": "code"
+    },
+    "hamishivi/IF_multi_constraints_upto5_filtered": {
+      "kind": "constraint checker",
+      "subject": "instruction following"
     }
   }
 }
