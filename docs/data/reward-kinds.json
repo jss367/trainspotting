@@ -1,21 +1,40 @@
 {
+  "families": {
+    "rlvr": {
+      "label": "RLVR \u00b7 programmatic rewards",
+      "explain": "Reinforcement learning with verifiable rewards: a program checks the answer, tests, or constraints."
+    },
+    "rlaif": {
+      "label": "RLAIF \u00b7 AI feedback",
+      "explain": "Reinforcement learning from AI feedback: an LLM judge scores the generated answer."
+    },
+    "unknown": {
+      "label": "RL \u00b7 reward type unknown",
+      "explain": "The available metadata does not identify how this answer is scored."
+    }
+  },
   "kinds": {
     "exact answer match": {
+      "family": "rlvr",
       "explain": "The final answer is extracted from the response and compared to the ground truth below. Reward 1 on a match, 0 otherwise."
     },
     "unit tests": {
+      "family": "rlvr",
       "explain": "The response's code is executed against test cases. Reward is the fraction of tests that pass.",
       "gt_label": "test cases the answer is run against"
     },
     "constraint checker": {
+      "family": "rlvr",
       "explain": "A program checks the response against the constraints listed below. Reward 1 when every constraint holds, 0 otherwise.",
       "gt_label": "checker configuration"
     },
     "LLM judge": {
-      "explain": "No rule can grade a free-form answer, so a judge model compares the response to the stored reference answer and rewards a match. The grading itself is another model call.",
+      "family": "rlaif",
+      "explain": "A judge model scores the response's quality, with a reference answer when the task provides one. The reward comes from another model's assessment. General chat mixes include reference-based and open-ended judging.",
       "gt_label": "reference answer the judge compares against"
     },
     "unknown": {
+      "family": "unknown",
       "explain": "This mix's reward function isn't identifiable from the row's own fields."
     }
   },

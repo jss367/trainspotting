@@ -31,6 +31,7 @@ const el = () => ({ addEventListener(){}, appendChild(){}, querySelectorAll: () 
 // Every name a suite asks for, collected in one place so a rename fails loudly
 // here rather than as `undefined is not a function` halfway through a suite.
 const EXPORTS = [
+  "stageLabel", "rewardFamily", "rewardComposition", "renderRewardComposition", "renderRLVR",
   // the DPO gradient panel
   "diffPair", "opChars", "uniqueChars", "sideText", "sideCut", "demotePrefix",
   "gradientSection", "rawResponseStored", "renderDPO", "sharedTurns",
@@ -82,6 +83,7 @@ export function loadPage(){
   // out of a module-scope cache the page fills at boot, and nothing serves that
   // file here. This is the one hook a suite needs into page internals.
   setLangNames: v => { LANG_NAMES = v; LANG_CODES = null; },
+  setRewards: v => { REWARDS = v; },
 };
 for (const name of ${JSON.stringify(EXPORTS)}) {
   try { globalThis.__PAGE[name] = eval(name); } catch { globalThis.__MISSING = (globalThis.__MISSING || []).concat(name); }
@@ -96,4 +98,3 @@ for (const name of ${JSON.stringify(EXPORTS)}) {
   // winner. That is how `budgetCard` shipped broken.
   return globalThis.__PAGE;
 }
-
