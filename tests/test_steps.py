@@ -213,9 +213,12 @@ def test_the_second_pass_starts_where_the_corpus_runs_out():
 
 def test_only_pythia_has_an_order_and_the_command_says_so(monkeypatch):
     assert registry.training_order(registry.resolve("pythia-12b-deduped"))[1] is ORDER
+    # Every Pythia size read the same stream in the same order, so each has it.
     for name in registry.targets():
-        if name != "pythia-12b-deduped":
+        if not name.startswith("pythia-"):
             assert registry.training_order(registry.resolve(name)) is None
+        else:
+            assert registry.training_order(registry.resolve(name))[1] is ORDER
 
     class Args:
         target, pattern = "olmo-3-7b-instruct", "x"

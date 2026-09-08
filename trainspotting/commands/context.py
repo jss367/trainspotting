@@ -29,7 +29,8 @@ def cmd_context(args):
             if prompt:
                 records.append(
                     context.build(
-                        row, registry.stage_kind(s), prompt, row_index, s.get("source_columns") or ()
+                        row, registry.stage_kind(s), prompt, row_index, s.get("source_columns") or (),
+                        dataset=s["hf_dataset"],
                     )
                 )
         path = _write_json(

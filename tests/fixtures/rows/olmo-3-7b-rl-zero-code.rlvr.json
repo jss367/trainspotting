@@ -1,0 +1,24 @@
+{
+  "target": "olmo-3-7b-rl-zero-code",
+  "stage": "rlvr",
+  "dataset": "allenai/Dolci-RL-Zero-Code-7B",
+  "prompt_path": "prompt",
+  "row_offset": 0,
+  "columns": [
+    "ground_truth",
+    "id",
+    "prompt",
+    "solution"
+  ],
+  "prompt_chars": 155,
+  "prompt_head": "user: Implement a function that takes a list of integers and a multiplier 'n', and returns a new list with each item fro",
+  "prompt_tail": "w list with each item from the input list multiplied by 'n'.",
+  "row": {
+    "id": "5ef8a823f733256b1af30c24aa006b206b82916dbdfb432fdbe47224bc8b4051",
+    "solution": "def multiply_list(int_list, n):\n    \"\"\"\n    Multiply each integer in int_list by n and return the resulting list.\n\n    Args:\n        int_list (list[int]): List of integers to be multiplied.\n        n (int): Multiplier.\n\n    Returns:\n        list[int]: New list containing each original integer multiplied by n.\n    \"\"\"\n    # Using list comprehension for concise mapping\n    return [item * n for item in int_list]",
+    "prompt": "user: Implement a function that takes a list of integers and a multiplier 'n', and returns a new list with each item from the input list multiplied by 'n'.",
+    "ground_truth": [
+      "[\"assert multiply_list([1, 2, 3], 2) == [2, 4, 6]\", \"assert multiply_list([5, 10, 15], 3) == [15, 30, 45]\", \"assert multiply_list([-1, -2, -3], 4) == [-4, -8, -12]\", \"assert multiply_list([0, 1, 2], 10) == [0, 10, 20]\", \"assert multiply_list([2, 4, 6, 8], 5) == [10, 20, 30, 40]\", \"assert multiply_list([3, 6], 5) == [15, 30]\", \"assert multiply_list([0, 0, 0], 5) == [0, 0, 0]\", \"assert multiply_list([1], 100) == [100]\", \"assert multiply_list([], 5) == []\", \"assert multiply_list([1, 2, 3, 4], 0) == [0, 0, 0, 0]\", \"assert multiply_list([-1, 0, 1], 10) == [-10, 0, 10]\", \"assert multiply_list([10, 20, 30], -1) == [-10, -20, -30]\", \"assert multiply_list([100, 200], 0.5) == [50.0, 100.0]\", \"assert multiply_list([2, 4, 8], 2) == [4, 8, 16]\", \"assert multiply_list([3, 7, 11], 1) == [3, 7, 11]\", \"assert multiply_list([9, 8, 7, 6], -2) == [-18, -16, -14, -12]\", \"assert multiply_list([2, 3, 5], 3) == [6, 9, 15]\", \"assert multiply_list([1, 2], 1000) == [1000, 2000]\", \"assert multiply_list([-5, -10, -15], -2) == [10, 20, 30]\", \"assert multiply_list([100, 200, 300], 10) == [1000, 2000, 3000]\"]"
+    ]
+  }
+}

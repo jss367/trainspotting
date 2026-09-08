@@ -76,6 +76,10 @@ PLAIN_TEXT = {
     "prompt": "prompt",
     "solution": "reference",  # RL: a reference implementation, not a target
     "constraint": "reference",  # RL: the constraint list a checker verifies
+    # The RL-Zero math mix stores one accepted answer as a string where every
+    # other RL mix stores a list; `text_fields` picks by column type, so the
+    # same name is in both tables.
+    "ground_truth": "reference",
 }
 LIST_TEXT = {
     "ground_truth": "reference",

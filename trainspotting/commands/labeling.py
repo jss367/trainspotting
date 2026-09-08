@@ -35,7 +35,7 @@ def _label_post_training(args, question=None, slug=None, stages=None):
         indices = [i for i, _, _ in rows]
         prompts = [p for _, _, p in rows]
         fixed = [
-            classify.verifier_label(row, registry.stage_kind(s)) if question is None else None
+            classify.verifier_label(row, registry.stage_kind(s), s["hf_dataset"]) if question is None else None
             for _, row, _ in rows
         ]
         ask = [p for p, f in zip(prompts, fixed) if not f]
@@ -101,8 +101,11 @@ def _label_post_training(args, question=None, slug=None, stages=None):
                 if f:
                     rec["by"] = "verifier"
                 records.append(rec)
+            # A replicate is the same draw labeled again, kept beside the main
+            # run for `agreement` to compare rather than in its place.
+            suffix = "labels-replicate" if getattr(args, "replicate", False) else "labels"
             path = _write_json(
-                RESULTS / f"{args.target}.{s['stage']}.labels.json",
+                RESULTS / f"{args.target}.{s['stage']}.{suffix}.json",
                 {**run, "records": records},
             )
             print(f"{s['stage']}: {_counts(records)}  -> {path}{note}", file=sys.stderr)

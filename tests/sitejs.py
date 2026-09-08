@@ -1,10 +1,9 @@
-"""Call a function defined in docs/index.html from a Python test.
+"""Call a function defined in docs/js/app.js from a Python test.
 
-The page is a single file with no build step, so the only way to test the code
-the browser runs is to evaluate the page and call into it. `tests/site/page.mjs`
-knows how; this is the Python door to it, so a test here can hand records in as
-JSON and get a result back without each one growing its own copy of the node
-boilerplate.
+The site's script is an ES module with no build step; `tests/site/page.mjs`
+imports it and hands back its exports. This is the Python door to that, so a
+test here can hand records in as JSON and get a result back without each one
+growing its own copy of the node boilerplate.
 
 Prefer this over pulling a function's source out of the file by name. That was
 tried, and it broke the first time the function it lifted called a helper
@@ -19,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-SITE = Path(__file__).resolve().parent.parent / "docs" / "index.html"
+SITE = Path(__file__).resolve().parent.parent / "docs" / "js" / "app.js"
 HARNESS = Path(__file__).resolve().parent / "site" / "page.mjs"
 
 # One string, because several things read it. It lands in pytest's skip summary
@@ -75,7 +74,7 @@ def call(body: str, payload=None, timeout: int = 300):
     """
     node = _node_or_skip()
     if not SITE.exists():
-        pytest.skip("no docs/index.html in this checkout")
+        pytest.skip("no docs/js/app.js in this checkout")
     script = f"""
 import fs from "node:fs";
 import {{ loadPage }} from {json.dumps(str(HARNESS))};

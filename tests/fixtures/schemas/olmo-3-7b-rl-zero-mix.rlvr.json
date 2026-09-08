@@ -1,0 +1,68 @@
+{
+  "target": "olmo-3-7b-rl-zero-mix",
+  "stage": "rlvr",
+  "dataset": "allenai/Dolci-RL-Zero-Mix-7B",
+  "shards": 8,
+  "partial": false,
+  "schema": {
+    "messages": "STRUCT(\"content\" VARCHAR, \"role\" VARCHAR)[]",
+    "ground_truth": "VARCHAR",
+    "dataset": "VARCHAR",
+    "solution": "VARCHAR",
+    "id": "VARCHAR",
+    "difficulty": "BIGINT",
+    "difficulty_explanation": "VARCHAR",
+    "source_dataset": "VARCHAR",
+    "prompt": "VARCHAR",
+    "data_source": "VARCHAR",
+    "source_prompt": "STRUCT(\"content\" VARCHAR, \"role\" VARCHAR)[]",
+    "ability": "VARCHAR",
+    "reward_model": "STRUCT(ground_truth VARCHAR, style VARCHAR)",
+    "extra_info": "STRUCT(\"index\" VARCHAR)",
+    "source": "VARCHAR",
+    "key": "VARCHAR",
+    "constraint_type": "VARCHAR",
+    "constraint": "VARCHAR"
+  },
+  "groups": {
+    "prompt": 3,
+    "response": 1,
+    "reference": 4
+  },
+  "leaves": [
+    [
+      "messages",
+      "content"
+    ],
+    [
+      "messages",
+      "role"
+    ],
+    [
+      "ground_truth",
+      null
+    ],
+    [
+      "solution",
+      null
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "source_prompt",
+      "content"
+    ],
+    [
+      "reward_model",
+      "ground_truth"
+    ],
+    [
+      "constraint",
+      null
+    ]
+  ],
+  "unsearched": [],
+  "source_column": "dataset"
+}

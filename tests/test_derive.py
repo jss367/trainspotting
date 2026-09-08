@@ -24,7 +24,7 @@ import sitejs
 from trainspotting import derive
 
 DATA = Path(__file__).resolve().parent.parent / "docs" / "data"
-SITE = Path(__file__).resolve().parent.parent / "docs" / "index.html"
+SITE = Path(__file__).resolve().parent.parent / "docs" / "js" / "app.js"
 
 PROFILES = sorted(DATA.glob("*.profile.json"))
 PROFILE_IDS = [p.name.replace(".profile.json", "") for p in PROFILES]
@@ -344,28 +344,28 @@ def test_labeled_prompts_reach_their_sampled_row(profile):
 
 
 def site_function(name: str) -> str:
-    """One top-level function lifted out of docs/index.html by name.
+    """One top-level function lifted out of docs/js/app.js by name.
 
-    The site is a single file with no build step and no module boundary, so the
-    only way to test its logic is to read it back out. A top-level declaration
-    ends at the first line that is exactly `}`, which is what the file's own
-    formatting guarantees.
+    Used where a test wants to run the page's own definition next to a Python
+    one in a single node process. A top-level declaration ends at the first
+    line that is exactly `}`, which is what the file's own formatting
+    guarantees.
     """
     src = SITE.read_text().splitlines()
     start = next(
         (i for i, line in enumerate(src) if line.startswith(f"function {name}(")), None
     )
-    assert start is not None, f"docs/index.html no longer defines {name}()"
+    assert start is not None, f"docs/js/app.js no longer defines {name}()"
     end = next(i for i in range(start, len(src)) if src[i] == "}")
     return "\n".join(src[start : end + 1])
 
 
 def site_const(name: str) -> str:
-    """A one-line `const name = ...` lifted out of docs/index.html, so a test
+    """A one-line `const name = ...` lifted out of docs/js/app.js, so a test
     exercising a function that closes over it runs the file's own definition."""
     src = SITE.read_text().splitlines()
     line = next((ln for ln in src if ln.startswith(f"const {name} = ")), None)
-    assert line is not None, f"docs/index.html no longer defines {name}"
+    assert line is not None, f"docs/js/app.js no longer defines {name}"
     return line
 
 
@@ -475,7 +475,7 @@ def test_the_page_refuses_to_guess_when_two_sampled_rows_share_a_key():
 def test_the_page_bins_lengths_the_same_way_python_does():
     src = SITE.read_text()
     m = re.search(r"const HIST_EDGES = Array\.from\(\{length: (\d+)\}, \(_, i\) => 10 \*\* \(([\d.]+) \+ i \* ([\d.]+)\)\)", src)
-    assert m, "docs/index.html no longer derives its histogram edges the same way"
+    assert m, "docs/js/app.js no longer derives its histogram edges the same way"
     count, start, step = int(m.group(1)), float(m.group(2)), float(m.group(3))
     assert (count, start, step) == (derive.HIST_BINS + 1, derive.HIST_MIN_LOG, derive.HIST_STEP)
 

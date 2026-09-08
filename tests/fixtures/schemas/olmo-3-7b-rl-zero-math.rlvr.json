@@ -1,0 +1,38 @@
+{
+  "target": "olmo-3-7b-rl-zero-math",
+  "stage": "rlvr",
+  "dataset": "allenai/Dolci-RL-Zero-Math-7B",
+  "shards": 1,
+  "partial": false,
+  "schema": {
+    "prompt": "VARCHAR",
+    "ground_truth": "VARCHAR",
+    "messages": "STRUCT(\"content\" VARCHAR, \"role\" VARCHAR)[]",
+    "dataset": "VARCHAR"
+  },
+  "groups": {
+    "prompt": 2,
+    "response": 1,
+    "reference": 1
+  },
+  "leaves": [
+    [
+      "prompt",
+      null
+    ],
+    [
+      "ground_truth",
+      null
+    ],
+    [
+      "messages",
+      "content"
+    ],
+    [
+      "messages",
+      "role"
+    ]
+  ],
+  "unsearched": [],
+  "source_column": "dataset"
+}

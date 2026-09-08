@@ -298,33 +298,81 @@ PYTHIA_DEDUPED_STAGES = [
     },
 ]
 
-MODELS = {
-    "olmo-3-7b-instruct": {
-        "hf_model": "allenai/Olmo-3-7B-Instruct",
+# The Instruct post-training mixes. One list, because Ai2 trained more than one
+# model on them: Olmo 3 7B Instruct, and — per the model cards of
+# allenai/Olmo-3.1-32B-Instruct-SFT, -DPO and -Instruct, which name exactly these
+# three datasets — Olmo 3.1 32B Instruct as well. The 32B model reads them from
+# a different base, so the two models share a post-training half and differ in
+# the pretraining half, which is the comparison the site can now draw.
+OLMO3_INSTRUCT_STAGES = [
+        {
+            "stage": "sft",
+            "name": "Dolci Instruct SFT",
+            "hf_dataset": "allenai/Dolci-Instruct-SFT",
+            "prompt_path": "messages",
+            "source_columns": ["domain", "source_dataset"],
+        },
+        {
+            "stage": "dpo",
+            "name": "Dolci Instruct DPO",
+            "hf_dataset": "allenai/Dolci-Instruct-DPO",
+            "prompt_path": "chosen_messages",
+            "source_columns": ["preference_type"],
+        },
+        {
+            "stage": "rlvr",
+            "name": "Dolci Instruct RL",
+            "hf_dataset": "allenai/Dolci-Instruct-RL",
+            "prompt_path": "prompt",
+            "source_columns": ["dataset_source", "data_source"],
+        },
+    ]
+
+# RL-Zero: reinforcement learning straight from the base model, with no SFT or
+# DPO before it. Ai2 released one model per domain plus a mix, each trained on
+# one Dolci-RL-Zero mix (allenai/Olmo-3-7B-RL-Zero-Math's card, table "RLVR
+# Dataset"). In the code, IF and general mixes `prompt` opens "user: ", which is
+# how the mix stores it and what the classifier sees. The domain mixes carry no
+# `dataset_source` column; each has one verifier for the whole mix, which
+# `rewards.WHOLE_MIX` names by dataset id. The Mix names its parts in
+# `source_dataset`, which `rewards.MIXES` knows.
+# (display name, prompt_path, source_columns). The four domain mixes store the
+# prompt as a string; the Mix stores it in `messages` and leaves `prompt` null
+# on every row but the math ones, so reading `prompt` there samples math only.
+RL_ZERO_DOMAINS = {
+    "math": ("Math", "prompt", ["dataset"]),
+    "code": ("Code", "prompt", []),
+    "if": ("IF", "prompt", []),
+    "general": ("General", "prompt", []),
+    "mix": ("Mix", "messages", ["dataset", "source_dataset"]),
+}
+
+
+def _rl_zero_model(key: str) -> dict:
+    domain, prompt_path, source_columns = RL_ZERO_DOMAINS[key]
+    return {
+        "hf_model": f"allenai/Olmo-3-7B-RL-Zero-{domain}",
         "stages": OLMO3_7B_BASE_STAGES
         + [
             {
-                "stage": "sft",
-                "name": "Dolci Instruct SFT",
-                "hf_dataset": "allenai/Dolci-Instruct-SFT",
-                "prompt_path": "messages",
-                "source_columns": ["domain", "source_dataset"],
-            },
-            {
-                "stage": "dpo",
-                "name": "Dolci Instruct DPO",
-                "hf_dataset": "allenai/Dolci-Instruct-DPO",
-                "prompt_path": "chosen_messages",
-                "source_columns": ["preference_type"],
-            },
-            {
                 "stage": "rlvr",
-                "name": "Dolci Instruct RL",
-                "hf_dataset": "allenai/Dolci-Instruct-RL",
-                "prompt_path": "prompt",
-                "source_columns": ["dataset_source", "data_source"],
-            },
+                "name": f"Dolci RL-Zero {domain} 7B",
+                "hf_dataset": f"allenai/Dolci-RL-Zero-{domain}-7B",
+                "prompt_path": prompt_path,
+                "source_columns": source_columns,
+                "note": (
+                    "RL-Zero: RLVR applied directly to the Olmo 3 7B base, with no "
+                    "SFT or DPO stage before it. One verifier for the whole mix."
+                ),
+            }
         ],
+    }
+
+
+MODELS = {
+    "olmo-3-7b-instruct": {
+        "hf_model": "allenai/Olmo-3-7B-Instruct",
+        "stages": OLMO3_7B_BASE_STAGES + OLMO3_INSTRUCT_STAGES,
     },
     "olmo-3-7b-think": {
         "hf_model": "allenai/Olmo-3-7B-Think",
@@ -388,11 +436,26 @@ MODELS = {
             },
         ],
     },
+    "olmo-3.1-32b-instruct": {
+        "hf_model": "allenai/Olmo-3.1-32B-Instruct",
+        # Same Instruct mixes as the 7B, on the 32B base (Olmo-3-1125-32B, per
+        # the SFT checkpoint's card). Stage sizes are those mixes' row counts.
+        "stages": OLMO3_32B_BASE_STAGES + OLMO3_INSTRUCT_STAGES,
+    },
+    **{f"olmo-3-7b-rl-zero-{k}": _rl_zero_model(k) for k in RL_ZERO_DOMAINS},
     "pythia-12b-deduped": {
         "hf_model": "EleutherAI/pythia-12b-deduped",
         "stages": PYTHIA_DEDUPED_STAGES,
         # The one registered model whose pretraining corpus has a public
         # infini-gram index. See `infinigram_index`.
+        "infinigram_index": "v4_piletrain_llama",
+    },
+    # The size `bif` runs on (bif.SUPPORTED_MODEL). Identical corpus, identical
+    # order, identical stages: only the model differs, so every result here
+    # describes the 12b as well.
+    "pythia-70m-deduped": {
+        "hf_model": "EleutherAI/pythia-70m-deduped",
+        "stages": PYTHIA_DEDUPED_STAGES,
         "infinigram_index": "v4_piletrain_llama",
     },
 }

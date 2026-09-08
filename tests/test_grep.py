@@ -1021,8 +1021,8 @@ def test_a_dataset_target_gets_no_training_origin_verdict():
     from trainspotting import registry
     assert registry.resolve("wildchat-1m")["is_model"] is False
     assert registry.resolve("olmo-3-7b-think")["is_model"] is True
-    source = pathlib.Path("trainspotting/cli.py").read_text()
-    assert 'if target["is_model"]:\n        trace = influence.compare(' in source
+    source = pathlib.Path("trainspotting/commands/report.py").read_text()
+    assert 'if target["is_model"]:\n        traces = _grep_traces(' in source
 
 
 # --- review round 11 --------------------------------------------------------

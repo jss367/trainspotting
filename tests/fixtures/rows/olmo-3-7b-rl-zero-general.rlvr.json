@@ -1,0 +1,22 @@
+{
+  "target": "olmo-3-7b-rl-zero-general",
+  "stage": "rlvr",
+  "dataset": "allenai/Dolci-RL-Zero-General-7B",
+  "prompt_path": "prompt",
+  "row_offset": 0,
+  "columns": [
+    "custom_id",
+    "ground_truth",
+    "prompt"
+  ],
+  "prompt_chars": 294,
+  "prompt_head": "user: The insurance period for a certain company's property insurance policy for profit loss is 1 year, from 00:00 on Ja",
+  "prompt_tail": "s 1 year to restore to normal, the compensation period is ()",
+  "row": {
+    "custom_id": "virtuoussy_multi_subject_rlvr_filtered-request-7-89",
+    "prompt": "user: The insurance period for a certain company's property insurance policy for profit loss is 1 year, from 00:00 on January 1, 2004, to 24:00 on December 31, 2004. If the insured property suffers a fire on June 30, 2004, and it takes 1 year to restore to normal, the compensation period is ()",
+    "ground_truth": [
+      "June 30, 2004 to June 30, 2005"
+    ]
+  }
+}

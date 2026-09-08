@@ -1,0 +1,24 @@
+{
+  "target": "olmo-3-7b-rl-zero-if",
+  "stage": "rlvr",
+  "dataset": "allenai/Dolci-RL-Zero-IF-7B",
+  "prompt_path": "prompt",
+  "row_offset": 0,
+  "columns": [
+    "constraint",
+    "ground_truth",
+    "key",
+    "prompt"
+  ],
+  "prompt_chars": 754,
+  "prompt_head": "user: A Hollywood executive is considering investing in a new theater production directed by a renowned theater director",
+  "prompt_tail": "phs. Paragraphs are separated with the markdown divider: ***",
+  "row": {
+    "constraint": "There should be 10 paragraphs. Paragraphs are separated with the markdown divider: ***\tIn your response, the letter d should appear less than 5 times.\tInclude a palindrome in your response.\tThere should be 2 paragraphs. Paragraphs are separated with the markdown divider: ***",
+    "prompt": "user: A Hollywood executive is considering investing in a new theater production directed by a renowned theater director known for a unique storytelling style. The director's last play ran for 8 weeks and had 5 shows each week. Each show sold an average of 120 tickets, and each ticket was priced at $50. The executive wants to estimate the total revenue from ticket sales for the entire run of the play. How much revenue did the director's last play generate from ticket sales? There should be 10 paragraphs. Paragraphs are separated with the markdown divider: *** In your response, the letter d should appear less than 5 times. Include a palindrome in your response. There should be 2 paragraphs. Paragraphs are separated with the markdown divider: ***",
+    "ground_truth": [
+      "[{'instruction_id': ['length_constraints:number_paragraphs', 'keywords:letter_frequency', 'keywords:palindrome', 'paragraphs:paragraphs'], 'kwargs': [{'num_paragraphs': 10}, {'letter': 'd', 'let_frequency': 5, 'let_relation': 'less than'}, None, {}]}]"
+    ],
+    "key": "personas_math_easy_xn0p966nf3spdwc4p4475dfn"
+  }
+}

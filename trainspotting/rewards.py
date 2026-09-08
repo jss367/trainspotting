@@ -66,6 +66,24 @@ MIXES = {
     "hamishivi/rlvr_general_mix": ("LLM judge", "general knowledge"),
     # Dolci Think RL 32B (where it differs from 7B)
     "saurabh5/code_rlvr_mixture_dpo": ("unit tests", "code"),
+    # Dolci RL-Zero Mix 7B names its parts in `source_dataset`
+    "TTTXXX01/MATH_3000_Filtered": ("exact answer match", "math"),
+    "hamishivi/synthetic2-rlvr-code-compressed_filtered": ("unit tests", "code"),
+    "hamishivi/klear-code-rlvr_filtered": ("unit tests", "code"),
+    "hamishivi/IF_multi_constraints_upto5_filtered": ("constraint checker", "instruction following"),
+}
+
+# Mixes with one verifier for every row and no column naming it. The RL-Zero
+# domain mixes are a prompt, a ground truth and nothing that says how the two
+# are compared; the Olmo 3 paper's RL-Zero section and the mixes' contents do.
+# Keyed on the dataset id, which is the only thing a row from one of these
+# shares with its verifier, so `kind_for` has to be told which dataset the row
+# came from to use this table.
+WHOLE_MIX = {
+    "allenai/Dolci-RL-Zero-Math-7B": ("exact answer match", "math"),
+    "allenai/Dolci-RL-Zero-Code-7B": ("unit tests", "code"),
+    "allenai/Dolci-RL-Zero-IF-7B": ("constraint checker", "instruction following"),
+    "allenai/Dolci-RL-Zero-General-7B": ("LLM judge", "general knowledge"),
 }
 
 # Fallback for mixes not yet in the table (a future Dolci release), matched
@@ -79,15 +97,25 @@ NEEDLES = [
 ]
 
 
-def kind_for(row: dict) -> str:
-    """The verifier kind for one RL row: exact mix lookup, then needle fallback."""
-    for k in ("dataset_source", "data_source", "original_dataset"):
+SOURCE_KEYS = ("dataset_source", "data_source", "original_dataset", "source_dataset")
+
+
+def kind_for(row: dict, dataset: str | None = None) -> str:
+    """The verifier kind for one RL row: whole-mix table, exact mix lookup, then needle fallback.
+
+    `dataset` is the id of the mix the row came from. It only matters for a mix
+    in `WHOLE_MIX`; every other mix says which source a row is from on the row
+    itself, and a caller that does not know the dataset still gets those right.
+    """
+    if dataset in WHOLE_MIX:
+        return WHOLE_MIX[dataset][0]
+    for k in SOURCE_KEYS:
         hit = MIXES.get(row.get(k) or "")
         if hit:
             return hit[0]
     tags = " ".join(
         str(row.get(k) or "").lower()
-        for k in ("dataset_source", "data_source", "original_dataset", "ability", "constraint_type")
+        for k in SOURCE_KEYS + ("ability", "constraint_type")
     )
     for needles, kind in NEEDLES:
         if any(n in tags for n in needles):

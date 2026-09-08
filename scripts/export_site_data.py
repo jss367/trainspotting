@@ -56,7 +56,9 @@ BULK = (".context.json", ".docs.json")
 # `report` is the only thing that reads it. `.steps-` is a per-training-step
 # count over Pythia's published batch order; the page has no card for it yet
 # either.
-UNRENDERED = (".grep-", ".search-", ".contam-", ".bif-", ".steps-")
+# `.labels-replicate` is a second classifier run over the same draw; the page
+# reads the comparison `agreement` writes, not the run itself.
+UNRENDERED = (".grep-", ".search-", ".contam-", ".bif-", ".steps-", ".labels-replicate")
 
 out = ROOT / "docs" / "data"
 out.mkdir(parents=True, exist_ok=True)

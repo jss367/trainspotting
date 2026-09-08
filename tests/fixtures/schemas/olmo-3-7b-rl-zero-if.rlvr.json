@@ -1,0 +1,33 @@
+{
+  "target": "olmo-3-7b-rl-zero-if",
+  "stage": "rlvr",
+  "dataset": "allenai/Dolci-RL-Zero-IF-7B",
+  "shards": 1,
+  "partial": false,
+  "schema": {
+    "constraint": "VARCHAR",
+    "prompt": "VARCHAR",
+    "ground_truth": "VARCHAR[]",
+    "key": "VARCHAR"
+  },
+  "groups": {
+    "prompt": 1,
+    "reference": 2
+  },
+  "leaves": [
+    [
+      "constraint",
+      null
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "ground_truth",
+      null
+    ]
+  ],
+  "unsearched": [],
+  "source_column": null
+}

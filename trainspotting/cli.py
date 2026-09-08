@@ -13,6 +13,7 @@ import math
 import sys
 
 from . import benchmarks, casestudy, grep, infinigram, lookup, registry
+from .commands.agreement import cmd_agreement, cmd_gold
 from .commands.bif import cmd_bif
 from .commands.budget import cmd_budget
 from .commands.case_study import cmd_case_study
@@ -37,6 +38,15 @@ from .commands.trace import cmd_trace
 # is a single samplable dataset with no pipeline around it, and the layers that
 # read rows cannot tell the difference (see registry.resolve).
 TARGET_HELP = "model or dataset: " + ", ".join(registry.targets())
+
+# Rows drawn per post-training stage by every layer that samples prompts. 300
+# gave roughly ±5% on the common labels and swamped the rare ones — `honesty`
+# and `tool_use` are a few percent of a stage, and at n=300 their intervals were
+# wider than the point estimate. 1,000 prompts at 1,500 characters is under a
+# million input tokens per stage, so cost was never the constraint. `pretrain`
+# keeps its own default: a corpus document is up to 200k characters and the
+# committed sample is what the site ships.
+SAMPLE = 1000
 
 
 def _count_int(value: str) -> int:
@@ -137,7 +147,7 @@ def main():
         help="only this stage — a post-training one (sft/dpo/rlvr), or with --pretrain "
         "a corpus one (pretrain/midtrain/long-context)",
     )
-    p.add_argument("--sample", type=_positive_int, default=300)
+    p.add_argument("--sample", type=_positive_int, default=SAMPLE)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--classifier", default="claude-opus-5")
     p.add_argument("--slug", help="short name for the result files (default: derived from the question)")
@@ -269,7 +279,7 @@ def main():
     p.add_argument("target", help=TARGET_HELP)
     p.add_argument("pattern", help="Python regex, case-insensitive unless --case-sensitive")
     p.add_argument("--stage", help="only this stage (sft/dpo/rlvr for a model; a dataset has one)")
-    p.add_argument("--sample", type=_positive_int, default=300)
+    p.add_argument("--sample", type=_positive_int, default=SAMPLE)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--case-sensitive", action="store_true")
     p.add_argument("--slug", help="short name for the result files (default: derived from the pattern)")
@@ -279,14 +289,14 @@ def main():
     p = sub.add_parser("context", help="store the full training example behind each sampled prompt")
     p.add_argument("target", help=TARGET_HELP)
     p.add_argument("--stage", help="only this stage (sft/dpo/rlvr for a model; a dataset has one)")
-    p.add_argument("--sample", type=_positive_int, default=300)
+    p.add_argument("--sample", type=_positive_int, default=SAMPLE)
     p.add_argument("--seed", type=int, default=0)
     p.set_defaults(fn=cmd_context)
 
     p = sub.add_parser("languages", help="detect the natural language of sampled prompts (local, no API key)")
     p.add_argument("target", help=TARGET_HELP)
     p.add_argument("--stage", help="only this stage (sft/dpo/rlvr for a model; a dataset has one)")
-    p.add_argument("--sample", type=int, default=300)
+    p.add_argument("--sample", type=int, default=SAMPLE)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--from-labels", action="store_true",
                    help="read prompts from the committed classify run instead of re-sampling HuggingFace")
@@ -406,10 +416,34 @@ def main():
     p = sub.add_parser("classify")
     p.add_argument("target", help=TARGET_HELP)
     p.add_argument("--stage", help="only this stage (sft/dpo/rlvr for a model; a dataset has one)")
-    p.add_argument("--sample", type=_positive_int, default=300)
+    p.add_argument("--sample", type=_positive_int, default=SAMPLE)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--classifier", default="claude-opus-5")
+    p.add_argument(
+        "--replicate",
+        action="store_true",
+        help="label the same draw again and write <target>.<stage>.labels-replicate.json, "
+        "for `agreement` to compare against the main run",
+    )
     p.set_defaults(fn=cmd_classify)
+
+    p = sub.add_parser(
+        "gold",
+        help="draw a blind, stratified set of labeled prompts under results/gold/ for hand labeling",
+    )
+    p.add_argument("target", help=TARGET_HELP)
+    p.add_argument("--stage", help="only this stage (sft/dpo/rlvr for a model; a dataset has one)")
+    p.add_argument("--per-label", type=_positive_int, default=8, help="prompts per classifier label (default 8)")
+    p.add_argument("--seed", type=int, default=0)
+    p.set_defaults(fn=cmd_gold)
+
+    p = sub.add_parser(
+        "agreement",
+        help="score the classifier against the hand-labeled gold set and against a --replicate run",
+    )
+    p.add_argument("target", help=TARGET_HELP)
+    p.add_argument("--stage", help="only this stage (sft/dpo/rlvr for a model; a dataset has one)")
+    p.set_defaults(fn=cmd_agreement)
 
     args = ap.parse_args()
     # Canonicalize once, here, so every result path and every lookup downstream
