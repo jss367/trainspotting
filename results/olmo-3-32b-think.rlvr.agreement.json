@@ -1,0 +1,53 @@
+{
+  "dataset": "allenai/Dolci-Think-RL-32B",
+  "labels_run": {
+    "sample": 300,
+    "seed": 0,
+    "classifier": "claude-opus-5",
+    "system_sha": null,
+    "revision": null,
+    "generated": null
+  },
+  "replicate": {
+    "n": 0,
+    "agree": 0,
+    "accuracy": null,
+    "accuracy_ci": [
+      0.0,
+      0.0
+    ],
+    "kappa": null,
+    "confusion": {},
+    "per_label": {},
+    "unpaired": 839,
+    "shares": {
+      "harmlessness": {
+        "first": 0.01507537688442211,
+        "second": 0.009375
+      },
+      "honesty": {
+        "first": 0.005025125628140704,
+        "second": 0.0125
+      },
+      "helpfulness": {
+        "first": 0.11557788944723618,
+        "second": 0.1125
+      },
+      "capability": {
+        "first": 0.8391959798994975,
+        "second": 0.8515625
+      },
+      "instruction_following": {
+        "first": 0.010050251256281407,
+        "second": 0.0140625
+      },
+      "other": {
+        "first": 0.01507537688442211,
+        "second": 0.0
+      }
+    },
+    "classifier": "claude-opus-5",
+    "generated": "2026-09-08T19:17:35+00:00",
+    "same_draw": false
+  }
+}

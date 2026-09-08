@@ -1,0 +1,123 @@
+{
+  "dataset": "allenai/Dolci-RL-Zero-General-7B",
+  "labels_run": {
+    "sample": 1000,
+    "seed": 0,
+    "classifier": "claude-opus-5",
+    "system_sha": "63d6567dac43",
+    "revision": "7e415e2b556bb74b3ce3924708772d43145ed6a3",
+    "generated": "2026-09-08T17:00:28+00:00"
+  },
+  "replicate": {
+    "n": 948,
+    "agree": 861,
+    "accuracy": 0.9082278481012658,
+    "accuracy_ci": [
+      0.888165249823092,
+      0.9249952592363985
+    ],
+    "kappa": 0.8632288705884693,
+    "confusion": {
+      "capability": {
+        "capability": 322,
+        "helpfulness": 24,
+        "other": 8,
+        "harmlessness": 1
+      },
+      "instruction_following": {
+        "instruction_following": 106,
+        "helpfulness": 3,
+        "capability": 1
+      },
+      "helpfulness": {
+        "helpfulness": 354,
+        "harmlessness": 1,
+        "other": 3,
+        "capability": 34,
+        "honesty": 2,
+        "instruction_following": 3
+      },
+      "honesty": {
+        "honesty": 47,
+        "other": 1,
+        "harmlessness": 1,
+        "helpfulness": 3
+      },
+      "harmlessness": {
+        "harmlessness": 32,
+        "helpfulness": 1
+      },
+      "other": {
+        "helpfulness": 1
+      }
+    },
+    "per_label": {
+      "harmlessness": {
+        "first": 33,
+        "second": 35,
+        "precision": 0.9142857142857143,
+        "recall": 0.9696969696969697
+      },
+      "honesty": {
+        "first": 52,
+        "second": 49,
+        "precision": 0.9591836734693877,
+        "recall": 0.9038461538461539
+      },
+      "helpfulness": {
+        "first": 397,
+        "second": 386,
+        "precision": 0.917098445595855,
+        "recall": 0.8916876574307305
+      },
+      "capability": {
+        "first": 355,
+        "second": 357,
+        "precision": 0.9019607843137255,
+        "recall": 0.9070422535211268
+      },
+      "instruction_following": {
+        "first": 110,
+        "second": 109,
+        "precision": 0.9724770642201835,
+        "recall": 0.9636363636363636
+      },
+      "other": {
+        "first": 1,
+        "second": 12,
+        "precision": 0.0,
+        "recall": 0.0
+      }
+    },
+    "unpaired": 20,
+    "shares": {
+      "harmlessness": {
+        "first": 0.03462749213011543,
+        "second": 0.037383177570093455
+      },
+      "honesty": {
+        "first": 0.05456453305351522,
+        "second": 0.05088265835929388
+      },
+      "helpfulness": {
+        "first": 0.4197271773347324,
+        "second": 0.407061266874351
+      },
+      "capability": {
+        "first": 0.3746065057712487,
+        "second": 0.37798546209761164
+      },
+      "instruction_following": {
+        "first": 0.11542497376705142,
+        "second": 0.1142263759086189
+      },
+      "other": {
+        "first": 0.001049317943336831,
+        "second": 0.012461059190031152
+      }
+    },
+    "classifier": "claude-opus-5",
+    "generated": "2026-09-08T19:59:10+00:00",
+    "same_draw": true
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "dataset": "allenai/Dolci-Think-SFT-32B",
+  "labels_run": {
+    "sample": 300,
+    "seed": 0,
+    "classifier": "claude-opus-5",
+    "system_sha": null,
+    "revision": null,
+    "generated": null
+  },
+  "replicate": {
+    "n": 0,
+    "agree": 0,
+    "accuracy": null,
+    "accuracy_ci": [
+      0.0,
+      0.0
+    ],
+    "kappa": null,
+    "confusion": {},
+    "per_label": {},
+    "unpaired": 1277,
+    "shares": {
+      "harmlessness": {
+        "first": 0.025089605734767026,
+        "second": 0.03006012024048096
+      },
+      "honesty": {
+        "first": 0.05734767025089606,
+        "second": 0.10020040080160321
+      },
+      "helpfulness": {
+        "first": 0.07526881720430108,
+        "second": 0.07915831663326653
+      },
+      "capability": {
+        "first": 0.6953405017921147,
+        "second": 0.6362725450901804
+      },
+      "instruction_following": {
+        "first": 0.13620071684587814,
+        "second": 0.1523046092184369
+      },
+      "other": {
+        "first": 0.010752688172043012,
+        "second": 0.002004008016032064
+      }
+    },
+    "classifier": "claude-opus-5",
+    "generated": "2026-09-08T18:56:14+00:00",
+    "same_draw": false
+  }
+}

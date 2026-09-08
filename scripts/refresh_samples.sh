@@ -52,19 +52,16 @@ if [[ "$PHASE" == all || "$PHASE" == asks ]]; then
   # Every question already asked of this target, by slug, with the wording the
   # committed file recorded. Rewording a question is a different measurement,
   # so the text is read back out of the result rather than typed here.
-  for f in results/"$TARGET".*.ask-*.json docs/data/"$TARGET".*.ask-*.json; do
-    [[ -f "$f" ]] || continue
-    slug="${f##*.ask-}"; slug="${slug%.json}"
-    question=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["question"])' "$f")
-    step "ask $TARGET '$slug'"
-    "${TS[@]}" ask "$TARGET" "$question" --slug "$slug"
-  done 2>/dev/null | sort -u
-  for f in results/"$TARGET".*.stance-*.json docs/data/"$TARGET".*.stance-*.json; do
-    [[ -f "$f" ]] || continue
-    slug="${f##*.stance-}"; slug="${slug%.json}"
-    question=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["question"])' "$f")
-    step "stance $TARGET '$slug'"
-    "${TS[@]}" stance "$TARGET" "$question" --slug "$slug"
+  # One run per slug, however many stages and copies (results/ and docs/data/)
+  # name it: the same question asked twice is the same money spent twice.
+  for kind in ask stance; do
+    for slug in $(ls results/"$TARGET".*."$kind"-*.json docs/data/"$TARGET".*."$kind"-*.json 2>/dev/null \
+                  | sed -E "s/.*\.$kind-//; s/\.json$//" | sort -u); do
+      f=$(ls results/"$TARGET".*."$kind"-"$slug".json docs/data/"$TARGET".*."$kind"-"$slug".json 2>/dev/null | head -1)
+      question=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["question"])' "$f")
+      step "$kind $TARGET '$slug'"
+      "${TS[@]}" "$kind" "$TARGET" "$question" --slug "$slug"
+    done
   done
 fi
 

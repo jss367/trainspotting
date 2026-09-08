@@ -1,0 +1,57 @@
+{
+  "dataset": "allenai/Dolci-RL-Zero-Mix-7B",
+  "labels_run": {
+    "sample": 1000,
+    "seed": 0,
+    "classifier": "claude-opus-5",
+    "system_sha": "63d6567dac43",
+    "revision": "75a351ffaa56ebe4cbce06b0ba9ad1977a62daa7",
+    "generated": "2026-09-08T17:11:48+00:00"
+  },
+  "replicate": {
+    "n": 654,
+    "agree": 653,
+    "accuracy": 0.9984709480122325,
+    "accuracy_ci": [
+      0.9913900100727014,
+      0.9997300407115605
+    ],
+    "kappa": 0.0,
+    "confusion": {
+      "capability": {
+        "capability": 653
+      },
+      "honesty": {
+        "capability": 1
+      }
+    },
+    "per_label": {
+      "honesty": {
+        "first": 1,
+        "second": 0,
+        "precision": null,
+        "recall": 0.0
+      },
+      "capability": {
+        "first": 653,
+        "second": 654,
+        "precision": 0.9984709480122325,
+        "recall": 1.0
+      }
+    },
+    "unpaired": 0,
+    "shares": {
+      "honesty": {
+        "first": 0.0015290519877675841,
+        "second": 0.0
+      },
+      "capability": {
+        "first": 0.9984709480122325,
+        "second": 1.0
+      }
+    },
+    "classifier": "claude-opus-5",
+    "generated": "2026-09-08T20:10:19+00:00",
+    "same_draw": true
+  }
+}

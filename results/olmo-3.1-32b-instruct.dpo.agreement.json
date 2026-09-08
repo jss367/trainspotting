@@ -1,0 +1,138 @@
+{
+  "dataset": "allenai/Dolci-Instruct-DPO",
+  "labels_run": {
+    "sample": 1000,
+    "seed": 0,
+    "classifier": "claude-opus-5",
+    "system_sha": "63d6567dac43",
+    "revision": "aed155cf32e809b590490b6c3577ee4b0d0a5019",
+    "generated": "2026-09-08T17:33:16+00:00"
+  },
+  "replicate": {
+    "n": 990,
+    "agree": 950,
+    "accuracy": 0.9595959595959596,
+    "accuracy_ci": [
+      0.9454491568790897,
+      0.9701897135405022
+    ],
+    "kappa": 0.9416949112614217,
+    "confusion": {
+      "harmlessness": {
+        "harmlessness": 87,
+        "honesty": 2
+      },
+      "capability": {
+        "capability": 452,
+        "helpfulness": 10,
+        "honesty": 3,
+        "instruction_following": 4
+      },
+      "helpfulness": {
+        "helpfulness": 203,
+        "honesty": 1,
+        "other": 2,
+        "harmlessness": 2,
+        "capability": 4,
+        "instruction_following": 1
+      },
+      "instruction_following": {
+        "instruction_following": 166,
+        "helpfulness": 4,
+        "capability": 1
+      },
+      "honesty": {
+        "honesty": 37,
+        "capability": 1,
+        "helpfulness": 2,
+        "instruction_following": 1,
+        "harmlessness": 1
+      },
+      "other": {
+        "other": 3,
+        "helpfulness": 1
+      },
+      "tool_use": {
+        "tool_use": 2
+      }
+    },
+    "per_label": {
+      "harmlessness": {
+        "first": 89,
+        "second": 90,
+        "precision": 0.9666666666666667,
+        "recall": 0.9775280898876404
+      },
+      "honesty": {
+        "first": 42,
+        "second": 43,
+        "precision": 0.8604651162790697,
+        "recall": 0.8809523809523809
+      },
+      "helpfulness": {
+        "first": 213,
+        "second": 220,
+        "precision": 0.9227272727272727,
+        "recall": 0.9530516431924883
+      },
+      "capability": {
+        "first": 469,
+        "second": 458,
+        "precision": 0.9868995633187773,
+        "recall": 0.9637526652452025
+      },
+      "instruction_following": {
+        "first": 171,
+        "second": 172,
+        "precision": 0.9651162790697675,
+        "recall": 0.9707602339181286
+      },
+      "tool_use": {
+        "first": 2,
+        "second": 2,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "other": {
+        "first": 4,
+        "second": 5,
+        "precision": 0.6,
+        "recall": 0.75
+      }
+    },
+    "unpaired": 9,
+    "shares": {
+      "harmlessness": {
+        "first": 0.0914572864321608,
+        "second": 0.0925553319919517
+      },
+      "honesty": {
+        "first": 0.04221105527638191,
+        "second": 0.043259557344064385
+      },
+      "helpfulness": {
+        "first": 0.21407035175879396,
+        "second": 0.22233400402414488
+      },
+      "capability": {
+        "first": 0.4733668341708543,
+        "second": 0.46177062374245476
+      },
+      "instruction_following": {
+        "first": 0.1728643216080402,
+        "second": 0.17303822937625754
+      },
+      "tool_use": {
+        "first": 0.0020100502512562816,
+        "second": 0.002012072434607646
+      },
+      "other": {
+        "first": 0.004020100502512563,
+        "second": 0.005030181086519115
+      }
+    },
+    "classifier": "claude-opus-5",
+    "generated": "2026-09-08T20:35:28+00:00",
+    "same_draw": true
+  }
+}

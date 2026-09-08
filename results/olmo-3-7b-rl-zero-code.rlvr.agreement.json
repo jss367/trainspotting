@@ -1,0 +1,44 @@
+{
+  "dataset": "allenai/Dolci-RL-Zero-Code-7B",
+  "labels_run": {
+    "sample": 1000,
+    "seed": 0,
+    "classifier": "claude-opus-5",
+    "system_sha": "63d6567dac43",
+    "revision": "054c0a1f9c5fd52566ad9124aa2e702924803cd3",
+    "generated": "2026-09-08T16:42:41+00:00"
+  },
+  "replicate": {
+    "n": 1000,
+    "agree": 1000,
+    "accuracy": 1.0,
+    "accuracy_ci": [
+      0.9961731014136095,
+      1.0
+    ],
+    "kappa": null,
+    "confusion": {
+      "capability": {
+        "capability": 1000
+      }
+    },
+    "per_label": {
+      "capability": {
+        "first": 1000,
+        "second": 1000,
+        "precision": 1.0,
+        "recall": 1.0
+      }
+    },
+    "unpaired": 0,
+    "shares": {
+      "capability": {
+        "first": 1.0,
+        "second": 1.0
+      }
+    },
+    "classifier": "claude-opus-5",
+    "generated": "2026-09-08T19:43:19+00:00",
+    "same_draw": true
+  }
+}
