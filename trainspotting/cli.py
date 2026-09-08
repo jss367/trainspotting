@@ -13,7 +13,7 @@ import math
 import sys
 
 from . import benchmarks, casestudy, grep, infinigram, lookup, registry
-from .commands.agreement import cmd_agreement, cmd_gold
+from .commands.agreement import cmd_agreement
 from .commands.bif import cmd_bif
 from .commands.budget import cmd_budget
 from .commands.case_study import cmd_case_study
@@ -428,18 +428,8 @@ def main():
     p.set_defaults(fn=cmd_classify)
 
     p = sub.add_parser(
-        "gold",
-        help="draw a blind, stratified set of labeled prompts under results/gold/ for hand labeling",
-    )
-    p.add_argument("target", help=TARGET_HELP)
-    p.add_argument("--stage", help="only this stage (sft/dpo/rlvr for a model; a dataset has one)")
-    p.add_argument("--per-label", type=_positive_int, default=8, help="prompts per classifier label (default 8)")
-    p.add_argument("--seed", type=int, default=0)
-    p.set_defaults(fn=cmd_gold)
-
-    p = sub.add_parser(
         "agreement",
-        help="score the classifier against the hand-labeled gold set and against a --replicate run",
+        help="compare a `classify --replicate` run with the main labels run: agreement, kappa, share drift",
     )
     p.add_argument("target", help=TARGET_HELP)
     p.add_argument("--stage", help="only this stage (sft/dpo/rlvr for a model; a dataset has one)")

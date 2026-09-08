@@ -71,20 +71,16 @@ row-index joins between them require.
 
 ## Checking the classifier
 
-The values shares rest on a language model's labels. Two checks travel with them:
+The values shares rest on a language model's labels, and the model samples at
+temperature, so the check that travels with them is a second run:
 
 ```bash
-trainspotting gold olmo-3-7b-think            # draw a blind, stratified set under results/gold/
-#   ...a person fills in `human_label` on each item, under the rubric in the file...
 trainspotting classify olmo-3-7b-think --replicate   # label the same draw a second time
-trainspotting agreement olmo-3-7b-think       # accuracy, its interval, Cohen's kappa, confusion
+trainspotting agreement olmo-3-7b-think              # agreement, its interval, Cohen's kappa, share drift
 ```
 
 `agreement` writes `<target>.<stage>.agreement.json` and the site prints the
-result beside the shares it qualifies. The draw is stratified by label so the
-rare labels are in it at all, which makes its accuracy a per-label figure rather
-than a share of the stage; the file says so. Gold sets for every committed
-labels run are drawn under `results/gold/` and waiting for labels.
+result beside the shares it qualifies.
 
 ## Values questions
 

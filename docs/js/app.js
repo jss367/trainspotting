@@ -2560,23 +2560,17 @@ function part(title, note){
   return h;
 }
 
-// How far to trust the shares below: the classifier checked against hand labels
-// on a stratified draw (`trainspotting gold`, then a person, then `agreement`),
-// and against a second run of itself (`classify --replicate`). Both halves are
-// in one file and either can be absent. Nothing is shown for a stage nobody has
-// checked — an absent line is the honest state, not a default of "fine".
+// How stable the shares below are: the classifier checked against a second run
+// of itself over the same draw (`classify --replicate`, then `agreement`).
+// Nothing is shown for a stage nobody has checked — an absent line is the
+// honest state, not a default of "fine".
 async function agreementNote(model, stage){
   const name = `${model}.${stage}.agreement.json`;
   if (!MANIFEST.includes(name)) return null;
   const a = await getData(name);
   if (!a) return null;
   const kappa = x => x == null ? "κ undefined" : `κ ${x.toFixed(2)}`;
-  const ci = s => `${pct(s.accuracy_ci[0])}–${pct(s.accuracy_ci[1])}`;
   const parts = [];
-  if (a.gold && a.gold.n)
-    parts.push(`against <b>${a.gold.n}</b> hand-labeled prompts (drawn per label, so the rare labels `
-      + `are over-represented) the classifier gave the same label on <b>${pct(a.gold.accuracy)}</b> `
-      + `(95% CI ${ci(a.gold)}), ${kappa(a.gold.kappa)}`);
   if (a.replicate && a.replicate.n)
     parts.push(`a second run of ${esc(a.replicate.classifier || "the classifier")} over the same `
       + `${num(a.replicate.n)} prompts agreed with the first on <b>${pct(a.replicate.accuracy)}</b>, `
@@ -2584,7 +2578,7 @@ async function agreementNote(model, stage){
   if (!parts.length) return null;
   const p = document.createElement("p");
   p.className = "stage-sub";
-  p.innerHTML = `<b>Instrument check</b> — ${parts.join("; ")}.`;
+  p.innerHTML = `<b>Stability check</b> — ${parts.join("; ")}.`;
   return p;
 }
 
