@@ -32,9 +32,24 @@ and `score` says so in the record it writes.
 import random
 
 from . import classify
+from .context import KEY_CHARS
 from .stats import wilson
 
 LABELS = classify.LABELS
+
+
+def _join_key(rec: dict):
+    """What identifies a labeled prompt across files.
+
+    A labels run written since result records carried a row index joins on it.
+    The runs committed before that have only the prompt text, and join the way
+    the site joins them: on its first `KEY_CHARS` characters. Two prompts that
+    share an opening collapse under it, which a curated mix mostly gets away
+    with; the row index exists because a chat log does not.
+    """
+    if rec.get("row") is not None:
+        return ("row", rec["row"])
+    return ("key", (rec.get("prompt") or "")[:KEY_CHARS])
 
 
 def draw_gold(records: list[dict], per_label: int = 8, seed: int = 0) -> list[dict]:
@@ -58,11 +73,11 @@ def draw_gold(records: list[dict], per_label: int = 8, seed: int = 0) -> list[di
     # Walk the labels in taxonomy order rather than dict order, so the same
     # seed draws the same set whatever order the labels happened to appear in.
     for label in LABELS:
-        pool = sorted(by_label.get(label, []), key=lambda r: r["row"])
+        pool = sorted(by_label.get(label, []), key=lambda r: str(_join_key(r)))
         rng.shuffle(pool)
         drawn.extend(pool[:per_label])
     rng.shuffle(drawn)
-    return [{"row": r["row"], "prompt": r["prompt"], "human_label": None} for r in drawn]
+    return [{"row": r.get("row"), "prompt": r["prompt"], "human_label": None} for r in drawn]
 
 
 def kappa(pairs: list[tuple[str, str]]) -> float | None:
@@ -148,7 +163,7 @@ def score(gold_items: list[dict], records: list[dict]) -> dict:
     A human label outside the taxonomy is a typo in the gold file and is
     reported by value so it can be fixed rather than silently dropped.
     """
-    by_row = {r["row"]: r.get("label") for r in records}
+    by_key = {_join_key(r): r.get("label") for r in records}
     pairs = []
     unlabeled = 0
     missing = 0
@@ -161,10 +176,11 @@ def score(gold_items: list[dict], records: list[dict]) -> dict:
         if human not in LABELS:
             invalid[human] = invalid.get(human, 0) + 1
             continue
-        if item["row"] not in by_row or by_row[item["row"]] is None:
+        key = _join_key(item)
+        if by_key.get(key) is None:
             missing += 1
             continue
-        pairs.append((human, by_row[item["row"]]))
+        pairs.append((human, by_key[key]))
     out = _summary(pairs, "human", "classifier")
     out.update(
         {
@@ -191,9 +207,9 @@ def compare(first: list[dict], second: list[dict]) -> dict:
     committed to. Verifier-settled rows are fixed by construction and are
     left out, so they cannot inflate the agreement.
     """
-    a = {r["row"]: r["label"] for r in first if r.get("label") and r.get("by") != "verifier"}
-    b = {r["row"]: r["label"] for r in second if r.get("label") and r.get("by") != "verifier"}
-    rows = sorted(set(a) & set(b))
+    a = {_join_key(r): r["label"] for r in first if r.get("label") and r.get("by") != "verifier"}
+    b = {_join_key(r): r["label"] for r in second if r.get("label") and r.get("by") != "verifier"}
+    rows = sorted(set(a) & set(b), key=str)
     pairs = [(a[i], b[i]) for i in rows]
     out = _summary(pairs, "first", "second")
     out["unpaired"] = len(set(a) ^ set(b))

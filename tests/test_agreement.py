@@ -121,6 +121,20 @@ class TestCompare:
         assert c["confusion"] == {"honesty": {"honesty": 1, "capability": 1}, "capability": {"capability": 2}}
 
 
+def test_old_shape_records_join_on_the_prompt_prefix():
+    """The committed Olmo labels predate the row index: records carry only the
+    prompt and its label, and the gold file drawn from them has to find its way
+    back without a row."""
+    recs = [{"prompt": "alpha " * 100, "label": "honesty"}, {"prompt": "beta", "label": "capability"}]
+    drawn = agreement.draw_gold(recs, per_label=5)
+    assert all(d["row"] is None for d in drawn)
+    for d in drawn:
+        d["human_label"] = "honesty" if d["prompt"].startswith("alpha") else "helpfulness"
+    s = agreement.score(drawn, recs)
+    assert s["n"] == 2 and s["agree"] == 1 and s["missing_rows"] == 0
+    assert agreement.compare(recs, recs)["n"] == 2
+
+
 def test_taxonomy_is_the_classifiers():
     """A gold file is labeled under the same seven words the classifier used;
     a label the module accepted that the classifier could not emit would score

@@ -68,7 +68,12 @@ out.mkdir(parents=True, exist_ok=True)
 # the table said the 7B models sample the -1125 mixes long after they moved to
 # -1025 — so the command that rebuilds the site checks it rather than trusting
 # the next person to remember.
-readme = (ROOT / "README.md").read_text()
+# The README's long sections now live under docs/*.md; the checks below read
+# all of them as one text, so a table or a quoted figure is found wherever it
+# was moved to.
+readme = "\n".join(
+    p.read_text() for p in [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]
+)
 # Any `owner/name` in a backtick span counts. An earlier version required the
 # owner to be `allenai/`, which would have reported EleutherAI's Pile corpus
 # missing however many times the README named it.
