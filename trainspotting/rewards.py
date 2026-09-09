@@ -43,7 +43,7 @@ KINDS = {
             "when the task provides one. The reward comes from another model's "
             "assessment. General chat mixes include reference-based and open-ended judging."
         ),
-        "gt_label": "reference answer the judge compares against",
+        "gt_label": "reference answer, when provided",
     },
     "unknown": {
         "family": "unknown",
