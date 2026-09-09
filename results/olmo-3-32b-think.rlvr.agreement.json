@@ -1,53 +1,99 @@
 {
   "dataset": "allenai/Dolci-Think-RL-32B",
   "labels_run": {
-    "sample": 300,
+    "sample": 1000,
     "seed": 0,
     "classifier": "claude-opus-5",
-    "system_sha": null,
-    "revision": null,
-    "generated": null
+    "system_sha": "63d6567dac43",
+    "revision": "d581ecde5cb4bb2a550c2499a7408a3b8dca79f6",
+    "generated": "2026-09-08T23:59:03+00:00"
   },
   "replicate": {
-    "n": 0,
-    "agree": 0,
-    "accuracy": null,
+    "n": 640,
+    "agree": 628,
+    "accuracy": 0.98125,
     "accuracy_ci": [
-      0.0,
-      0.0
+      0.9675146935663795,
+      0.9892423721466778
     ],
-    "kappa": null,
-    "confusion": {},
-    "per_label": {},
-    "unpaired": 839,
+    "kappa": 0.9262814359761948,
+    "confusion": {
+      "capability": {
+        "capability": 542,
+        "honesty": 3,
+        "helpfulness": 6
+      },
+      "helpfulness": {
+        "capability": 3,
+        "helpfulness": 66
+      },
+      "harmlessness": {
+        "harmlessness": 6
+      },
+      "instruction_following": {
+        "instruction_following": 9
+      },
+      "honesty": {
+        "honesty": 5
+      }
+    },
+    "per_label": {
+      "harmlessness": {
+        "first": 6,
+        "second": 6,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "honesty": {
+        "first": 5,
+        "second": 8,
+        "precision": 0.625,
+        "recall": 1.0
+      },
+      "helpfulness": {
+        "first": 69,
+        "second": 72,
+        "precision": 0.9166666666666666,
+        "recall": 0.9565217391304348
+      },
+      "capability": {
+        "first": 551,
+        "second": 545,
+        "precision": 0.9944954128440368,
+        "recall": 0.9836660617059891
+      },
+      "instruction_following": {
+        "first": 9,
+        "second": 9,
+        "precision": 1.0,
+        "recall": 1.0
+      }
+    },
+    "unpaired": 0,
     "shares": {
       "harmlessness": {
-        "first": 0.01507537688442211,
+        "first": 0.009375,
         "second": 0.009375
       },
       "honesty": {
-        "first": 0.005025125628140704,
+        "first": 0.0078125,
         "second": 0.0125
       },
       "helpfulness": {
-        "first": 0.11557788944723618,
+        "first": 0.1078125,
         "second": 0.1125
       },
       "capability": {
-        "first": 0.8391959798994975,
+        "first": 0.8609375,
         "second": 0.8515625
       },
       "instruction_following": {
-        "first": 0.010050251256281407,
+        "first": 0.0140625,
         "second": 0.0140625
-      },
-      "other": {
-        "first": 0.01507537688442211,
-        "second": 0.0
       }
     },
     "classifier": "claude-opus-5",
     "generated": "2026-09-08T19:17:35+00:00",
-    "same_draw": false
+    "same_draw": true
   }
 }
