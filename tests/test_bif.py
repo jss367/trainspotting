@@ -85,11 +85,12 @@ def test_structured_content_stored_as_a_repr_is_incomplete_where_the_file_marks_
              {"role": "assistant", "text": "a", "chars": 1, "chars_raw": 20}]
     assert not bif.incomplete(whole, marked=True)
     assert bif.marks_fidelity([{"turns": marked}]) and not bif.marks_fidelity([{"turns": [marked[1]]}])
-    # The committed Instruct sample predates the markers; the think samples carry them.
+    # Every committed sample has been re-drawn since the markers were added, so
+    # each carries them; the unmarked branch above is for a file that predates them.
     import json
     from trainspotting import paths
-    assert not bif.marks_fidelity(json.loads(paths.find("olmo-3-7b-instruct.sft.context.json").read_text())["records"])
-    assert bif.marks_fidelity(json.loads(paths.find("olmo-3-7b-think.sft.context.json").read_text())["records"])
+    for name in ("olmo-3-7b-instruct.sft.context.json", "olmo-3-7b-think.sft.context.json"):
+        assert bif.marks_fidelity(json.loads(paths.find(name).read_text())["records"])
 
 
 def test_a_sample_of_another_mix_or_a_straddled_draw_is_a_skip(tmp_path, monkeypatch):
