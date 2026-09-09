@@ -12,14 +12,14 @@ every stage's answer on one scale, and the tenth is the only one that opens the
 model:
 
 1. **Facts** — stage sizes for a model's whole training pipeline (pretrain →
-   midtrain → long-context → SFT → DPO → RLVR), hardcoded in a registry.
+   midtrain → long-context → SFT → DPO → reinforcement learning), hardcoded in a registry.
 2. **Sources** — exact composition of each post-training mix (which source
    datasets, which domains, which reward types), computed from HuggingFace's
    precomputed column statistics. No downloads, exact counts.
 3. **Values** — how much of the post-training data is about being **helpful,
    honest, and harmless** versus pure skill content (math, code, formatting,
    tool use). No such labels exist in the data, so this layer samples prompts
-   and classifies them with Claude — except where an RLVR row's verifier already
+   and classifies them with Claude — except where an RL row's verifier already
    settles what it teaches, which the prompt can contradict (see
    [Taxonomy](#taxonomy)).
 4. **Language** — which natural language each prompt is written in. The Dolci
@@ -58,6 +58,16 @@ model:
    rankings when sampling diagnostics are inconclusive. This does not establish
    which training examples caused a behavior. See
    [Experimental loss sensitivity](#experimental-loss-sensitivity).
+
+Olmo 3's final reinforcement learning stage mixes **RLVR** (reinforcement
+learning with verifiable, programmatic rewards) and **RLAIF** (reinforcement
+learning from AI feedback, using an LLM judge). They train the same policy
+within one stage after preference tuning; neither is a later stage than the
+other. The site separates these reward families in the mix composition and
+individual examples. Prompt counts describe the released dataset, not shares
+of training updates. See the [Olmo 3 reward design](https://arxiv.org/html/2512.13961v2#S4.SS4.SSS1).
+The historical `rlvr` identifier remains in CLI arguments, data paths, and
+permalinks for this shared stage.
 
 Every one of those starts from something you can already name — a string to
 search for, or a question you can already phrase. When you start from an
@@ -543,7 +553,7 @@ column it was read from and a side per hit:
 |---|---|
 | SFT | `prompt` (user and system turns), `response` (assistant turns) |
 | DPO | `prompt` (everything before the pair branches, counted once), `chosen`, `rejected` |
-| RLVR | `prompt`, `verifier` (ground truth, solution, constraint), `rollout` (stored reference generations) |
+| RL (programmatic rewards or AI feedback) | `prompt`, `verifier` (ground truth, solution, constraint), `rollout` (stored reference generations) |
 | chat (a dataset like WildChat-1M) | `prompt`, `reply` — a log, so nothing was fit to either |
 
 The side is the finding, not a detail of it. "I am ChatGPT" in a rejected
@@ -813,7 +823,7 @@ unsearched. Any of them makes the result inconclusive — nothing matched *in wh
 was read* — and keeps it out of the stage-wide claim. A run written before result files
 recorded which sides the mix has usually cannot demonstrate it read all of them,
 so it lands there too — unless its `fields` already holds every side this layer
-maps, which no narrowing could have produced and which the older RLVR sweeps
+maps, which no narrowing could have produced and which the older RL sweeps
 do. A pattern absent from every stage read end to end does get
 said outright: 0 of N rows, exact over all of them, so a model that produces the
 string anyway did not take it from those stages. What that points at depends on
@@ -857,7 +867,7 @@ moved file still carries the contested one in its payload.
 
 What the ranking deliberately does not do is weight the stages against each
 other. Identity behaviour is mostly set after pretraining, so the same rate in
-RLVR and in Dolma 3 are not the same evidence — but by how much is not something
+RL and in Dolma 3 are not the same evidence — but by how much is not something
 these counts measure, and folding a guess into a score would bury it. It is
 printed as a caveat and the rates stay comparable on their own terms.
 
@@ -1044,7 +1054,7 @@ response, and for a preference pair it is a claim about *which* response.
 `search` reads that half but only matches strings.
 
 The wrong shape, because yes/no cannot represent training that points the other
-way, and this data contains some — the anti-vaccine RLVR row under
+way, and this data contains some — the anti-vaccine RL row under
 [Taxonomy](#taxonomy) is a `yes` under `ask` and teaches the opposite.
 
 ```bash
@@ -1061,7 +1071,7 @@ net, `toward − away`.
 |---|---|---|
 | SFT | the prompt and the assistant turns the model is fit to | the target response itself cuts against the question |
 | DPO | the shared prefix, then both completions marked preferred / dispreferred | the *dispreferred* completion is the one that serves the question |
-| RLVR | the prompt, the verifier and what it checks, and the pass rate | the reward pays for output that cuts against the question |
+| RL | the prompt, the verifier and what it checks, and the pass rate | the reward pays for output that cuts against the question |
 
 An RL row's stored reference generation is deliberately left out of that. The
 schema records a row's `outputs` and an aggregate `total_correct_rollouts` with
@@ -1131,7 +1141,7 @@ neither completion was preferred for. That is 12 of the 300 sampled
 Dolci-Instruct-DPO pairs and 5.9% of that stage's fit characters; the think
 mixes are single-turn throughout, so nothing there moves.
 
-RLVR is the honest gap, and the table marks it `*`. The published mix holds
+RL is the honest gap, and the table marks it `*`. The published mix holds
 prompts, verifiers and some reference generations, not the text the policy was
 fit to, and how many rollouts per prompt the run took is not in the data. What
 the table reports is a **floor**: one reference rollout per prompt.
@@ -1666,7 +1676,7 @@ Each sampled prompt gets exactly one primary label:
 | `tool_use` | Function calling / agentic tool use |
 | `other` | None of the above |
 
-Most labels come from the classifier reading the prompt. Where an RLVR row's
+Most labels come from the classifier reading the prompt. Where an RL row's
 verifier already settles what the example teaches, the verifier wins and no
 model is asked: the mix→verifier table in `trainspotting/rewards.py` scores a
 row from the `IF_multi_constraints` mix with a program checking IFEval
@@ -1682,7 +1692,7 @@ Its ground truth is the constraint list, nothing else, and reference rollouts
 passed it 54% of the time — the verifier pays the model for delivering the
 anti-vaccine speech in the right shape. Counted as harmlessness content it
 would inflate the harmlessness bar with an example that trains the opposite.
-Across the three RLVR samples, 260 rows are settled by their verifier and 47 of
+Across the three RL samples, 260 rows are settled by their verifier and 47 of
 them had a label it contradicts — including all nine harmlessness labels in
 `Dolci-Think-RL-7B`, which leaves that stage with none. Records the verifier
 labeled carry `"by": "verifier"`, and the site and `report` name both counts
@@ -1808,7 +1818,7 @@ sampling run that quietly labels nothing.
 
 ## Caveats
 
-- The values layer classifies **prompts**. For RLVR stages the values are also
+- The values layer classifies **prompts**. For RL stages the values are also
   carried by the reward, which the prompt text does not show. Where that reward
   is a constraint checker the label comes from it instead of from the prompt
   (see [Taxonomy](#taxonomy)); where it is an LLM judge the rubric is not
@@ -1816,7 +1826,7 @@ sampling run that quietly labels nothing.
   alone. The `sources` layer's reward-type breakdown and the `context` layer's
   verifier view are the complement.
 - The stage ranking is evidence about where a string is, and only that. It does
-  not weight the stages against each other, so a rate in RLVR and the same rate
+  not weight the stages against each other, so a rate in RL and the same rate
   in pretraining rank equal even though the late one generally moves behaviour
   more; and a pattern present in a stage is not a demonstration that any
   particular behaviour came from it. For "did this exact document train the
