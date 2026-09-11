@@ -1,17 +1,16 @@
 """`case-study`: run a committed lookup study and write its result file."""
 
-import json
 import sys
 
 from .. import casestudy, lookup
 from ..paths import RESULTS
+from .common import _write_json
 
 
 def cmd_case_study(args):
     """Run a committed lookup study and write its result file for the site."""
     if args.slug not in casestudy.CASE_STUDIES:
         sys.exit(f"unknown case study {args.slug!r}; known: {', '.join(casestudy.CASE_STUDIES)}")
-    RESULTS.mkdir(exist_ok=True)
 
     def progress(query, index):
         line = f"  {lookup.INDEX_BY_ID[index]['label']} · {query}"
@@ -19,8 +18,7 @@ def cmd_case_study(args):
 
     out = casestudy.run(args.slug, progress=progress)
     print(file=sys.stderr)
-    path = RESULTS / f"case-study.{args.slug}.json"
-    path.write_text(json.dumps(out, indent=2))
+    path = _write_json(RESULTS / f"case-study.{args.slug}.json", out)
 
     probe, spread = out["probe"], out["spread"]
     print(
