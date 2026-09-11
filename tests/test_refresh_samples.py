@@ -24,24 +24,29 @@ def refresh(tmp_path):
         "if sys.argv[1:3] == ['-m', 'trainspotting.cli']:\n"
         f"    with open({str(commands)!r}, 'a') as log:\n"
         "        log.write(json.dumps(sys.argv[3:]) + '\\n')\n"
+        "elif sys.argv[1:] == ['scripts/export_site_data.py']:\n"
+        f"    with open({str(commands)!r}, 'a') as log:\n"
+        "        log.write(json.dumps(['export']) + '\\n')\n"
         "else:\n"
         f"    os.execv({sys.executable!r}, [{sys.executable!r}, *sys.argv[1:]])\n"
     )
     python.chmod(0o755)
 
-    def write(directory, stage, slug, question, kind="ask", **metadata):
-        path = tmp_path / directory / f"target.{stage}.{kind}-{slug}.json"
+    def write(directory, stage, slug=None, question=None, kind="ask", target="target", **metadata):
+        suffix = kind if kind in ("labels", "labels-replicate") else f"{kind}-{slug}"
+        path = tmp_path / directory / f"{target}.{stage}.{suffix}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({"question": question, **metadata}))
 
-    def run():
+    def run(target="target", phase="asks", expected_status=0):
         result = subprocess.run(
-            [shutil.which("bash"), str(SCRIPT), "target", "asks"],
-            cwd=tmp_path, env={**os.environ, "PATH": f"{binary}:{os.environ['PATH']}"},
+            [shutil.which("bash"), str(SCRIPT), target, phase],
+            cwd=tmp_path, env={**os.environ, "PATH": f"{binary}:{os.environ['PATH']}", "PYTHONPATH": str(SCRIPT.parent.parent)},
             text=True, capture_output=True,
         )
-        assert result.returncode == 0, result.stderr
-        assert "done" in result.stderr
+        assert result.returncode == expected_status, result.stderr
+        if expected_status == 0:
+            assert "done" in result.stderr
         return [json.loads(line) for line in commands.read_text().splitlines()] if commands.exists() else []
 
     return write, run
@@ -129,3 +134,42 @@ def test_legacy_questions_without_a_classifier_keep_the_cli_default(refresh, kin
     write, run = refresh
     write("results", "sft", "topic", "legacy wording", kind=kind, **metadata)
     assert run() == [[kind, "target", "legacy wording", "--slug", "topic", "--stage", "sft"]]
+
+
+@pytest.mark.parametrize("phase", ["labels", "all"])
+def test_labels_keep_each_stages_classifier_and_still_run_new_stages(refresh, phase):
+    write, run = refresh
+    target = "olmo-3.1-32b-instruct"
+    write("results", "sft", kind="labels", target=target, classifier="fresh-judge")
+    write("docs/data", "sft", kind="labels", target=target, classifier="old-judge")
+    write("docs/data", "dpo", kind="labels", target=target, classifier="exported-judge")
+    write("results", "rlvr", kind="labels-replicate", target=target, classifier="replicate-judge")
+    calls = run(target=target, phase=phase)
+    assert [c for c in calls if c[0] == "classify"] == [
+        ["classify", target, "--stage", "sft", "--classifier", "fresh-judge"],
+        ["classify", target, "--stage", "dpo", "--classifier", "exported-judge"],
+        ["classify", target, "--stage", "rlvr"],
+    ]
+    if phase == "all":
+        assert [c[0] for c in calls] == ["context", "languages", "classify", "classify", "classify", "export"]
+
+
+@pytest.mark.parametrize("metadata", [{}, {"classifier": None}])
+def test_legacy_main_labels_keep_defaults_instead_of_using_an_older_copy(refresh, metadata):
+    write, run = refresh
+    write("results", "chat", kind="labels", target="wildchat-1m", **metadata)
+    write("docs/data", "chat", kind="labels", target="wildchat-1m", classifier="old-judge")
+    assert run(target="wildchat-1m", phase="labels") == [["classify", "wildchat-1m", "--stage", "chat"]]
+
+
+def test_label_classifier_lookup_uses_the_canonical_target_key(refresh):
+    write, run = refresh
+    write("results", "chat", kind="labels", target="wildchat-1m", classifier="saved-judge")
+    assert run(target="WILDCHAT-1M", phase="labels") == [
+        ["classify", "wildchat-1m", "--stage", "chat", "--classifier", "saved-judge"],
+    ]
+
+
+def test_labels_for_a_base_only_target_still_fail_before_any_classification(refresh):
+    _, run = refresh
+    assert run(target="pythia-12b-deduped", phase="labels", expected_status=1) == []

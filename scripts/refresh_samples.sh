@@ -44,8 +44,33 @@ if [[ "$PHASE" == all || "$PHASE" == free ]]; then
 fi
 
 if [[ "$PHASE" == all || "$PHASE" == labels ]]; then
-  step "classify $TARGET (needs ANTHROPIC_API_KEY)"
-  "${TS[@]}" classify "$TARGET"
+  # Visit every registered prompt stage, including stages without a prior run.
+  # Resolve the canonical target key so case variants find the saved artifact.
+  selection=$(python3 - "$TARGET" <<'PYTHON'
+import sys
+from trainspotting import registry
+target = registry.resolve(sys.argv[1])
+stages = registry.post_training_stages(target)
+if not stages:
+    sys.exit(f"{sys.argv[1]} has no post-training stages")
+print(target["target"], *(s["stage"] for s in stages))
+PYTHON
+)
+  read -r labels_target label_stages <<< "$selection"
+  for stage in $label_stages; do
+    classifier=""
+    # Exact main-label filenames only; a replicate is a separate run.
+    for f in results/"$labels_target"."$stage".labels.json docs/data/"$labels_target"."$stage".labels.json; do
+      if [[ ! -f "$f" ]]; then continue; fi
+      classifier=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("classifier") or "")' "$f")
+      break
+    done
+    args=(classify "$labels_target" --stage "$stage")
+    # A new stage or a legacy file without a classifier uses the CLI default.
+    if [[ -n "$classifier" ]]; then args+=(--classifier "$classifier"); fi
+    step "classify $labels_target $stage (needs ANTHROPIC_API_KEY)"
+    "${TS[@]}" "${args[@]}"
+  done
 fi
 
 if [[ "$PHASE" == all || "$PHASE" == asks ]]; then
