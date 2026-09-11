@@ -1,6 +1,6 @@
 // One name, one definition, across the whole site script.
 //
-// docs/index.html is a single <script>, so every top-level `function` shares a
+// docs/js/app.js is one module, so every top-level `function` shares a
 // namespace and the last declaration silently wins — hoisting means the earlier
 // one is never called, even from code written above it. That is how
 // `budgetCard` broke: the per-question card added later took the name of the

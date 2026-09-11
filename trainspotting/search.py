@@ -48,6 +48,7 @@ COLUMNS = {
     "rlvr": (
         "prompt",
         "source_prompt",
+        "messages",
         "ground_truth",
         "solution",
         "constraint",
@@ -71,7 +72,7 @@ SIDE_COLUMNS = {
         "rejected": ("rejected",),
     },
     "rlvr": {
-        "prompt": ("prompt", "source_prompt"),
+        "prompt": ("prompt", "source_prompt", "messages"),
         "verifier": ("ground_truth", "solution", "constraint", "reward_model"),
         "rollout": ("outputs",),
     },
@@ -263,14 +264,18 @@ def fields(row: dict, stage: str) -> list[dict]:
         else:
             add("prompt", "prompt", "prompt", row.get("prompt"))
             column.add((None, flatten(row.get("prompt"))))
-        for i, role, text in _turns(row.get("source_prompt")):
-            # Some RL rows carry the same conversation in both columns. A turn
-            # is a copy when it holds the same text at the same position, or
-            # when it repeats a string-valued `prompt` outright — not merely
-            # when some other turn happened to say the same words.
-            if (i, text) in column or (None, text) in column:
-                continue
-            add("prompt", role, "source_prompt", text, i)
+        # Some RL rows carry the same conversation in two columns: `source_prompt`
+        # beside `prompt` on the Dolci RL mixes, `messages` beside a `prompt`
+        # that is null on most rows of the RL-Zero Mix. A turn is a copy when it
+        # holds the same text at the same position, or when it repeats a
+        # string-valued `prompt` outright — not merely when some other turn
+        # happened to say the same words.
+        for name in ("source_prompt", "messages"):
+            for i, role, text in _turns(row.get(name)):
+                if (i, text) in column or (None, text) in column:
+                    continue
+                add("prompt", role, name, text, i)
+                column.add((i, text))
         # What the verifier scores against. Not a response — no RL row stores
         # one — but it is the rest of what the example teaches, and a string in
         # the answer key is a different finding from the same string in the

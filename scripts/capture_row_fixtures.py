@@ -23,6 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from trainspotting import extract, hf, registry  # noqa: E402
+from trainspotting.redact import redact_credentials  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "rows"
 ROW_OFFSET = 0
@@ -32,7 +33,8 @@ MAX_LIST = 8
 
 def shrink(value):
     if isinstance(value, str):
-        return value[:MAX_STR]
+        # Redact before deriving golden lengths/prefixes from the saved row.
+        return redact_credentials(value)[:MAX_STR]
     if isinstance(value, dict):
         return {k: shrink(v) for k, v in value.items()}
     if isinstance(value, list):
@@ -67,7 +69,7 @@ def main():
                 )
             path = FIXTURES / f"{target_name}.{stage['stage']}.json"
             path.write_text(
-                json.dumps(
+                redact_credentials(json.dumps(
                     {
                         "target": target_name,
                         "stage": stage["stage"],
@@ -82,7 +84,7 @@ def main():
                     },
                     indent=2,
                     ensure_ascii=False,
-                )
+                ))
                 + "\n"
             )
             print(f"{path.name}: {len(prompt)} prompt chars, {len(row)} columns")

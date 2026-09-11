@@ -962,9 +962,9 @@ def test_an_explicit_slug_cannot_escape_the_results_directory(slug, expected):
     """`_write_json` creates parent directories, so a raw `--slug` in the path
     would file a multi-gigabyte scan where neither the report nor the site export
     looks — and `../..` would write outside results/ entirely."""
-    from trainspotting import cli
-    assert cli._filename_part(slug) == expected
-    assert "/" not in cli._filename_part(slug)
+    from trainspotting.commands import common
+    assert common._filename_part(slug) == expected
+    assert "/" not in common._filename_part(slug)
 
 
 def test_the_recompute_script_pins_the_parquet_revision():
@@ -1021,8 +1021,8 @@ def test_a_dataset_target_gets_no_training_origin_verdict():
     from trainspotting import registry
     assert registry.resolve("wildchat-1m")["is_model"] is False
     assert registry.resolve("olmo-3-7b-think")["is_model"] is True
-    source = pathlib.Path("trainspotting/cli.py").read_text()
-    assert 'if target["is_model"]:\n        trace = influence.compare(' in source
+    source = pathlib.Path("trainspotting/commands/report.py").read_text()
+    assert 'if target["is_model"]:\n        traces = _grep_traces(' in source
 
 
 # --- review round 11 --------------------------------------------------------
@@ -1200,7 +1200,7 @@ def test_an_rl_source_prompt_is_prompt_throughout():
 
 
 class TestTheReadmeTranscript:
-    """The `grep` example in the README, held to the run it claims to be.
+    """The `grep` example in docs/commands.md, held to the run it claims to be.
 
     It is a transcript of one committed run, and it went stale the moment DPO
     grew `chosen` and `rejected` groups: the plan line still said
@@ -1215,7 +1215,8 @@ class TestTheReadmeTranscript:
     RESULT = Path(__file__).resolve().parent.parent / "results" / (
         "olmo-3-7b-think.dpo.grep-chatgpt.json"
     )
-    README = Path(__file__).resolve().parent.parent / "README.md"
+    # The transcript moved with the rest of the long-form docs.
+    README = Path(__file__).resolve().parent.parent / "docs" / "commands.md"
 
     @pytest.fixture(scope="class")
     def transcript(self):

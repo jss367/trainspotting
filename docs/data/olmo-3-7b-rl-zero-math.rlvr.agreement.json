@@ -1,0 +1,66 @@
+{
+  "dataset": "allenai/Dolci-RL-Zero-Math-7B",
+  "labels_run": {
+    "dataset": "allenai/Dolci-RL-Zero-Math-7B",
+    "revision": "93b5e498577804a93fb11bfe8821428f8535f2d8",
+    "system_sha": "63d6567dac43",
+    "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
+    "generated": "2026-09-08T16:32:26+00:00",
+    "revision_moved_to": null
+  },
+  "replicate": {
+    "n": 995,
+    "agree": 995,
+    "accuracy": 1.0,
+    "accuracy_ci": [
+      0.9961539447295749,
+      1.0
+    ],
+    "kappa": 1.0,
+    "confusion": {
+      "capability": {
+        "capability": 994
+      },
+      "honesty": {
+        "honesty": 1
+      }
+    },
+    "per_label": {
+      "honesty": {
+        "first": 1,
+        "second": 1,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "capability": {
+        "first": 994,
+        "second": 994,
+        "precision": 1.0,
+        "recall": 1.0
+      }
+    },
+    "unpaired": 3,
+    "shares": {
+      "honesty": {
+        "first": 0.0010050251256281408,
+        "second": 0.001002004008016032
+      },
+      "capability": {
+        "first": 0.9989949748743718,
+        "second": 0.998997995991984
+      }
+    },
+    "dataset": "allenai/Dolci-RL-Zero-Math-7B",
+    "revision": "93b5e498577804a93fb11bfe8821428f8535f2d8",
+    "system_sha": "63d6567dac43",
+    "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
+    "generated": "2026-09-08T19:34:39+00:00",
+    "revision_moved_to": null,
+    "same_draw": true,
+    "comparison_issues": []
+  }
+}

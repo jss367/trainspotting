@@ -1,0 +1,143 @@
+{
+  "dataset": "allenai/WildChat-1M",
+  "labels_run": {
+    "dataset": "allenai/WildChat-1M",
+    "revision": "7d6490e462285cf85d91eabea0f9a954fbddcd1f",
+    "system_sha": "d164ae2f6ec0",
+    "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
+    "generated": "2026-09-09T00:36:54+00:00",
+    "revision_moved_to": null
+  },
+  "replicate": {
+    "n": 995,
+    "agree": 950,
+    "accuracy": 0.9547738693467337,
+    "accuracy_ci": [
+      0.9400196016562119,
+      0.9660299661631502
+    ],
+    "kappa": 0.9292147460979184,
+    "confusion": {
+      "capability": {
+        "capability": 156,
+        "helpfulness": 5
+      },
+      "helpfulness": {
+        "helpfulness": 521,
+        "other": 4,
+        "capability": 1,
+        "honesty": 5,
+        "instruction_following": 5,
+        "harmlessness": 2
+      },
+      "harmlessness": {
+        "harmlessness": 41,
+        "instruction_following": 1,
+        "helpfulness": 2
+      },
+      "honesty": {
+        "honesty": 41,
+        "helpfulness": 5
+      },
+      "instruction_following": {
+        "instruction_following": 174,
+        "helpfulness": 11,
+        "honesty": 1
+      },
+      "other": {
+        "other": 16,
+        "helpfulness": 3
+      },
+      "tool_use": {
+        "tool_use": 1
+      }
+    },
+    "per_label": {
+      "harmlessness": {
+        "first": 44,
+        "second": 43,
+        "precision": 0.9534883720930233,
+        "recall": 0.9318181818181818
+      },
+      "honesty": {
+        "first": 46,
+        "second": 47,
+        "precision": 0.8723404255319149,
+        "recall": 0.8913043478260869
+      },
+      "helpfulness": {
+        "first": 538,
+        "second": 547,
+        "precision": 0.9524680073126143,
+        "recall": 0.9684014869888475
+      },
+      "capability": {
+        "first": 161,
+        "second": 157,
+        "precision": 0.9936305732484076,
+        "recall": 0.968944099378882
+      },
+      "instruction_following": {
+        "first": 186,
+        "second": 180,
+        "precision": 0.9666666666666667,
+        "recall": 0.9354838709677419
+      },
+      "tool_use": {
+        "first": 1,
+        "second": 1,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "other": {
+        "first": 19,
+        "second": 20,
+        "precision": 0.8,
+        "recall": 0.8421052631578947
+      }
+    },
+    "unpaired": 1,
+    "shares": {
+      "harmlessness": {
+        "first": 0.044221105527638194,
+        "second": 0.04317269076305221
+      },
+      "honesty": {
+        "first": 0.04623115577889447,
+        "second": 0.04718875502008032
+      },
+      "helpfulness": {
+        "first": 0.5407035175879397,
+        "second": 0.5502008032128514
+      },
+      "capability": {
+        "first": 0.16180904522613065,
+        "second": 0.1576305220883534
+      },
+      "instruction_following": {
+        "first": 0.18693467336683417,
+        "second": 0.18072289156626506
+      },
+      "tool_use": {
+        "first": 0.0010050251256281408,
+        "second": 0.001004016064257028
+      },
+      "other": {
+        "first": 0.019095477386934675,
+        "second": 0.020080321285140562
+      }
+    },
+    "dataset": "allenai/WildChat-1M",
+    "revision": "7d6490e462285cf85d91eabea0f9a954fbddcd1f",
+    "system_sha": "d164ae2f6ec0",
+    "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
+    "generated": "2026-09-08T19:27:00+00:00",
+    "revision_moved_to": null,
+    "same_draw": true,
+    "comparison_issues": []
+  }
+}

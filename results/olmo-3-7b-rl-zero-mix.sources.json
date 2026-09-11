@@ -1,0 +1,34 @@
+{
+  "rlvr": {
+    "dataset": "allenai/Dolci-RL-Zero-Mix-7B",
+    "generated": "2026-09-07T23:45:58+00:00",
+    "revision": "75a351ffaa56ebe4cbce06b0ba9ad1977a62daa7",
+    "total": 46931,
+    "counted": 46931,
+    "partial": false,
+    "columns": {
+      "dataset": {
+        "ifeval": 15644,
+        "math": 15643,
+        "code": 7830,
+        "code_stdio": 7814
+      },
+      "source_dataset": {
+        "hamishivi/IF_multi_constraints_upto5_filtered": 15644,
+        "hamishivi/DAPO-Math-17k-Processed_filtered": 12643,
+        "hamishivi/rlvr_acecoder_filtered_filtered": 7822,
+        "hamishivi/synthetic2-rlvr-code-compressed_filtered": 3911,
+        "hamishivi/klear-code-rlvr_filtered": 3911,
+        "TTTXXX01/MATH_3000_Filtered": 3000
+      }
+    },
+    "links": {
+      "hamishivi/IF_multi_constraints_upto5_filtered": "https://huggingface.co/datasets/hamishivi/IF_multi_constraints_upto5_filtered",
+      "hamishivi/DAPO-Math-17k-Processed_filtered": "https://huggingface.co/datasets/hamishivi/DAPO-Math-17k-Processed_filtered",
+      "hamishivi/rlvr_acecoder_filtered_filtered": "https://huggingface.co/datasets/hamishivi/rlvr_acecoder_filtered_filtered",
+      "hamishivi/synthetic2-rlvr-code-compressed_filtered": "https://huggingface.co/datasets/hamishivi/synthetic2-rlvr-code-compressed_filtered",
+      "hamishivi/klear-code-rlvr_filtered": "https://huggingface.co/datasets/hamishivi/klear-code-rlvr_filtered",
+      "TTTXXX01/MATH_3000_Filtered": "https://huggingface.co/datasets/TTTXXX01/MATH_3000_Filtered"
+    }
+  }
+}

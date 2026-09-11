@@ -15,7 +15,6 @@ box avoids downloading them all.
 import json
 import math
 import re
-import shutil
 import sys
 from pathlib import Path
 
@@ -30,6 +29,7 @@ from trainspotting import (  # noqa: E402
     paths,
     registry,
     rewards,
+    redact,
     searchindex,
 )
 
@@ -56,7 +56,9 @@ BULK = (".context.json", ".docs.json")
 # `report` is the only thing that reads it. `.steps-` is a per-training-step
 # count over Pythia's published batch order; the page has no card for it yet
 # either.
-UNRENDERED = (".grep-", ".search-", ".contam-", ".bif-", ".steps-")
+# `.labels-replicate` is a second classifier run over the same draw; the page
+# reads the comparison `agreement` writes, not the run itself.
+UNRENDERED = (".grep-", ".search-", ".contam-", ".bif-", ".steps-", ".labels-replicate")
 
 out = ROOT / "docs" / "data"
 out.mkdir(parents=True, exist_ok=True)
@@ -66,7 +68,12 @@ out.mkdir(parents=True, exist_ok=True)
 # the table said the 7B models sample the -1125 mixes long after they moved to
 # -1025 — so the command that rebuilds the site checks it rather than trusting
 # the next person to remember.
-readme = (ROOT / "README.md").read_text()
+# The README's long sections now live under docs/*.md; the checks below read
+# all of them as one text, so a table or a quoted figure is found wherever it
+# was moved to.
+readme = "\n".join(
+    p.read_text() for p in [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]
+)
 # Any `owner/name` in a backtick span counts. An earlier version required the
 # owner to be `allenai/`, which would have reported EleutherAI's Pile corpus
 # missing however many times the README named it.
@@ -113,9 +120,9 @@ for f in sorted((ROOT / "results").glob("*.json")):
     if ".budget-" in f.name or any(marker in f.name for marker in UNRENDERED):
         continue
     if f.name.endswith(BULK):
-        (out / f.name).write_text(json.dumps(json.loads(f.read_text()), separators=(",", ":")))
+        (out / f.name).write_text(redact.redact_credentials(json.dumps(json.loads(f.read_text()), separators=(",", ":"))))
     else:
-        shutil.copy(f, out / f.name)
+        (out / f.name).write_text(redact.redact_credentials(f.read_text()))
     total += (out / f.name).stat().st_size
     copied.append(f.name)
 
@@ -125,6 +132,13 @@ for f in sorted((ROOT / "results").glob("*.json")):
 # written means the summaries always describe the sample the site actually
 # serves, instead of going stale the moment a re-sample lands from another
 # machine.
+for f in sorted(out.glob("*.json")):
+    if f.name.endswith(BULK):
+        original = f.read_text()
+        cleaned = redact.redact_credentials(original)
+        if cleaned != original:
+            f.write_text(cleaned)
+
 derived = []
 
 # Significant digits kept for a derived float. Everything under this heading is

@@ -30,7 +30,9 @@ def test_a_record_keeps_the_source_columns_the_registry_declares(target_name, st
     saved = row_fixture(target_name, stage["stage"])
     columns = stage.get("source_columns") or ()
 
-    rec = context.build(saved["row"], registry.stage_kind(stage), "prompt", 0, columns)
+    rec = context.build(
+        saved["row"], registry.stage_kind(stage), "prompt", 0, columns, dataset=stage["hf_dataset"]
+    )
 
     # Only the columns this row actually carries: the registry names the columns
     # the stage is counted by, and a row is allowed to leave one null.
@@ -47,8 +49,11 @@ def test_every_stage_can_be_grouped_by_something(target_name, stage):
     A stage with an empty metadata dict has no provenance view at all."""
     saved = row_fixture(target_name, stage["stage"])
 
+    # As `cmd_context` calls it, dataset included: a mix with one verifier and
+    # no provenance column gets its domain from the dataset id.
     rec = context.build(
-        saved["row"], registry.stage_kind(stage), "prompt", 0, stage.get("source_columns") or ()
+        saved["row"], registry.stage_kind(stage), "prompt", 0, stage.get("source_columns") or (),
+        dataset=stage["hf_dataset"],
     )
 
     assert rec["meta"], f"{stage['hf_dataset']}: nothing recorded about where this example came from"

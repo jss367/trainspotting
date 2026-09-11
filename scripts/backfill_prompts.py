@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from trainspotting import extract, hf, registry  # noqa: E402
+from trainspotting.commands.common import _write_json  # noqa: E402
 
 # The stage token in a result filename is a kind, so read the alternation off
 # the registry rather than hardcoding the three model stages — a dataset's files
@@ -30,45 +31,57 @@ from trainspotting import extract, hf, registry  # noqa: E402
 # would skip them without saying so.
 STAGE_RE = re.compile(rf"^(.+?)\.({'|'.join(registry.KINDS)})\.")
 
-for path in sorted((ROOT / "results").glob("*.json")):
-    m = STAGE_RE.match(path.name)
-    if not m:
-        continue
-    target_name, stage_name = m.groups()
-    stage = next(
-        s for s in registry.post_training_stages(registry.resolve(target_name))
-        if s["stage"] == stage_name
-    )
-    data = json.loads(path.read_text())
-    rows = hf.sample_rows(stage["hf_dataset"], data["sample"], seed=data["seed"])
-    prompts = [extract.extract_prompt(r, stage["prompt_path"]) for r in rows]
-    # Keyed on the prefix the records store, so a record finds its own row
-    # wherever the draw put it. Ambiguity is about the text, not the rows: a
-    # prompt appearing in several rows still upgrades to one answer, while two
-    # rows agreeing for 200 characters and diverging after have no single
-    # answer, so drop those rather than guess.
-    by_prefix = {}
-    for full in prompts:
-        if full:
-            by_prefix.setdefault(full[:200], set()).add(full)
-    unique = {k: next(iter(v)) for k, v in by_prefix.items() if len(v) == 1}
+def main():
+    for path in sorted((ROOT / "results").glob("*.json")):
+        m = STAGE_RE.match(path.name)
+        if not m:
+            continue
+        target_name, stage_name = m.groups()
+        stage = next(
+            s for s in registry.post_training_stages(registry.resolve(target_name))
+            if s["stage"] == stage_name
+        )
+        data = json.loads(path.read_text())
+        records = data.get("records")
+        # Agreement summaries and context/profile files share these filename
+        # prefixes, but only prompt-record runs can be upgraded by this join.
+        if (data.get("sample") is None or data.get("seed") is None
+                or not isinstance(records, list) or not records
+                or not all(isinstance(r, dict) and isinstance(r.get("prompt"), str) for r in records)):
+            continue
+        rows = hf.sample_rows(stage["hf_dataset"], data["sample"], seed=data["seed"])
+        prompts = [extract.extract_prompt(r, stage["prompt_path"]) for r in rows]
+        # Keyed on the prefix the records store, so a record finds its own row
+        # wherever the draw put it. Ambiguity is about the text, not the rows: a
+        # prompt appearing in several rows still upgrades to one answer, while two
+        # rows agreeing for 200 characters and diverging after have no single
+        # answer, so drop those rather than guess.
+        by_prefix = {}
+        for full in prompts:
+            if full:
+                by_prefix.setdefault(full[:200], set()).add(full)
+        unique = {k: next(iter(v)) for k, v in by_prefix.items() if len(v) == 1}
 
-    upgraded = ambiguous = 0
-    missing = []
-    for rec in data["records"]:
-        prefix = rec["prompt"][:200]
-        if prefix in unique:
-            rec["prompt"] = extract.clip(unique[prefix])
-            upgraded += 1
-        elif prefix in by_prefix:
-            ambiguous += 1
-        else:
-            missing.append(prefix)
-    if upgraded:
-        path.write_text(json.dumps(data, indent=2))
-    parts = [f"{upgraded} upgraded"]
-    if missing:
-        parts.append(f"{len(missing)} not in this draw")
-    if ambiguous:
-        parts.append(f"{ambiguous} ambiguous prefix")
-    print(f"backfilled {path.name}: {', '.join(parts)} of {len(data['records'])}")
+        upgraded = ambiguous = 0
+        missing = []
+        for rec in data["records"]:
+            prefix = rec["prompt"][:200]
+            if prefix in unique:
+                rec["prompt"] = extract.clip(unique[prefix])
+                upgraded += 1
+            elif prefix in by_prefix:
+                ambiguous += 1
+            else:
+                missing.append(prefix)
+        if upgraded:
+            _write_json(path, data)
+        parts = [f"{upgraded} upgraded"]
+        if missing:
+            parts.append(f"{len(missing)} not in this draw")
+        if ambiguous:
+            parts.append(f"{ambiguous} ambiguous prefix")
+        print(f"backfilled {path.name}: {', '.join(parts)} of {len(data['records'])}")
+
+
+if __name__ == "__main__":
+    main()

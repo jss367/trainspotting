@@ -1,0 +1,147 @@
+{
+  "dataset": "allenai/Dolci-Instruct-SFT",
+  "labels_run": {
+    "dataset": "allenai/Dolci-Instruct-SFT",
+    "revision": "bd3c8f3a9b2cc5a9682e44b96ddd0bb2ff027221",
+    "system_sha": "63d6567dac43",
+    "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
+    "generated": "2026-09-08T17:22:39+00:00",
+    "revision_moved_to": null
+  },
+  "replicate": {
+    "n": 993,
+    "agree": 967,
+    "accuracy": 0.973816717019134,
+    "accuracy_ci": [
+      0.9619112218431923,
+      0.9820702492350614
+    ],
+    "kappa": 0.9565227641674021,
+    "confusion": {
+      "capability": {
+        "capability": 584,
+        "helpfulness": 6,
+        "honesty": 1
+      },
+      "instruction_following": {
+        "instruction_following": 64,
+        "capability": 1
+      },
+      "harmlessness": {
+        "harmlessness": 48,
+        "helpfulness": 1,
+        "honesty": 1
+      },
+      "helpfulness": {
+        "helpfulness": 166,
+        "harmlessness": 1,
+        "other": 2,
+        "honesty": 3,
+        "tool_use": 1,
+        "capability": 1
+      },
+      "honesty": {
+        "honesty": 26,
+        "helpfulness": 3,
+        "capability": 1,
+        "instruction_following": 1
+      },
+      "tool_use": {
+        "tool_use": 77,
+        "capability": 1,
+        "honesty": 1,
+        "helpfulness": 1
+      },
+      "other": {
+        "other": 2
+      }
+    },
+    "per_label": {
+      "harmlessness": {
+        "first": 50,
+        "second": 49,
+        "precision": 0.9795918367346939,
+        "recall": 0.96
+      },
+      "honesty": {
+        "first": 31,
+        "second": 32,
+        "precision": 0.8125,
+        "recall": 0.8387096774193549
+      },
+      "helpfulness": {
+        "first": 174,
+        "second": 177,
+        "precision": 0.9378531073446328,
+        "recall": 0.9540229885057471
+      },
+      "capability": {
+        "first": 591,
+        "second": 588,
+        "precision": 0.9931972789115646,
+        "recall": 0.988155668358714
+      },
+      "instruction_following": {
+        "first": 65,
+        "second": 65,
+        "precision": 0.9846153846153847,
+        "recall": 0.9846153846153847
+      },
+      "tool_use": {
+        "first": 80,
+        "second": 78,
+        "precision": 0.9871794871794872,
+        "recall": 0.9625
+      },
+      "other": {
+        "first": 2,
+        "second": 4,
+        "precision": 0.5,
+        "recall": 1.0
+      }
+    },
+    "unpaired": 6,
+    "shares": {
+      "harmlessness": {
+        "first": 0.05030181086519115,
+        "second": 0.04909819639278557
+      },
+      "honesty": {
+        "first": 0.03118712273641851,
+        "second": 0.03206412825651302
+      },
+      "helpfulness": {
+        "first": 0.1750503018108652,
+        "second": 0.17735470941883769
+      },
+      "capability": {
+        "first": 0.5955734406438632,
+        "second": 0.593186372745491
+      },
+      "instruction_following": {
+        "first": 0.06539235412474849,
+        "second": 0.06513026052104208
+      },
+      "tool_use": {
+        "first": 0.08048289738430583,
+        "second": 0.07915831663326653
+      },
+      "other": {
+        "first": 0.002012072434607646,
+        "second": 0.004008016032064128
+      }
+    },
+    "dataset": "allenai/Dolci-Instruct-SFT",
+    "revision": "bd3c8f3a9b2cc5a9682e44b96ddd0bb2ff027221",
+    "system_sha": "63d6567dac43",
+    "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
+    "generated": "2026-09-08T20:20:24+00:00",
+    "revision_moved_to": null,
+    "same_draw": true,
+    "comparison_issues": []
+  }
+}

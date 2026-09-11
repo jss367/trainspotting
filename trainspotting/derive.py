@@ -397,9 +397,9 @@ def stage_profile(ctx: dict, examples: int | None = None) -> dict:
         for k, v in meta.items():
             columns.setdefault(k, set()).add(str(v))
         # The row index travels too. It costs a couple of kilobytes a stage and
-        # it is the only identity on this page that proves rather than infers:
-        # a languages run records the same indices, so the two can be compared
-        # outright instead of through a hash of a prompt's opening.
+        # within the same known dataset revision it identifies a prompt without
+        # the ambiguity of a shared opening. Without matching revisions the
+        # site still checks the prompt hash, since positions can change.
         rec_out = {"k": key, "m": {k: str(v) for k, v in meta.items()}}
         if rec.get("row") is not None:
             rec_out["row"] = rec["row"]

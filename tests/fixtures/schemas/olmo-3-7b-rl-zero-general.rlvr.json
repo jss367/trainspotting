@@ -1,0 +1,28 @@
+{
+  "target": "olmo-3-7b-rl-zero-general",
+  "stage": "rlvr",
+  "dataset": "allenai/Dolci-RL-Zero-General-7B",
+  "shards": 1,
+  "partial": false,
+  "schema": {
+    "custom_id": "VARCHAR",
+    "prompt": "VARCHAR",
+    "ground_truth": "VARCHAR[]"
+  },
+  "groups": {
+    "prompt": 1,
+    "reference": 1
+  },
+  "leaves": [
+    [
+      "prompt",
+      null
+    ],
+    [
+      "ground_truth",
+      null
+    ]
+  ],
+  "unsearched": [],
+  "source_column": null
+}

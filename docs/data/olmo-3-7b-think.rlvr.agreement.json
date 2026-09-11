@@ -1,0 +1,121 @@
+{
+  "dataset": "allenai/Dolci-Think-RL-7B",
+  "labels_run": {
+    "dataset": "allenai/Dolci-Think-RL-7B",
+    "revision": "0fb6466d31ef3a9dd16985ef635e6429e05a6491",
+    "system_sha": "63d6567dac43",
+    "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
+    "generated": "2026-09-08T17:37:14+00:00",
+    "revision_moved_to": null
+  },
+  "replicate": {
+    "n": 626,
+    "agree": 618,
+    "accuracy": 0.987220447284345,
+    "accuracy_ci": [
+      0.9749869129511182,
+      0.9935105632397208
+    ],
+    "kappa": 0.9507721343543264,
+    "confusion": {
+      "capability": {
+        "capability": 531,
+        "helpfulness": 4,
+        "honesty": 1
+      },
+      "instruction_following": {
+        "instruction_following": 10
+      },
+      "helpfulness": {
+        "helpfulness": 70
+      },
+      "honesty": {
+        "helpfulness": 2,
+        "honesty": 4
+      },
+      "harmlessness": {
+        "harmlessness": 3
+      },
+      "other": {
+        "helpfulness": 1
+      }
+    },
+    "per_label": {
+      "harmlessness": {
+        "first": 3,
+        "second": 3,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "honesty": {
+        "first": 6,
+        "second": 5,
+        "precision": 0.8,
+        "recall": 0.6666666666666666
+      },
+      "helpfulness": {
+        "first": 70,
+        "second": 77,
+        "precision": 0.9090909090909091,
+        "recall": 1.0
+      },
+      "capability": {
+        "first": 536,
+        "second": 531,
+        "precision": 1.0,
+        "recall": 0.9906716417910447
+      },
+      "instruction_following": {
+        "first": 10,
+        "second": 10,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "other": {
+        "first": 1,
+        "second": 0,
+        "precision": null,
+        "recall": 0.0
+      }
+    },
+    "unpaired": 14,
+    "shares": {
+      "harmlessness": {
+        "first": 0.003,
+        "second": 0.0030425963488843813
+      },
+      "honesty": {
+        "first": 0.007,
+        "second": 0.005070993914807302
+      },
+      "helpfulness": {
+        "first": 0.073,
+        "second": 0.07809330628803246
+      },
+      "capability": {
+        "first": 0.546,
+        "second": 0.5385395537525355
+      },
+      "instruction_following": {
+        "first": 0.37,
+        "second": 0.3752535496957404
+      },
+      "other": {
+        "first": 0.001,
+        "second": 0.0
+      }
+    },
+    "dataset": "allenai/Dolci-Think-RL-7B",
+    "revision": "0fb6466d31ef3a9dd16985ef635e6429e05a6491",
+    "system_sha": "63d6567dac43",
+    "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
+    "generated": "2026-09-08T18:13:13+00:00",
+    "revision_moved_to": null,
+    "same_draw": true,
+    "comparison_issues": []
+  }
+}

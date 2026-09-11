@@ -1,0 +1,132 @@
+{
+  "dataset": "allenai/Dolci-Think-DPO-7B",
+  "labels_run": {
+    "dataset": "allenai/Dolci-Think-DPO-7B",
+    "revision": "f27fa9b8e9f315f01fbc25b4d6d7763e0f6e25cb",
+    "system_sha": "63d6567dac43",
+    "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
+    "generated": "2026-09-08T17:30:35+00:00",
+    "revision_moved_to": null
+  },
+  "replicate": {
+    "n": 999,
+    "agree": 959,
+    "accuracy": 0.95995995995996,
+    "accuracy_ci": [
+      0.9459364551493892,
+      0.9704595140644927
+    ],
+    "kappa": 0.9408446075477899,
+    "confusion": {
+      "helpfulness": {
+        "helpfulness": 289,
+        "capability": 7,
+        "instruction_following": 3,
+        "honesty": 5,
+        "other": 2
+      },
+      "capability": {
+        "capability": 441,
+        "helpfulness": 8,
+        "honesty": 3
+      },
+      "instruction_following": {
+        "instruction_following": 145,
+        "honesty": 2,
+        "capability": 1,
+        "helpfulness": 2
+      },
+      "harmlessness": {
+        "harmlessness": 53,
+        "instruction_following": 1
+      },
+      "other": {
+        "helpfulness": 1,
+        "other": 4
+      },
+      "honesty": {
+        "honesty": 27,
+        "harmlessness": 2,
+        "capability": 2,
+        "helpfulness": 1
+      }
+    },
+    "per_label": {
+      "harmlessness": {
+        "first": 54,
+        "second": 55,
+        "precision": 0.9636363636363636,
+        "recall": 0.9814814814814815
+      },
+      "honesty": {
+        "first": 32,
+        "second": 37,
+        "precision": 0.7297297297297297,
+        "recall": 0.84375
+      },
+      "helpfulness": {
+        "first": 306,
+        "second": 301,
+        "precision": 0.9601328903654485,
+        "recall": 0.9444444444444444
+      },
+      "capability": {
+        "first": 452,
+        "second": 451,
+        "precision": 0.9778270509977827,
+        "recall": 0.9756637168141593
+      },
+      "instruction_following": {
+        "first": 150,
+        "second": 149,
+        "precision": 0.9731543624161074,
+        "recall": 0.9666666666666667
+      },
+      "other": {
+        "first": 5,
+        "second": 6,
+        "precision": 0.6666666666666666,
+        "recall": 0.8
+      }
+    },
+    "unpaired": 0,
+    "shares": {
+      "harmlessness": {
+        "first": 0.05405405405405406,
+        "second": 0.055055055055055056
+      },
+      "honesty": {
+        "first": 0.03203203203203203,
+        "second": 0.037037037037037035
+      },
+      "helpfulness": {
+        "first": 0.3063063063063063,
+        "second": 0.3013013013013013
+      },
+      "capability": {
+        "first": 0.45245245245245247,
+        "second": 0.45145145145145144
+      },
+      "instruction_following": {
+        "first": 0.15015015015015015,
+        "second": 0.14914914914914915
+      },
+      "other": {
+        "first": 0.005005005005005005,
+        "second": 0.006006006006006006
+      }
+    },
+    "dataset": "allenai/Dolci-Think-DPO-7B",
+    "revision": "f27fa9b8e9f315f01fbc25b4d6d7763e0f6e25cb",
+    "system_sha": "63d6567dac43",
+    "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
+    "generated": "2026-09-08T18:03:41+00:00",
+    "revision_moved_to": null,
+    "same_draw": true,
+    "comparison_issues": []
+  }
+}

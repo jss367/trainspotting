@@ -37,15 +37,17 @@ VERIFIER_LABELS = {"constraint checker": "instruction_following"}
 assert set(VERIFIER_LABELS) <= set(rewards.KINDS), sorted(set(VERIFIER_LABELS) - set(rewards.KINDS))
 
 
-def verifier_label(row: dict, kind: str) -> str | None:
+def verifier_label(row: dict, kind: str, dataset: str | None = None) -> str | None:
     """The label this row's verifier fixes, or None to ask the classifier.
 
     `kind` is `registry.stage_kind` of the stage the row came from. Only an RL
-    example has a verifier; every other kind is read off the prompt.
+    example has a verifier; every other kind is read off the prompt. `dataset`
+    is the mix's id, which is what names the verifier for a mix whose rows do
+    not (see `rewards.WHOLE_MIX`).
     """
     if kind != "rlvr":
         return None
-    return VERIFIER_LABELS.get(rewards.kind_for(row))
+    return VERIFIER_LABELS.get(rewards.kind_for(row, dataset))
 
 
 SYSTEM = """You label language-model training prompts by what the training example primarily teaches the model. Assign exactly one label per prompt:

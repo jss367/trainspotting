@@ -152,12 +152,12 @@ def _meta(row: dict, keys: list[str]) -> dict:
     return {k: row[k] for k in keys if row.get(k) not in (None, "", [], {})}
 
 
-def _reward(row: dict) -> dict:
+def _reward(row: dict, dataset: str | None = None) -> dict:
     # What the reward checks comes from the mix→verifier table in rewards.py.
     # The raw dataset_source travels with the record so the inference stays
     # checkable; the site re-derives the explanation from the kind, so the
     # baked text here only serves offline readers of the JSON.
-    kind = rewards.kind_for(row)
+    kind = rewards.kind_for(row, dataset)
     explain = rewards.KINDS[kind]["explain"]
     rm = row.get("reward_model") or {}
     # Every accepted answer, not the first of them. `ground_truth` is a list on
@@ -186,7 +186,7 @@ def _reward(row: dict) -> dict:
     }
 
 
-def build(row: dict, kind: str, prompt: str, row_index: int, source_columns=()) -> dict:
+def build(row: dict, kind: str, prompt: str, row_index: int, source_columns=(), dataset: str | None = None) -> dict:
     """One kind-appropriate context record for an already-sampled row.
 
     `kind` is `registry.stage_kind` of the stage the row came from — the shape
@@ -232,7 +232,7 @@ def build(row: dict, kind: str, prompt: str, row_index: int, source_columns=()) 
         rec["meta"] = _meta(row, [*source_columns, "preference_type", "dataset_source"])
     else:
         rec["kind"] = "rlvr"
-        rec["reward"] = _reward(row)
+        rec["reward"] = _reward(row, dataset)
         outputs = [o for o in (row.get("outputs") or []) if o]
         rec["rollouts"] = {
             "total": row.get("total_rollouts"),
@@ -244,4 +244,8 @@ def build(row: dict, kind: str, prompt: str, row_index: int, source_columns=()) 
             row,
             [*source_columns, "dataset", "dataset_source", "data_source", "ability", "difficulty", "setting_name"],
         )
+        # A mix with one verifier and no provenance column is still from
+        # somewhere: the whole mix is one domain, and the site can group by that.
+        if dataset in rewards.WHOLE_MIX:
+            rec["meta"].setdefault("domain", rewards.WHOLE_MIX[dataset][1])
     return rec

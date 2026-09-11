@@ -46,3 +46,18 @@ const unknown = T.renderRLVR({...example, reward: {kind: "unknown"}}, st.dataset
 assert.match(unknown, /reward type unknown/);
 assert.doesNotMatch(unknown, /3 · verifier/);
 console.log("reward family labels, counts, and legacy examples passed");
+
+// The expanded registry includes direct reinforcement learning with one reward
+// family. It must not inherit the mixed-stage description from Instruct/Think.
+for (const [domain, family] of [["math", "rlvr"], ["code", "rlvr"], ["if", "rlvr"], ["general", "rlaif"]]){
+  const source = read(`olmo-3-7b-rl-zero-${domain}.sources.json`).rlvr;
+  const groups = T.rewardComposition(source);
+  assert.deepEqual(Object.keys(groups), [family]);
+  assert.equal(groups[family].count, source.total);
+  const html = T.renderRewardComposition(source);
+  assert.doesNotMatch(html, /Both reward families train|after preference tuning|split is unavailable/);
+  const rec = read(`olmo-3-7b-rl-zero-${domain}.rlvr.context.json`).records[0];
+  assert.doesNotMatch(T.renderRLVR(rec, source.dataset), /Both reward families are mixed|after preference tuning/);
+}
+const mixed = T.rewardComposition(read("olmo-3-7b-rl-zero-mix.sources.json").rlvr);
+assert.deepEqual(Object.keys(mixed), ["rlvr"]);

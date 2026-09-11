@@ -1,0 +1,16 @@
+{
+  "rlvr": {
+    "dataset": "allenai/Dolci-RL-Zero-Math-7B",
+    "generated": "2026-09-07T23:11:02+00:00",
+    "revision": "93b5e498577804a93fb11bfe8821428f8535f2d8",
+    "total": 13314,
+    "counted": 13314,
+    "partial": false,
+    "columns": {
+      "dataset": {
+        "math": 13314
+      }
+    },
+    "links": {}
+  }
+}

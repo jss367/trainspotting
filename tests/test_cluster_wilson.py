@@ -8,7 +8,7 @@ narrow. These pin the arithmetic and both degenerate branches.
 
 import pytest
 
-from trainspotting.cli import _cluster_wilson, _wilson
+from trainspotting.stats import cluster_wilson as _cluster_wilson, wilson as _wilson
 
 
 def docs(spec):

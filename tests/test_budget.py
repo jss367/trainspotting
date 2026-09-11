@@ -186,7 +186,7 @@ def test_one_slug_over_two_wordings_gets_no_total(capsys):
     words. Summing them produces a number no single question ever measured, and
     the ask cards above already split such a collision apart.
     """
-    from trainspotting.cli import _warn_mixed_questions
+    from trainspotting.commands.budget import _warn_mixed_questions
 
     est = {"slug": "s", "mixed": True,
            "question_variants": ["wording one?", "wording two?"], "classifiers": []}
@@ -208,7 +208,7 @@ def test_one_wording_judged_by_two_classifiers_also_gets_no_total(capsys):
     question text alone cannot show it — which is why the site already buckets
     ask results by question *and* classifier.
     """
-    from trainspotting.cli import _warn_mixed_questions
+    from trainspotting.commands.budget import _warn_mixed_questions
 
     est = {"slug": "s", "mixed": True, "question_variants": ["one wording?"],
            "classifiers": ["claude-opus-5", "claude-sonnet-5"]}
@@ -681,7 +681,7 @@ def test_only_a_fully_sized_pipeline_can_claim_a_lower_bound():
     so sizing it moves both, and if its own rate is below the aggregate the
     share falls. Prefixing that with "at least" is arithmetic nobody can defend.
     """
-    from trainspotting.cli import _share_phrase
+    from trainspotting.commands.budget import _share_phrase
 
     sized_and_measured = {"share": 0.5, "measured": 2, "stages": 2, "unsized": [],
                           "size_tokens": 1_000}
@@ -704,9 +704,9 @@ def test_budget_tells_an_unusable_run_apart_from_a_missing_one(capsys, monkeypat
     Telling someone to re-run the command that produced it sends them in a
     circle, and throws away the reason each stage already recorded.
     """
-    import trainspotting.cli as cli
+    from trainspotting.commands import budget as cli
 
-    monkeypatch.setattr(cli.budget, "estimate", lambda t, s: {
+    monkeypatch.setattr(budget, "estimate", lambda t, s: {
         "target": t, "slug": s, "question": "Q?", "mixed": False, "stages": [
             {"stage": "sft", "measured": False, "unusable": "the ask run labeled nothing",
              "notes": ["an ask run exists but produced no usable rate"]},

@@ -160,7 +160,7 @@ def test_stale_stored_examples_are_refused_before_any_api_call():
     a stage repointed at another dataset leaves those examples in place, and a
     fresh stance run would score them and file the result under the new stage.
     """
-    from trainspotting.cli import _stale_context
+    from trainspotting.commands.stance import _stale_context
 
     assert _stale_context({"dataset": "x/y", "records": []}, "x/y") is None
     assert _stale_context({"records": []}, "x/y") is None      # unstamped is silence

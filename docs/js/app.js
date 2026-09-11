@@ -1,0 +1,4560 @@
+// The site's script. Loaded by main.js as an ES module and imported directly by
+// tests/site/page.mjs. Nothing at module top level touches the DOM or fetches
+// data — that all happens in boot() — so importing this file has no side
+// effects and a test can call any exported function on its own.
+//
+// ES modules do not load over file://. Preview with:  python -m http.server -d docs
+const LABELS = ["helpfulness","honesty","harmlessness","capability","instruction_following","tool_use","other"];
+const VALUE_LABELS = new Set(["helpfulness","honesty","harmlessness"]);
+const NICE = {helpfulness:"helpful", honesty:"honest", harmlessness:"harmless",
+  capability:"capability (math/code/science)", instruction_following:"precise instruction following",
+  tool_use:"tool use", other:"other"};
+// Each post-training stage keeps one hue everywhere it appears (tiles, headers, bars).
+// The three corpus stages deliberately get no hue of their own: a 4th categorical
+// slot cannot clear the all-pairs CVD floors against these three in both modes, and
+// they are a different kind of thing anyway. They read as neutral in the pipeline,
+// and their own card is single-series, so one hue there carries no cross-card claim.
+const STAGE_HUE = {sft: "var(--stage-sft)", dpo: "var(--stage-dpo)", rlvr: "var(--stage-rlvr)"};
+const stageLabel = stage => stage === "rlvr" ? "RL" : stage.toUpperCase();
+const hueFor = stage => STAGE_HUE[stage] || "var(--series-1)";
+const fmtBytes = n => n >= 1e12 ? (n/1e12).toFixed(1)+" TB" : n >= 1e9 ? Math.round(n/1e9)+" GB" : Math.round(n/1e6)+" MB";
+const niceGroup = g => g.replace(/_/g, " ");
+// Trailing ".0" is noise on an axis tick, and an estimated token count arrives
+// as a float — neither should reach the page as "1.0T" or "20,702,775.833".
+const trim = s => s.replace(/\.0(?=[A-Z]|$)/, "");
+const fmtTok = n => trim(n >= 1e12 ? (n/1e12).toFixed(1)+"T" : n >= 1e9 ? (n/1e9).toFixed(1)+"B"
+  : n >= 1e6 ? (n/1e6).toFixed(1)+"M" : Math.round(n).toLocaleString());
+const fmtEx = n => n >= 1e6 ? (n/1e6).toFixed(2)+"M" : n >= 1e3 ? Math.round(n/1e3)+"K" : String(n);
+const pct = x => (x*100).toFixed(1)+"%";
+const num = n => (n ?? 0).toLocaleString();
+
+function wilson(k, n, z=1.96){
+  if (!n) return [0,0];
+  const p = k/n, d = 1 + z*z/n;
+  const c = (p + z*z/(2*n)) / d;
+  const h = z * Math.sqrt(p*(1-p)/n + z*z/(4*n*n)) / d;
+  return [Math.max(0,c-h), Math.min(1,c+h)];
+}
+
+let tip;  // #tip, assigned by wireDialog() at boot
+function hover(el, html){
+  el.addEventListener("pointerenter", () => { tip.innerHTML = html; tip.style.display = "block"; });
+  el.addEventListener("pointermove", e => {
+    tip.style.left = Math.min(e.clientX + 14, innerWidth - 320) + "px";
+    tip.style.top = (e.clientY + 14) + "px";
+  });
+  el.addEventListener("pointerleave", () => tip.style.display = "none");
+}
+// Markup built as strings carries its tooltip in data-tip; this wires them up after insert.
+function wireTips(root){
+  root.querySelectorAll("[data-tip]").forEach(el => hover(el, el.dataset.tip));
+}
+
+// Every `chars` in a context record comes from Python's len(), which counts code
+// points. JavaScript's .length counts UTF-16 units, so an emoji counts twice —
+// enough to make a stored field look truncated when it is not, or truncated when
+// it is not. Any length compared against `chars`, or shown to a reader, uses this.
+const clen = s => /[\uD800-\uDBFF]/.test(s)
+  ? s.length - (s.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g) || []).length
+  : s.length;
+
+const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const escAttr = s => esc(s).replace(/"/g,"&quot;");
+// A dataset id does not say which version was counted: `main` moves. Result
+// files written since the sampler was fixed carry the commit they read, so link
+// it where the count is shown; older files simply have nothing to link.
+const treeLink = (dataset, sha) =>
+  `<a href="https://huggingface.co/datasets/${escAttr(dataset)}/tree/${escAttr(sha)}" target="_blank" rel="noopener"><code>${esc(String(sha).slice(0,7))}</code></a>`;
+// A run long enough to outlast a republish records where the dataset went. The
+// rows may then come from either tree, and showing only the first SHA would
+// present exactly the ambiguity the field exists to record as a settled fact —
+// so show both, in the order they happened.
+const revLink = d => d.revision
+  ? ` ${treeLink(d.dataset, d.revision)}` + (d.revision_moved_to
+      ? ` <span title="the dataset moved while this run was in flight; its rows may come from either tree">→ ${treeLink(d.dataset, d.revision_moved_to)}</span>`
+      : "")
+  : "";
+
+// What a run's classifier never labeled, phrased once. Both views need it: a
+// comparison that shows one model's 280 beside another's 300 without saying why
+// invites reading the gap as a difference in the data rather than in coverage.
+// Older files carry no count, so fall back to the null records they still hold.
+const unlabeledOf = (d, labeled) => {
+  const n = d.unlabeled ?? (d.records.length - labeled);
+  const why = Object.entries(d.unlabeled_reasons || {}).map(([k, v]) => `${v} ${k}`).join(", ");
+  return n ? {n, why, text: `${n} of ${n + labeled} sampled prompts unlabeled${why ? ` (${why})` : ""} and excluded`} : null;
+};
+
+// A run whose every request failed writes a real file: an unlabeled count and
+// no records. There is no share to draw from zero labels — 0/0 is NaN, which
+// renders as "NaN%" behind a bar of undefined width — so each chart says what
+// happened instead of drawing it.
+const noLabels = (parent, text) => {
+  const p = document.createElement("p");
+  p.className = "note";
+  p.textContent = text;
+  parent.appendChild(p);
+};
+
+// Mix labels are a mix of real HuggingFace dataset ids and bare internal names.
+// Only the ones checked as publicly reachable when the data was built get a link.
+const srcLabel = (v, links) => (links && links[v])
+  ? `<a href="${escAttr(links[v])}" target="_blank" rel="noopener">${esc(v)}</a>`
+  : esc(v);
+
+// ---------------------------------------------------------------- context ---
+// One training example, rendered the way its stage actually trains: SFT fits a
+// target response, DPO pushes between a pair, RL scores a rollout the model
+// writes itself.
+
+const STAGE_LEDE = {
+  sft: "Supervised fine-tuning. The model is fit directly to the assistant turns below — it learns to produce this text after this prompt.",
+  dpo: "Direct preference optimization. The model is pushed toward the chosen response and away from the rejected one. Only the difference between the two is the training signal.",
+  rlvr: "Reinforcement learning. The response being optimized is generated during training. Each prompt uses its assigned scoring method: a programmatic reward (RLVR) or AI feedback (RLAIF). Reference answers and filtering rollouts may be stored in the dataset.",
+};
+const PREF_EXPLAIN = {
+  delta_learning: "Delta learning: the chosen response comes from a larger model and the rejected one from a smaller model. No human or judge compared these two responses — the size gap is the label.",
+  llm_judged: "A judge model scored both responses; the higher-scored one became chosen.",
+  multiturn_synthetic_context: "A synthetic multi-turn pair built by Ai2 — see the dataset card for how the two continuations were produced.",
+  multiturn_self_talk: "A synthetic self-talk multi-turn pair built by Ai2 — see the dataset card for how the two continuations were produced.",
+};
+
+// Turns arrive with the thinking span already separated, so a long trace never
+// swallows the answer behind it.
+const turnChars = t => t.chars + (t.reasoning ? t.reasoning.chars : 0);
+const assistantChars = side =>
+  (side.turns || []).filter(t => t.role === "assistant").reduce((a,t) => a + turnChars(t), 0);
+
+function textBlock(text, chars){
+  const cut = chars > clen(text)
+    ? `<p class="note">showing the first ${num(clen(text))} of ${num(chars)} characters</p>` : "";
+  return `<div class="ctxtext">${esc(text)}</div>${cut}`;
+}
+
+function turnBlock(turn, trained){
+  const r = turn.reasoning;
+  // A turn can carry output this record does not keep — a tool call, a refusal.
+  // Saying so is the difference between a turn that was empty and one whose
+  // content lives somewhere the site never sees.
+  const omitted = turn.omitted && turn.omitted.length
+    ? `<p class="note">plus ${turn.omitted.map(f => `<code>${esc(f)}</code>`).join(", ")},
+       carried by this turn and not stored here — read the row on HuggingFace for it</p>` : "";
+  return `<div class="turn">
+    <div class="role">${esc(turn.role)} ${trained ? `<b>${trained}</b>` : ""}</div>
+    ${omitted}
+    ${r ? `<details><summary>reasoning — ${num(r.chars)} characters, folded away</summary>${textBlock(r.text, r.chars)}</details>` : ""}
+    ${textBlock(turn.text, turn.chars)}
+  </div>`;
+}
+
+function chips(rec, dataset){
+  const out = [];
+  for (const [k, v] of Object.entries(rec.meta || {})){
+    const ex = PREF_EXPLAIN[v];
+    out.push(`<span class="chip"${ex ? ` data-tip="${escAttr(ex)}"` : ""}>${esc(k.replace(/_/g," "))} <b>${esc(v)}</b></span>`);
+  }
+  if (rec.row != null){
+    const url = `https://huggingface.co/datasets/${dataset}/viewer/default/train?row=${rec.row}`;
+    out.push(`<span class="chip link"><a href="${escAttr(url)}" target="_blank" rel="noopener">row ${num(rec.row)} on HuggingFace ↗</a></span>`);
+  }
+  return `<div class="chips">${out.join("")}</div>`;
+}
+
+function promptSection(rec){
+  const p = rec.prompt_full;
+  return `<section class="ctxsec"><h3>the prompt</h3>${textBlock(p.text, p.chars)}</section>`;
+}
+
+// SFT: how much of the example is the target the model is fit to.
+function renderSFT(rec, dataset){
+  const parts = {context: 0, reasoning: 0, answer: 0};
+  for (const t of rec.turns){
+    if (t.role === "assistant"){
+      parts.reasoning += t.reasoning ? t.reasoning.chars : 0;
+      parts.answer += t.chars;
+    } else {
+      parts.context += t.chars;
+    }
+  }
+  const segs = [
+    {k: "prompt and conversation", n: parts.context, c: "var(--baseline)", why: "context the model reads but is not scored on"},
+    {k: "assistant reasoning", n: parts.reasoning, c: "var(--ramp-lo)", why: "the thinking span, itself a training target"},
+    {k: "assistant answer", n: parts.answer, c: "var(--ramp-hi)", why: "the visible response the model is fit to"},
+  ].filter(s => s.n > 0);
+  const total = segs.reduce((a,s) => a + s.n, 0) || 1;
+  const strip = segs.map(s =>
+    `<div style="flex:${s.n};background:${s.c}" data-tip="<b>${escAttr(s.k)}</b><br>${num(s.n)} characters (${pct(s.n/total)})<br>${escAttr(s.why)}"></div>`).join("");
+  const legend = segs.map(s =>
+    `<span class="k"><i style="background:${s.c}"></i>${esc(s.k)} <em>${num(s.n)} ch · ${pct(s.n/total)}</em></span>`).join("");
+  const nturns = rec.turns.length;
+
+  return `${chips(rec, dataset)}
+    <section class="ctxsec">
+      <h3>what this example is made of</h3>
+      <div class="strip">${strip}</div>
+      <div class="legend">${legend}</div>
+      <p class="note">Characters across ${nturns} turn${nturns > 1 ? "s" : ""}, counted before any
+        display truncation. The assistant text is the training target; everything else is context.</p>
+    </section>
+    <section class="ctxsec">
+      <h3>the example</h3>
+      ${rec.turns.map(t => turnBlock(t, t.role === "assistant" ? "trained to produce this" : "")).join("")}
+    </section>`;
+}
+
+// Chat log: nobody was trained on this. Show the exchange and the metadata the
+// collector kept, and say plainly that no turn here is a target — the SFT view
+// above would otherwise mark the assistant turns "trained to produce this",
+// which is exactly the claim a raw conversation corpus does not support.
+function renderChat(rec, dataset){
+  const nturns = rec.turns.length;
+  return `${chips(rec, dataset)}
+    <section class="ctxsec">
+      <h3>what this example is</h3>
+      <p class="kv">A logged conversation, ${nturns} turn${nturns > 1 ? "s" : ""} long. No model
+        was fit to any of it: the replies are what the other side said, not a training target.
+        What it shows is what people actually sent — which is what a mix built from this
+        inherits.</p>
+    </section>
+    <section class="ctxsec">
+      <h3>the conversation</h3>
+      ${rec.turns.map(t => turnBlock(t, "")).join("")}
+    </section>`;
+}
+
+// ---- how a preference pair updates the model -------------------------------
+// Opt-in panel under the pair. Everything it *displays* is computable from the
+// stored row: which spans the two responses share and which they do not. The
+// loss itself is explained symbolically — no log-probs are stored anywhere, so
+// showing a number for one would mean inventing it.
+//
+// The diff distinguishes two kinds of shared wording, because they are not the
+// same thing to the loss. A shared *opening* is conditioned on identical text
+// on both sides, so its two terms cancel exactly. Wording that reappears after
+// the responses have diverged follows a different prefix on each side, so the
+// match alone implies nothing about cancellation; it is reported as overlap.
+
+// Whitespace rides along with the word before it, and any leading run is its own
+// chunk, so the pieces rejoin into the original text byte for byte.
+const WORDS = s => s.match(/^\s+|\S+\s*/g) || [];
+const LINES = s => s.match(/[^\n]*\n|[^\n]+/g) || [];
+const DIFF_CELLS = 4e6;  // LCS table cap; bigger pairs drop to line granularity
+const MIN_SAME = 24;     // characters; shorter matches are coincidence, not shared wording
+
+// Longest-common-subsequence diff over raw chunks, compared on their trimmed
+// form so a newline-vs-space difference does not split an otherwise equal word.
+// Each op keeps both sides' raw text: matched chunks can differ in whitespace,
+// and rendering one side's copy in place of the other's would silently rewrite
+// the response (and miscount its characters).
+function lcsOps(a, b){
+  const ak = a.map(w => w.trim()), bk = b.map(w => w.trim());
+  const n = a.length, m = b.length, W = m + 1;
+  const dp = new Uint32Array((n + 1) * W);
+  for (let i = n - 1; i >= 0; i--){
+    for (let j = m - 1; j >= 0; j--){
+      dp[i * W + j] = ak[i] === bk[j]
+        ? dp[(i + 1) * W + j + 1] + 1
+        : Math.max(dp[(i + 1) * W + j], dp[i * W + j + 1]);
+    }
+  }
+  const ops = [];
+  const push = (t, ta, tb) => {
+    const last = ops[ops.length - 1];
+    if (last && last.t === t){ last.a += ta; last.b += tb; }
+    else ops.push({t, a: ta, b: tb});
+  };
+  let i = 0, j = 0;
+  while (i < n && j < m){
+    if (ak[i] === bk[j]){ push("same", a[i], b[j]); i++; j++; }
+    else if (dp[(i + 1) * W + j] >= dp[i * W + j + 1]){ push("chosen", a[i], ""); i++; }
+    else { push("rejected", "", b[j]); j++; }
+  }
+  while (i < n) push("chosen", a[i++], "");
+  while (j < m) push("rejected", "", b[j++]);
+  return ops;
+}
+
+// The shared opening is the one span the panel makes a claim about cancellation
+// for, so it is measured byte for byte rather than over trimmed words: two
+// responses whose indentation differs are already different token sequences.
+// The cut backs off to a word boundary so the diff of the rest starts clean.
+function commonPrefix(a, b){
+  const n = Math.min(a.length, b.length);
+  let i = 0;
+  while (i < n && a[i] === b[i]) i++;
+  if (i === a.length && i === b.length) return i;   // identical throughout
+  while (i > 0 && !/\s/.test(a[i - 1])) i--;
+  // Most tokenizers attach the space to the word after it, so the delimiter
+  // between "To solve" and "To find" belongs to the differing token. Stop the
+  // opening before it: the whitespace goes into the divergence, where it can
+  // make no false promise.
+  while (i > 0 && /\s/.test(a[i - 1])) i--;
+  return i;
+}
+
+// Ops are typed: `prefix` (the identical opening, where the two terms cancel),
+// `same` (wording matched after the responses diverge), `chosen`, `rejected`.
+function diffPair(aRaw, bRaw){
+  if (!aRaw && !bRaw) return [];
+  const p = commonPrefix(aRaw, bRaw);
+  const head = p ? {a: aRaw.slice(0, p), b: bRaw.slice(0, p)} : null;
+  const a = WORDS(aRaw.slice(p)), b = WORDS(bRaw.slice(p));
+  // An identical tail comes off next — cheap, and it keeps near-identical pairs
+  // out of the LCS table entirely.
+  let hi = 0;
+  while (hi < a.length && hi < b.length && a[a.length - 1 - hi] === b[b.length - 1 - hi]) hi++;
+  const tail = hi ? {a: a.slice(a.length - hi).join(""), b: b.slice(b.length - hi).join("")} : null;
+  const am = a.slice(0, a.length - hi), bm = b.slice(0, b.length - hi);
+  let mid;
+  if (am.length * bm.length <= DIFF_CELLS) mid = lcsOps(am, bm);
+  else {
+    const al = LINES(am.join("")), bl = LINES(bm.join(""));
+    mid = al.length * bl.length <= DIFF_CELLS ? lcsOps(al, bl)
+      : [{t: "chosen", a: am.join(""), b: ""}, {t: "rejected", a: "", b: bm.join("")}]
+          .filter(o => o.a || o.b);
+  }
+  return coalesce([
+    ...(head ? [{t: "prefix", a: head.a, b: head.b}] : []),
+    ...mid,
+    // A shared tail is matched wording, not a shared opening: by the time the
+    // two responses reach it they are conditioned on different text.
+    ...(tail ? [{t: "same", a: tail.a, b: tail.b}] : []),
+  ]);
+}
+
+// Two responses that share only "the" and "is" do not really share wording, and
+// a word-level LCS finds hundreds of such matches in unrelated prose. Folding
+// the short ones back into both sides makes the highlight read as blocks, and
+// keeps the overlap count from being flattered by function words. The shared
+// opening is exempt: however short, it does cancel.
+function coalesce(ops){
+  if (ops.length === 1) return ops;
+  const out = [];
+  const push = (t, a, b) => {
+    const last = out[out.length - 1];
+    if (last && last.t === t){ last.a += a; last.b += b; }
+    else out.push({t, a, b});
+  };
+  for (const o of ops){
+    if (o.t === "same" && (clen(o.a.trim()) < MIN_SAME || clen(o.b.trim()) < MIN_SAME)){
+      push("chosen", o.a, ""); push("rejected", "", o.b);
+    } else push(o.t, o.a, o.b);
+  }
+  return out;
+}
+
+// A span may be called exact cancellation only if everything DPO scores before
+// it is byte-identical on both sides. DPO scores one sequence per response —
+// for a think model the thinking span first, then the answer — so a shared
+// answer opening sitting after two different thinking spans is conditioned on
+// different text and cancels nothing. Relabel it as overlap.
+function demotePrefix(ops){
+  const out = [];
+  for (const o of ops){
+    const t = o.t === "prefix" ? "same" : o.t;
+    const last = out[out.length - 1];
+    if (last && last.t === t){ last.a += o.a; last.b += o.b; }
+    else out.push({t, a: o.a, b: o.b});
+  }
+  return out;
+}
+
+// Characters of one op kind on one side, counted in that side's own text.
+const opChars = (ops, t, side) => ops.reduce((n, o) => n + (o.t === t ? clen(o[side]) : 0), 0);
+const uniqueChars = ops => opChars(ops, "chosen", "a") + opChars(ops, "rejected", "b");
+
+// Where a multi-turn pair branches. Everything before that point is the
+// conversation both candidates answer in, not either candidate — counting it as
+// response wording would report the shared history as text the model is pushed
+// toward and away from at once. Mirrors `_shared_turns` and its cap in
+// trainspotting/search.py: the last turn is the candidate answer by definition,
+// however far the two lists agree.
+// `raw` is set by the exporter when a turn's stored text is the turn as written.
+// Nothing else proves it: a thinking span leaves its markers and surrounding
+// whitespace behind even when the span is empty and no reasoning field remains,
+// a cut field says nothing about what followed, and a turn can carry output the
+// record does not keep at all. Absent on older context runs, which therefore
+// make no exactness claims until they are regenerated.
+const rawTurn = t => t.raw === true;
+// Two turns count as the same only where both are stored as written. A turn
+// carrying output this record does not keep serializes to the same empty text
+// whatever it held, so a call to one tool and a call to another would otherwise
+// read as one shared turn — while `search._shared_turns`, comparing the payloads
+// themselves, branches there.
+const sameTurn = (x, y) => rawTurn(x) && rawTurn(y) && x.role === y.role && x.text === y.text &&
+  (x.reasoning ? x.reasoning.text : null) === (y.reasoning ? y.reasoning.text : null);
+// Where a pair stops being one conversation and becomes two answers, under
+// whatever sameness rule the caller needs.
+//
+// The rule is a parameter because the two callers on this page legitimately
+// differ on it. The panel below will only call turns shared where the record
+// proves they were byte-identical — `sameTurn` demands `raw` — because it goes
+// on to claim their log-probability terms cancel. The search box compares the
+// text it can actually read, cut fields included, because the honest answer to
+// "is this string on both sides" is about the text, not about provenance.
+//
+// The clamp is not a parameter. A pair's last turn is its candidate answer by
+// definition, however far the two lists agree, so it is never shared history.
+// That rule is now expressed in search.py, in grep.py's SQL, and here; the
+// fourth copy — an inline loop inside `searchFields` — omitted the clamp, and
+// reported four committed Instruct-DPO records as having no candidate answer
+// at all. One clamp, one place, however many predicates.
+function branchPoint(a, b, same){
+  let n = 0;
+  while (n < a.length && n < b.length && same(a[n], b[n])) n++;
+  return Math.min(n, Math.max(0, a.length - 1), Math.max(0, b.length - 1));
+}
+function sharedTurns(chosen, rejected){
+  return branchPoint(chosen.turns || [], rejected.turns || [], sameTurn);
+}
+const candidateTurns = (side, shared) => (side.turns || []).slice(shared)
+  .filter(t => t.role === "assistant");
+// Anything after the branch that is not an assistant turn is context the two
+// candidates do not share — the turn at the branch point differs by definition,
+// so an assistant turn behind one reads different text on each side.
+const postBranchContext = (side, shared) => (side.turns || []).slice(shared)
+  .filter(t => t.role !== "assistant");
+
+// Assistant text on one side of the pair, from the branch point on: `part` picks
+// the answer or the thinking span, both of which DPO scores.
+const sideText = (side, part, shared = 0) => candidateTurns(side, shared)
+  .map(t => part === "reasoning" ? (t.reasoning ? t.reasoning.text : "") : t.text)
+  .filter(Boolean).join("\n\n");
+const cutTurn = t => t.chars > clen(t.text) ||
+  (t.reasoning && t.reasoning.chars > clen(t.reasoning.text));
+const sideCut = (side, shared = 0) => candidateTurns(side, shared).some(cutTurn);
+// Every shared turn is stored as written, since `sameTurn` will not match one
+// that is not. Checked again here rather than assumed: it is the invariant the
+// exactness claims below rest on, and it costs one pass over a handful of turns.
+const historyProvable = (side, shared) => (side.turns || []).slice(0, shared).every(rawTurn);
+
+function diffPanel(ops){
+  const sides = [
+    {key: "chosen", f: "a", cls: "pos", mark: "✓", head: "pushed toward this", cmark: "up", color: "var(--series-1)"},
+    {key: "rejected", f: "b", cls: "neg", mark: "✗", head: "pushed away from this", cmark: "down", color: "var(--neg)"},
+  ];
+  const KINDS = [
+    {t: "prefix", k: "shared opening", c: "var(--muted)",
+     why: "byte-identical on both sides, so every token inside it reads the same context and its two terms cancel"},
+    {t: "same", k: "matched later", c: "var(--baseline)",
+     why: "the same words, but after a different prefix on each side — overlap, not cancellation"},
+  ];
+
+  const bars = sides.map(s => {
+    const segs = [
+      ...KINDS.map(kind => ({...kind, n: opChars(ops, kind.t, s.f)})),
+      {t: s.key, k: "only on the " + s.key + " side", c: s.color, n: opChars(ops, s.key, s.f),
+       why: "text with no counterpart in the other response"},
+    ].filter(x => x.n > 0);
+    const total = segs.reduce((n, x) => n + x.n, 0);
+    const uniq = opChars(ops, s.key, s.f);
+    return `<div class="lenrow splitrow">
+      <div class="lbl">${s.mark} ${s.key}</div>
+      <div><div class="strip" style="width:${total / Math.max(...sides.map(o =>
+        ["prefix", "same", o.key].reduce((n, t) => n + opChars(ops, t, o.f), 0)), 1) * 100}%">
+        ${segs.map(x => `<div style="flex:${x.n};background:${x.c}"
+          data-tip="<b>${escAttr(x.k)}</b><br>${num(x.n)} characters<br>${escAttr(x.why)}"></div>`).join("")}
+      </div></div>
+      <div class="val">${pct(uniq / (total || 1))} unique</div>
+    </div>`;
+  }).join("");
+
+  const panels = sides.map(s => {
+    const html = ops.map(o => {
+      const txt = o[s.f];
+      if (!txt) return "";
+      if (o.t === "prefix") return `<span class="pre">${esc(txt)}</span>`;
+      if (o.t === "same") return `<span class="ovl">${esc(txt)}</span>`;
+      return o.t === s.key ? `<mark class="${s.cmark}">${esc(txt)}</mark>` : "";
+    }).join("");
+    return `<div class="side ${s.cls}">
+      <div class="sh"><div class="verdict"><i style="background:${s.color}"></i>${s.mark} ${s.head}</div>
+        <div class="who">highlighted: only on this side</div></div>
+      <div class="body">${html
+        ? `<div class="ctxtext">${html}</div>`
+        : '<p class="note">nothing stored on this side</p>'}</div>
+    </div>`;
+  }).join("");
+
+  // A matched span keeps each side's own text, so the same words can come to a
+  // different length on each — 166 of the 900 committed rows have one. One
+  // number would have to be the chosen side's, silently, so both are shown
+  // wherever they disagree.
+  const legend = [
+    ...KINDS.map(kind => ({...kind, a: opChars(ops, kind.t, "a"), b: opChars(ops, kind.t, "b")})),
+    {k: "only chosen", c: "var(--series-1)", a: opChars(ops, "chosen", "a"), b: null},
+    {k: "only rejected", c: "var(--neg)", a: null, b: opChars(ops, "rejected", "b")},
+  ].filter(x => (x.a || 0) + (x.b || 0) > 0).map(x => {
+    const split = x.a != null && x.b != null && x.a !== x.b;
+    const count = split ? `${num(x.a)} / ${num(x.b)} ch` : `${num(x.a != null ? x.a : x.b)} ch`;
+    const tip = split
+      ? `chosen / rejected — the same words, stored with different whitespace on each side.
+         ${x.why || ""}`
+      : x.why;
+    return `<span class="k"${tip ? ` data-tip="${escAttr(tip)}"` : ""}>
+      <i style="background:${x.c}"></i>${esc(x.k)} <em>${count}</em></span>`;
+  }).join("");
+
+  return `<div class="legend" style="margin-bottom:8px">${legend}</div>
+    ${bars}
+    <div class="pair" style="margin-top:12px">${panels}</div>`;
+}
+
+// Reading of the diff for this particular pair. Dolci's pairs are mostly two
+// independent generations rather than an edit of one response, so the
+// almost-nothing-in-common case is the common one and gets its own sentence.
+// Why a matching answer opening cannot be called cancellation on this row.
+function demotionReason(rec, reason, shared = 0){
+  const many = side => candidateTurns(side, shared).length > 1;
+  if (many(rec.chosen) || many(rec.rejected))
+    return `this pair keeps going for more than one turn a side after it branches, and the panel does not
+      model how the scored sequence interleaves with the conversation between them, so it cannot say what
+      precedes the answer.`;
+  // A turn after the branch that is not the candidate answer and is not stored
+  // as written means the branch point itself is a guess: the two completions may
+  // have parted company at that turn, in what the record no longer holds.
+  const branchGuessed = side => {
+    const turns = side.turns || [];
+    return turns.slice(shared, Math.max(shared, turns.length - 1)).some(t => !rawTurn(t));
+  };
+  if (branchGuessed(rec.chosen) || branchGuessed(rec.rejected))
+    return `the conversation reaches a turn this record does not hold as written — cut, normalized, or
+      carrying output kept only in the row upstream — so the panel cannot tell where the two completions
+      actually part company.`;
+  if (postBranchContext(rec.chosen, shared).length || postBranchContext(rec.rejected, shared).length)
+    return `the pair branches on a turn the model did not write, so the answers below are replies to
+      different text and cannot cancel however alike they look.`;
+  if (reason.a !== reason.b)
+    return `DPO scores thinking and answer as one sequence, and the two thinking spans in front of these
+      answers differ, so every token of the answer follows different text on each side and none of it
+      cancels.`;
+  if (reason.a)
+    return `the two thinking spans in front of them match as stored, but the dataset drops the
+      <code>&lt;think&gt;</code> markers and the whitespace around them, so the panel cannot establish that
+      the raw sequences the model scored were identical.`;
+  const answer = side => candidateTurns(side, shared)[0];
+  const carries = side => (answer(side) || {}).omitted;
+  if (carries(rec.chosen) || carries(rec.rejected)){
+    const fields = [...new Set([...(carries(rec.chosen) || []), ...(carries(rec.rejected) || [])])];
+    return `an answer here carries ${fields.map(f => `<code>${esc(f)}</code>`).join(" and ")} beside its
+      text, which this record does not keep, so what the model was scored on is not all here.`;
+  }
+  if (sideCut(rec.chosen, shared) || sideCut(rec.rejected, shared))
+    return `one side is cut at 4,000 characters, so whether the responses stay identical past the stored
+      text is unknown.`;
+  return `this record does not hold an answer as written. Something was normalized on the way in that
+    leaves no trace to point at — an empty thinking span, whose markers go while no reasoning field is
+    left behind — so the two cannot be compared byte for byte.`;
+}
+
+// `ops` covers the answers alone; a thinking span is diffed separately, so
+// nothing here may speak for the response as a whole. Every count and every
+// claim is about the answers, and where there is reasoning as well, says so.
+function sharedNote(ops, rec, dead, demoted, hasThink){
+  const alsoThinking = hasThink
+    ? " Both also carry a thinking span, diffed on its own below; none of these counts include it."
+    : "";
+  const pre = opChars(ops, "prefix", "a"), ovl = opChars(ops, "same", "a");
+  const chosenTotal = pre + ovl + opChars(ops, "chosen", "a");
+  const why = (rec.meta && rec.meta.preference_type) === "delta_learning"
+    ? " That is what delta learning produces: two independent generations from two different-sized models, not an edit of one response into the other."
+    : "";
+  if (dead) return `As stored, the two responses are identical — same text throughout, so the same
+    log-probability under both copies of the model, a margin of exactly zero, and a gradient of exactly
+    zero. This pair moves the model not at all.${(rec.meta && rec.meta.preference_type) === "delta_learning"
+      ? " Delta learning marks the larger model's response as chosen without comparing the two, so a prompt where both models answered identically still ends up in the mix as a preference pair."
+      : ""}`;
+  if (demoted) return `The two answers open with the same ${num(ovl)} characters of wording, but that is
+    not a shared opening: ${demoted} It is counted here as overlap.`;
+  const parts = [];
+  if (pre) parts.push(`a shared opening of ${num(pre)} characters, byte-identical on both sides, so the
+    tokens inside it read the same context and their two terms cancel`);
+  if (ovl) parts.push(`${num(ovl)} characters of wording that reappears after they diverge, which the
+    loss does not see as the same tokens at all — each copy follows a different prefix`);
+  if (!parts.length) return `The two answers have no wording in common beyond incidental short matches.
+    The update pushes up nearly every token of the chosen answer and pushes down nearly every token of the
+    rejected one, so this pair teaches a preference over whole answers rather than a local
+    fix.${why}${alsoThinking}`;
+  const lex = (pre + ovl) / (chosenTotal || 1);
+  return `Of the chosen answer's ${num(chosenTotal)} characters: ${parts.join("; and ")}.
+    ${lex > 0.5
+      ? "Lexically the two answers are close to an edit of one into the other, so the highlighted spans are where they differ at all."
+      : `The rest is unique to one side.${why}`}${alsoThinking}`;
+}
+
+// Exactness is claimable only where the stored record is the raw response. A
+// context row is built by splitting the thinking span out — which drops the
+// <think> markers and strips the whitespace around them — and cutting every
+// field at 4,000 characters. Either step means the panel cannot compare what
+// DPO actually scored, so it stops claiming cancellation and reports overlap.
+function rawResponseStored(side, shared = 0){
+  const turns = candidateTurns(side, shared);
+  return turns.length === 1 && rawTurn(turns[0]) && !turns[0].reasoning &&
+    turns[0].chars === clen(turns[0].text);
+}
+
+// What to say about a pair where the thinking spans are not symmetric. A side
+// with no stored span has not necessarily reasoned less: it can be carrying its
+// reasoning in a field this record does not keep, which is a different claim.
+function thinkingNote(rec, reason, shared){
+  if (reason.a && reason.b) return "Both responses carry a thinking span, and DPO scores those tokens too.";
+  const has = reason.a ? "chosen" : "rejected", other = reason.a ? "rejected" : "chosen";
+  const turns = candidateTurns(rec[other], shared);
+  if (turns.some(t => (t.omitted || []).includes("reasoning_content")))
+    return `Only the ${has} response's thinking span is stored here. The ${other} one carries its
+      reasoning in a field this record does not keep, so what faces this span cannot be read from it —
+      not that there is nothing there.`;
+  // A span of whitespace between <think> markers comes out as no span at all:
+  // the markers go, the whitespace goes, no reasoning field is left, and the
+  // turn is marked non-raw. Only a turn stored as written can say there was
+  // nothing there.
+  if (!turns.length || !turns.every(rawTurn))
+    return `Only the ${has} response's thinking span is stored here. The ${other} answer is not held as
+      written — normalized or cut on the way in — so whether anything faced this span cannot be read from
+      this record either way.`;
+  return `Only the ${has} response carries a thinking span — the other answers with no visible reasoning
+    at all — and DPO scores those tokens too, so the whole span is text one side is pushed
+    ${reason.a ? "toward" : "away from"} with nothing opposite it.`;
+}
+
+function gradientSection(rec, shared = 0){
+  const reason = {a: sideText(rec.chosen, "reasoning", shared),
+                  b: sideText(rec.rejected, "reasoning", shared)};
+  const hasThink = reason.a || reason.b;
+  const exact = rawResponseStored(rec.chosen, shared) && rawResponseStored(rec.rejected, shared) &&
+    historyProvable(rec.chosen, shared) && historyProvable(rec.rejected, shared) &&
+    !postBranchContext(rec.chosen, shared).length && !postBranchContext(rec.rejected, shared).length;
+  let answers = diffPair(sideText(rec.chosen, "answer", shared), sideText(rec.rejected, "answer", shared));
+  const demoted = !exact && opChars(answers, "prefix", "a") > 0
+    ? demotionReason(rec, reason, shared) : null;
+  if (!exact) answers = demotePrefix(answers);
+  // A thinking span is itself a reason exactness is unknown, so a thinking diff
+  // never claims an opening either.
+  let thinking = hasThink ? demotePrefix(diffPair(reason.a, reason.b)) : null;
+  // "Zero gradient" is categorical, so it needs byte-exact equality of the whole
+  // stored response — not "the diff found nothing unique", which a whitespace-
+  // tolerant match can satisfy — and it needs that stored text to be the raw one.
+  const deadPair = exact &&
+    sideText(rec.chosen, "answer", shared) === sideText(rec.rejected, "answer", shared) &&
+    reason.a === reason.b;
+  const cut = sideCut(rec.chosen, shared) || sideCut(rec.rejected, shared);
+
+  const step = (n, title, body) =>
+    `<div class="step" data-s="${n}" tabindex="0"><div class="t">${n} · ${title}</div><div class="v">${body}</div></div>`;
+  const flow = `<div class="flow">
+    ${step(1, "score", "sum the log-probability of each response's tokens")}
+    <div class="arrow">→</div>
+    ${step(2, "compare", "against a frozen copy of the SFT checkpoint")}
+    <div class="arrow">→</div>
+    ${step(3, "margin", "how much further the chosen one has moved")}
+    <div class="arrow">→</div>
+    ${step(4, "update", "one step from both sets of token terms")}
+    <div class="hint">Hover, tap, or tab to a step to light up the part of the objective it names.</div>
+  </div>`;
+
+  return `<div class="grad" id="gradpanel" hidden>
+    <h4>the update</h4>
+    ${flow}
+    <div class="eqs">
+      <span class="lhs">margin</span><span class="rel">=</span><span class="rhs"><span class="bit" data-s="3"><i>β</i> <span class="brk">[</span> <span class="par">(</span><span class="bit" data-s="1"><span class="fn">log</span><i>π</i>(<span class="tag up">chosen</span>)</span> − <span class="bit" data-s="2"><span class="fn">log</span><i>π</i><sub>ref</sub>(<span class="tag up">chosen</span>)</span><span class="par">)</span> − <span class="par">(</span><span class="bit" data-s="1"><span class="fn">log</span><i>π</i>(<span class="tag down">rejected</span>)</span> − <span class="bit" data-s="2"><span class="fn">log</span><i>π</i><sub>ref</sub>(<span class="tag down">rejected</span>)</span><span class="par">)</span> <span class="brk">]</span></span></span>
+      <span class="lhs">loss</span><span class="rel">=</span><span class="rhs">−<span class="fn">log</span><i>σ</i>(<span class="bit" data-s="3"><i>margin</i></span>)</span>
+      <span class="lhs">update</span><span class="rel">∝</span><span class="rhs"><span class="bit" data-s="4"><i>σ</i>(−<span class="bit" data-s="3"><i>margin</i></span>) <span class="brk">[</span> <span class="grad-op">∇</span><span class="fn">log</span><i>π</i>(<span class="tag up">chosen</span>) − <span class="grad-op">∇</span><span class="fn">log</span><i>π</i>(<span class="tag down">rejected</span>) <span class="brk">]</span></span></span>
+    </div>
+    <p class="kv">Two copies of the model are involved: the one being trained (π) and a frozen copy of the
+      SFT checkpoint it started from (π_ref). At the first step the two are identical, so the margin is zero
+      and every pair contributes the same loss, log 2. Training drives the margin positive.</p>
+    <p class="kv">The update is ordinary next-token cross-entropy on the chosen response, plus the same thing
+      with its sign flipped on the rejected one: every chosen token contributes a term pushing its
+      probability up, every rejected token a term pushing its probability down. Those terms are summed into
+      one update to shared parameters, so they are what the step is made of rather than a promise about each
+      token — an individual chosen token can still come out less likely once every other term has had its
+      say. The scale factor σ(−margin) shrinks as the margin grows, and the margin is measured against
+      the reference rather than in absolute terms — it is how much more strongly π prefers the chosen response
+      than π_ref already did. So a pair π ranks correctly still draws a large update if it ranks it less
+      strongly than π_ref did, and a pair π ranks backwards draws a reduced one if π_ref ranked it more
+      backwards still. What the loss is fitting is the gap between the two models' preferences, which is why
+      DPO needs no separately trained reward model: β · log(π/π_ref) is the reward, and the reference is the
+      baseline it is scored against. β also sets how far π may drift from π_ref; it is a setting of the
+      training run, not part of this dataset.</p>
+    <h4>how much of ${hasThink ? "these answers" : "this pair"} the update acts on</h4>
+    <p class="kv">Add a constant to both log-probabilities and the margin does not move: the loss sees only
+      the gap between the two responses. Where the pair shares an opening, both sides are conditioned on
+      identical text, so the tokens inside it cancel one for one and that span carries no signal. Once the responses
+      diverge that stops holding — wording that reappears on both sides sits after a different prefix on
+      each, so it is the same words but not the same training signal, and matching text on its own says
+      nothing about how much of it cancels. Each response is scored as one sequence, thinking span first
+      and then the answer, so "opening" means the opening of that whole sequence: two answers that start
+      alike after two different thinking spans share no opening at all.</p>
+    ${diffPanel(answers)}
+    <p class="kv">${sharedNote(answers, rec, deadPair, demoted, !!thinking)}</p>
+    ${thinking ? `<h4>the thinking span${reason.a && reason.b ? "s" : ""}</h4>
+      <p class="kv">${thinkingNote(rec, reason, shared)}</p>
+      <details><summary>diff the thinking span${reason.a && reason.b ? "s" : ""}</summary>
+        <div style="margin-top:8px">${diffPanel(thinking)}</div></details>` : ""}
+    <h4>what this view approximates</h4>
+    <p class="note">The diff is over words and the model is scored over tokens, so the spans above are an
+      approximation of the sequences it actually sees, and matches shorter than ${MIN_SAME} characters are
+      counted as coincidence rather than shared wording. The panel cannot see token boundaries, so a shared
+      opening is cut back to the last character before the whitespace that separates it from the divergence
+      — tokenizers usually give that space to the word after it — and the claim covers the tokens lying
+      inside the span, not whichever token straddles its end. It is the only claim about cancellation, and
+      the panel makes it only where the stored row is the whole raw response: one
+      assistant turn a side, no thinking span (splitting one out drops the
+      <code>&lt;think&gt;</code> markers and the whitespace around them), and nothing cut at 4,000
+      characters. Everywhere else it reports overlap and character counts. No log-probabilities, gradients
+      or β values are stored in the dataset, so the loss above is symbolic.
+      ${cut ? "One side of this pair is cut at 4,000 characters, so the diff covers only the stored prefix — the HuggingFace row has the rest." : ""}</p>
+  </div>`;
+}
+
+// DPO: the pair, side by side, plus the length gap between the two responses.
+function renderDPO(rec, dataset){
+  const sides = [
+    {key: "chosen", side: rec.chosen, cls: "pos", mark: "✓", verdict: "chosen — trained toward this", color: "var(--series-1)"},
+    {key: "rejected", side: rec.rejected, cls: "neg", mark: "✗", verdict: "rejected — trained away from this", color: "var(--neg)"},
+  ];
+  const shared = sharedTurns(rec.chosen, rec.rejected);
+  // Every pair shares its opening user turn, which the prompt section already
+  // shows. Anything else in the shared prefix — a system turn, a tool result, a
+  // second user message, an assistant turn — is conversation that would
+  // otherwise go unseen: prompt extraction keeps only the first user message, so
+  // there is nowhere else on the page it appears. `prompt_full` stands for that
+  // one turn and no other, so the exemption is by position: a later turn that
+  // repeats the opening, or reads as part of it, still has its own role and its
+  // own place in the conversation to show.
+  const isThePrompt = (t, i) => i === 0 && t.role === "user" &&
+    (t.text === rec.prompt_full.text || rec.prompt_full.text.startsWith(t.text));
+  const sharedHistory = rec.chosen.turns.slice(0, shared).some((t, i) => !isThePrompt(t, i));
+  const candidateChars = side => candidateTurns(side, shared).reduce((a, t) => a + turnChars(t), 0);
+  const maxLen = Math.max(...sides.map(s => candidateChars(s.side)), 1);
+  const lens = sides.map(s => {
+    const n = candidateChars(s.side);
+    return `<div class="lenrow">
+      <div class="lbl">${s.mark} ${s.key}</div>
+      <div><div class="lenbar" style="width:${n/maxLen*100}%;background:${s.color}"
+        data-tip="<b>${s.key}</b><br>${num(n)} characters"></div></div>
+      <div class="val">${num(n)} ch</div>
+    </div>`;
+  }).join("");
+
+  const panels = sides.map(s => {
+    // Everything after the branch, not only the assistant turns: where a pair
+    // branches on a user turn, that turn is why the two answers differ and
+    // hiding it would leave the difference unexplained.
+    const turns = (s.side.turns || []).slice(shared);
+    return `<div class="side ${s.cls}">
+      <div class="sh">
+        <div class="verdict"><i style="background:${s.color}"></i>${s.mark} ${esc(s.verdict)}</div>
+        <div class="who">written by ${esc(s.side.model || "an unnamed model")}</div>
+      </div>
+      <div class="body">${turns.map(t =>
+        turnBlock(t, t.role === "assistant" ? "" : "context on this side, not a target")).join("")
+        || '<p class="note">no assistant turn stored</p>'}</div>
+    </div>`;
+  }).join("");
+
+  const pref = rec.meta && rec.meta.preference_type;
+  return `${chips(rec, dataset)}
+    ${pref && PREF_EXPLAIN[pref] ? `<p class="kv">${esc(PREF_EXPLAIN[pref])}</p>` : ""}
+    <section class="ctxsec">
+      <h3>response length</h3>
+      ${lens}
+      <p class="note">Length is the most common confound in preference data — a pair that differs
+        mainly in length teaches length.</p>
+    </section>
+    ${promptSection(rec)}
+    ${sharedHistory ? `<section class="ctxsec">
+      <h3>the conversation both answers continue</h3>
+      <p class="note">The two completions of this pair are identical for their first ${shared}
+        turn${shared > 1 ? "s" : ""} and branch after them. Those turns are the conversation both
+        candidates answer in, so they are shown once here rather than inside each side — counting them as
+        response wording would make the same text something the model is pushed toward and away from at
+        once. Prompt extraction keeps only the opening user message, so this is the only place the rest of
+        the conversation appears. The split follows the search layer's
+        (<code>_shared_turns</code> in <code>trainspotting/search.py</code>).</p>
+      ${rec.chosen.turns.slice(0, shared).map(t => turnBlock(t, "")).join("")}
+    </section>` : ""}
+    <section class="ctxsec">
+      <h3>${sharedHistory ? "the branch" : "the pair"}</h3>
+      <div class="pair">${panels}</div>
+    </section>
+    <section class="ctxsec">
+      <h3>how this pair updates the model</h3>
+      <button class="ctxbtn" data-toggle="gradpanel"
+        data-more="show how this pair updates the model ›"
+        data-less="hide the update ⌄">show how this pair updates the model ›</button>
+      ${gradientSection(rec, shared)}
+    </section>`;
+}
+
+// RL generates the response being optimized; stored references serve the scorer.
+function rewardFamily(kind){
+  return REWARDS.kinds[kind]?.family || "unknown";
+}
+
+// All counts must cover the split before showing exact shares. The source map
+// identifies broad reward families, not the judge's reference/open-ended mode.
+function rewardComposition(st){
+  if (!st || st.partial || !st.total) return null;
+  const whole = REWARDS.whole_mixes?.[st.dataset];
+  if (whole) return {[rewardFamily(whole.kind)]: {count: st.total, kinds: {[whole.kind]: st.total}}};
+  const mapped = Object.values(st.columns || {}).find(freq => {
+    const vals = Object.keys(freq);
+    return vals.length && vals.every(v => REWARDS.mixes[v]) &&
+      vals.reduce((sum, v) => sum + freq[v], 0) === st.total;
+  });
+  if (!mapped) return null;
+  const families = {};
+  for (const [source, count] of Object.entries(mapped)){
+    const kind = REWARDS.mixes[source].kind;
+    const family = rewardFamily(kind);
+    const group = families[family] ||= {count: 0, kinds: {}};
+    group.count += count;
+    group.kinds[kind] = (group.kinds[kind] || 0) + count;
+  }
+  return families;
+}
+
+function renderRewardComposition(st){
+  const groups = rewardComposition(st);
+  const intro = `<p class="stage-sub">Reinforcement learning rewards: RLVR uses programmatic
+    checks; RLAIF uses AI feedback from an LLM judge. ${groups && groups.rlvr && groups.rlaif
+      ? "Both reward families train the same policy within this stage."
+      : "Each prompt uses the scoring method assigned to its source."}
+    <a href="https://arxiv.org/html/2512.13961v2#S4.SS4.SSS1"
+    target="_blank" rel="noopener">Olmo 3 training recipe ↗</a></p>`;
+  if (!groups) return intro + `<p class="note">The available source counts do not cover the full
+    dataset with known reward types, so an exact RLVR/RLAIF split is unavailable.</p>`;
+  const bar = (label, count, explain) => `<div class="row" style="--bar:${hueFor("rlvr")}">
+    <div class="lbl">${esc(label)}</div>
+    <div class="trackbar" data-tip="${escAttr(explain)}"><div class="fill" style="width:${count/st.total*100}%"></div></div>
+    <div class="val">${pct(count/st.total)} <small>${num(count)}</small></div></div>`;
+  return intro + `<p class="stage-sub">Shares of prompts in the released dataset, grouped by reward
+    type. These are not shares of training updates, tokens, or reward strength.</p>`
+    + Object.entries(groups).sort((a, b) => b[1].count - a[1].count).map(([family, group]) => {
+      const info = REWARDS.families[family];
+      return bar(info.label, group.count, info.explain)
+        + `<details><summary>${esc(info.label)} — scoring methods</summary>`
+        + Object.entries(group.kinds).sort((a, b) => b[1] - a[1]).map(([kind, count]) =>
+          bar(kind, count, REWARDS.kinds[kind]?.explain || "")).join("")
+        + `</details>`;
+    }).join("");
+}
+
+function renderRLVR(rec, dataset){
+  const r = rec.reward || {};
+  const roll = rec.rollouts || {};
+  const family = rewardFamily(r.kind);
+  const familyInfo = REWARDS.families[family];
+  const flow = `<div class="flow">
+    <div class="step"><div class="t">1 · input</div><div class="v">the prompt</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="t">2 · rollout</div><div class="v">the model writes its own answer</div></div>
+    <div class="arrow">→</div>
+    <div class="step accent"><div class="t">3 · ${family === "rlaif" ? "LLM judge" : family === "rlvr" ? "verifier" : "scorer"}</div><div class="v">${esc(r.kind || "unknown")}</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="t">4 · reward</div><div class="v">score on that answer</div></div>
+  </div>`;
+
+  const kindInfo = REWARDS.kinds[r.kind] || {};
+  const checks = [];
+  if (r.ground_truth) checks.push([kindInfo.gt_label || "ground truth the answer is matched against", r.ground_truth]);
+  if (r.constraint) checks.push([`constraint checked${r.constraint_type ? " (" + r.constraint_type + ")" : ""}`, r.constraint]);
+  if (r.solution) checks.push(["reference solution", r.solution]);
+  // Code mixes store their tests as one base64 blob; dumping it reads as noise.
+  const blob = v => v.text.length > 200 && !/\s/.test(v.text);
+  const check = ([k, v]) => `<p class="kv"><b>${esc(k)}</b></p>` + (blob(v)
+    ? `<details><summary>encoded blob, ${num(v.chars)} characters — the verifier decodes it before running</summary>${textBlock(v.text, v.chars)}</details>`
+    : textBlock(v.text, v.chars));
+
+  let meter = "";
+  if (roll.total){
+    const p = roll.passrate != null ? roll.passrate : (roll.correct || 0) / roll.total;
+    meter = `<section class="ctxsec">
+      <h3>how hard this prompt was for the reference model</h3>
+      <div class="meterwrap">
+        <div class="hero">${pct(p)}</div>
+        <div class="meter" data-tip="${escAttr(num(roll.correct) + " of " + num(roll.total) + " sampled rollouts passed the verifier")}"><div style="width:${Math.min(100, p*100)}%"></div></div>
+        <p class="note">${num(roll.correct)} of ${num(roll.total)} sampled rollouts passed. Ai2 used this
+          rate to filter the mix — prompts that always pass or never pass carry no gradient.</p>
+      </div>
+    </section>`;
+  } else {
+    meter = `<section class="ctxsec">
+      <h3>how hard this prompt was for the reference model</h3>
+      <p class="kv">This row stores no reference-model rollout statistics, so there is no
+        measured pass rate to show.</p>
+    </section>`;
+  }
+
+  return `${chips(rec, dataset)}
+    <section class="ctxsec">
+      <h3>${esc(familyInfo.label)}</h3>
+      <p class="kv">${esc(familyInfo.explain)}</p>
+      <p class="note">This prompt uses the scoring method shown below; other sources can use different reward types.</p>
+      <h3>how this prompt trains the model</h3>
+      ${flow}
+      <p class="kv">${esc(kindInfo.explain || r.explain || "")}</p>
+    </section>
+    ${promptSection(rec)}
+    ${checks.length ? `<section class="ctxsec"><h3>what the ${family === "rlaif" ? "judge receives" : "verifier checks"}</h3>
+      ${checks.map(check).join("")}
+    </section>` : `<section class="ctxsec"><h3>what the ${family === "rlaif" ? "judge receives" : "verifier checks"}</h3>
+      <p class="kv">This row stores no ground truth, constraint, or reference answer for the
+        scorer to read.</p></section>`}
+    ${meter}
+    ${roll.sample ? `<section class="ctxsec"><h3>one sampled rollout</h3>
+      <details><summary>show the answer the reference model produced</summary>${textBlock(roll.sample.text, roll.sample.chars)}</details>
+      <p class="note">Stored for difficulty filtering, not as a training target. RL trains on the
+        policy's own answers, not on this one.</p></section>` : ""}`;
+}
+
+const RENDER = {sft: renderSFT, dpo: renderDPO, rlvr: renderRLVR, chat: renderChat};
+
+let dlg;  // the <dialog id=ctx>, assigned by wireDialog() at boot
+// Closing the modal drops the row-… segment from the hash it wrote on open.
+// Wired on every close path explicitly (not the dialog close event, which some
+// Chrome builds don't deliver); cancel covers Esc.
+function closeCtx(){
+  if (dlg._backLink){
+    // Only rewrite the hash if it still shows exactly what this modal wrote on
+    // open. If navigation has moved the hash anywhere else since (history nav,
+    // manual edit, a new view mid-render), the backlink is stale and writing it
+    // would point the URL at the old view.
+    if (location.hash === dlg._modalHash) setHash(...dlg._backLink);
+    dlg._backLink = dlg._modalHash = null;
+  }
+  if (dlg.open) dlg.close();
+}
+// The tooltip and modal elements, the modal's close paths and its disclosure
+// buttons. Called once from boot(), after the DOM exists: module top level
+// must not touch `document`, so tests/site can import this file under node.
+function wireDialog(){
+  tip = document.getElementById("tip");
+  dlg = document.getElementById("ctx");
+  document.getElementById("ctxclose").onclick = closeCtx;
+  dlg.addEventListener("click", e => { if (e.target === dlg) closeCtx(); });
+  dlg.addEventListener("cancel", closeCtx);
+  dlg.addEventListener("close", closeCtx);
+
+  // Sections built as strings ask for a disclosure button with data-toggle.
+  document.getElementById("ctxbody").addEventListener("click", e => {
+    const b = e.target.closest("button[data-toggle]");
+    if (!b) return;
+    const t = document.getElementById(b.dataset.toggle);
+    if (!t) return;
+    t.hidden = !t.hidden;
+    b.textContent = t.hidden ? b.dataset.more : b.dataset.less;
+  });
+}
+
+// `link` (hash segments incl. row-…) makes the open modal linkable.
+function openContext(rec, stage, dataset, stageName, link){
+  if (link){
+    setHash(...link);
+    dlg._modalHash = location.hash;
+    // Closing goes back to whatever was open behind the modal: the drill-down
+    // the link names, or — in the search view, whose results are the page
+    // itself and have no panel to reopen — the query alone.
+    dlg._backLink = link[0] === "search" ? link.slice(0, 2) : link.slice(0, 3);
+  }
+  else dlg._backLink = dlg._modalHash = null;
+  document.getElementById("ctxtitle").innerHTML =
+    `<i class="sw" style="background:${hueFor(stage)}"></i>${esc(stage === "rlvr" ? REWARDS.families[rewardFamily(rec.reward?.kind)].label : stageLabel(stage))} — ${esc(stageName)}`;
+  document.getElementById("ctxlede").textContent = STAGE_LEDE[stage] || "";
+  const body = document.getElementById("ctxbody");
+  body.innerHTML = (RENDER[stage] || RENDER.sft)(rec, dataset);
+  wireTips(body);
+  dlg.scrollTop = 0;
+  if (!dlg.open) dlg.showModal();
+}
+
+// ------------------------------------------------------------------ charts ---
+
+// The literal sampled prompts behind a count, each with a button into the whole
+// training example. Every count on this page is a sample, so every count that
+// can be clicked opens this — a bar, and a heatmap cell.
+function drillPanel(records, ctx){
+  const panel = document.createElement("div");
+  panel.className = "drill";
+  panel.style.setProperty("--bar", hueFor(ctx.stage));
+  const dpoNote = ctx.stage === "dpo"
+    ? " These prompts are often deliberately harmful: the training signal is the preference between the two responses, not the prompt."
+    : "";
+  // What sits behind a prompt differs by kind, and a chat log has no
+  // training half at all — promising "the response the model is fit to"
+  // there would describe a target that does not exist.
+  const behind = ctx.kind === "chat"
+    ? "open it to read the rest of the exchange."
+    : "open the training context for the response the model is fit to, the pair it is pushed between, or the verifier that scores it.";
+  const half = ctx.kind === "chat"
+    ? `the ${records.length} sampled prompt${records.length>1?"s":""} behind this ${ctx.unit || "bar"}. Each opened a
+       real conversation —`
+    : `the ${records.length} sampled prompt${records.length>1?"s":""} behind
+    this ${ctx.unit || "bar"}. A prompt is half of a training example —`;
+  panel.innerHTML = ctx.isCorpus
+    ? `<p class="dnote">the ${records.length} sampled document${records.length>1?"s":""} behind this bar.
+        These are raw corpus documents, not requests to a model — nothing here was written to teach
+        anything, so what the model takes from them is whatever fitting the text implies.</p>`
+    : `<p class="dnote">${half} ${ctx.hasContext
+      ? behind
+      : `no context run is committed for this stage, so only the prompts are here (run <code>trainspotting context ${ctx.model}</code>).`}${dpoNote}</p>`;
+  for (const r of records){
+    const item = document.createElement("div");
+    item.className = "pitem";
+    item.innerHTML = `<details><summary>${esc(r.prompt.slice(0,200))}</summary><pre>${esc(r.prompt)}</pre></details>`;
+    if (ctx.hasContext){
+      const b = document.createElement("button");
+      b.className = "ctxbtn";
+      b.textContent = "see it in training context ›";
+      b.onclick = async () => {
+        const nav = NAV;
+        b.disabled = true;
+        b.textContent = "loading…";
+        let rec = await contextFor(ctx.model, ctx.stage, r);
+        // Any hash move (nav moved on) or a closed drill-down (button
+        // detached) mid-download makes this modal stale — drop it.
+        if (nav !== NAV || !b.isConnected) return;
+        // the labeled record keeps a longer prompt copy than the context record
+        if (rec && r.prompt.length > rec.prompt_full.chars)
+          rec = {...rec, prompt_full: {text: r.prompt, chars: r.prompt.length}};
+        b.disabled = false;
+        b.textContent = "see it in training context ›";
+        if (rec) openContext(rec, ctx.stage, ctx.dataset, ctx.stageName,
+          ctx.linkKey && rec.row != null ? [ctx.view || ctx.model, ctx.stage, ctx.linkKey, "row-" + rec.row] : null);
+        else b.textContent = "this prompt is not in the committed context run";
+      };
+      item.appendChild(b);
+    }
+    panel.appendChild(item);
+  }
+  return panel;
+}
+
+// One bar row on a shared 0–max% scale. CI whisker in muted ink.
+// With `records`, clicking the row toggles the literal sampled examples behind
+// the count; each one opens the whole training example it came from.
+// A ctx.linkKey makes the drill-down state linkable (mirrored into the URL hash).
+// A second reading of the same quantity, drawn on the bar that measures it: the
+// dataset's own label column against what the detector found. Added after the
+// row rather than through barRow's already-long parameter list, and clamped
+// because a caller can pass a share past the group's scale.
+function refTick(row, frac, max){
+  const track = row && row.querySelector(".trackbar");
+  if (!track) return;
+  const t = document.createElement("div");
+  t.className = "reftick";
+  t.style.left = Math.min(100, Math.max(0, frac/max*100)) + "%";
+  track.appendChild(t);
+}
+
+function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx, color){
+  const row = document.createElement("div");
+  row.className = "row";
+  if (ctx) row.style.setProperty("--bar", hueFor(ctx.stage));
+  const w = f => Math.min(100, f/max*100);
+  row.innerHTML = `
+    <div class="lbl" style="${isValue ? "font-weight:600;color:var(--text-primary)" : ""}">${label}</div>
+    <div class="trackbar">
+      <div class="fill ${frac ? "" : "zero"}" style="width:${w(frac)}%${color ? `;background:${color}` : ""}"></div>
+      ${hi > lo ? `<div class="ci" style="left:${w(lo)}%;width:${Math.max(0, w(hi)-w(lo))}%"></div>` : ""}
+    </div>
+    <div class="val">${pct(frac)} <small>${pct(lo)}–${pct(hi)}</small></div>`;
+  hover(row.querySelector(".trackbar"), tipHtml);
+  parent.appendChild(row);
+  if (records && records.length){
+    row.classList.add("clickable");
+    row.title = "click to see the sampled examples behind this count";
+    // Keep the backing records reachable from the element: row deep links
+    // verify membership against them before opening the context modal.
+    if (ctx.linkKey){ row.dataset.link = `${ctx.stage}/${ctx.linkKey}`; row._records = records; }
+    let panel = null;
+    row._toggle = (writeHash = true) => {
+      if (panel){
+        panel.remove(); panel = null;
+        if (writeHash && ctx.linkKey) setHash(ctx.view || ctx.model);
+        return;
+      }
+      if (writeHash && ctx.linkKey){
+        // The hash names at most one open drill-down, and a direct click
+        // suppresses the ensuing route(), so close the others here rather
+        // than relying on route()'s cleanup loop (which only runs on
+        // history navigation).
+        for (const other of document.querySelectorAll("[data-link]"))
+          if (other !== row && other._isOpen()) other._toggle(false);
+        setHash(ctx.view || ctx.model, ctx.stage, ctx.linkKey);
+      }
+      panel = drillPanel(records, ctx);
+      row.after(panel);
+    };
+    row._isOpen = () => !!panel;
+    row.addEventListener("click", () => row._toggle());
+  }
+}
+
+// ------------------------------------------------- pretraining documents ---
+
+// One sampled document: where it came from, what the filters recorded about it,
+// and the text itself. The provenance chips are the point — they are what a
+// search index over the same corpus cannot give you. `rec.revision` pins the
+// shard link to the commit the document was sampled at.
+function docBlock(rec){
+  const m = rec.metadata || {};
+  // A rows-sampled corpus carries no per-document source: the deduplicated Pile
+  // dropped the column that held it. Say so rather than rendering a blank chip
+  // that reads as a source of "".
+  const tags = [rec.source
+    ? `<span class="prov">${esc(rec.source)}${rec.topic ? " · " + esc(niceGroup(rec.topic)) : ""}</span>`
+    : `<span class="prov">row ${num(rec.row)}</span>`];
+  if (m.cc_dump) tags.push(`<span>${esc(m.cc_dump)}</span>`);
+  if (m.quality_score != null) tags.push(`<span>quality ${m.quality_score.toFixed(2)}</span>`);
+  if (m.lang) tags.push(`<span>${esc(m.lang)}${m.lang_score ? " " + m.lang_score.toFixed(2) : ""}</span>`);
+  if (m.word_count) tags.push(`<span>${num(m.word_count)} words</span>`);
+  if (m.exact_duplicates) tags.push(`<span>${num(m.exact_duplicates)} exact dupes</span>`);
+  // Long documents are stored as spans taken across their whole length, so say
+  // what fraction is on screen rather than letting an excerpt read as the file.
+  const excerpted = rec.chars && rec.chars > rec.text.length;
+  if (excerpted) tags.push(`<span>excerpt of ${num(rec.chars)} chars</span>`);
+  // The server shortened this cell before we saw it, so `chars` is the length of
+  // what arrived, not of the document.
+  if (rec.truncated) tags.push(`<span>shortened in transit</span>`);
+  const head = rec.text.slice(0, 150).replace(/\s+/g, " ").trim() || "(empty)";
+  return `<div class="doc">
+    <div class="doctags">${tags.join("")}</div>
+    <details><summary>${esc(head)}${rec.text.length > 150 ? "…" : ""}</summary>
+      ${excerpted ? `<p class="note" style="margin:6px 0 0">Three spans sampled across a ${num(rec.chars)}-character document; <code>[…]</code> marks what is cut. This is also exactly the text the classifier judged.</p>` : ""}
+      <pre>${esc(rec.text)}</pre>
+      ${rec.shard
+        ? `<a class="shard" href="https://huggingface.co/datasets/${escAttr(rec.dataset)}/blob/${escAttr(rec.revision || "main")}/${escAttr(rec.shard)}" target="_blank" rel="noopener">${esc(rec.shard)} ›</a>`
+        : `<a class="shard" href="https://huggingface.co/datasets/${escAttr(rec.dataset)}/viewer/default/train?row=${escAttr(rec.row)}" target="_blank" rel="noopener">row ${num(rec.row)} in the dataset viewer ›</a>`}
+    </details>
+  </div>`;
+}
+
+// Composition comes from the file listing, so it is exact: every shard in the
+// repo, weighed by compressed bytes. Only the documents are sampled.
+function corpusComposition(parent, groups, totalBytes, limit = 14){
+  const entries = Object.entries(groups).slice(0, limit);
+  const max = Math.max(...entries.map(([, g]) => g.bytes / totalBytes), 0.001);
+  for (const [key, g] of entries){
+    const f = g.bytes / totalBytes;
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `
+      <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(niceGroup(key))}</div>
+      <div class="trackbar"><div class="fill" style="width:${f/max*100}%"></div></div>
+      <div class="val">${pct(f)} <small>${fmtBytes(g.bytes)}</small></div>`;
+    hover(row.querySelector(".trackbar"),
+      `<b>${esc(niceGroup(key))}</b><br>${fmtBytes(g.bytes)} compressed across ${num(g.shards)} shards<br>${pct(f)} of the mix by bytes`);
+    parent.appendChild(row);
+  }
+  const rest = Object.keys(groups).length - entries.length;
+  if (rest > 0){
+    const p = document.createElement("p");
+    p.className = "note";
+    p.textContent = `+${rest} more source/topic groups`;
+    parent.appendChild(p);
+  }
+}
+
+// ------------------------------------------------------------ chart forms ---
+// The pieces the size charts are built from. Each takes numbers and returns
+// elements; what those numbers mean is decided by the cards below.
+
+const fmtChars = n => trim(n >= 1e6 ? (n/1e6).toFixed(1) + "M" : n >= 1e3 ? Math.round(n/1e3) + "k" : String(Math.round(n)));
+
+// Ink that stays readable on a filled mark. The two ramps used for fills run
+// light-to-dark on the light surface and dark-to-light on the dark one, so
+// which end needs white text flips with the mode — resolve the actual colour
+// rather than deciding per step. Cached, and the cache is dropped when the
+// mode changes under a live page.
+let INK = {};
+// Guarded for a non-browser evaluator: tests/site runs this script under
+// node, where `window` is not defined at all.
+function watchColorScheme(){
+  if (window.matchMedia)
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { INK = {}; });
+}
+function inkOn(color){
+  if (INK[color]) return INK[color];
+  const probe = document.createElement("div");
+  probe.style.cssText = `position:absolute;visibility:hidden;color:${color}`;
+  document.body.appendChild(probe);
+  const rgb = (getComputedStyle(probe).color.match(/[\d.]+/g) || [0,0,0]).slice(0,3).map(Number);
+  probe.remove();
+  const lin = c => (c /= 255) <= 0.03928 ? c/12.92 : ((c + 0.055)/1.055) ** 2.4;
+  const L = 0.2126*lin(rgb[0]) + 0.7152*lin(rgb[1]) + 0.0722*lin(rgb[2]);
+  // Fixed inks, not the theme's text token: the choice is made against the
+  // fill, and on a dark page a pale fill still wants dark text.
+  return INK[color] = L > 0.42 ? "#0b0b0b" : "#ffffff";
+}
+
+// A 100%-wide part-to-whole strip. Segments are laid out by value, so a segment
+// worth 0.03% of the total is a hairline — which is the finding, not a defect.
+// A 2px gap separates fills; identity comes from the card's legend and the
+// tooltip, never from the segment alone.
+function stackedStrip(parent, title, right, segments){
+  const total = segments.reduce((a, s) => a + s.v, 0) || 1;
+  const wrap = document.createElement("div");
+  wrap.className = "striprow";
+  wrap.innerHTML = `<div class="t"><span>${title}</span><em>${right}</em></div>
+    <div class="strip">${segments.filter(s => s.v > 0).map(s =>
+      `<div style="flex:${s.v};background:${s.c}" data-tip="<b>${escAttr(s.k)}</b><br>${escAttr(s.detail)}<br>${pct(s.v/total)} of the total"></div>`
+    ).join("")}</div>`;
+  wireTips(wrap);
+  parent.appendChild(wrap);
+  return wrap;
+}
+
+// Bars on a log axis, one decade per gridline. Bar length is not proportional
+// here — that is what the strip above it is for — so every bar is direct
+// labeled and the decades are ticked, and the two charts are always shown
+// together. Six orders of magnitude cannot be read any other way.
+function logChart(parent, rows){
+  const values = rows.map(r => r.v).filter(v => v > 0);
+  if (!values.length) return;
+  // Start a decade below the smallest bar so the smallest is a bar and not a
+  // hairline at the axis origin.
+  const lo = Math.floor(Math.log10(Math.min(...values))) - 1;
+  const hi = Math.ceil(Math.log10(Math.max(...values)));
+  const at = v => Math.max(0, Math.min(100, (Math.log10(v) - lo) / (hi - lo) * 100));
+  const wrap = document.createElement("div");
+  wrap.className = "logwrap";
+  for (const r of rows){
+    const row = document.createElement("div");
+    row.className = "row log";
+    const ci = r.lo && r.hi && r.hi > r.lo
+      ? `<div class="ci" style="left:${at(r.lo)}%;width:${Math.max(0, at(r.hi)-at(r.lo))}%"></div>` : "";
+    row.innerHTML = `
+      <div class="lbl">${r.label}</div>
+      <div class="trackbar" style="background:none">
+        <div class="fill" style="width:${at(r.v)}%;background:${r.c}"></div>${ci}
+      </div>
+      <div class="val">${r.value}${r.note ? ` <small>${r.note}</small>` : ""}</div>`;
+    hover(row.querySelector(".trackbar"), r.tip);
+    wrap.appendChild(row);
+  }
+  // Appended last so the hairlines read over the fills rather than under them.
+  const axis = document.createElement("div");
+  axis.className = "logaxis";
+  for (let d = lo; d <= hi; d++){
+    const left = (d - lo) / (hi - lo) * 100;
+    axis.innerHTML += `<i style="left:${left}%"></i><b style="left:${left}%">${fmtTok(10 ** d)}</b>`;
+  }
+  wrap.appendChild(axis);
+  parent.appendChild(wrap);
+}
+
+// One stage's length distribution, on bins shared by every other stage so the
+// rows read as small multiples of one axis.
+function histRow(parent, label, stats, color, tipHead){
+  const bins = stats.hist || [];
+  const max = Math.max(...bins, 1);
+  const row = document.createElement("div");
+  row.className = "histrow";
+  row.innerHTML = `<div class="lbl">${label}</div>
+    <div class="spark">${bins.map((c, i) => {
+      const from = HIST_EDGES[i], to = HIST_EDGES[i+1];
+      return `<i style="height:${Math.max(c ? 2 : 0, c/max*100)}%;background:${color}" data-tip="<b>${escAttr(tipHead)}</b><br>${c} of ${stats.n} sampled (${pct(c/stats.n)})<br>${fmtChars(from)}–${fmtChars(to)} characters"></i>`;
+    }).join("")}</div>
+    <div class="val">${fmtChars(stats.median)} <small>median</small></div>`;
+  wireTips(row);
+  parent.appendChild(row);
+}
+
+// Every stage's share of one label on a single axis: one dot per stage, a
+// hairline connecting the extremes. Three bars per label would be twenty-one
+// bars; this is the same numbers as one glance, and the per-stage bars below
+// remain the place to read the values off.
+function dotRow(parent, label, points, max, isValue){
+  const row = document.createElement("div");
+  row.className = "dotrow";
+  const at = f => Math.max(0, Math.min(100, f/max*100));
+  const spread = points.length > 1
+    ? `<div class="span" style="left:${at(Math.min(...points.map(p => p.f)))}%;width:${at(Math.max(...points.map(p => p.f))) - at(Math.min(...points.map(p => p.f)))}%"></div>`
+    : "";
+  row.innerHTML = `
+    <div class="lbl" style="${isValue ? "font-weight:600;color:var(--text-primary)" : ""}">${label}</div>
+    <div class="dottrack">${spread}${points.map(p =>
+      `<div class="dot" style="left:${at(p.f)}%;background:${p.c}" data-tip="${escAttr(p.tip)}"></div>`).join("")}</div>
+    <div class="val">${points.length ? `${pct(Math.max(...points.map(p => p.f)))} <small>${esc(points.reduce((a, p) => p.f > a.f ? p : a).stage)}</small>` : ""}</div>`;
+  wireTips(row);
+  parent.appendChild(row);
+}
+
+// A grid of counts: rows are one metadata column's values, columns are the
+// labels, cells carry the count and a sequential blue for the share of the row.
+// The number is in the cell as well as in the colour, so the grid is its own
+// table view; a cell with prompts behind it opens them like any bar does.
+function heatTable(parent, rows, cols, ctx){
+  const wrap = document.createElement("div");
+  wrap.className = "hmwrap";
+  const table = document.createElement("table");
+  table.className = "hm";
+  const head = document.createElement("tr");
+  head.innerHTML = `<th class="rowlbl"></th>`
+    + cols.map(c => `<th>${esc(c.short)}</th>`).join("")
+    + `<th style="text-align:right">n</th>`;
+  table.appendChild(head);
+  const STEPS = ["var(--heat-1)", "var(--heat-2)", "var(--heat-3)", "var(--heat-4)", "var(--heat-5)"];
+  for (const r of rows){
+    const tr = document.createElement("tr");
+    const lbl = document.createElement("th");
+    lbl.className = "rowlbl";
+    lbl.textContent = r.name;
+    lbl.title = r.name;
+    tr.appendChild(lbl);
+    for (const c of cols){
+      const recs = r.byCol[c.key] || [];
+      const f = r.total ? recs.length / r.total : 0;
+      const td = document.createElement("td");
+      // Five steps, so a cell's colour is read as a band and the count is read
+      // as the number. Zero stays on the surface rather than taking the
+      // lightest step, which would make "none" and "a couple" look alike.
+      const step = f <= 0 ? null : STEPS[Math.min(STEPS.length - 1, Math.floor(f * STEPS.length))];
+      td.style.background = step || "var(--track)";
+      if (step) td.style.color = inkOn(step);
+      td.textContent = recs.length || "·";
+      hover(td, `<b>${escAttr(r.name)}</b> · ${escAttr(c.label)}<br>${recs.length} of ${r.total} sampled prompts (${pct(f)})`
+        + (recs.length && ctx ? "<br>click to read them" : ""));
+      if (recs.length && ctx){
+        td.classList.add("on");
+        td.setAttribute("role", "button");
+        td.tabIndex = 0;
+        td.title = `${recs.length} prompts — ${r.name} · ${c.label}`;
+        let panel = null;
+        const toggle = () => {
+          if (panel){ panel.remove(); panel = null; return; }
+          panel = drillPanel(recs, {...ctx, unit: "cell"});
+          panel.style.margin = "4px 0 12px";
+          // Under the whole table: a row of a <table> is no place to mount a
+          // block of prompts.
+          wrap.after(panel);
+        };
+        td.addEventListener("click", toggle);
+        td.addEventListener("keydown", e => {
+          if (e.key === "Enter" || e.key === " "){ e.preventDefault(); toggle(); }
+        });
+      }
+      tr.appendChild(td);
+    }
+    const n = document.createElement("td");
+    n.className = "n";
+    n.textContent = r.total;
+    tr.appendChild(n);
+    table.appendChild(tr);
+  }
+  wrap.appendChild(table);
+  parent.appendChild(wrap);
+  const scale = document.createElement("div");
+  scale.className = "scalelegend";
+  scale.innerHTML = `share of the row: 0%`
+    + STEPS.map(s => `<i style="background:${s}"></i>`).join("")
+    + `100% · the count is in the cell`;
+  parent.appendChild(scale);
+  return wrap;
+}
+
+// Squarified treemap. Returns rectangles in the order given, so the caller can
+// keep colour tied to the entity rather than to the layout.
+function treemapLayout(items, W, H, minSide = 3){
+  const total = items.reduce((a, i) => a + i.v, 0) || 1;
+  const list = items.filter(i => i.v > 0).sort((a, b) => b.v - a.v)
+    .map(i => ({item: i, area: i.v / total * W * H}));
+  const rects = [];
+  let x = 0, y = 0, w = W, h = H, i = 0;
+  const worst = (row, side) => {
+    const s = row.reduce((a, r) => a + r.area, 0);
+    if (!s || !side) return Infinity;
+    const mx = Math.max(...row.map(r => r.area)), mn = Math.min(...row.map(r => r.area));
+    return Math.max(side * side * mx / (s * s), s * s / (side * side * mn));
+  };
+  while (i < list.length && w > 0 && h > 0){
+    const column = w >= h, side = column ? h : w;
+    const row = [list[i++]];
+    while (i < list.length && worst(row, side) >= worst([...row, list[i]], side)) row.push(list[i++]);
+    const sum = row.reduce((a, r) => a + r.area, 0);
+    const thick = Math.min(sum / side, column ? w : h);
+    let off = 0;
+    for (const r of row){
+      const len = thick ? r.area / thick : 0;
+      rects.push(column
+        ? {...r.item, x, y: y + off, w: thick, h: len}
+        : {...r.item, x: x + off, y, w: len, h: thick});
+      off += len;
+    }
+    if (column){ x += thick; w -= thick; } else { y += thick; h -= thick; }
+  }
+  // A tile worth 0.03% of the area is smaller than a pixel. Drawing it at zero
+  // would say it isn't there; drawing it at 3px is a distortion, so the caller
+  // is expected to say out loud that these tiles are not to scale.
+  for (const r of rects){
+    r.clamped = r.w < minSide || r.h < minSide;
+    r.w = Math.max(r.w, minSide);
+    r.h = Math.max(r.h, minSide);
+  }
+  return rects;
+}
+
+let REG, MANIFEST, LANG_NAMES = {}, REWARDS = {families:{}, kinds:{}, mixes:{}}, DATA = {}, CTXMAPS = {};
+const langName = c => LANG_NAMES[c] || c;
+const UNDET = "undetermined";
+
+// A dataset that ships its own `language` column spells the languages out in
+// English; the detector emits ISO codes. Invert the shared name table so a
+// language gets one row carrying both readings instead of two rows in two
+// cards.
+//
+// A column names a language whatever it likes, and an exact-name inversion
+// misses the same language under another spelling — WildChat writes Bokmal,
+// Nynorsk and Slovene where the code table says Norwegian Bokmal, Norwegian
+// Nynorsk and Slovenian. Unaliased, those 943 rows get reported as labels the
+// detector cannot emit, and a sample that did draw one would show a zero tick
+// next to a share the dataset actually recorded. `Nolang` is WildChat's own
+// marker for a conversation its detector would not call, which is what
+// `undetermined` means here.
+const LANG_ALIASES = {
+  nolang: UNDET,
+  bokmal: "nb",
+  nynorsk: "nn",
+  slovene: "sl",
+};
+let LANG_CODES = null;
+function langCode(value){
+  if (!LANG_CODES){
+    LANG_CODES = new Map(Object.entries(LANG_NAMES).map(([c, n]) => [n.toLowerCase(), c]));
+    // Aliases lose to a real name: a column value that already matches the code
+    // table is not a variant spelling of something else.
+    for (const [alias, code] of Object.entries(LANG_ALIASES))
+      if (!LANG_CODES.has(alias)) LANG_CODES.set(alias, code);
+  }
+  return LANG_CODES.get(String(value).trim().toLowerCase()) || null;
+}
+
+const langColumn = (sources, stage) =>
+  (sources && sources[stage] && sources[stage].columns && sources[stage].columns.language) || null;
+
+// The dataset's own language column as shares, keyed by the codes the detector
+// emits. Values the code table cannot express are kept aside rather than
+// dropped: WildChat's column lists Maori, Sotho and Latin, which is worth
+// saying out loud, and silently discarding them would make the column's shares
+// stop summing to its own rows.
+function columnLangShares(freq, denom){
+  const byCode = {}, unmatched = [];
+  for (const [value, count] of Object.entries(freq || {})){
+    const code = langCode(value);
+    if (code) byCode[code] = (byCode[code] || 0) + count/denom;
+    else unmatched.push([value, count/denom]);
+  }
+  unmatched.sort((a, b) => b[1] - a[1]);
+  const unmatchedShare = unmatched.reduce((a, [, f]) => a + f, 0);
+  const covered = Object.values(byCode).reduce((a, f) => a + f, 0) + unmatchedShare;
+  return {
+    byCode, unmatched, unmatchedShare, covered,
+    english: byCode.en || 0,
+    undetermined: byCode[UNDET] || 0,
+    // Everything the column labeled as some language other than English —
+    // including the labels above that have no ISO code, which are still
+    // non-English answers to the question this card asks.
+    nonEnglish: covered - (byCode.en || 0) - (byCode[UNDET] || 0),
+  };
+}
+
+// English, everything else, and the prompts the detector would not call, over
+// the same denominator so the three shares a stage reports add to the sample.
+// They were reported as two numbers that did not add to anything, which is most
+// of why the two language readings looked like a contradiction.
+function langSummary(counts, n){
+  const rest = Object.keys(counts).filter(c => c !== "en" && c !== UNDET)
+    .sort((a, b) => counts[b] - counts[a]);
+  const en = counts.en || 0;
+  const undet = counts[UNDET] || 0;
+  return {rest, en, undet, nonEn: rest.reduce((a, c) => a + counts[c], 0), n};
+}
+
+async function fetchJSON(p){ const r = await fetch("data/"+p); if(!r.ok) throw new Error(p); return r.json(); }
+async function getData(name){
+  if (!DATA[name] && MANIFEST.includes(name)) DATA[name] = await fetchJSON(name);
+  return DATA[name];
+}
+const KEY_CHARS = 400;  // must match trainspotting/context.py
+
+// The prompt opening every join on this page is keyed on. Python cut it by code
+// point, so this has to as well: String.slice counts UTF-16 units, and one
+// emoji before the cut moves it a character. Three committed context records
+// have a non-BMP character in their first 400, and under the old slice every
+// lookup for them missed — the crosstab dropped the prompt, and the "see it in
+// training context" button reported the row as uncommitted.
+const keyPrefix = prompt => [...prompt].slice(0, KEY_CHARS).join("");
+const ctxFile = (model, stage) => `${model}.${stage}.context.json`;
+const profileFile = (model, stage) => `${model}.${stage}.profile.json`;
+
+// Half-decade bins from 10 characters up — must match derive.HIST_* .
+const HIST_EDGES = Array.from({length: 12}, (_, i) => 10 ** (1 + i * 0.5));
+
+// The third join on this page, and the cheapest: a profile record carries no
+// prompt text at all, only this hash of the same 400-character opening
+// `context.build` keys on. 32-bit FNV-1a over code points — mirrored from
+// derive.prompt_key, and tests/test_derive.py runs both over the committed
+// samples so the two cannot drift apart silently.
+function promptKey(prompt){
+  let h = 0x811c9dc5;
+  // Sliced by code point, not by `String.slice`, which counts UTF-16 units: a
+  // prompt with an emoji in its first 400 characters would otherwise be cut a
+  // character short of where Python cut it, hash differently, and drop out of
+  // the grid silently. Three of the committed samples do exactly that.
+  for (const ch of keyPrefix(prompt)) h = Math.imul(h ^ ch.codePointAt(0), 0x01000193) >>> 0;
+  return h.toString(16).padStart(8, "0");
+}
+
+// Two joins, and the row is the real one. The prompt-prefix map cannot tell
+// apart two rows that open with the same 400 characters, and it keeps the first
+// — rare in a curated mix, routine in a chat log, where WildChat repeats the
+// same Midjourney preamble before different conversations. Result records carry the
+// sampled row index; the prefix map stays for runs committed before they did.
+async function ctxMaps(model, stage){
+  const f = ctxFile(model, stage);
+  if (!CTXMAPS[f]){
+    const d = await getData(f);
+    const byKey = new Map(), byRow = new Map();
+    for (const r of (d ? d.records : [])){
+      if (!byKey.has(r.key)) byKey.set(r.key, r);
+      if (r.row != null) byRow.set(r.row, r);
+    }
+    CTXMAPS[f] = {byKey, byRow};
+  }
+  return CTXMAPS[f];
+}
+
+async function contextFor(model, stage, rec){
+  const {byKey, byRow} = await ctxMaps(model, stage);
+  if (rec.row != null && byRow.has(rec.row)) return byRow.get(rec.row);
+  return byKey.get(keyPrefix(rec.prompt));
+}
+// Deep links address a training example by its HuggingFace row number.
+async function contextRowFor(model, stage, row){
+  const d = await getData(ctxFile(model, stage));
+  return d ? d.records.find(r => r.row === row) : null;
+}
+
+// A tile can be clicked while renderModel() is still awaiting its data files, before
+// the destination section exists. Remember the request and replay it once render finishes.
+let pendingJump = null;
+
+// The tab bar is sticky and wraps onto extra rows on narrow viewports, so its height
+// is not a constant. Publish it as --stickyh, which the scroll-margin rules read.
+function syncStickyHeight(){
+  const tabs = document.getElementById("tabs");
+  if (tabs) document.documentElement.style.setProperty("--stickyh", tabs.offsetHeight + "px");
+}
+
+// Each stage's first card owns "sec-": the published mix for a base stage, the
+// exact composition for a post-training one. The fallbacks cover a stage whose
+// first card didn't render because its data file isn't committed.
+function jumpToStage(stage){
+  const el = document.getElementById("sec-" + stage)
+    || document.getElementById("hhh-" + stage)
+    || document.getElementById("docs-" + stage);
+  if (!el) return false;
+  syncStickyHeight();
+  el.scrollIntoView({behavior: "smooth", block: "start"});
+  el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+  return true;
+}
+
+// ------------------------------------------------------------ token budget ---
+// Every other card on this page is about post-training, which is where the
+// detail is. This is the card that says what fraction of the model's training
+// that detail describes.
+//
+// The numbers are not all of one kind and the card never pretends otherwise:
+// a corpus stage's tokens are published in the paper, a post-training stage's
+// are estimated from the same examples every other card samples. What makes
+// the comparison worth drawing anyway is its size — the gap is four orders of
+// magnitude, and no plausible tokenizer moves it by one.
+
+// The corpus stages are ordered, so they take an ordinal ramp rather than
+// categorical hues they could not clear the CVD floors in.
+const CORPUS_RAMP = ["var(--corpus-1)", "var(--corpus-2)", "var(--corpus-3)"];
+
+// One row per stage, with everything the size cards need already resolved:
+// where its token count came from, what the model was fit to, and what this
+// page has actually looked at.
+function budgetRows(m, sources, profiles, corpusSummaries){
+  const corpusStages = m.stages.filter(s => !s.hf_dataset);
+  return m.stages.map(s => {
+    const base = !s.hf_dataset;
+    const p = profiles[s.stage];
+    const est = p && p.tokens;
+    const corpus = corpusSummaries[s.stage];
+    const src = sources && sources[s.stage];
+    return {
+      stage: s.stage,
+      name: s.name,
+      stageEntry: s,
+      base,
+      color: base ? CORPUS_RAMP[Math.min(corpusStages.indexOf(s), CORPUS_RAMP.length - 1)] : hueFor(s.stage),
+      tokens: base ? s.tokens : (est ? est.tokens : null),
+      // Absent where the sample was one fetch: no between-draw information,
+      // so no interval rather than one that assumes the rows were independent.
+      lo: est && est.lo != null ? est.lo : null,
+      hi: est && est.hi != null ? est.hi : null,
+      estimated: !base,
+      // Every pretraining token is a next-token target; what a post-training
+      // stage fits is a fraction of the example, and for RL none of it.
+      fitTokens: base ? s.tokens : (p && p.target_tokens ? p.target_tokens.tokens : (p ? 0 : null)),
+      fitShare: base ? 1 : (p && p.chars && p.chars.mean
+        ? p.target_chars.mean / p.chars.mean : null),
+      examples: base ? null : (src ? src.total : null),
+      // What this page looked at: the committed sample behind every chart below.
+      sampled: base ? (corpus ? corpus.records : null) : (p ? p.chars.n : null),
+      lengths: base ? (corpus && corpus.lengths ? corpus.lengths.chars : null) : (p ? p.chars : null),
+      targetLengths: base ? null : (p ? p.target_chars : null),
+      perExample: est ? est.per_example : null,
+      // Why the whisker is as wide as it is: the sampler's draws, and how much
+      // correlation inside them cost. A wide interval with no explanation reads
+      // as a small sample.
+      deff: p && p.chars ? p.chars.deff : null,
+      clusters: p && p.chars ? p.chars.clusters : null,
+      // Whether the sampled mean and the row count it is multiplied by were
+      // read from the same tree. These dataset ids move.
+      revisions: p ? p.revisions : null,
+      // Rows the sampler fetched and the context layer could not read.
+      dropped: p && p.requested ? p.requested - p.retained : 0,
+    };
+  });
+}
+
+function tokenBudgetCard(m, rows){
+  const sized = rows.filter(r => r.tokens);
+  if (!sized.length) return null;
+  const card = document.createElement("section");
+  card.className = "card";
+  // A dataset is one stage with nothing to compare it against. One number is a
+  // stat, not a chart. A lone stage whose size was published rather than
+  // measured has nothing to say here at all — the pipeline tile above already
+  // says it.
+  if (sized.length === 1){
+    const r = sized[0];
+    if (!r.estimated || !r.lengths) return null;
+    card.innerHTML = `<h2>How big is it?</h2>
+      <div class="hero-stat"><div class="n">${fmtTok(r.tokens)}</div>
+        <div class="cap">tokens, estimated from the ${r.sampled} sampled examples — a mean of
+          ${num(Math.round(r.lengths.mean))} characters each, at four characters per token, across
+          ${num(r.examples)} examples. ${r.lo != null
+            ? `95% interval ${fmtTok(r.lo)}–${fmtTok(r.hi)} on the sampled mean; the divisor is the
+               larger uncertainty.`
+            : `No interval: the sample came back as a single fetch of adjacent rows, which carries
+               no information about how much the mean would move on another draw.`}</div></div>`;
+    return card;
+  }
+  const total = sized.reduce((a, r) => a + r.tokens, 0);
+  const post = sized.filter(r => !r.base);
+  const postTokens = post.reduce((a, r) => a + r.tokens, 0);
+  const share = postTokens / total;
+  const legend = `<div class="legend" style="margin:0 0 14px">${sized.map(r =>
+    `<span class="k"><i style="background:${r.color}"></i>${esc(stageLabel(r.stage))}</span>`).join("")}</div>`;
+  // With no post-training stage sized there is no estimate to explain and no
+  // share to lead with — the card is then just the corpus stages against each
+  // other, which is still worth drawing.
+  card.innerHTML = `<h2>Where the token budget went</h2>
+    <p class="sub">Corpus tokens are the paper's own (Table 4).${post.length ? ` Post-training tokens are
+      estimated here — mean characters over the same ${post[0].sampled}-example sample every card
+      below draws from, at four characters per token, times the exact row count. The estimate's 95%
+      interval is on the log chart; the divisor is the larger uncertainty and no value in the
+      plausible 3.5–4.5 range changes what this shows.` : ""}</p>
+    ${post.length ? `<div class="hero-stat"><div class="n">${share < 0.001 ? (share*100).toPrecision(2) + "%" : pct(share)}</div>
+      <div class="cap">of the text behind this model, counted in tokens, came after pretraining —
+        and nearly every other card on this page is about that sliver. The pipeline tiles above are
+        in the order training happened; this is the same pipeline to scale.</div></div>` : ""}
+    ${legend}`;
+  stackedStrip(card, "text in each stage, in tokens", fmtTok(total) + " total", sized.map(r => ({
+    k: `${stageLabel(r.stage)} — ${r.name}`, v: r.tokens, c: r.color,
+    detail: `${fmtTok(r.tokens)} tokens${r.estimated ? " (estimated)" : ""}`,
+  })));
+  const sampledRows = rows.filter(r => r.sampled);
+  if (sampledRows.length > 1){
+    const totalSampled = sampledRows.reduce((a, r) => a + r.sampled, 0);
+    stackedStrip(card, "examples and documents sampled for this page",
+      num(totalSampled) + " sampled", sampledRows.map(r => ({
+        k: `${stageLabel(r.stage)} — ${r.name}`, v: r.sampled, c: r.color,
+        detail: `${num(r.sampled)} sampled` + (r.examples ? ` of ${num(r.examples)} examples (${(r.sampled/r.examples*100).toFixed(3)}%)` : " documents"),
+      })));
+    // A stage with tokens but no committed sample is missing from the second
+    // strip entirely, which is a stronger version of the same point and has to
+    // be said rather than left as an absence.
+    const unsampled = sized.filter(r => !r.sampled);
+    const p = document.createElement("p");
+    p.className = "note";
+    p.style.margin = "-8px 0 14px";
+    p.textContent = "The two strips are the same pipeline weighted two ways, each to its own total: "
+      + "what the model read, and what this page read. Every stage gets roughly the same sample, "
+      + "which is why the second strip is nothing like the first."
+      + (unsampled.length
+        ? ` ${unsampled.map(r => r.stage).join(", ")} ${unsampled.length === 1 ? "has" : "have"} no committed sample at all, so ${unsampled.length === 1 ? "it is" : "they are"} absent from the second strip — run trainspotting pretrain to put ${unsampled.length === 1 ? "it" : "them"} there.`
+        : "");
+    card.appendChild(p);
+  }
+  // A stage whose sample and row count come from different trees has no
+  // honest total, so the export withholds one — and an absence on a size chart
+  // reads as "nothing here" rather than "not comparable". Say which.
+  const mixed = rows.filter(r => !r.base && !r.tokens && r.revisions && r.revisions.agree === false);
+  if (mixed.length){
+    const p = document.createElement("p");
+    p.className = "note";
+    p.style.margin = "0 0 14px";
+    p.textContent = `${mixed.map(r => r.stage).join(", ")} ${mixed.length === 1 ? "is" : "are"} missing above: `
+      + (mixed.some(r => r.revisions.moved && r.revisions.moved.length)
+        ? `the dataset was republished while a run was in flight, so its rows may come from either tree. `
+        : `the sampled examples and the exact row count were read from different revisions of the dataset, `
+          + `so multiplying one by the other would report a mixed-tree number as one measurement. `)
+      + `Re-run trainspotting context or trainspotting sources for ${mixed.length === 1 ? "it" : "them"}.`;
+    card.appendChild(p);
+  }
+  const grp = document.createElement("div");
+  grp.className = "grp";
+  grp.textContent = "the same tokens on a log axis";
+  card.appendChild(grp);
+  logChart(card, sized.map(r => ({
+    label: `${esc(stageLabel(r.stage))}`,
+    v: r.tokens, lo: r.lo, hi: r.hi, c: r.color,
+    value: fmtTok(r.tokens),
+    note: r.stage === "rlvr" ? "prompts only" : r.estimated ? "est" : "paper",
+    tip: `<b>${esc(stageLabel(r.stage))}</b> — ${esc(r.name)}<br>${fmtTok(r.tokens)} tokens`
+      + (r.stage === "rlvr" ? "<br>the prompt set only — RL's training completions are generated during the run and are not released in full, so the tokens this stage actually processes cannot be counted from the data" : "")
+      + (r.estimated
+        ? `<br>estimated: ${num(Math.round(r.perExample))} tokens/example × ${num(r.examples)} examples`
+          + (r.lo != null
+            ? `<br>95% CI ${fmtTok(r.lo)}–${fmtTok(r.hi)} on the sampled mean length`
+              + `<br>at t(${r.lengths.df}) — the error is estimated from ${r.clusters} draws, not known`
+            : `<br>no interval: the sample came back as a single fetch of adjacent rows, which carries no information about how much the mean would move on another draw`)
+          + (r.deff > 1.05
+            ? `<br>widened ${r.deff.toFixed(1)}× for clustering — ${r.clusters} draws of ten consecutive rows, not ${r.lengths.n} independent ones`
+            : "")
+          + (r.dropped
+            ? `<br>${r.dropped} of the ${r.lengths.n + r.dropped} fetched rows had no readable prompt and were dropped; the total assumes they are like the ones that were kept`
+            : "")
+          + (r.revisions && r.revisions.agree === null
+            ? `<br>the sample and the row count are not pinned to the same dataset revision — one of the two runs predates the stamp, so the pairing is unproven`
+            : "")
+        : `<br>published in the OLMo 3 paper`),
+  })));
+  const note = document.createElement("p");
+  note.className = "note";
+  note.style.marginTop = "22px";
+  note.innerHTML = "Every gridline is 10×, so bar length here is not proportional — the strip above "
+    + "is the same numbers to scale. Whiskers on the estimated stages are the 95% interval on the "
+    + "sampled mean example length, which is sampling error only: it says nothing about the "
+    + "characters-per-token divisor."
+    // What this is a count of, said plainly, because the two obvious readings
+    // differ and only one of them is measurable from the data. Tokens
+    // *processed* would count a DPO prompt twice (it is read once with each
+    // completion) and would have to include RL's generated rollouts, which are
+    // not in the dataset at any length and cannot be recovered from it.
+    + " The interval is over the sampler's draws rather than its rows: rows arrive in"
+    + " chunks of ten consecutive positions and neighbours on disk are correlated. Treating"
+    + " every row as an independent draw would make the whiskers too narrow."
+    + " These are tokens of text in each stage's data, not tokens processed during training."
+    + " A DPO example's shared prompt is read once with each completion at training time and is"
+    + " counted once here; an RL stage is only its prompts, because the completions RL actually"
+    + " trains on are generated during the run and are not released in full. Read the RL bar as the size of"
+    + " the prompt set, not the size of the RL update.";
+  card.appendChild(note);
+  return card;
+}
+
+// The second half of the token question: of the text in a stage, how much does
+// the model actually get fit to? A stage's answer is a property of the loss,
+// not of the data, so this is the one chart on the page whose bars are exact
+// for the corpus stages and sampled for the rest.
+function fitCard(m, rows){
+  const usable = rows.filter(r => r.fitShare != null);
+  if (usable.length < 2) return null;
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<h2>How much of it the model is fit to</h2>
+    <p class="sub">Share of each stage's text that carries a gradient. Pretraining fits every token
+      it reads. An SFT example is mostly prompt and tool output the model reads but is not scored on.
+      A DPO example scores only the two completions after the pair branches — in opposite directions.
+      An RL row stores no response at all: the model writes its own during training, so none of the
+      text in the dataset is a target.</p>`;
+  const FIT_NOTE = {
+    sft: "the assistant turns, reasoning span included",
+    dpo: "both completions after the branch — chosen positively, rejected negatively",
+    rlvr: "the full set of training responses is not released — RL generates and scores them during the run, so this share is 0% of the stored text rather than 0% of the update",
+    chat: "nothing — a chat log is not a training example",
+  };
+  for (const r of usable){
+    const row = document.createElement("div");
+    row.className = "row";
+    const what = r.base ? "every token is a next-token target" : (FIT_NOTE[r.stage] || "");
+    row.innerHTML = `
+      <div class="lbl">${esc(stageLabel(r.stage))}</div>
+      <div class="trackbar"><div class="fill ${r.fitShare ? "" : "zero"}" style="width:${r.fitShare*100}%;background:${r.color}"></div></div>
+      <div class="val">${pct(r.fitShare)}${r.fitTokens ? ` <small>${fmtTok(r.fitTokens)} tok</small>` : ""}</div>`;
+    hover(row.querySelector(".trackbar"),
+      `<b>${esc(stageLabel(r.stage))}</b> — ${esc(what)}`
+      + (r.base ? "" : `<br>${num(Math.round(r.targetLengths.mean))} of ${num(Math.round(r.lengths.mean))} characters per example, on average`)
+      + (r.fitTokens ? `<br>≈ ${fmtTok(r.fitTokens)} of ${fmtTok(r.tokens)} tokens` : ""));
+    card.appendChild(row);
+  }
+  return card;
+}
+
+// How long one example is, per stage, on bins every stage shares. This is what
+// makes an example count and a token count the same kind of statement: 2.1M SFT
+// examples and 5.93T pretraining tokens are only comparable once you know that
+// one example is about 2,800 characters and one document about 11,000.
+function lengthCard(m, rows){
+  const usable = rows.filter(r => r.lengths && r.lengths.n);
+  if (!usable.length) return null;
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<h2>How long is one example?</h2>
+    <p class="sub">Characters per training example (per document, for the corpus stages), counted
+      before any display truncation. Half-decade bins, shared by every row, so these read as one
+      chart: a pretraining document, an SFT conversation and an RL prompt are three orders of
+      magnitude apart.</p>`;
+  for (const r of usable){
+    histRow(card, `${esc(stageLabel(r.stage))}`, r.lengths, r.color,
+      `${stageLabel(r.stage)} — ${r.base ? "documents" : "examples"}`);
+  }
+  // Ticks sit on their own bin edge rather than being spread evenly: the bins
+  // are equal-width, so an evenly spread label row would put "1M" a tenth of
+  // the axis away from where a million characters actually is.
+  const axis = document.createElement("div");
+  axis.className = "histaxis";
+  const last = HIST_EDGES.length - 1;
+  axis.innerHTML = `<div></div><div class="ticks">${[0, 2, 4, 6, 8, 10, last].map(i =>
+    `<span style="left:${i/last*100}%;transform:translateX(${i === 0 ? "0" : i === last ? "-100%" : "-50%"})">${fmtChars(HIST_EDGES[i])}</span>`
+  ).join("")}</div><div></div>`;
+  card.appendChild(axis);
+  const note = document.createElement("p");
+  note.className = "note";
+  const longest = usable.reduce((a, r) => r.lengths.max > a.lengths.max ? r : a);
+  note.textContent = `Bars are counts within the sample, each row on its own vertical scale; the `
+    + `median is printed beside it. The longest single item sampled is ${num(Math.round(longest.lengths.max))} `
+    + `characters, in ${stageLabel(longest.stage)}. Anything past ${fmtChars(HIST_EDGES[11])} characters is counted in the last bin.`;
+  card.appendChild(note);
+  return card;
+}
+
+// ----------------------------------------------------------------- treemap ---
+// The bars in the cards above compare sources within one stage. This is the
+// only view that puts every source in the pipeline in one frame at once: area
+// is tokens, so Common Crawl against FineMath against the whole of DPO is a
+// single picture rather than three charts with three different denominators.
+// Appends rather than returns: the boxes are laid out in pixels against the
+// container's real width, so the card has to be in the document before it can
+// be drawn.
+function appendTreemap(parent, m, rows, corpusSummaries){
+  const base = rows.filter(r => r.base && r.tokens);
+  if (!base.length) return;
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<h2>The whole pipeline as area</h2>
+    <p class="sub">Every box is tokens. Stages come from the paper; a stage's own boxes come from
+      the mix's published composition where it has one, and otherwise from the shard listing of the
+      corpus itself, which measures compressed bytes rather than tokens and is scaled into the
+      stage's published total. Colour is the stage; the boxes inside one stage are separated by the
+      gap between them, not by hue.</p>`;
+  const wrap = document.createElement("div");
+  wrap.className = "tmap";
+  card.appendChild(wrap);
+
+  const post = rows.filter(r => !r.base && r.tokens);
+  const postTokens = post.reduce((a, r) => a + r.tokens, 0);
+  const stages = base.map(r => ({...r, children: childrenOf(r, corpusSummaries)}));
+  if (postTokens) stages.push({
+    stage: "post-training", name: post.map(r => stageLabel(r.stage)).join(" + "), tokens: postTokens,
+    color: hueFor(post[0].stage), estimated: true, children: null,
+  });
+
+  // Laid out in pixels against the real width, so re-laying out on resize is
+  // the only way the boxes stay square-ish. A ResizeObserver also covers the
+  // first layout, which a rAF would miss in a background tab.
+  let note = null;
+  const draw = () => {
+    const W = wrap.clientWidth, H = wrap.clientHeight;
+    if (!W || !H) return;
+    wrap.innerHTML = "";
+    if (note){ note.remove(); note = null; }
+    let clamped = 0;
+    for (const rect of treemapLayout(stages.map(s => ({...s, v: s.tokens})), W, H)){
+      if (rect.clamped) clamped++;
+      // A stage with room for its own name gets a caption band and its
+      // composition inside; anything smaller is one tile with a tooltip.
+      const roomy = rect.w > 90 && rect.h > 54 && rect.children && rect.children.length;
+      const kids = roomy
+        ? treemapLayout(rect.children.map(c => ({...c, v: c.v})), rect.w - 4, rect.h - 22)
+        : [];
+      wrap.appendChild(tile(rect, rect.x, rect.y, rect.w, rect.h, rect.color, roomy ? "head" : "solid",
+        `<b>${esc(rect.stage)}</b><br>${esc(rect.name)}<br>${fmtTok(rect.tokens)} tokens${rect.estimated ? " (estimated)" : ""}`
+        + (rect.clamped ? "<br>drawn at minimum size — its true area here is under a pixel" : "")));
+      for (const k of kids){
+        // A child hits the minimum long before a stage does — Wikipedia is
+        // 0.04% of the pretraining mix — so counting only the top level left
+        // the warning off a treemap that was already not to scale.
+        if (k.clamped) clamped++;
+        wrap.appendChild(tile({stage: k.name, tokens: k.tokens, unit: k.unit}, rect.x + 2 + k.x, rect.y + 20 + k.y,
+          k.w, k.h, rect.color, "child",
+          `<b>${esc(k.name)}</b> — in ${esc(rect.stage)}<br>${esc(k.detail)}`
+          + (k.clamped ? "<br>drawn at minimum size — its true area here is under a pixel" : "")));
+      }
+    }
+    if (clamped){
+      note = document.createElement("p");
+      note.className = "note";
+      note.textContent = `${clamped} box${clamped === 1 ? " is" : "es are"} drawn at a 3-pixel minimum `
+        + `because ${clamped === 1 ? "its" : "their"} true area is smaller than a pixel at this size. `
+        + `Everything else is to scale.`;
+      wrap.after(note);
+    }
+  };
+  parent.appendChild(card);
+  draw();
+  // Boxes laid out in pixels have to be re-laid out when the width changes.
+  if (window.ResizeObserver) new ResizeObserver(draw).observe(wrap);
+}
+
+// One box. Captions only where they fit — a clipped label is worse than none,
+// and the tooltip carries the same text at any size.
+function tile(item, x, y, w, h, color, kind, tipHtml){
+  const el = document.createElement("div");
+  el.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;background:${color}`;
+  el.style.color = inkOn(color);
+  if (kind === "child") el.style.boxShadow = "inset 0 0 0 1px var(--surface-1)";
+  const fits = w > 74 && h > (kind === "head" ? 18 : 30);
+  if (fits) el.innerHTML = `<b>${esc(kind === "head" ? stageLabel(item.stage) : item.stage)}</b>`
+    + (kind === "head" || h > 42 ? `<span>${fmtTok(item.tokens)}${item.unit ? " " + item.unit : ""}</span>` : "");
+  hover(el, tipHtml);
+  return el;
+}
+
+// What a corpus stage is made of: the mix's own published composition when the
+// registry has one, and otherwise the shard listing, whose byte shares are
+// scaled into the stage's published token total. The two are different
+// measurements of the same mix and the tooltip says which one a box is.
+function childrenOf(row, corpusSummaries){
+  const stage = row.stageEntry;
+  if (stage && stage.composition && stage.composition.length){
+    // Same unit choice the published-composition bars make, and it has to be
+    // made here too: a corpus that states sizes rather than token counts (the
+    // Pile) carries `bytes`, and reading `tokens` off it gives every child an
+    // undefined value, which treemapLayout filters out — dropping the whole
+    // composition from the card silently rather than visibly.
+    const bytes = stage.composition_unit === "bytes";
+    const amount = c => bytes ? c.bytes : c.tokens;
+    const total = stage.composition.reduce((a, c) => a + amount(c), 0);
+    // Same test the published-composition card makes: a stage that trains on
+    // less than the full recipe (the 32B runs 5.50T of a 5.93T mix) has
+    // per-source counts that describe the mix, not the run, so they are scaled
+    // and labeled approximate. Where the two agree, the mix's own numbers are
+    // the numbers — scaling them would put a different figure on this box than
+    // on the bar above it. A byte composition is never in the box's unit, so it
+    // is always the share that is carried across, never the count.
+    const exact = !bytes && Math.abs(total - row.tokens) <= 0.005 * row.tokens;
+    return stage.composition.map(c => ({
+      name: c.name, v: amount(c),
+      tokens: exact ? c.tokens : amount(c) / total * row.tokens,
+      detail: exact
+        ? `${fmtTok(c.tokens)} of this stage's ${fmtTok(row.tokens)} tokens (${pct(c.tokens/total)})`
+        : bytes
+        ? `${fmtBytes(c.bytes)}, ${pct(c.bytes/total)} of the corpus — ≈${fmtTok(c.bytes/total*row.tokens)} of this ${fmtTok(row.tokens)}-token stage`
+        : `${pct(c.tokens/total)} of the mix recipe — ≈${fmtTok(c.tokens/total*row.tokens)} of this ${fmtTok(row.tokens)}-token run`,
+    }));
+  }
+  const corpus = corpusSummaries[row.stage];
+  if (corpus && corpus.groups){
+    const entries = Object.entries(corpus.groups);
+    const total = entries.reduce((a, [, g]) => a + g.bytes, 0) || 1;
+    return entries.map(([name, g]) => ({
+      name: niceGroup(name), v: g.bytes, tokens: g.bytes / total * row.tokens,
+      detail: `${fmtBytes(g.bytes)} compressed, ${pct(g.bytes/total)} of the shards — ≈${fmtTok(g.bytes/total*row.tokens)} tokens`,
+    }));
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------- crosstab ---
+// The taxonomy says how much of a stage is about being harmless. The mix
+// composition says which datasets the stage was built from. Neither says which
+// of those datasets the harmless prompts came from — and that is usually one or
+// two of them, which is worth knowing before reading a stage-level share as a
+// property of the stage.
+//
+// The join costs nothing to ship: a profile record carries a hash of the same
+// prompt opening the label record holds, so the crossing happens in the browser
+// over files it already has.
+
+// Columns worth grouping rows by, best first. Everything else the rows happen
+// to carry is still offered, but a source dataset beats a difficulty bucket.
+const GROUP_PREFERENCE = ["source_dataset", "dataset_source", "data_source", "dataset",
+  "model", "domain", "ability", "preference_type", "country", "language"];
+const SHORT_LABEL = {helpfulness: "helpful", honesty: "honest", harmlessness: "harmless",
+  capability: "capability", instruction_following: "instruction", tool_use: "tool use", other: "other"};
+
+function pickGroupColumn(columns){
+  // One value for every row groups nothing; sixty is already more rows than a
+  // grid can be read at.
+  const usable = Object.entries(columns || {}).filter(([, d]) => d >= 2 && d <= 60);
+  for (const name of GROUP_PREFERENCE){
+    if (usable.some(([n]) => n === name)) return name;
+  }
+  return usable.sort((a, b) => b[1] - a[1]).map(([n]) => n)[0] || null;
+}
+
+// Sampled records grouped by the metadata value of the prompt behind each one,
+// then by whatever the record was labeled. Returns the rows a heat table needs.
+// One metadata value per prompt key, and nothing where the sample disagrees.
+//
+// The key is a prompt's opening, so two sampled rows can share one. Where they
+// carry the same value for this column that costs nothing — the prompt belongs
+// to that value either way. Where they carry different ones (7B Think DPO has a
+// key spanning two source datasets; a WildChat key spans eight countries), no
+// join can say which row a labeled prompt came from, and last-one-wins would
+// file every prompt under whichever row happened to be sampled last. Drop those
+// keys instead and let the count of them travel with the grid: a prompt missing
+// from the table is recoverable, a prompt in the wrong row is not.
+function valueByKey(records, col){
+  const map = new Map(), dropped = new Set(), missing = new Set();
+  for (const r of records){
+    const v = r.m[col];
+    // A row with no value for this column is not a row to skip past: if
+    // another row shares its key, a prompt on that key might belong to either,
+    // and leaving the other row's value in the map files it under a source it
+    // may not have. Missing-against-present is the same ambiguity as two
+    // different values, so it drops the key too. Nullable source columns are a
+    // supported case — tests/test_context.py allows a row to leave one null.
+    if (v == null){ missing.add(r.k); continue; }
+    if (map.has(r.k) && map.get(r.k) !== v) dropped.add(r.k);
+    else if (!map.has(r.k)) map.set(r.k, v);
+  }
+  for (const k of missing) if (map.has(k)) dropped.add(k);
+  for (const k of dropped) map.delete(k);
+  return {map, dropped};
+}
+
+// With equal known dataset revisions and row numbers on both runs, a prompt's
+// metadata can be looked up by row without ambiguity. The
+// prefix hash exists because a labels file older than the row field has nothing
+// else to join on, and it is lossy in exactly the way this avoids: shared
+// Midjourney openings in WildChat span several models, so ambiguous hashes
+// must be dropped.
+function rowResolver(profileRecords, col){
+  const byRow = new Map();
+  for (const r of profileRecords)
+    if (r.row != null && r.m[col] != null) byRow.set(r.row, r.m[col]);
+  return rec => rec.row != null && byRow.has(rec.row)
+    ? {value: byRow.get(rec.row)}
+    : {miss: "unmatched"};
+}
+
+function hashResolver(profileRecords, col){
+  const {map, dropped} = valueByKey(profileRecords, col);
+  return rec => {
+    const key = promptKey(rec.prompt);
+    const value = map.get(key);
+    return value === undefined
+      ? {miss: dropped.has(key) ? "undecidable" : "unmatched"}
+      : {value};
+  };
+}
+
+// Numeric positions identify prompts only within the same known dataset tree.
+function sameRevision(profile, run){
+  return Boolean(profile.dataset && profile.dataset === run.dataset
+    && profile.revisions?.context && profile.revisions.context === run.revision
+    && !run.revision_moved_to && !(profile.revisions?.moved || []).length);
+}
+
+// Otherwise corroborate the prompt opening; never trust an unproven row ID
+// even if most of the other prompts match and the overall join passes.
+function resolverFor(profile, run, col){
+  const usable = sameRevision(profile, run) && profile.records.every(r => r.row != null)
+    && (run.records || []).every(r => r.row != null);
+  return usable ? rowResolver(profile.records, col) : hashResolver(profile.records, col);
+}
+
+function crossRows(records, resolve, labelOf, limit = 12){
+  const groups = new Map();
+  // Two ways a prompt misses the grid, and they mean different things: its key
+  // was thrown out as undecidable, or the sample has no row for it at all
+  // (the row records nothing for this column, or its stored prompt no longer
+  // matches the labeled copy). Counting them together would describe the first
+  // as missing data when it is a refusal to guess.
+  let undecidable = 0, unmatched = 0;
+  for (const r of records){
+    const {value, miss} = resolve(r);
+    if (value === undefined){
+      if (miss === "undecidable") undecidable++; else unmatched++;
+      continue;
+    }
+    if (!groups.has(value)) groups.set(value, {name: value, total: 0, byCol: {}});
+    const g = groups.get(value);
+    g.total++;
+    (g.byCol[labelOf(r)] ||= []).push(r);
+  }
+  const sorted = [...groups.values()].sort((a, b) => b.total - a.total);
+  const rows = sorted.slice(0, limit);
+  const rest = sorted.slice(limit);
+  // Never drop the tail silently: fold it into one row that is still countable
+  // and still opens its prompts.
+  if (rest.length){
+    const folded = {name: `${rest.length} smaller values`, total: 0, byCol: {}, folded: true};
+    for (const g of rest){
+      folded.total += g.total;
+      for (const [k, v] of Object.entries(g.byCol)) (folded.byCol[k] ||= []).push(...v);
+    }
+    rows.push(folded);
+  }
+  return {rows, undecidable, unmatched, groups: sorted.length};
+}
+
+// Whether two committed runs describe the same draw, and if not, what differs.
+//
+// The crosstab crosses a profile against a labels or languages run as though
+// they sampled the same rows. They usually did — sampling is deterministic in
+// --sample and --seed — but the CLI lets each command run with its own, and a
+// classify at --sample 500 crossed against a context at 300 produces a grid of
+// whatever the two draws happen to share. That is a biased intersection wearing
+// the same clothes as a real one, and the note under it would blame the gap on
+// key collisions.
+function sameDraw(profile, run){
+  if (profile.dataset !== run.dataset)
+    return `they were run against different datasets (${profile.dataset} and ${run.dataset})`;
+  if (profile.sample !== run.sample || profile.seed !== run.seed)
+    return `they were drawn with different sampling — the examples at --sample ${profile.sample} --seed ${profile.seed}, `
+      + `the labels at --sample ${run.sample} --seed ${run.seed}`;
+  // A revision on both sides that disagrees is two trees.
+  if (profile.revisions && profile.revisions.context && run.revision
+      && profile.revisions.context !== run.revision)
+    return `they read different revisions of the dataset (${profile.revisions.context.slice(0,7)} and ${run.revision.slice(0,7)})`;
+  // Either side spanning a republish is unpairable whatever its starting
+  // revision says — including the context side, which the first version of
+  // this check forgot to look at.
+  if (run.revision_moved_to || (profile.revisions && profile.revisions.moved || []).length)
+    return `the dataset was republished while one of the runs was in flight, so its rows may come from either tree`;
+  return null;
+}
+
+// Legacy runs can lack revision stamps. Their prompt openings provide a
+// fallback, with ambiguous metadata keys excluded by hashResolver. A poor
+// match rate refuses the grid; a high rate never admits an unmatched record.
+const JOIN_FLOOR = 0.9;
+
+// Row-set equality is evidence of the same draw only after sameRevision has
+// established that those positions belong to the same dataset tree.
+function sameRows(profile, run){
+  const mine = profile.records.map(r => r.row).filter(r => r != null);
+  const theirs = (run.records || []).map(r => r.row).filter(r => r != null);
+  if (mine.length !== profile.records.length || theirs.length !== run.records.length) return null;
+  const set = new Set(mine);
+  const shared = theirs.filter(r => set.has(r)).length;
+  return {shared, mine: mine.length, theirs: theirs.length,
+          identical: shared === mine.length && shared === theirs.length};
+}
+
+function joinEvidence(matched, total, profile, run){
+  const proven = sameRevision(profile, run);
+  const rate = total ? matched / total : 1;
+  if (rate < JOIN_FLOOR)
+    return {refuse: `only ${matched} of ${total} prompts in that run match a sampled example`
+      + `${proven ? "" : ", and the runs are not both pinned to the same dataset revision"} — these are not the same draw`};
+  return {note: proven || rate === 1 ? null
+    : `The runs are not both pinned to a dataset revision, so their pairing rests on ${matched} of ${total} prompts matching a sampled example rather than on the stamps.`};
+}
+
+// The evidence that two runs describe one draw, best available first. Both
+// grids ask through here: writing the question out twice is what left the
+// taxonomy grid on hash rates after the language grid had row identities, and
+// `classify` records a row per label exactly as `languages` does — only the
+// files committed before it did are legacy.
+function pairingEvidence(profile, run, matched, total){
+  const rows = sameRevision(profile, run) ? sameRows(profile, run) : null;
+  if (!rows) return joinEvidence(matched, total, profile, run);
+  return rows.identical ? {note: null}
+    : {refuse: `they drew different rows — ${rows.shared} of ${rows.theirs} in that run are among the ${rows.mine} sampled examples`};
+}
+
+async function crosstabCard(model, m, post, profiles, ctxFor, gen){
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<h2>Where in the mix each kind of content comes from</h2>
+    <p class="sub">The same sampled prompts as the card above, crossed against the source column
+      their row carries. A cell is the count; its colour is that share of the row. Click one to read
+      the prompts behind it. Row numbers join the runs when both record the same dataset revision.
+      Otherwise, the join checks each prompt's opening and excludes ambiguous matches.</p>`;
+  let any = false;
+  for (const s of post){
+    const p = profiles[s.stage];
+    if (!p) continue;
+    const col = pickGroupColumn(p.columns);
+    const labels = await getData(`${model}.${s.stage}.labels.json`);
+    if (gen !== GEN) return null;
+    const h = document.createElement("h3");
+    h.className = "stage";
+    h.style.setProperty("--bar", hueFor(s.stage));
+    h.innerHTML = `<i class="sw"></i>${esc(stageLabel(s.stage))}
+      <span class="ds">— ${esc(s.name)}${col ? ` · by <code>${esc(col)}</code>` : ""}</span>`;
+    card.appendChild(h);
+    if (!col){
+      noLabels(card, `the sampled rows of this stage carry no metadata column to group by — `
+        + `its examples record ${Object.keys(p.columns || {}).length ? "only single-valued fields" : "nothing about where they came from"}`);
+      continue;
+    }
+    const langs = await getData(`${model}.${s.stage}.languages.json`);
+    if (gen !== GEN) return null;
+    const labeled = labels ? labels.records.filter(r => r.label) : [];
+    if (!labeled.length && !(langs && langs.records.length)){
+      noLabels(card, `nothing is committed for this stage to cross against ${col} — `
+        + `run trainspotting classify or trainspotting languages on it`);
+      continue;
+    }
+    any = true;
+    const ctx = ctxFor(s);
+    const explain = (name, {rows, undecidable, unmatched, groups}, extra) => {
+      const note = document.createElement("p");
+      note.className = "note";
+      // Two ways to miss the grid, counted apart, and only named when they
+      // happened. One cause needs no breakdown; two do.
+      const undecidableWhy = `their opening 400 characters are shared by two sampled rows carrying different ${col} values, which makes the row they came from undecidable`;
+      const unmatchedWhy = `they matched no sampled row — its row records no ${col}, or stores a different copy of the prompt`;
+      const total = undecidable + unmatched;
+      const why = undecidable && unmatched
+        ? `: ${undecidable} because ${undecidableWhy}, and ${unmatched} because ${unmatchedWhy}`
+        : undecidable ? `, because ${undecidableWhy}` : `, because ${unmatchedWhy}`;
+      note.textContent = `${groups} distinct ${col} value${groups === 1 ? "" : "s"} across the sampled ${name}`
+        + (rows.length && rows[rows.length-1].folded ? `, the top 12 drawn and the rest folded into the last row` : "")
+        + (extra || "")
+        + (total
+          ? `. ${total} sampled prompt${total === 1 ? " is" : "s are"} left out of this grid${why}.`
+          : ".");
+      return note;
+    };
+
+    const mismatch = labeled.length ? sameDraw(p, labels) : null;
+    let drewLabels = false;
+    if (mismatch){
+      noLabels(card, `the sampled examples and the classification run cannot be crossed: ${mismatch}. `
+        + `Re-run one of them so both describe the same draw.`);
+    } else if (labeled.length){
+      const cross = crossRows(labeled, resolverFor(p, labels, col), r => r.label);
+      // Proven row identities when available, otherwise the prompt match rate.
+      const evidence = pairingEvidence(p, labels, labeled.length - cross.unmatched, labeled.length);
+      if (evidence.refuse){
+        noLabels(card, `the sampled examples and the classification run cannot be crossed: ${evidence.refuse}.`);
+      } else {
+        drewLabels = true;
+        heatTable(card, cross.rows, LABELS.map(l => ({key: l, short: SHORT_LABEL[l], label: NICE[l]})), ctx);
+        card.appendChild(explain("prompts", cross));
+        if (evidence.note){
+          const n = document.createElement("p");
+          n.className = "note";
+          n.textContent = evidence.note;
+          card.appendChild(n);
+        }
+      }
+    }
+
+    // The same grid against the detected language, which answers a different
+    // question with the same join: whether the non-English prompts come from
+    // one corner of the mix or from all of it. Secondary where a taxonomy grid
+    // is already drawn, primary where none is.
+    const langMismatch = langs && langs.records.length ? sameDraw(p, langs) : null;
+    if (langMismatch){
+      noLabels(card, `the language run cannot be crossed against these examples: ${langMismatch}.`);
+    } else if (langs && langs.records.length){
+      const counts = {};
+      for (const r of langs.records) counts[r.label] = (counts[r.label]||0) + 1;
+      const top = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 7);
+      const cols = [...top.map(c => ({key: c, short: c === "undetermined" ? "?" : c, label: langName(c)})),
+        {key: "…", short: "…", label: "every other language"}];
+      const build = parent => {
+        const cross = crossRows(langs.records, resolverFor(p, langs, col), r => top.includes(r.label) ? r.label : "…");
+        // The same provenance and prompt-evidence guard as the taxonomy grid.
+        const evidence = pairingEvidence(p, langs, langs.records.length - cross.unmatched, langs.records.length);
+        if (evidence.refuse){
+          noLabels(parent, `the language run cannot be crossed against these examples: ${evidence.refuse}.`);
+          return;
+        }
+        heatTable(parent, cross.rows, cols, ctx);
+        parent.appendChild(explain("prompts", cross,
+          `, the top ${top.length} detected languages drawn and everything else in the last column`));
+        if (evidence.note){
+          const n = document.createElement("p");
+          n.className = "note";
+          n.textContent = evidence.note;
+          parent.appendChild(n);
+        }
+      };
+      if (!drewLabels){
+        const sub = document.createElement("p");
+        sub.className = "stage-sub";
+        sub.textContent = mismatch
+          ? "by detected language — the classification run for this stage could not be crossed, so there is no taxonomy grid above"
+          : "by detected language — no classification run is committed for this stage, so there is no taxonomy grid to draw";
+        card.appendChild(sub);
+        build(card);
+      } else {
+        const det = document.createElement("details");
+        det.innerHTML = `<summary class="stage-sub" style="cursor:pointer;margin:10px 0 0">the same rows by detected language</summary>`;
+        const body = document.createElement("div");
+        det.appendChild(body);
+        let built = false;
+        det.addEventListener("toggle", () => { if (det.open && !built){ built = true; build(body); } });
+        card.appendChild(det);
+      }
+    }
+  }
+  return any ? card : null;
+}
+
+// A divider between the two halves of the pipeline, so the page reads top to
+// bottom in the same order as the tiles at the top of it.
+// Mirrors cli._fmt_est: three significant figures at most, because these are a
+// sampled rate times a mean length and anything more claims precision the
+// sample has nowhere near.
+function tokens(n){
+  if (n == null) return "—";
+  for (const [scale, suffix] of [[1e12,"T"],[1e9,"B"],[1e6,"M"],[1e3,"K"]]){
+    if (n >= scale){
+      const v = n / scale;
+      return (v >= 100 ? v.toFixed(0) : String(+v.toFixed(1))) + suffix;
+    }
+  }
+  return n.toFixed(0);
+}
+
+// A question answered only over post-training is a rounding error against 5.93T
+// pretraining tokens. "0.00%" would read as "none" rather than as the
+// three-orders-of-magnitude gap that is the actual finding.
+const shareText = f => (f * 100 >= 0.01 || f === 0) ? (f*100).toFixed(2)+"%" : (f*100).toPrecision(2)+"%";
+
+// What made two runs under one slug incomparable. "Two wordings" and "one
+// wording, two judges" read very differently to someone deciding whether the
+// withheld total was worth withholding.
+function mixedWhat(est){
+  const parts = [];
+  if ((est.question_variants || []).length > 1) parts.push("wordings of the question");
+  if ((est.classifiers || []).length > 1) parts.push("classifiers");
+  if ((est.rubric_conflict || []).length) parts.push(`rubrics within the ${est.rubric_conflict.join(", ")} stages`);
+  return parts.length ? parts.join(" and ") : "judging instruments";
+}
+
+// One card per question, rolling every stage onto the scale the question is
+// actually about: tokens the model was fit to. The per-stage rates above this
+// are not comparable to each other — a share of DPO rows and a share of Dolma 3
+// documents are different denominators — and this is where they become one
+// number. Built by scripts/export_site_data.py from the committed ask runs, so
+// it cannot disagree with the bars above it.
+async function budgetCard(main, model, slug){
+  const est = await getData(`${model}.budget-${slug}.json`);
+  if (!est) return;
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<h2>How much training is that?</h2>
+    <p class="sub">Each stage's rate times its size, in tokens the model was fit to —
+    the assistant turns of an SFT example, both completions of a preference pair,
+    every token of a corpus. Not the size of the dataset.</p>`;
+  const t = document.createElement("table");
+  t.className = "budget";
+  t.innerHTML = `<thead><tr><th>stage</th><th>fit tokens</th><th>sampled</th>
+    <th>rate</th><th>matching tokens</th></tr></thead>`;
+  const body = document.createElement("tbody");
+  for (const st of est.stages){
+    const tr = document.createElement("tr");
+    if (!st.measured) tr.className = "unmeasured";
+    const size = tokens(st.size_tokens) + (st.size_is_floor ? "*" : "");
+    if (!st.measured){
+      // "never asked" and "asked, but nothing came back that could be weighed"
+      // are different facts about the stage.
+      tr.innerHTML = `<td>${esc(stageLabel(st.stage))}</td><td>${size}</td>`
+        + `<td colspan="3">${esc(st.unusable || "never asked this question")}</td>`;
+    } else {
+      const ci = st.matching_tokens_ci
+        ? `<span class="est">${tokens(st.matching_tokens_ci[0])}–${tokens(st.matching_tokens_ci[1])}</span>` : "";
+      tr.innerHTML = `<td>${esc(stageLabel(st.stage))}</td><td>${size}</td>`
+        + `<td>${st.matched}/${st.n} · ${pct(st.count_rate)}</td>`
+        + `<td>${pct(st.rate)}</td>`
+        + `<td>${tokens(st.matching_tokens)}${ci}</td>`;
+    }
+    body.appendChild(tr);
+  }
+  const all = est.totals.all;
+  // A slug is not a question. `--slug` takes any string and a generated one is
+  // truncated to 60 characters, so stages sharing a slug can have been scored
+  // against different wordings — which the ask card above already splits into
+  // separate cards. Summing them here would put a number under a total that no
+  // single question produced, so the total is withheld rather than qualified.
+  const mixed = !!est.mixed;
+  const total = document.createElement("tr");
+  total.className = "total";
+  // The denominator is every sized stage, asked or not, so with one still
+  // unasked this is a lower bound on the whole pipeline — not a share of the
+  // part that was measured. The two differ by three orders of magnitude here.
+  // Three cases, and only one of them is a bound.
+  //
+  // Every stage sized and measured: the share, flat. Every stage sized with
+  // some unmeasured: a genuine lower bound — those stages are already in the
+  // denominator, so measuring one can only add matches. Some stage unsized:
+  // not a bound in either direction, because `totals()` drops an unsized stage
+  // from the denominator *and* the numerator, so sizing it later moves both and
+  // the share falls if that stage's own rate is below this aggregate.
+  const unsized = (all.unsized || []).length > 0;
+  const bounded = !unsized && all.measured < all.stages;
+  const partial = unsized || all.measured < all.stages;
+  total.innerHTML = `<td>whole pipeline</td><td>${tokens(all.size_tokens)}</td>`
+    + (mixed
+      ? `<td colspan="3">no single total — these stages were scored with different ${mixedWhat(est)}</td>`
+      : `<td colspan="2">${all.measured} of ${all.stages} stages measured</td>`
+        + `<td>${tokens(all.matching_tokens)}<span class="est">${bounded ? "≥ " : ""}${shareText(all.share)}`
+          + `${unsized ? " of what could be sized" : ""}</span></td>`);
+  body.appendChild(total);
+  t.appendChild(body);
+  card.appendChild(t);
+
+  const notes = [];
+  if (mixed){
+    const detail = (est.question_variants || []).length > 1
+      ? ": " + est.question_variants.map(q => `“${q}”`).join("  ·  ")
+      : ((est.classifiers || []).length > 1 ? ": " + est.classifiers.join(", ") : "");
+    notes.push(`Stages under this slug were scored with different ${mixedWhat(est)}, `
+      + `so they do not add up to one measurement${detail}.`);
+  }
+  // Declared out here because the unsized-only note below reads it too. Left
+  // inside the `if` it was block-scoped, and `unsized && !missing.length` threw
+  // a ReferenceError the moment any stage was unsized — taking the whole card
+  // down with it, since budgetCard throws before it appends anything.
+  const missing = est.stages.filter(st => !st.measured);
+  // Keyed on `missing`, not on `partial`. `partial` is also true when every
+  // stage was measured and one could not be sized, and this note would then
+  // announce that nothing at all was unmeasured: ", so 0 of 6.1T fit tokens
+  // above — 0.00% of the pipeline — are unmeasured".
+  if (missing.length){
+    // The single most misleading thing this page could do is show a pipeline
+    // total that quietly leaves out 5.93T tokens of pretraining.
+    //
+    // "Never asked" and "asked, and nothing usable came back" are different
+    // facts, and the row above already prints `unusable` for the second. Saying
+    // "never asked" about those too contradicts the same card two lines up, and
+    // tells someone to run a question they have already run.
+    const unasked = missing.filter(st => !st.unusable);
+    const unusable = missing.filter(st => st.unusable);
+    const missingTokens = missing.reduce((a, st) => a + (st.size_tokens || 0), 0);
+    const said = [];
+    if (unasked.length)
+      said.push(`${unasked.map(st => st.stage).join(", ")} ${unasked.length > 1 ? "were" : "was"} never asked this question`);
+    if (unusable.length)
+      said.push(`${unusable.map(st => st.stage).join(", ")} ${unusable.length > 1 ? "were" : "was"} asked but produced nothing usable (see the row above)`);
+    const tail = unsized
+      ? `The share beside it is over the stages that could be sized only, so it is not a bound in either `
+        + `direction: sizing ${all.unsized.join(", ")} would move the matching total and the denominator both.`
+      : `The share is still over the whole pipeline, which makes it a lower bound: only `
+        + `${tokens(all.measured_size_tokens)} of it was looked at, and measuring the rest can only add matches.`;
+    notes.push(`${said.join("; ")}, so ${tokens(missingTokens)} of the ${tokens(all.size_tokens)} fit tokens above `
+      + `— ${shareText(missingTokens / all.size_tokens)} of the pipeline — are unmeasured. ${tail}`);
+  }
+  if (unsized && !missing.length){
+    notes.push(`${all.unsized.join(", ")} could not be sized, so the share above is over the stages that `
+      + `could be — not over the whole pipeline, and not a bound on it.`);
+  }
+  if (all.floor.length){
+    notes.push(`${all.floor.join(", ")} sized at one reference rollout per prompt — a floor. `
+      + `The rollouts the policy was actually fit to are not in the published mix.`);
+  }
+  if (all.unsized.length) notes.push(`No size for ${all.unsized.join(", ")}; excluded from the total.`);
+  for (const st of est.stages) for (const n of (st.notes || [])) notes.push(`${stageLabel(st.stage)}: ${n}`);
+  // The rate column is not one rule, because the correction that is right for
+  // one sampling design double-counts on another. Which one applies is a
+  // property of how a stage was *drawn*, not of what kind of stage it is: a
+  // corpus the datasets-server indexes in full is paged uniformly over
+  // documents and needs exactly the weighting a post-training mix needs.
+  // So describe the rules this estimate actually used, and no others.
+  const rateRule = r =>
+    r.startsWith("fit characters — rows")
+      ? "A corpus paged uniformly over documents is weighed by fit characters: without that its rate "
+        + "is a share of documents rather than a share of training."
+    : r.startsWith("fit characters")
+      ? "Post-training rows are drawn uniformly, so their rate is weighed by fit characters — "
+        + "otherwise it answers what fraction of examples rather than what fraction of training."
+    : r.startsWith("none")
+      ? "Corpus documents drawn by shard come from shards drawn with probability proportional to size, "
+        + "which already weights by tokens, so their document rate is used unchanged; weighing it by "
+        + "length would apply that a second time."
+      : "One corpus stage stores no document lengths to weigh by, so its unweighed document rate is "
+        + "used and reads its matches as if every document were the same size.";
+  const rules = [...new Set(est.stages.filter(st => st.weighting).map(st => st.weighting))];
+  const rateNotes = [...new Set(rules.map(rateRule))];
+  if (rateNotes.length) notes.push("Rate: " + rateNotes.join(" "));
+  notes.push(`Fit characters are converted at ${est.chars_per_token} per token. This weighs tokens, not learning: `
+    + `a post-training token and a pretraining token are not equally formative, and nothing here corrects for that.`);
+  for (const text of notes){
+    const p = document.createElement("p");
+    p.className = "note";
+    p.textContent = text;
+    card.appendChild(p);
+  }
+  main.appendChild(card);
+}
+
+// The colour a direction gets. `away` takes the diverging pole the page already
+// reserves for "trained away from" — a stage where the dispreferred completion
+// is the one that serves the question is the finding, and it should not read as
+// just another category next to `toward`.
+const STANCE_COLOR = {
+  toward: "var(--series-1)",
+  away: "var(--neg)",
+  neither: "var(--baseline)",
+};
+const STANCE_TIP = {
+  toward: "fitting this example makes the behaviour more likely",
+  away: "fitting it makes the behaviour less likely — the preferred side, or the reward, points the other way",
+  neither: "the example does not bear on the question either way",
+};
+
+// `trainspotting stance`: the same question asked of whole examples instead of
+// prompts, so the answer can be signed. A yes/no over prompts cannot say that a
+// stage contains training pushing the other way, and this data has some.
+async function stanceCard(main, model, slug, stages, ctxFor, post, askKeys){
+  const loaded = [];
+  for (const stage of stages){
+    const d = await getData(`${model}.${stage}.stance-${slug}.json`);
+    if (d) loaded.push({stage, d});
+  }
+  if (!loaded.length) return false;
+  // Group by the instrument actually stored in each file, exactly as the ask
+  // cards above do. A slug is not a question — `--slug` takes any string and a
+  // generated one is cut to 60 characters — so stages sharing one can have been
+  // judged against different words. A single card headed "the same question"
+  // over files that disagree is the claim the grouping exists to prevent.
+  //
+  // The rubric is part of the key here, as it is in the CLI report: stance.SYSTEM
+  // is what tells the judge that a DISPREFERRED completion means the model is
+  // trained *out* of that text, so rewording it moves toward/away labels with
+  // the question and the classifier untouched — and a net is signed, so two
+  // rubrics reading as one instrument is worse than it would be for a rate.
+  const byInstrument = new Map();
+  for (const row of loaded){
+    const key = `${row.d.question}\u0000${row.d.classifier}\u0000${row.d.system_sha || ""}`;
+    if (!byInstrument.has(key)) byInstrument.set(key, []);
+    byInstrument.get(key).push(row);
+  }
+  // "The same question" is a claim, so only make it when it has been checked
+  // against the ask cards above. A slug with one stance file can still hold a
+  // different wording — or the same wording judged by a different model — than
+  // the ask results it is rendered under, and comparing stance files only to
+  // each other cannot see that. The ask key deliberately omits the rubric: an
+  // ask run and a stance run never share one, so including it would report
+  // every stance card as unmatched.
+  for (const rows of byInstrument.values()){
+    const askKey = `${rows[0].d.question}\u0000${rows[0].d.classifier}`;
+    stanceGroup(main, slug, rows, ctxFor, post, byInstrument.size > 1 || !askKeys.has(askKey));
+  }
+  return true;
+}
+
+function stanceGroup(main, slug, rows, ctxFor, post, showQuestion){
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<h2>Which way does it push?</h2>
+    <p class="sub">${showQuestion ? `“${esc(rows[0].d.question)}” — asked` : "The same question asked"}
+    of the whole example — the response the model is fit to,
+    which side of a preference pair is preferred, what the verifier pays for — so the answer can be
+    negative. Judged by ${esc(rows[0].d.classifier)}.</p>`;
+  // A run where every example was refused or errored writes a valid file with
+  // no records. Dividing by that n gives NaN, which spreads silently into the
+  // scale, the bar widths, the percentages and the intervals — the ask and HHH
+  // cards already show a no-labels state for it instead.
+  for (const {stage} of rows.filter(r => !r.d.records.length)){
+    noLabels(card, `${stageLabel(stage)} — every sampled example went unjudged, so there is no direction to show`);
+  }
+  const scored = rows.filter(r => r.d.records.length);
+  const max = Math.max(...scored.flatMap(r => ["toward","away"].map(k => r.d.counts[k] / r.d.records.length)), 0.01);
+  for (const {stage, d} of scored){
+    const n = d.records.length;
+    const s = post.find(p => p.stage === stage) || {stage, hf_dataset: d.dataset, name: d.dataset};
+    const head = document.createElement("div");
+    head.className = "lbl";
+    head.style.cssText = "font-size:12px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);margin:14px 0 4px";
+    head.textContent = `${stageLabel(stage)} — ${d.dataset.split("/")[1]} · net ${d.net > 0 ? "+" : ""}${d.net}`;
+    card.appendChild(head);
+    for (const k of ["toward", "away", "neither"]){
+      const c = d.counts[k], [lo, hi] = wilson(c, n);
+      barRow(card, k, c/n, lo, hi, k === "neither" ? 1 : max,
+        `<b>${k}</b> — ${esc(STANCE_TIP[k])}<br>${c} of ${n} judged examples (${pct(c/n)})`
+        + `<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to read them`,
+        false, d.records.filter(x => x.stance === k),
+        {...ctxFor(s), linkKey: `stance-${slug}-${k}`}, STANCE_COLOR[k]);
+    }
+  }
+  const p1 = document.createElement("p");
+  p1.className = "note";
+  p1.textContent = "“neither” is drawn on its own scale — it is the answer for most of any mix, "
+    + "and putting it beside the other two would flatten them to nothing. The headline is the net, "
+    + "toward minus away.";
+  card.appendChild(p1);
+  if (showQuestion){
+    const p2 = document.createElement("p");
+    p2.className = "note";
+    p2.textContent = "The wording is spelled out because it is not simply the question asked above — "
+      + "either other stages under this slug were judged against a different wording, classifier or "
+      + "rubric, or this run used a wording or a classifier that no ask card here matches.";
+    card.appendChild(p2);
+  }
+  main.appendChild(card);
+}
+
+function part(title, note){
+  const h = document.createElement("h2");
+  h.className = "part";
+  h.innerHTML = `${esc(title)}<span>${esc(note)}</span>`;
+  return h;
+}
+
+// How stable the shares below are: the classifier checked against a second run
+// of itself over the same draw (`classify --replicate`, then `agreement`).
+// Nothing is shown for a stage nobody has checked — an absent line is the
+// honest state, not a default of "fine".
+function stabilityNote(a, labels){
+  const r = a?.replicate;
+  if (!r?.n || r.same_draw !== true || r.comparison_issues?.length) return null;
+  // A saved check can outlive the main labels run it qualified. Only display
+  // it beside that run, with known, matching provenance on both sides.
+  const keys = ["dataset", "revision", "system_sha", "classifier", "sample", "seed"];
+  if (!labels || !a.labels_run || labels.revision_moved_to
+      || a.labels_run.revision_moved_to || r.revision_moved_to) return null;
+  if (keys.some(k => labels[k] == null || labels[k] === ""
+      || labels[k] !== a.labels_run[k] || labels[k] !== r[k])) return null;
+  if (!labels.generated || labels.generated !== a.labels_run.generated) return null;
+  const kappa = r.kappa == null ? "κ undefined" : `κ ${r.kappa.toFixed(2)}`;
+  return `<b>Stability check</b> — a second run of ${esc(r.classifier)} over the same `
+    + `${num(r.n)} prompts agreed with the first on <b>${pct(r.accuracy)}</b>, ${kappa}.`;
+}
+
+async function agreementNote(model, stage, labels){
+  const name = `${model}.${stage}.agreement.json`;
+  if (!MANIFEST.includes(name)) return null;
+  const note = stabilityNote(await getData(name), labels);
+  if (!note) return null;
+  const p = document.createElement("p");
+  p.className = "stage-sub";
+  p.innerHTML = note;
+  return p;
+}
+
+// The model prefix is already known. Strip it before parsing the stage and
+// question so a version dot in a model key is never mistaken for a separator.
+function questionFiles(model, manifest, kind){
+  const bySlug = {};
+  const prefix = model + ".";
+  for (const file of manifest){
+    if (!file.startsWith(prefix)) continue;
+    const match = file.slice(prefix.length).match(/^([^.]+)\.(ask|stance)-(.+)\.json$/);
+    if (!match || match[2] !== kind) continue;
+    const [, stage, , slug] = match;
+    (bySlug[slug] ||= []).push([stage, file]);
+  }
+  return bySlug;
+}
+
+async function renderModel(model, gen){
+  const m = REG[model];
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  pendingJump = null;
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === model));
+
+  const sources = await getData(model + ".sources.json");
+  if (gen !== GEN) return;
+  const post = m.stages.filter(s => s.hf_dataset);
+  const ctxFor = s => ({
+    model, stage: s.stage, kind: s.kind || s.stage, dataset: s.hf_dataset, stageName: s.name,
+    hasContext: MANIFEST.includes(ctxFile(model, s.stage)),
+  });
+
+  // ---- pipeline tiles ----
+  const facts = document.createElement("section");
+  facts.className = "card";
+  // Third member of the kind taxonomy this card labels. A model with no
+  // post-training stage at all is not the same thing as one whose runs are
+  // uncommitted, and the chip is where the page says what kind of target it is.
+  const base_only = m.is_model !== false && !m.stages.some(s => s.hf_dataset);
+  facts.innerHTML = m.is_model === false
+    ? `<h2>${esc(m.name)}<span class="kind" data-tip="A dataset, not a model: one stage, no training pipeline
+         around it. The layers below read the data itself, which nothing was fit to.">dataset</span></h2>
+       <p class="sub">${esc(m.note || "A dataset on its own — no model trained on it here.")}</p>
+       <div class="pipe"></div>`
+    : `<h2>Training pipeline<span class="kind" data-tip="${base_only
+         ? "A base model: pretraining only. It was released without post-training, so there are no SFT, DPO or RL stages to read."
+         : "A model, and every stage of data it was fit to."}">${base_only ? "base model" : "model"}</span></h2>
+       <p class="sub">${m.hf_model} — token counts as the release published them; example counts from the datasets themselves.</p>
+       <div class="pipe"></div>`;
+  wireTips(facts);
+  const pipe = facts.querySelector(".pipe");
+  // A dataset has one stage and no arrows: a lone tile stretched across the card
+  // would still read as a pipeline with the rest cropped off.
+  if (m.stages.length === 1) pipe.classList.add("one");
+  m.stages.forEach((s, i) => {
+    if (i){
+      const a = document.createElement("div");
+      a.className = "parrow"; a.textContent = "→"; a.setAttribute("aria-hidden", "true");
+      pipe.appendChild(a);
+    }
+    const t = document.createElement("div");
+    t.className = "ptile";
+    if (STAGE_HUE[s.stage]) t.style.setProperty("--bar", STAGE_HUE[s.stage]);
+    const size = s.tokens ? fmtTok(s.tokens) + " tok"
+      : (sources && sources[s.stage] ? fmtEx(sources[s.stage].total) + " ex" : "—");
+    const rewardGroups = s.stage === "rlvr" ? rewardComposition(sources?.[s.stage]) : null;
+    const rewardNames = rewardGroups ? Object.keys(rewardGroups).map(f => REWARDS.families[f].label).join(" + ") : "";
+    t.innerHTML = `<div class="k">${esc(stageLabel(s.stage))}</div><div class="v">${size}</div><div class="d">${s.name}${rewardNames ? " · " + esc(rewardNames) : ""}</div>`;
+    const tipParts = [];
+    if (s.stage === "rlvr") tipParts.push("Reinforcement learning: each prompt uses its assigned programmatic scorer or AI judge.");
+    if (sources && sources[s.stage] && !s.tokens) tipParts.push(`${sources[s.stage].total.toLocaleString()} examples`);
+    if (s.note) tipParts.push(esc(s.note));
+    tipParts.push(`<span style="color:var(--muted)">click to jump to this stage ↓</span>`);
+    hover(t, tipParts.join("<br>"));
+    t.classList.add("link");
+    t.setAttribute("role", "button");
+    t.tabIndex = 0;
+    // Always overwrite the queue: the newest click wins, so a jump that lands now
+    // discards an earlier one still waiting on its section to mount.
+    const jump = () => {
+      pendingJump = jumpToStage(s.stage) ? null : {model, stage: s.stage};
+    };
+    t.addEventListener("click", jump);
+    t.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); jump(); } });
+    pipe.appendChild(t);
+  });
+  main.appendChild(facts);
+
+  // ---- pretraining documents ----
+  const corpusStages = m.stages.filter(s => s.sample_dataset);
+  const corpusData = [];
+  for (const s of corpusStages){
+    // Summaries only — kilobytes. The documents themselves are several megabytes
+    // and most visitors never open them, so they load on demand below.
+    const d = await getData(`${model}.${s.stage}.corpus.json`);
+    // Still guard: a tab switch during even a small fetch would otherwise append
+    // the old model's corpus, question and base cards into the new model's <main>.
+    if (gen !== GEN) return;
+    if (d) corpusData.push([s, d]);
+  }
+
+  // ---- how big each stage is ----
+  // Profiles are kilobytes (lengths, and one metadata row per sampled example
+  // with no prompt text on it), so they load with the tab rather than on click.
+  const profiles = {};
+  for (const s of post){
+    const p = await getData(profileFile(model, s.stage));
+    if (gen !== GEN) return;
+    if (p) profiles[s.stage] = p;
+  }
+  const sizes = budgetRows(m, sources, profiles,
+    Object.fromEntries(corpusData.map(([s, d]) => [s.stage, d])));
+  for (const c of [tokenBudgetCard(m, sizes), fitCard(m, sizes), lengthCard(m, sizes)])
+    if (c) main.appendChild(c);
+
+  const base = m.stages.filter(s => !s.hf_dataset);
+  if (base.length || corpusData.length)
+    main.appendChild(part("Pretraining", "what the base model read, before any instruction tuning"));
+
+  // ---- base training stages (facts from the paper and each mix's own dataset
+  // card; the corpus card below measures the same stages by sampling them) ----
+  if (base.length){
+    const card = document.createElement("section");
+    card.className = "card";
+    // Only a shard-sampled corpus gets measured independently below; a corpus
+    // read through the dataset viewer has no file listing to count, so its
+    // composition is the published one and nothing here re-derives it.
+    const measured = corpusData.some(([, d]) => (d.route || "shards") === "shards");
+    card.innerHTML = `<h2>What the base model was trained on</h2>
+      <p class="sub">Token counts and mix composition as each release published them — its own
+        numbers, not measured here.${measured ? ` The card below measures the same mixes
+        independently by sampling their shards, so the two are worth comparing.` : ""}</p>`;
+    // shares under 0.1% would round to a flat 0.0%
+    const pctc = f => f < 0.001 ? (f*100).toFixed(2)+"%" : pct(f);
+    for (const s of base){
+      const div = document.createElement("div");
+      div.className = "basestage";
+      // One anchor per stage, and this card owns it: a tile click lands on the
+      // stage's published facts, with the sampled documents for the same stage
+      // in the next card down.
+      div.id = "sec-" + s.stage;
+      const link = s.hf
+        ? `<span class="chip link"><a href="https://huggingface.co/datasets/${escAttr(s.hf)}"
+             target="_blank" rel="noopener">${esc(s.hf)} ↗</a></span>` : "";
+      div.innerHTML = `<h3 class="stage"><i class="sw" style="background:var(--baseline)"></i>${esc(stageLabel(s.stage))}
+          <span class="ds">— ${esc(s.name)}${s.tokens ? " · " + fmtTok(s.tokens) + " tokens" : ""}</span>${link}</h3>
+        <p class="kv" style="margin:2px 0 8px">${esc(s.note || "No further details recorded in the registry.")}</p>`;
+      if (s.composition && s.composition.length){
+        // Mixes publish token counts; a corpus like the Pile publishes sizes.
+        // Reading the wrong field would render every bar as NaN, so the unit
+        // picks both the field and the formatter.
+        const bytes = s.composition_unit === "bytes";
+        const amount = c => bytes ? c.bytes : c.tokens;
+        const fmtAmt = bytes ? fmtBytes : fmtTok;
+        const total = s.composition.reduce((a,c) => a + amount(c), 0);
+        const maxf = Math.max(...s.composition.map(c => amount(c)/total));
+        // Some stages train on less than the full published mix (the 32B runs
+        // 5.50T of a recipe whose card counts 5.93T). When the stage's declared
+        // tokens don't match the composition total, the absolute per-source
+        // counts describe the mix, not this run — show only the mix's own
+        // shares, and put a clearly-approximate scaled count in the tooltip.
+        // A byte composition is never comparable to the stage's token count, so
+        // it is exact on its own terms rather than "approximate" against a
+        // number measuring something else.
+        const exact = bytes || !s.tokens || Math.abs(total - s.tokens) <= 0.005 * s.tokens;
+        for (const c of s.composition){
+          const f = amount(c)/total;
+          const row = document.createElement("div");
+          row.className = "row";
+          row.innerHTML = `
+            <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</div>
+            <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
+            <div class="val">${pctc(f)}${exact ? ` <small>${fmtAmt(amount(c))}</small>` : ""}</div>`;
+          hover(row.querySelector(".trackbar"), exact
+            ? `<b>${escAttr(c.name)}</b><br>${fmtAmt(amount(c))} of ${fmtAmt(total)}${bytes ? "" : " tokens"} (${pctc(f)})`
+            : `<b>${escAttr(c.name)}</b><br>${pctc(f)} of the mix recipe — ≈${fmtTok(f*s.tokens)} of this ${fmtTok(s.tokens)}-token run`);
+          div.appendChild(row);
+        }
+        // What the shares are shares *of*, when that is not the same corpus as
+        // the one sampled below.
+        if (s.composition_scope){
+          const note = document.createElement("p");
+          note.className = "note";
+          note.style.margin = "8px 0 0";
+          note.textContent = s.composition_scope;
+          div.appendChild(note);
+        }
+      }
+      card.appendChild(div);
+    }
+    main.appendChild(card);
+    appendTreemap(main, m, sizes, Object.fromEntries(corpusData.map(([s, d]) => [s.stage, d])));
+  }
+
+  if (corpusData.length){
+    const card = document.createElement("section");
+    card.className = "card corpus";
+    // Two ways in, and they leave very different samples. Describing the shard
+    // route over a corpus drawn uniformly would invent a bias that isn't there;
+    // describing the uniform route over Dolma 3 would hide one that is.
+    const anyShards = corpusData.some(([, d]) => (d.route || "shards") === "shards");
+    const anyRows = corpusData.some(([, d]) => d.route === "rows");
+    const blurb = [
+      anyShards ? `The dataset viewer indexes only the first few GB of these corpora and the
+        shards are ordered by topic, so sampling it returns one cluster at a time. Those documents
+        come from the shard files directly: shards drawn in proportion to their size, each one's
+        head pulled with a range request. Composition is exact — it is the whole file listing,
+        not a sample.` : "",
+      anyRows ? `Where the viewer <em>has</em> indexed a corpus in full, there is nothing to work
+        around: those documents are drawn uniformly from every row in it.` : "",
+    ].filter(Boolean).join(" ");
+    card.innerHTML = `<h2>What's actually in the pretraining data</h2>
+      <p class="sub">${blurb}</p>`;
+    for (const [s, d] of corpusData){
+      const h = document.createElement("h3");
+      h.className = "stage";
+      h.id = "docs-" + s.stage;
+      h.innerHTML = `<i class="sw" style="background:var(--baseline)"></i>${esc(stageLabel(s.stage))}
+        <span class="ds">— ${esc(d.dataset)} · ${fmtTok(s.tokens)} tokens</span>`;
+      card.appendChild(h);
+
+      const facts = document.createElement("p");
+      facts.className = "corpusfacts";
+      // The revision is what makes "exact composition" checkable: main moves, so
+      // the link pins the counts to the tree they were taken from.
+      const rev = d.revision
+        ? ` <span>at <a href="https://huggingface.co/datasets/${escAttr(d.dataset)}/tree/${escAttr(d.revision)}" target="_blank" rel="noopener"><code>${esc(d.revision.slice(0,7))}</code></a></span>`
+        : "";
+      // A rows-sampled corpus has no shards, no compressed byte total and no
+      // per-group listing. Printing zeros for those would read as a measured
+      // result; the corpus size it does know goes in their place.
+      facts.innerHTML = (d.route === "rows"
+        ? `<span><b>${num(d.rows_total)}</b> documents in the corpus</span>\n`
+        : `<span><b>${num(d.shards)}</b> shards</span>
+           <span><b>${fmtBytes(d.bytes)}</b> compressed</span>
+           <span><b>${Object.keys(d.groups || {}).length}</b> source/topic groups</span>\n`)
+        + `<span><b>${num(d.records)}</b> documents sampled</span>${rev}`;
+      card.appendChild(facts);
+
+      // A draw that yields nothing is silently replaced by another, which
+      // reweights the sample by reachable-unique-document count on top of size.
+      // Say so when it happened; at zero the size weighting is exactly as claimed.
+      const short = d.short_draws ?? d.barren_draws;
+      const barren = short
+        ? ` ${num(short)} shard draw${short > 1 ? "s" : ""} came up short of ${short > 1 ? "their" : "its"} quota and ${short > 1 ? "were" : "was"} made up by other shards, so size weighting is approximate here.`
+        : "";
+      if (d.scope || d.caveat || barren){
+        const scope = document.createElement("p");
+        scope.className = "scope";
+        scope.textContent = [d.scope, d.caveat].filter(Boolean).join(" ") + barren;
+        card.appendChild(scope);
+      }
+
+      if (d.groups && Object.keys(d.groups).length) corpusComposition(card, d.groups, d.bytes);
+
+      const det = document.createElement("details");
+      det.innerHTML = `<summary class="stage-sub" style="cursor:pointer;margin:12px 0 0">
+        read the ${num(d.records)} sampled documents</summary>`;
+      const holder = document.createElement("div");
+      holder.innerHTML = `<p class="note">loading…</p>`;
+      det.appendChild(holder);
+      // Fetch and build only once someone opens the list: the payload is a few
+      // megabytes and the blocks are hundreds of DOM nodes, and neither is worth
+      // anything to a visitor who came for the charts.
+      let loaded = false;
+      const stage = s.stage;
+      det.addEventListener("toggle", async () => {
+        if (!det.open || loaded) return;
+        // Claim the load, but only keep the claim if it succeeds — a transient
+        // failure would otherwise pin the panel on "loading…" and make every
+        // reopen a no-op until the whole page is reloaded.
+        loaded = true;
+        let full;
+        try {
+          full = await getData(`${model}.${stage}.docs.json`);
+        } catch (e) {
+          loaded = false;
+          holder.innerHTML = `<p class="note">could not load the documents — close and reopen to try again</p>`;
+          return;
+        }
+        if (!full){
+          loaded = false;
+          holder.innerHTML = `<p class="note">sample not available — close and reopen to try again</p>`;
+          return;
+        }
+        // Same pinned revision as the composition above: main moves, and a link
+        // to a shard that has since changed would not be provenance for this
+        // document.
+        holder.innerHTML = full.records
+          .map(r => docBlock({...r, dataset: full.dataset, revision: full.revision}))
+          .join("");
+      });
+      card.appendChild(det);
+    }
+    main.appendChild(card);
+  }
+
+  if (post.length)
+    main.appendChild(m.is_model === false
+      ? part("The data", "what is in it, and what the prompts in it are about")
+      : part("Post-training", "the examples that turned the base model into an assistant"));
+  else if (m.is_model){
+    // A base model. The cards below all read sampled prompts, and each has a
+    // "no runs committed yet" fallback that would read as work not done rather
+    // than as a stage that does not exist — so say which it is, once, and skip
+    // them entirely.
+    main.appendChild(part("Post-training", "there wasn't any"));
+    const none = document.createElement("section");
+    none.className = "card";
+    none.innerHTML = `<h2>This model was never post-trained</h2>
+      <p class="sub">${esc(m.hf_model)} was released as a base model, so there are no SFT, DPO or
+        RL stages — no prompts to sample, nothing fit to a response, and no verifier to read a
+        label off. The helpful/honest/harmless question this page leads with has no answer here,
+        which is a fact about the model rather than a gap in the audit. Everything above measures
+        the corpus it read; ask a free-form question of that corpus with
+        <code>trainspotting ask ${esc(model)} "…" --pretrain</code>.</p>`;
+    main.appendChild(none);
+  }
+
+  // ---- exact mix composition ----
+  if (sources){
+    const mix = document.createElement("section");
+    mix.className = "card";
+    // "Mix" is a model's word for it. A standalone dataset has a composition
+    // too, but it was not mixed toward anything.
+    //
+    // "Counted, not sampled" is the claim worth making here, and it survives a
+    // stats API that stopped early — these are still every row it read, not a
+    // draw of prompts. "Exact", the word that was here, does not: on a
+    // partial stage the per-stage note directly underneath says the shares are
+    // over a fraction of the split, so the subtitle was arguing with the line
+    // below it.
+    const anyPartial = post.some(s => sources[s.stage] && sources[s.stage].partial);
+    const scanNote = anyPartial
+      ? " Where HuggingFace's stats API stopped before the end of a split, the stage says how far it got and its shares are over the rows it read."
+      : "";
+    mix.innerHTML = m.is_model === false
+      ? `<h2>Composition</h2>
+         <p class="sub">From the dataset's own label columns — counted row by row, not sampled.${scanNote}</p>`
+      : `<h2>${anyPartial ? "Mix composition" : "Exact mix composition"}</h2>
+         <p class="sub">From each dataset's own label columns — counted row by row, not sampled.${scanNote}</p>`;
+    for (const s of post){
+      const st = sources[s.stage];
+      if (!st) continue;
+      const h = document.createElement("h3");
+      h.className = "stage";
+      h.id = "sec-" + s.stage;
+      h.style.setProperty("--bar", hueFor(s.stage));
+      // Link the tree these counts were taken from, not just the dataset root:
+      // "exact composition" is a claim about one revision, and `main` moves.
+      h.innerHTML = `<i class="sw"></i>${esc(stageLabel(s.stage))}
+        <span class="ds">— <a href="https://huggingface.co/datasets/${escAttr(st.dataset)}"
+          target="_blank" rel="noopener">${esc(st.dataset)} ↗</a>${revLink(st)} (${st.total.toLocaleString()} examples)</span>`;
+      mix.appendChild(h);
+      // On a big dataset HuggingFace's stats API stops after a first slice, so
+      // the counts below are over the rows it reached, not the whole split.
+      // Divide by the scanned count or every share reads low under a heading
+      // that promises exact numbers.
+      const denom = st.counted || st.total;
+      if (st.partial){
+        const note = document.createElement("p");
+        note.className = "stage-sub";
+        note.textContent = `shares are over the ${denom.toLocaleString()} rows `
+          + `(${pct(denom/st.total)}) HuggingFace's stats API scanned, not all ${st.total.toLocaleString()}`;
+        mix.appendChild(note);
+      }
+      if (s.stage === "rlvr"){
+        const rewards = document.createElement("div");
+        rewards.innerHTML = renderRewardComposition(st);
+        wireTips(rewards);
+        mix.appendChild(rewards);
+      }
+      // The language column is drawn in the language card below instead, on the
+      // same bars as the detector's own reading. Two breakdowns of the same
+      // thing, three screens apart and on different denominators, read as the
+      // page contradicting itself.
+      const langMoved = MANIFEST.includes(`${model}.${s.stage}.languages.json`) && st.columns.language;
+      for (const [col, freq] of Object.entries(st.columns)){
+        if (col === "language" && langMoved) continue;
+        const sub = document.createElement("p");
+        sub.className = "stage-sub"; sub.textContent = col;
+        mix.appendChild(sub);
+        const entries = Object.entries(freq);
+        const shown = entries.slice(0, 12);
+        const maxf = Math.max(...entries.map(([,c]) => c/denom));
+        for (const [v, c] of shown){
+          const f = c/denom;
+          const row = document.createElement("div");
+          row.className = "row";
+          row.style.setProperty("--bar", hueFor(s.stage));
+          row.innerHTML = `
+            <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${srcLabel(v, st.links)}</div>
+            <div class="trackbar"><div class="fill" style="width:${f/maxf*100}%"></div></div>
+            <div class="val">${pct(f)} <small>${c.toLocaleString()}</small></div>`;
+          const mx = REWARDS.mixes[v];
+          hover(row.querySelector(".trackbar"), `<b>${v}</b><br>${c.toLocaleString()} of ${denom.toLocaleString()} (${pct(f)})`
+            + (mx ? `<br>${esc(mx.subject)}, scored by ${esc(mx.kind)}` : ""));
+          mix.appendChild(row);
+        }
+        const restN = entries.length - shown.length;
+        const sum = entries.reduce((a,[,c]) => a+c, 0);
+        const notes = [];
+        if (restN > 0) notes.push(`+${restN} more values (${pct((sum - shown.reduce((a,[,c])=>a+c,0))/denom)})`);
+        if (sum < denom * 0.95) notes.push(`values shown cover ${pct(sum/denom)} of rows — the rest are null or not enumerated by the stats API`);
+        if (notes.length){
+          const p = document.createElement("p"); p.className = "note"; p.textContent = notes.join(" · ");
+          mix.appendChild(p);
+        }
+      }
+      if (langMoved){
+        const p = document.createElement("p");
+        p.className = "note";
+        p.innerHTML = `The <code>language</code> column is further down, in `
+          + `<a role="button" tabindex="0">what language is this written in?</a> — `
+          + `drawn on the same bars as the language detected here, so the two readings sit together.`;
+        const link = p.querySelector("a");
+        const go = () => {
+          const card = document.getElementById("card-languages");
+          if (card) card.scrollIntoView({behavior: "smooth", block: "start"});
+        };
+        link.addEventListener("click", go);
+        link.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); go(); } });
+        mix.appendChild(p);
+      }
+    }
+    main.appendChild(mix);
+  }
+
+  // ---- HHH classification ----
+  const hhh = document.createElement("section");
+  hhh.className = "card";
+  hhh.innerHTML = m.is_model === false
+    ? `<h2>What are people in this dataset asking for?</h2>
+       <p class="sub">Share of sampled prompts in each request category. The same seven labels a model
+          stage gets, but read differently: nothing was trained on these, so a bar is what was asked,
+          not a training signal — <code>harmlessness</code> here means the request was safety-relevant,
+          and says nothing about what came back. Whiskers: Wilson 95% CI.</p>`
+    : `<h2>How much of post-training is about being helpful, honest, harmless?</h2>
+       <p class="sub">Share of sampled prompts per stage whose primary training signal is each label. Whiskers: Wilson 95% CI.</p>`;
+  // Filled after the loop below, which is where the per-stage counts land. One
+  // row per label with a dot per stage answers "does this stage differ?"
+  // without scrolling three screens of bars to compare them.
+  const glance = document.createElement("div");
+  hhh.appendChild(glance);
+  const perStage = [];
+  let any = false;
+  for (const s of post){
+    const d = await getData(`${model}.${s.stage}.labels.json`);
+    if (gen !== GEN) return;
+    if (!d) continue;
+    any = true;
+    const recs = d.records.filter(r => r.label);
+    const n = recs.length;
+    const counts = {};
+    for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
+    if (n) perStage.push({s, counts, n});
+    const h = document.createElement("h3");
+    h.className = "stage";
+    h.id = "hhh-" + s.stage;
+    h.style.setProperty("--bar", hueFor(s.stage));
+    h.innerHTML = `<i class="sw"></i>${esc(stageLabel(s.stage))} <span class="ds">— ${esc(s.name)}</span>`;
+    const sub = document.createElement("p");
+    sub.className = "stage-sub";
+    // Two things the count alone would hide. Some RLVR rows are labeled by
+    // their own verifier and never reached the classifier, so name both counts
+    // instead of crediting the model for labels it was never asked about. And
+    // prompts the classifier never labeled are excluded from every bar below —
+    // refusals land on jailbreak-style prompts, the content the harmlessness
+    // bar is about, so an unreported gap reads as a smaller share rather than
+    // as missing data. Older files carry no unlabeled count; for those the
+    // unlabeled records are still in `records`, so count them.
+    const byVerifier = recs.filter(r => r.by === "verifier").length;
+    const who = byVerifier
+      ? `n=${n} sampled prompts — ${n - byVerifier} labeled by ${esc(d.classifier)}, ${byVerifier} by their verifier`
+      : `n=${n} sampled prompts labeled by ${esc(d.classifier)}`;
+    const skipped = d.unlabeled ?? (d.records.length - n);
+    const why = Object.entries(d.unlabeled_reasons || {}).map(([k, v]) => `${v} ${k}`).join(", ");
+    sub.innerHTML = `${esc(d.dataset)}${revLink(d)} · ${who}`
+      + (skipped ? ` · <b>${skipped}</b> unlabeled${why ? ` (${esc(why)})` : ""} and excluded` : "");
+    hhh.append(h, sub);
+    const check = await agreementNote(model, s.stage, d);
+    if (gen !== GEN) return;
+    if (check) hhh.appendChild(check);
+    if (!n){
+      noLabels(hhh, `every sampled prompt went unlabeled — no shares to show for this stage`);
+      continue;
+    }
+    const max = Math.max(...LABELS.map(l => wilson(counts[l]||0, n)[1]), 0.01);
+    let lastGrp = null;
+    for (const l of LABELS){
+      const grp = VALUE_LABELS.has(l) ? "values" : "skills";
+      if (grp !== lastGrp){
+        const g = document.createElement("div"); g.className = "grp"; g.textContent = grp;
+        hhh.appendChild(g); lastGrp = grp;
+      }
+      const k = counts[l] || 0;
+      const [lo, hi] = wilson(k, n);
+      barRow(hhh, NICE[l], k/n, lo, hi, max,
+        `<b>${NICE[l]}</b><br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}<br>click to see the prompts`,
+        VALUE_LABELS.has(l),
+        recs.filter(r => r.label === l), {...ctxFor(s), linkKey: l});
+    }
+  }
+  // ---- every stage on one axis, per label ----
+  if (perStage.length > 1){
+    const max = Math.max(...perStage.flatMap(p => LABELS.map(l => (p.counts[l]||0)/p.n)), 0.01);
+    const head = document.createElement("div");
+    head.className = "grp";
+    head.textContent = "every stage on one axis";
+    glance.appendChild(head);
+    const legend = document.createElement("div");
+    legend.className = "legend";
+    legend.style.margin = "2px 0 8px";
+    legend.innerHTML = perStage.map(p =>
+      `<span class="k"><i style="background:${hueFor(p.s.stage)};border-radius:50%"></i>${esc(stageLabel(p.s.stage))}</span>`).join("");
+    glance.appendChild(legend);
+    let lastGrp = null;
+    for (const l of LABELS){
+      const grp = VALUE_LABELS.has(l) ? "values" : "skills";
+      if (grp !== lastGrp){
+        const g = document.createElement("div"); g.className = "grp"; g.textContent = grp;
+        glance.appendChild(g); lastGrp = grp;
+      }
+      dotRow(glance, NICE[l], perStage.map(p => ({
+        stage: p.s.stage, f: (p.counts[l]||0)/p.n, c: hueFor(p.s.stage),
+        tip: `<b>${stageLabel(p.s.stage)}</b> · ${NICE[l]}<br>${p.counts[l]||0} of ${p.n} sampled prompts (${pct((p.counts[l]||0)/p.n)})`,
+      })), max, VALUE_LABELS.has(l));
+    }
+    const axis = document.createElement("div");
+    axis.className = "dotaxis";
+    axis.innerHTML = `<div></div><div><span>0%</span><span>${pct(max/2)}</span><span>${pct(max)}</span></div><div></div>`;
+    glance.appendChild(axis);
+    const note = document.createElement("p");
+    note.className = "note";
+    note.style.margin = "0 0 4px";
+    note.textContent = "The hairline spans the stages, so a long line is a label the stages disagree "
+      + "about. Every value here is also a bar below, with its interval and the prompts behind it.";
+    glance.appendChild(note);
+  }
+  if (!any) hhh.innerHTML += `<p class="note">No classification runs committed for ${esc(model)} yet — run <code>trainspotting classify ${model}</code>.</p>`;
+  if (post.length) main.appendChild(hhh);
+
+  // ---- label × source crosstab ----
+  const cross = await crosstabCard(model, m, post, profiles, ctxFor, gen);
+  if (gen !== GEN) return;
+  if (cross) main.appendChild(cross);
+
+  // ---- language breakdown ----
+  // A stage detects a dozen-odd languages and all but English are slivers, so
+  // the full breakdown is three screens of bars answering a question most
+  // visitors answer with one number. Each stage collapses to that number and
+  // draws its bars when someone opens it.
+  //
+  // Where the dataset ships its own `language` column, this card holds both
+  // readings. Keeping them together makes their different coverage visible,
+  // including prompts the detector leaves uncalled while the dataset column
+  // assigns a language.
+  const langCard = document.createElement("section");
+  langCard.className = "card";
+  langCard.id = "card-languages";
+  // Whether this is a check on the detector or the only number available
+  // depends on the dataset, so say which one it is rather than picking by tab.
+  const anyColumn = post.some(s => langColumn(sources, s.stage));
+  const hasLabels = post.some(s => MANIFEST.includes(`${model}.${s.stage}.labels.json`));
+  langCard.innerHTML = `<h2>What language ${m.is_model === false ? "is this dataset" : "is post-training"} written in?</h2>
+    <p class="sub">Detected locally with py3langid over ${hasLabels
+         ? "the same sampled prompts the labels above were read from"
+         : "a fixed random sample of the prompts"} — no model is called.
+       ${anyColumn
+         ? "This dataset also carries its own <code>language</code> column; it is drawn as a tick on the same bars, so the two readings can be compared where they sit."
+         : "The Dolci datasets carry no language column, so this is the only way to get the breakdown."}
+       Open a stage for every language it found, and click any language to read its prompts.</p>`;
+  let anyLang = false;
+  for (const s of post){
+    const d = await getData(`${model}.${s.stage}.languages.json`);
+    if (gen !== GEN) return;
+    if (!d) continue;
+    anyLang = true;
+    const recs = d.records;
+    const n = recs.length;
+    const counts = {};
+    for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
+    const {rest, en: enK, nonEn, undet} = langSummary(counts, n);
+
+    // The dataset's own column, on the same denominator the composition card
+    // used and keyed by the codes the detector emits.
+    const st = sources && sources[s.stage];
+    const colFreq = langColumn(sources, s.stage);
+    const colDenom = st ? (st.counted || st.total) : 0;
+    const col = colFreq && colDenom ? columnLangShares(colFreq, colDenom) : null;
+
+    const det = document.createElement("details");
+    det.className = "langstage";
+    det.style.setProperty("--bar", hueFor(s.stage));
+    // All three shares, so they visibly add to the sample. The headline was
+    // non-English and undetermined, which add to neither 100% nor anything
+    // else, and left the number a reader wants to compare — English — to be
+    // found by opening the stage and doing the subtraction.
+    det.innerHTML = `<summary>
+      <i class="sw"></i><b>${esc(stageLabel(s.stage))}</b>
+      <span class="ds">— ${esc(s.name)}</span>
+      <span class="ds">${esc(d.dataset)}${revLink(d)}</span>
+      <span class="lsum"><em>${pct(enK/n)}</em> English${col ? ` here, ${pct(col.english)} by its own column` : ""} ·
+        ${pct(nonEn/n)} another language ·
+        ${undet ? `${pct(undet/n)} undetermined · ` : ""}
+        ${rest.length} other language${rest.length === 1 ? "" : "s"} · n=${n}</span>
+      <span class="caret">›</span></summary>`;
+    const body = document.createElement("div");
+    body.className = "langbody";
+    det.appendChild(body);
+    langCard.appendChild(det);
+
+    // Bars are built on first open, not up front: three stages of them is a few
+    // hundred elements nobody has asked to see yet.
+    let built = false;
+    det.addEventListener("toggle", () => {
+      if (!det.open || built) return;
+      built = true;
+
+      const sub = document.createElement("p");
+      sub.className = "stage-sub";
+      sub.textContent = `${d.dataset} · n=${n} sampled prompts · detector ${d.detector}`;
+      body.appendChild(sub);
+
+      // Why the two readings differ, in the one place both are on screen. They
+      // measure different text over different rows, and the difference is
+      // roughly the size of the undetermined bucket — none of which is
+      // recoverable from two percentages sitting three screens apart.
+      if (col){
+        const rec = document.createElement("p");
+        rec.className = "note";
+        rec.innerHTML = `The tick on each bar is the dataset's own <code>language</code> column, `
+          + (st.partial
+              ? `over the ${colDenom.toLocaleString()} rows HuggingFace's stats API scanned`
+              : `over all ${colDenom.toLocaleString()} rows`)
+          + `. It labels the whole conversation; the bar detects the first user turn only, over `
+          + `${n} sampled prompts, so the bars carry sampling error the ticks do not. `
+          + `The column also has no undetermined bucket`
+          + (col.undetermined ? ` beyond the ${pct(col.undetermined)} it marks unknown` : "")
+          + `, which is where most of the ${pct(Math.abs(col.english - enK/n))} between the two English shares sits.`;
+        body.appendChild(rec);
+      }
+
+      // English swamps everything, so the two groups get separate scales: one bar
+      // at full width for English, then the rest against the largest non-English
+      // share. A shared scale would render every other language as an invisible
+      // sliver. The column's share is on the same scale as the bar it marks, or
+      // the tick would say nothing.
+      const g1 = document.createElement("div"); g1.className = "grp"; g1.textContent = "english";
+      body.appendChild(g1);
+      const enCI = wilson(enK, n);
+      const enMax = Math.max(enCI[1], col ? col.english : 0, 0.01);
+      barRow(body, "English", enK/n, enCI[0], enCI[1], enMax,
+        `<b>English</b><br>${enK} of ${n} sampled prompts (${pct(enK/n)})<br>95% CI ${pct(enCI[0])}–${pct(enCI[1])}`
+        + (col ? `<br>its own column: ${pct(col.english)}` : "")
+        + `<br>click to see the prompts`,
+        true, recs.filter(r => r.label === "en"), ctxFor(s));
+      if (col) refTick(body.lastElementChild, col.english, enMax);
+
+      const g2 = document.createElement("div"); g2.className = "grp";
+      g2.textContent = "every other language — own scale";
+      body.appendChild(g2);
+      if (!rest.length){
+        const p = document.createElement("p"); p.className = "note";
+        p.textContent = "no non-English prompts in this sample";
+        body.appendChild(p);
+      }
+      const restMax = Math.max(...rest.map(c => wilson(counts[c], n)[1]),
+        ...(col ? rest.map(c => col.byCode[c] || 0) : []), 0.005);
+      for (const c of rest){
+        const k = counts[c], [lo, hi] = wilson(k, n);
+        const colF = col ? (col.byCode[c] || 0) : null;
+        barRow(body, esc(langName(c)), k/n, lo, hi, restMax,
+          `<b>${esc(langName(c))}</b> (${esc(c)})<br>${k} of ${n} sampled prompts (${pct(k/n)})<br>95% CI ${pct(lo)}–${pct(hi)}`
+          + (col ? `<br>its own column: ${pct(colF)}` : "")
+          + `<br>click to see the prompts`,
+          false, recs.filter(r => r.label === c), ctxFor(s));
+        if (col) refTick(body.lastElementChild, colF, restMax);
+      }
+      const note = document.createElement("p");
+      note.className = "note";
+      note.textContent = `${pct(nonEn/n)} of this sample was detected as not English.`
+        + (undet ? ` ${undet} prompt${undet>1?"s":""} (${pct(undet/n)}) ${undet>1?"were":"was"} too short, too much code, or too evenly mixed to call, and ${undet>1?"are":"is"} counted in neither group.` : "")
+        + (col ? ` The dataset's own column puts non-English at ${pct(col.nonEnglish)}.` : "");
+      body.appendChild(note);
+
+      // Languages the column reports that this sample never drew, and labels it
+      // uses that py3langid has no code for. Both are absences the bars above
+      // cannot show, and the second is where WildChat's own detector is doing
+      // something odd — a Maori and a Sotho share, on a ChatGPT log.
+      if (col){
+        const missed = Object.entries(col.byCode)
+          .filter(([c, f]) => c !== "en" && c !== UNDET && !counts[c] && f > 0)
+          .sort((a, b) => b[1] - a[1]);
+        const bits = [];
+        if (missed.length)
+          bits.push(`${missed.length} language${missed.length === 1 ? "" : "s"} the column reports never came up in this sample `
+            + `(largest: ${missed.slice(0, 3).map(([c, f]) => `${langName(c)} ${pct(f)}`).join(", ")})`);
+        if (col.unmatched.length)
+          bits.push(`${pct(col.unmatchedShare)} of the column uses labels this detector cannot emit `
+            + `(${col.unmatched.slice(0, 3).map(([v, f]) => `${v} ${pct(f)}`).join(", ")}), so those get no tick`);
+        if (bits.length){
+          const p = document.createElement("p"); p.className = "note"; p.textContent = bits.join(" · ");
+          body.appendChild(p);
+        }
+      }
+    });
+  }
+  if (!anyLang) langCard.innerHTML += `<p class="note">No language run committed for ${esc(model)} yet — run <code>trainspotting languages ${model}</code>.</p>`;
+  if (post.length) main.appendChild(langCard);
+
+  // ---- custom questions (trainspotting ask) ----
+  const bySlug = questionFiles(model, MANIFEST, "ask");
+  // Stance-only slugs also drive their own direction and budget cards below.
+  const stanceStages = Object.fromEntries(
+    Object.entries(questionFiles(model, MANIFEST, "stance"))
+      .map(([slug, files]) => [slug, files.map(([stage]) => stage)]));
+  for (const slug in stanceStages){
+    const order = m.stages.map(x => x.stage);
+    stanceStages[slug].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  }
+
+  let askDivider = false;   // only if a card actually renders — the files may all fail to load
+  const askSlugsSeen = new Set();
+  for (const [slug, files] of Object.entries(bySlug)){
+    // Pipeline order, not just post-training order — a question asked with
+    // --pretrain puts corpus stages in the same card, and they come first.
+    const stageOrder = m.stages.map(s => s.stage);
+    files.sort((a,b) => stageOrder.indexOf(a[0]) - stageOrder.indexOf(b[0]));
+    // A slug is not a safe identity: cmd_ask accepts arbitrary --slug values
+    // and truncates generated ones to 60 chars, so files sharing a slug can
+    // belong to different ask runs. Group rows by their stored question +
+    // classifier and render one card per distinct pair — with the usual single
+    // question per slug this is exactly one card, same as before.
+    const buckets = new Map();
+    for (const [stage, f] of files){
+      const d = await getData(f);
+      if (gen !== GEN) return;
+      if (!d) continue;
+      const key = `${d.question}\u0000${d.classifier}`;
+      if (!buckets.has(key)) buckets.set(key, {question: d.question, classifier: d.classifier, rows: []});
+      const n = d.records.length, k = d.records.filter(r => r.match).length;
+      // Corpus runs ship their own interval: documents drawn together are
+      // correlated — one shard is one topic cluster, one page is ten rows that
+      // were adjacent on disk — so the CI is widened by the measured design
+      // effect of that clustering. Computing it here too would be a second
+      // implementation free to drift from the CLI's, so use the stored one when
+      // it exists.
+      const nEff = d.n_effective || n;
+      buckets.get(key).rows.push({
+        stage, d, n, k, nEff,
+        ci: d.ci || wilson(k, n),
+      });
+    }
+    for (const {question, classifier, rows} of buckets.values()){
+      const card = document.createElement("section");
+      card.className = "card";
+      const kinds = rows.map(r => corpusStages.some(c => c.stage === r.stage) ? "documents" : "prompts");
+      const unitLabel = [...new Set(kinds)].join(" and ");
+      card.innerHTML = `<h2>“${esc(question)}”</h2>
+        <p class="sub">Share of sampled ${unitLabel} judged a match by ${classifier}. Click a bar to read the matches verbatim.</p>`;
+      const max = Math.max(...rows.map(r => r.ci[1]), 0.01);
+      for (const r of rows){
+        if (!r.n){
+          noLabels(card, `${stageLabel(r.stage)} — every sampled item went unjudged, so there is no rate to show`);
+          continue;
+        }
+        const s = post.find(p => p.stage === r.stage) || {stage: r.stage, hf_dataset: r.d.dataset, name: r.d.dataset};
+        const isCorpus = corpusStages.some(c => c.stage === r.stage);
+        const unit = isCorpus ? "documents" : "prompts";
+        // Only call out the correction when it actually bit; at one document per
+        // shard, or a page whose rows are unrelated, the design effect is ~1 and
+        // n_eff lands within a hair of n.
+        const clustered = r.nEff < r.n * 0.98;
+        // Same accounting as the HHH card: whatever the classifier never
+        // judged is missing from n, not counted as a non-match.
+        const skipped = r.d.unlabeled || 0;
+        const skipNote = skipped
+          ? `<br>${skipped} sampled ${unit} went unjudged (${esc(Object.entries(r.d.unlabeled_reasons || {}).map(([k, v]) => `${v} ${k}`).join(", ") || "no reason recorded")}) and are excluded from n`
+          : "";
+        const ciNote = clustered
+          ? `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])} — widened for clustering, effective n ${r.nEff.toFixed(0)} of ${r.n} (documents drawn together are correlated)`
+          : `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`;
+        barRow(card, stageLabel(r.stage) + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
+          `<b>${stageLabel(r.stage)}</b> · ${esc(r.d.dataset)}${revLink(r.d)}<br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})${ciNote}${skipNote}<br>click to read them`,
+          false,
+          r.d.records.filter(x => x.match), {...ctxFor(s), isCorpus, linkKey: "ask-" + slug});
+      }
+      if (rows.some(r => corpusStages.some(c => c.stage === r.stage))){
+        const p = document.createElement("p");
+        p.className = "note";
+        p.textContent = "Corpus stages and post-training stages are not on the same footing: "
+          + "the first are documents the model fit, the second are examples built to teach it. "
+          + "A given rate means something different in each.";
+        card.appendChild(p);
+      }
+      if (!askDivider){
+        main.appendChild(part("Custom questions", "asked of whichever stages you ran them against"));
+        askDivider = true;
+      }
+      main.appendChild(card);
+    }
+    // After the bars, not instead of them: the bars are what was measured and
+    // the budget is what it adds up to. One per slug, however many wordings the
+    // slug turned out to cover.
+    askSlugsSeen.add(slug);
+    if (askDivider){
+      // Direction first, then the budget: which way it pushes, then how much of
+      // it there is. A total is only worth reading once the sign is settled.
+      // The instruments the ask cards for this slug were drawn from, keyed the
+      // same way the stance files are, so a stance run that used other words or
+      // another judge can be told apart from one that matches.
+      const askKeys = new Set([...buckets.values()].map(b => `${b.question}\u0000${b.classifier}`));
+      await stanceCard(main, model, slug, stanceStages[slug] || [], ctxFor, post, askKeys);
+      if (gen !== GEN) return;
+      await budgetCard(main, model, slug);
+    }
+    if (gen !== GEN) return;
+  }
+
+  // A stance run does not require an ask run — `stance` reads the committed
+  // context records, not an ask file, and the CLI report shows stance-only
+  // slugs. Iterating `bySlug` alone indexes those files and then never draws
+  // them, so anything asked only of whole examples would silently not exist on
+  // this page. They have no ask bucket to compare against, so every one states
+  // its own wording.
+  for (const slug of Object.keys(stanceStages)){
+    if (askSlugsSeen.has(slug)) continue;
+    if (!askDivider){
+      main.appendChild(part("Custom questions", "asked of whichever stages you ran them against"));
+      askDivider = true;
+    }
+    await stanceCard(main, model, slug, stanceStages[slug], ctxFor, post, new Set());
+    if (gen !== GEN) return;
+    await budgetCard(main, model, slug);
+    if (gen !== GEN) return;
+  }
+
+  // Every destination is mounted now, so honor a tile clicked while data was loading.
+  if (pendingJump && pendingJump.model === model){
+    const {stage} = pendingJump;
+    pendingJump = null;
+    jumpToStage(stage);
+  }
+}
+
+// ------------------------------------------------------- cross-model compare ---
+// Same classification data as the per-model tabs, but every model on one axis
+// per stage, so "does the think variant's post-training differ?" is one glance.
+const MODEL_COLORS = Array.from({length: 9}, (_, i) => `var(--series-${i + 1})`);
+function comparisonColors(models){
+  return new Map(models.map((model, i) => [model, MODEL_COLORS[i]]));
+}
+const shortName = m => m.replace(/^olmo-3-/, "");
+
+// ---- lookup study ----
+// The one view that is not about a model. Every other card answers what a
+// corpus contains, at what rate; this answers whether it contains one specific
+// text — the question someone asks about their own writing, and the one
+// sampling can never reach, since a whole blog is a rounding error in a mix
+// this size. The corpora here are the ones with a public suffix-array index,
+// none of which is Dolma 3, so every table names the corpus it is about.
+
+const isCaseFile = f => f.startsWith("case-study.") && f.endsWith(".json");
+
+// Only the subject's own pages become links. The rest of these documents sit on
+// bookmark mirrors and SEO spam, and the finding is that they exist — handing
+// them an outbound link from a published page is not part of reporting it.
+function lookupDocBlock(rec, site, exhaustive){
+  const tags = [];
+  if (rec.domain) tags.push(`<span class="prov">${esc(rec.domain)}</span>`);
+  if (rec.subset) tags.push(`<span>${esc(rec.subset)}</span>`);
+  if (rec.snapshot) tags.push(`<span>${esc(rec.snapshot)}</span>`);
+  if (rec.tokens != null) tags.push(`<span>${num(rec.tokens)} tokens</span>`);
+  if (rec.quality != null) tags.push(`<span>quality ${rec.quality.toFixed(2)}</span>`);
+  // The number that explains why a long post is a short training document.
+  if (rec.lines_kept != null && rec.lines_original)
+    tags.push(`<span>${num(rec.lines_kept)} of ${num(rec.lines_original)} lines kept</span>`);
+  // Same number, two different meanings. Where the list is exhaustive it is how
+  // many times the string occurs in this document; where it is sampled it is how
+  // many random draws happened to land here, which says nothing about the page.
+  if (rec.occurrences_drawn > 1)
+    tags.push(`<span>${rec.occurrences_drawn} ${exhaustive ? "occurrences in this document" : "draws landed here"}</span>`);
+  const text = rec.excerpt || "";
+  const head = text.slice(0, 150).replace(/\s+/g, " ").trim() || "(no text returned)";
+  const own = rec.domain === site;
+  const link = rec.url
+    ? (own
+        ? `<a class="shard" href="${escAttr(rec.url)}" target="_blank" rel="noopener">${esc(rec.url)} ›</a>`
+        : `<span class="shard">${esc(rec.url)}</span>`)
+    : "";
+  return `<div class="doc">
+    <div class="doctags">${tags.join("")}</div>
+    <details><summary>${esc(head)}${text.length > 150 ? "…" : ""}</summary>
+      <p class="note" style="margin:6px 0 0">A window the index centres on the match, so it
+        starts mid-document rather than at the top of the page.</p>
+      <pre>${esc(text)}</pre>
+      ${link}
+    </details>
+  </div>`;
+}
+
+function caseStudyCards(main, d){
+  const ids = d.indexes.map(i => i.id);
+  const byId = Object.fromEntries(d.indexes.map(i => [i.id, i]));
+  const probeIndex = byId[d.probe.index] || {label: d.probe.index};
+  const spreadIndex = byId[d.spread.index] || {label: d.spread.index};
+  // The ceiling row: the first independently chosen query, in the probe's
+  // corpus. Read off the data rather than hardcoded, so re-running the study
+  // moves the headline with the table under it.
+  const ceiling = (d.groups.find(g => g.selection === "independent") || {rows: []}).rows[0];
+
+  // A draw whose document had unreadable metadata has no domain — `normalize`
+  // leaves it unset and `domain_shares` groups it as "(no url recorded)". It is
+  // excluded from `on_subject_site`, which does not make it somebody else's page.
+  const unknownDomain = (d.spread.domains.find(x => !x.domain || x.domain === "(no url recorded)") || {}).occurrences || 0;
+  const anyApprox = d.groups.some(g => g.rows.some(r => Object.values(r.by_index).some(v => v.approx)))
+    || d.probe.approx || d.spread.approx;
+  const head = document.createElement("section");
+  head.className = "card lookup";
+  head.innerHTML = `<h2>${esc(d.title)}</h2>
+    <p class="sub">${esc(d.subject)} — ${esc(d.byline)} · <code>${esc(d.site)}</code>.
+      Counted ${esc(d.run_on)} against <a href="https://infini-gram.io" target="_blank" rel="noopener">infini-gram</a>,
+      a suffix-array index over these corpora.</p>
+    <p style="margin:0 0 14px;font-size:14px"><b>${esc(d.question)}</b>
+      <span style="color:var(--text-secondary)">${esc(d.answer)}</span></p>
+    <div class="findings">
+      <div class="finding">
+        <div class="n">${num(d.probe.documents.length)}</div>
+        <div class="t">documents in ${esc(probeIndex.label)} hold one particular post —
+          ${d.probe.exhaustive
+            ? "every copy of it the corpus has."
+            : `a sample of the copies the corpus has, drawn from ${num(d.probe.drawn)} draws. The index
+               answered with fewer than the whole occurrence list, so this is not all of them.`}</div>
+      </div>
+      <div class="finding">
+        <div class="n">${num(d.spread.on_subject_site)} of ${num(d.spread.drawn)}</div>
+        <div class="t">randomly drawn copies of the blog's own name sit on the blog.
+          ${unknownDomain
+            ? `${num(d.spread.drawn - d.spread.on_subject_site - unknownDomain)} are on other people's pages,
+               and ${num(unknownDomain)} came back with no readable URL, so where they sit is unknown.`
+            : "The rest are other people's pages."}</div>
+      </div>
+      ${ceiling ? `<div class="finding">
+        <div class="n">${num(ceiling.by_index[d.probe.index].occurrences)}</div>
+        <div class="t">occurrences of <code>${esc(ceiling.q)}</code> — a ceiling on how many posts using it are present at all.</div>
+      </div>` : ""}
+    </div>
+    <p class="scope">${esc(d.caveat)}</p>`;
+  main.appendChild(head);
+
+  // ---- counts ----
+  // Two things the prose above and below must not assume: that every drawn
+  // occurrence has a readable domain, and that every count is exact. Both are
+  // recorded per result, so read them rather than writing around them.
+  const counts = document.createElement("section");
+  counts.className = "card lookup";
+  counts.innerHTML = `<h2>The counts</h2>
+    <p class="sub">Occurrences of each exact string, per corpus. Nothing is sampled here — a
+      suffix array counts every occurrence it holds.${anyApprox
+        ? ` A count marked <code>~</code> is the index's own estimate: it stops counting a string this
+            common and reports an approximation, which it flags and this passes through.`
+        : ""}</p>`;
+  for (const g of d.groups){
+    const h = document.createElement("p");
+    h.className = "lutgrp";
+    // The badge is the load-bearing part of this table. Queries found by
+    // reading documents already pulled out of the corpus are present by
+    // construction, and letting them share a table with independently chosen
+    // ones without saying so would report a 100% hit rate as a finding.
+    const biased = g.selection !== "independent";
+    h.innerHTML = `${esc(g.name)}<span class="selbadge${biased ? " biased" : ""}">${
+      biased ? "found in the corpus — present by construction" : "chosen independently"}</span>`;
+    counts.appendChild(h);
+    const note = document.createElement("p");
+    note.className = "note";
+    note.style.margin = "2px 0 6px";
+    note.textContent = g.explain;
+    counts.appendChild(note);
+
+    const wrap = document.createElement("div");
+    wrap.className = "lutwrap";
+    const rows = g.rows.map(r => `<tr>
+        <td class="q"><code>${esc(r.q)}</code><small>${esc(r.note)}</small></td>
+        ${ids.map(i => {
+          const c = r.by_index[i] || {};
+          const n = c.occurrences ?? 0;
+          return `<td class="n${n ? "" : " zero"}">${n ? num(n) + (c.approx ? "~" : "") : "absent"}</td>`;
+        }).join("")}
+      </tr>`).join("");
+    wrap.innerHTML = `<table class="lut">
+      <thead><tr><th>string</th>${ids.map(i => `<th>${esc(byId[i].label)}</th>`).join("")}</tr></thead>
+      <tbody>${rows}</tbody></table>`;
+    counts.appendChild(wrap);
+  }
+  const legend = document.createElement("p");
+  legend.className = "note";
+  legend.textContent = d.indexes.map(i => `${i.label}: ${i.note}`).join("  ");
+  counts.appendChild(legend);
+  main.appendChild(counts);
+
+  // ---- the probe ----
+  const probe = document.createElement("section");
+  probe.className = "card lookup";
+  probe.innerHTML = `<h2>What one post looks like when it is in there</h2>
+    <p class="sub"><code>${esc(d.probe.query)}</code> in ${esc(probeIndex.label)}:
+      ${num(d.probe.occurrences)} occurrence${d.probe.occurrences === 1 ? "" : "s"}
+      across ${num(d.probe.documents.length)} document${d.probe.documents.length === 1 ? "" : "s"}.
+      ${d.probe.exhaustive
+        ? esc(d.probe.explain)
+        : `The index answered with fewer than the whole occurrence list, so these documents are a
+           sample of ${num(d.probe.drawn)} draws rather than every copy the corpus holds.`}</p>`;
+  for (const rec of d.probe.documents)
+    probe.insertAdjacentHTML("beforeend", lookupDocBlock(rec, d.site, d.probe.exhaustive));
+  main.appendChild(probe);
+
+  // ---- the spread ----
+  const spread = document.createElement("section");
+  spread.className = "card lookup";
+  spread.innerHTML = `<h2>Where the copies actually live</h2>
+    <p class="sub"><code>${esc(d.spread.query)}</code> appears ${num(d.spread.occurrences)}${d.spread.approx ? "~" : ""} times in
+      ${esc(spreadIndex.label)}${d.spread.approx ? ", which the index reports as an estimate rather than a count — it stops counting a string this common" : ""}. ${esc(d.spread.explain)}
+      Shares below are over the ${num(d.spread.drawn)} occurrences drawn, weighted by occurrence
+      rather than by page: a site that reposts the text on several pages counts once per page, and a
+      page that repeats it counts once per repeat.</p>`;
+  // The long tail is a finding, not noise — but twenty rows all reading 1.7%
+  // spend the card's whole height saying one thing. Name the sites that came up
+  // more than once, then roll the rest into a single row that keeps the count.
+  // The subject's own site always gets its own row however rare it is: whether
+  // it is there at all is the question this section answers.
+  // "(no url recorded)" is not a site. It rides in `domains` because that is
+  // where `domain_shares` puts a draw whose document had no readable URL, and
+  // rolling it into the tail would count it as one more site holding a copy —
+  // contradicting the headline and the conclusion, which both say its location
+  // is unknown. It gets its own row.
+  const isUnknown = x => !x.domain || x.domain === "(no url recorded)";
+  const sites = d.spread.domains.filter(x => !isUnknown(x));
+  const named = sites.filter(x => x.occurrences > 1 || x.domain === d.site);
+  const tail = sites.filter(x => !named.includes(x));
+  const max = Math.max(...d.spread.domains.map(x => x.share), 0.01);
+  const bar = (label, share, count, tip, bold) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `<div class="lbl"${bold ? ' style="color:var(--text-primary);font-weight:600"' : ""}>${esc(label)}</div>
+      <div class="trackbar"><div class="fill" style="width:${share / max * 100}%"></div></div>
+      <div class="val">${pct(share)} <small>${num(count)}</small></div>`;
+    hover(row.querySelector(".trackbar"), tip);
+    spread.appendChild(row);
+  };
+  for (const x of named)
+    bar(x.domain, x.share, x.occurrences,
+      `<b>${esc(x.domain)}</b><br>${num(x.occurrences)} of ${num(d.spread.drawn)} drawn occurrences`,
+      x.domain === d.site);
+  if (tail.length)
+    bar(`${tail.length} more sites, one copy each`,
+      tail.reduce((a, x) => a + x.share, 0), tail.length,
+      `<b>${tail.length} sites</b> each holding one drawn occurrence<br>${
+        tail.slice(0, 12).map(x => esc(x.domain)).join("<br>")}${tail.length > 12 ? "<br>…" : ""}`);
+  if (unknownDomain)
+    bar("no readable URL", unknownDomain / d.spread.drawn, unknownDomain,
+      `<b>${num(unknownDomain)} drawn occurrence${unknownDomain === 1 ? "" : "s"}</b> whose document `
+      + `carried no usable URL — the corpus recorded none, or its metadata would not parse. Which `
+      + `site ${unknownDomain === 1 ? "it sits" : "they sit"} on is unknown, not elsewhere.`);
+  const sn = document.createElement("p");
+  sn.className = "note";
+  // `on_subject_site` counts draws whose domain was readable and matched. A
+  // draw with no readable URL is evidence of nothing, so it cannot be folded
+  // into either side of this sentence.
+  const placed = d.spread.drawn - unknownDomain;
+  sn.textContent = d.spread.on_subject_site === 0
+    ? `Not one of the ${num(placed)} drawn copies whose page could be identified is on ${d.site}. Its own pages are in the corpus — the post above is one — but the site's heading is a nav line, and line-level filtering drops nav lines. What survives is the name as other people typed it into their own prose.`
+      + (unknownDomain ? ` The other ${num(unknownDomain)} came back with no readable URL and could be anywhere.` : "")
+    : `${d.spread.on_subject_site} of the ${num(placed)} drawn copies whose page could be identified are on ${d.site} itself.`
+      + (unknownDomain ? ` ${num(unknownDomain)} more came back with no readable URL.` : "");
+  spread.appendChild(sn);
+  const det = document.createElement("details");
+  det.innerHTML = `<summary class="stage-sub" style="cursor:pointer;margin:12px 0 0">read the ${num(d.spread.documents.length)} distinct documents drawn</summary>`;
+  det.insertAdjacentHTML("beforeend",
+    d.spread.documents.map(r => lookupDocBlock(r, d.site, d.spread.exhaustive)).join(""));
+  spread.appendChild(det);
+  main.appendChild(spread);
+}
+
+async function renderLookup(gen){
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === "lookup"));
+
+  const intro = document.createElement("section");
+  intro.className = "card lookup";
+  intro.innerHTML = `<h2>Is my writing in the pretraining data?</h2>
+    <p class="sub">The rest of this site samples: it draws documents and reports what share of a
+      corpus looks like one thing or another. That cannot answer a question about one particular
+      text, because any single blog is a rounding error in a mix of trillions of tokens and no
+      sample will ever land on it. An exact-substring index can. Below is one blog run through
+      that index, and what its counts turned out to mean.</p>`;
+  main.appendChild(intro);
+
+  for (const f of MANIFEST.filter(isCaseFile)){
+    const d = await getData(f);
+    if (gen !== GEN) return;   // a tab switch mid-fetch, same guard as the model view
+    if (d) caseStudyCards(main, d);
+  }
+
+  const how = document.createElement("section");
+  how.className = "card lookup";
+  how.innerHTML = `<h2>Run it on your own writing</h2>
+    <p class="sub">Pick a sentence of yours distinctive enough that nobody else would write it, and
+      count it. A phrase you use often gives a ceiling on how many of your pages are present; a
+      sentence from one page tells you whether that page is.</p>
+    <code class="cmdline">trainspotting lookup "a sentence only you would have written" --docs 10</code>
+    <p class="note">There is no search box on this page on purpose. The index's API sends no
+      CORS headers, so a browser cannot call it from here — a box would need a proxy server, and
+      this site is static files with nothing behind them. The command above runs the same queries
+      locally, and <a href="https://huggingface.co/spaces/liujch1998/infini-gram" target="_blank" rel="noopener">infini-gram's
+      own demo</a> is the hosted version.</p>
+    <p class="note">For the opposite direction — take something a model wrote and find the training
+      documents behind it — use <a href="https://allenai.org/blog/olmotrace" target="_blank" rel="noopener">OLMoTrace</a>.
+      Neither tool covers Dolma 3: no public index does, so nothing here describes what OLMo 3 read.</p>`;
+  main.appendChild(how);
+}
+
+async function renderCompare(gen){
+  // Models with a post-training pipeline. A dataset has no pipeline to line up
+  // stage-by-stage against one, and putting it on this axis would read as a
+  // model; a base model that was never post-trained is the same case for the
+  // same reason. Every card below is built from stages with an `hf_dataset`, so
+  // such a target can contribute neither a bar nor a missing-run note — only a
+  // legend entry for a series that never arrives.
+  const models = Object.keys(REG).filter(k =>
+    REG[k].is_model !== false && (REG[k].stages || []).some(s => s.hf_dataset));
+  // Named rather than dropped: the tab strip offers these models, so a reader
+  // who does not find one here should be told it has nothing to compare rather
+  // than left to wonder whether the page failed to load it.
+  const baseOnly = Object.keys(REG).filter(k =>
+    REG[k].is_model !== false && !(REG[k].stages || []).some(s => s.hf_dataset));
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === "compare"));
+
+  const colors = comparisonColors(models);
+  const color = m => colors.get(m);
+  // Colors are keyed to the list of compared models, so a model keeps its color
+  // even in a legend that only names a subset (the per-bucket ask legends
+  // below). Each compared model has its own palette slot; colors never wrap.
+  const legendFor = ms => `<div class="legend" style="margin:0 0 4px">${ms.map(m =>
+    `<span class="k"><i style="background:${color(m)}"></i>${m}</span>`).join("")}</div>`;
+  const legend = legendFor(models);
+  // Order-preserving union across all models, so a stage that only some models
+  // have (heterogeneous pipelines) still gets a section instead of vanishing.
+  const stages = [];
+  for (const m of models)
+    for (const s of REG[m].stages)
+      if (s.hf_dataset && !stages.includes(s.stage)) stages.push(s.stage);
+  const ctxOf = (m, stage, ds) => {
+    const s = REG[m].stages.find(x => x.stage === stage) || {stage, hf_dataset: ds, name: ds};
+    return {model: m, view: "compare", stage: s.stage, kind: s.kind || s.stage,
+      dataset: s.hf_dataset, stageName: s.name,
+      hasContext: MANIFEST.includes(ctxFile(m, s.stage))};
+  };
+
+  // ---- HHH shares, all models per stage ----
+  const hhh = document.createElement("section");
+  hhh.className = "card";
+  hhh.innerHTML = `<h2>Helpful, honest, harmless — model against model</h2>
+    <p class="sub">Share of sampled prompts per stage whose primary training signal is each label,
+      all models on one axis. Whiskers: Wilson 95% CI. Click a bar for the prompts behind it.${
+        baseOnly.length ? ` Not on this axis: ${baseOnly.map(esc).join(", ")} — released as a base
+        model with no post-training stages, so there is nothing here to compare. Its pretraining
+        corpus is on its own tab.` : ""}</p>${legend}`;
+  for (const stage of stages){
+    const per = [], missing = [];
+    for (const m of models){
+      const d = await getData(`${m}.${stage}.labels.json`);
+      if (gen !== GEN) return;
+      if (!d){
+        // Only a model whose registry actually has this stage is "missing" —
+        // in a heterogeneous pipeline the absence isn't an uncommitted run.
+        if (REG[m].stages.some(x => x.stage === stage && x.hf_dataset)) missing.push(m);
+        continue;
+      }
+      const recs = d.records.filter(r => r.label);
+      const counts = {};
+      for (const r of recs) counts[r.label] = (counts[r.label]||0) + 1;
+      per.push({m, recs, counts, n: recs.length, dataset: d.dataset, rev: d, skipped: unlabeledOf(d, recs.length)});
+    }
+    // A stage no registered model has at all contributes neither data nor
+    // missing-run notices — skip it. But a stage where every registered model
+    // lacks a committed labels file must still show its header and notes, so
+    // a wholly unclassified stage can't make the comparison read as complete
+    // (same rule as the ask cards below).
+    if (!per.length && !missing.length) continue;
+    const h = document.createElement("h3");
+    h.className = "stage";
+    h.textContent = stageLabel(stage);
+    hhh.appendChild(h);
+    // Say so when a legend model has no committed run for this stage, so a
+    // partial experiment doesn't silently read as a complete comparison.
+    for (const m of missing){
+      const p = document.createElement("p");
+      p.className = "note";
+      p.textContent = `${m} — no classification run committed for this stage`;
+      hhh.appendChild(p);
+    }
+    if (!per.length) continue;
+    for (const p of per.filter(x => !x.n)){
+      noLabels(hhh, `${p.m} — every sampled prompt went unlabeled, so this model has no bars here`);
+    }
+    // Same accounting as the per-model page, per model rather than per stage.
+    for (const p of per.filter(x => x.skipped)){
+      const note = document.createElement("p");
+      note.className = "note";
+      note.textContent = `${p.m} — ${p.skipped.text} from the bars below`;
+      hhh.appendChild(note);
+    }
+    const max = Math.max(...per.filter(p => p.n).flatMap(p => LABELS.map(l => wilson(p.counts[l]||0, p.n)[1])), 0.01);
+    let lastGrp = null;
+    for (const l of LABELS){
+      const grp = VALUE_LABELS.has(l) ? "values" : "skills";
+      if (grp !== lastGrp){
+        const g = document.createElement("div"); g.className = "grp"; g.textContent = grp;
+        hhh.appendChild(g); lastGrp = grp;
+      }
+      const lbl = document.createElement("div");
+      lbl.className = "cmp-lbl" + (VALUE_LABELS.has(l) ? " value" : "");
+      lbl.textContent = NICE[l];
+      hhh.appendChild(lbl);
+      for (const p of per.filter(x => x.n)){
+        const k = p.counts[l] || 0;
+        const [lo, hi] = wilson(k, p.n);
+        barRow(hhh, shortName(p.m), k/p.n, lo, hi, max,
+          `<b>${p.m}</b> · ${NICE[l]}${revLink(p.rev)}<br>${k} of ${p.n} sampled prompts (${pct(k/p.n)})<br>95% CI ${pct(lo)}–${pct(hi)}`
+          + (p.skipped ? `<br>${esc(p.skipped.text)}` : "") + `<br>click to see the prompts`,
+          false,
+          p.recs.filter(r => r.label === l), {...ctxOf(p.m, stage, p.dataset), linkKey: `${p.m}.${l}`}, color(p.m));
+      }
+    }
+  }
+  main.appendChild(hhh);
+
+  // ---- custom questions across models ----
+  const slugs = [...new Set(MANIFEST.filter(f => f.includes(".ask-"))
+    .map(f => (f.match(/\.ask-(.+)\.json$/) || [])[1]).filter(Boolean))];
+  for (const slug of slugs){
+    // Same slug-collision guard as the per-model view: cmd_ask accepts
+    // arbitrary --slug values and truncates generated ones, so different runs
+    // can share a slug. Bucket by the stored question + classifier and render
+    // one card per distinct pair instead of merging everything under whichever
+    // file happened to load first.
+    const buckets = new Map();
+    // Models with no ask file at all for a stage (as opposed to one that
+    // landed in a different question bucket) are missing from EVERY bucket
+    // of this slug, so the note below is accurate in each.
+    const missingByStage = new Map();
+    for (const stage of stages){
+      for (const m of models){
+        const d = await getData(`${m}.${stage}.ask-${slug}.json`);
+        if (gen !== GEN) return;
+        if (!d){
+          if (REG[m].stages.some(x => x.stage === stage && x.hf_dataset)){
+            if (!missingByStage.has(stage)) missingByStage.set(stage, []);
+            missingByStage.get(stage).push(m);
+          }
+          continue;
+        }
+        const key = `${d.question}\u0000${d.classifier}`;
+        if (!buckets.has(key)) buckets.set(key, {question: d.question, classifier: d.classifier, rowsByStage: new Map()});
+        const b = buckets.get(key);
+        if (!b.rowsByStage.has(stage)) b.rowsByStage.set(stage, []);
+        const n = d.records.length, k = d.records.filter(r => r.match).length;
+        b.rowsByStage.get(stage).push({m, d, n, k, ci: wilson(k, n), skipped: unlabeledOf(d, n)});
+      }
+    }
+    for (const {question, classifier, rowsByStage} of buckets.values()){
+      // The legend names only this bucket's models: a model whose run for this
+      // slug answers a different question belongs to another card, and listing
+      // it here would advertise a row (or a missing-run note) that never comes.
+      const bucketModels = models.filter(m =>
+        [...rowsByStage.values()].some(rows => rows.some(r => r.m === m)));
+      const card = document.createElement("section");
+      card.className = "card";
+      card.innerHTML = `<h2>Custom question — model against model</h2>
+        <p class="sub">“${esc(question)}” — share of sampled prompts judged a match by ${classifier}.</p>${legendFor(bucketModels)}`;
+      const max = Math.max(...[...rowsByStage.values()].flat().map(r => r.ci[1]), 0.01);
+      // Iterate the registered stage union, not just the stages with loaded
+      // rows: a stage where NO model has a file for this question still gets
+      // its header and missing-run notes, so a partially committed ask
+      // experiment can't read as a complete one.
+      for (const stage of stages){
+        const rows = rowsByStage.get(stage) || [];
+        const missing = missingByStage.get(stage) || [];
+        if (!rows.length && !missing.length) continue;
+        const h = document.createElement("h3");
+        h.className = "stage";
+        h.textContent = stageLabel(stage);
+        card.appendChild(h);
+        for (const m of missing){
+          const p = document.createElement("p");
+          p.className = "note";
+          p.textContent = `${m} — no ask run committed for this stage`;
+          card.appendChild(p);
+        }
+        for (const r of rows.filter(x => x.skipped)){
+          const note = document.createElement("p");
+          note.className = "note";
+          note.textContent = `${r.m} — ${r.skipped.text} from the bar below`;
+          card.appendChild(note);
+        }
+        for (const r of rows){
+          if (!r.n){
+            noLabels(card, `${r.m} — every sampled item went unjudged, so there is no rate to show`);
+            continue;
+          }
+          barRow(card, shortName(r.m), r.k/r.n, r.ci[0], r.ci[1], max,
+            `<b>${r.m}</b> · ${stageLabel(stage)}${revLink(r.d)}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`
+            + (r.skipped ? `<br>${esc(r.skipped.text)}` : "") + `<br>click to read them`,
+            false,
+            r.d.records.filter(x => x.match), {...ctxOf(r.m, stage, r.d.dataset), linkKey: `${r.m}.ask-${slug}`}, color(r.m));
+        }
+      }
+      main.appendChild(card);
+    }
+  }
+}
+
+// ------------------------------------------------------------------- search ---
+// Find a string anywhere in the committed samples — prompts, the responses a
+// stage fits or prefers, the reference answers a verifier scores against, and
+// the pretraining documents. The bar drill-downs only reach a prompt whose bar
+// you already guessed, and no bar covers the response side at all; this does.
+//
+// What it searches is the sample, not the mix; sample sizes vary by stage. It finds
+// instances to read, never a rate. `trainspotting grep` is the other half —
+// exact counts over every row of a mix, no sample.
+
+// The query's three-character runs, cut the way trainspotting/searchindex.py
+// cuts the samples' — by code point, which is why the string is spread first:
+// these prompts are full of emoji and mathematical-bold letters, and slicing
+// UTF-16 units would cut different trigrams than Python did and lose the file.
+function searchGrams(s, n){
+  const chars = [...s.toLowerCase()], out = new Set();
+  for (let i = 0; i + n <= chars.length; i++) out.add(chars.slice(i, i + n).join(""));
+  return [...out];
+}
+
+let SEARCH_INDEX;   // undefined = not fetched yet, null = no index in this export
+async function searchIndex(){
+  if (SEARCH_INDEX === undefined)
+    SEARCH_INDEX = await fetchJSON("search-index.json").catch(() => null);
+  return SEARCH_INDEX;
+}
+
+// Every sampled file the scan can read, in pipeline order per model, so results
+// arrive in the order the training run did.
+function searchableFiles(){
+  const out = [];
+  for (const [model, m] of Object.entries(REG))
+    for (const s of m.stages){
+      for (const name of [ctxFile(model, s.stage), `${model}.${s.stage}.docs.json`])
+        if (MANIFEST.includes(name)) out.push({name, model, stage: s.stage, stageName: s.name,
+          dataset: s.hf_dataset || s.sample_dataset, corpus: !s.hf_dataset});
+    }
+  return out;
+}
+
+// Which parts of a training example the scan reads. The user and system turns
+// inside a response are the prompt again — matching them would report the same
+// text twice under two names.
+function searchFields(rec){
+  const out = [], seen = new Map();
+  // Deduplicate on the text itself, not on the role. `prompt_full` is the FIRST
+  // user turn (extract.py's _first), so a record's own turn list repeats it —
+  // but a system instruction and every later user turn are text the prompt does
+  // not carry, and skipping them by role hid 430,000 characters across the
+  // committed samples. The trigram index reads them (it walks every string in
+  // the record), so a query that only lived there passed the prefilter, cost a
+  // download, and came back "no match" for text that is provably in the data.
+  // `cut` is whether context.py shortened this field. Every field it writes
+  // carries the true length beside the text, so a search can tell "not in this
+  // sample" from "not in the first 4,000 characters of it" — which are
+  // different claims, and only the first is the one the page used to make.
+  // `chars` is Python's len() — Unicode code points. JavaScript's `.length` is
+  // UTF-16 code units, which is larger for anything outside the BMP. Comparing
+  // them directly missed every cut field whose kept prefix is emoji-heavy: 4,100
+  // code points truncated to 4,000 exports a string whose `.length` is 8,000, so
+  // `4100 > 8000` is false and the field read as complete. WildChat is full of
+  // emoji, and so is the wrapper-template prompt this whole search started from.
+  // `side` scopes that deduplication. Text repeated within one side of the
+  // example is one thing said once; the same text on opposite sides of a
+  // preference pair is two findings, and collapsing them is the single worst
+  // thing this page can do to a count — "I am ChatGPT" in the chosen completion
+  // trains the model toward saying it and in the rejected one trains it away.
+  // A global set kept whichever copy it reached first, which is always the
+  // chosen one, so eight records across the two committed Think DPO samples
+  // presented a string on both sides as preferred-only.
+  const push = (field, text, chars, side = "") => {
+    const within = seen.get(side) || seen.set(side, new Set()).get(side);
+    if (!text || within.has(text)) return;
+    within.add(text);
+    // Spread only when the cheap comparison cannot settle it. Code points are
+    // never more than code units, so `chars > units` already proves a cut.
+    const units = text.length;
+    const cut = typeof chars !== "number" ? false
+      : chars > units ? true
+      : chars > [...text].length;
+    out.push({field, text, cut});
+  };
+  const cell = (v, field, side = "") => v && push(field, v.text, v.chars, side);
+  cell(rec.prompt_full, "prompt");
+  // A tool *menu* is offered to the model, not produced by it, so it stays on
+  // the prompt side whichever turn carries it — the other four are the model's
+  // own output. `search._side_of` draws the same line, and `grep.MESSAGE_EXTRAS`
+  // maps the same five names to the same two groups.
+  const PRODUCED = ["tool_calls", "function_call", "function_calls", "refusal"];
+  const OFFERED = ["functions"];
+  const turns = (list, tag) => (list || []).forEach(t => {
+    // A candidate side labels only what that candidate produced. A user turn
+    // after the branch point is still something the model reads, not something
+    // either completion claims, so it goes back to the bare role — which also
+    // puts it in the prompt scope, where the copy on the other side of the pair
+    // deduplicates against it instead of being reported twice. `search.fields`
+    // reaches the same answer through `_side_of` and `seen_after`.
+    const side = tag && t.role !== "assistant" ? "" : tag;
+    if (t.reasoning) push(side + t.role + " reasoning", t.reasoning.text, t.reasoning.chars, side);
+    push(side + t.role, t.text, t.chars, side);
+    // Every structured field the export now carries. `context.TURN_FIELDS`
+    // widened to the full set `search` knows; reading only two of them here
+    // meant the index could retain and fetch a file for a match in the other
+    // three while this scan then reported nothing.
+    for (const k of PRODUCED)
+      cell(t[k], side + t.role + " " + k.replace(/_/g, " "), side);
+    for (const k of OFFERED)
+      cell(t[k], t.role + " " + k.replace(/_/g, " "), "");
+  });
+  turns(rec.turns, "");                          // sft: the target response
+  // A pair shares a conversation prefix and differs only from where one answer
+  // diverges. Labelling by role put that shared history under "chosen
+  // assistant" — and because dedup is on the text, the rejected copy was then
+  // dropped, so a query matching only shared history was presented as a hit on
+  // the preferred completion. Twelve records of the committed Instruct DPO
+  // sample have such a prefix. The CLI splits at the branch; so does this.
+  if (rec.chosen || rec.rejected){
+    const ch = (rec.chosen && rec.chosen.turns) || [];
+    const rj = (rec.rejected && rec.rejected.turns) || [];
+    // Every field a search can reach, reasoning included. A Think pair can
+    // agree on its final answer and differ only in the thinking that led there;
+    // keyed without it, the turn read as shared, the rejected copy was never
+    // scanned at all, and the chosen reasoning was labelled context.
+    const key = t => JSON.stringify([t.role, t.text, t.reasoning && t.reasoning.text,
+      ...[...PRODUCED, ...OFFERED].map(k => t[k] && t[k].text)]);
+    // `branchPoint` rather than a loop of its own: it carries the clamp that
+    // keeps a pair's last turn out of the shared prefix, which is what the
+    // loop here used to drop. See its comment for why the predicate is a
+    // parameter and the clamp is not.
+    const b = branchPoint(ch, rj, (x, y) => key(x) === key(y));
+    turns(ch.slice(0, b), "");                   // shared: the conversation, not a claim
+    turns(ch.slice(b), "chosen ");
+    turns(rj.slice(b), "rejected ");
+  }
+  const reward = rec.reward || {};
+  for (const k of ["ground_truth", "solution", "constraint"]){
+    const v = reward[k], field = k.replace(/_/g, " ");
+    if (typeof v === "string") push(field, v);
+    else cell(v, field);
+  }
+  if (rec.rollouts && rec.rollouts.sample) cell(rec.rollouts.sample, "sampled rollout");
+  push("document", rec.text, rec.chars);         // pretraining corpora
+  return out;
+}
+
+const MAX_HITS_PER_FILE = 40;   // rendered, not found; the count above them is the truth
+const SNIPPET_PAD = 110;
+
+// Where `needle` first matches `text`, case-insensitively, as an index into
+// `text` itself. Folding the whole string and searching that gives an offset
+// into the folded copy, which is not the same number: lowercasing changes
+// UTF-16 length for some characters — "İ".toLowerCase() is two code units, an
+// "i" and a combining dot — so one Turkish capital before the match shifted
+// every later offset by one and the highlight marked the character after the
+// match instead. These prompts are full of Turkish.
+//
+// So fold one candidate window at a time and keep the original index. The scan
+// has already established that the needle is in there, so this walks at most
+// until it finds it.
+function matchIndex(text, needle){
+  if (!needle) return -1;
+  for (let i = 0; i < text.length; i++){
+    // Compare a slice of the original, folded, against the folded needle.
+    // Folding changes length in both directions — "İ" folds to two code units,
+    // so a two-unit needle can match a one-unit slice, and a longer slice can
+    // fold down to a shorter needle — so widths either side of the natural one
+    // are tried too.
+    // Widths from one up to the needle's own length. Bounding starts by
+    // `needle.length` was wrong at the end of a field: a needle that is itself a
+    // fold — "i" plus a combining dot, two code units — matches a one-unit "İ",
+    // and if that İ is the last character there are fewer than two units left,
+    // so the position was never visited and a real late hit went unhighlighted.
+    // Folding expands or preserves length and never shrinks it, so a slice that
+    // folds to the needle can be no wider than the needle; the upper bound needs
+    // no guess about how far a fold can stretch.
+    for (let w = 1; w <= needle.length && i + w <= text.length; w++){
+      if (text.slice(i, i + w).toLowerCase() === needle) return {at: i, len: w};
+    }
+  }
+  return -1;
+}
+
+// One `…text <mark>match</mark> text…` line per matching field.
+function snippet(text, needle){
+  const found = matchIndex(text, needle);
+  if (found === -1) return esc(text.slice(0, SNIPPET_PAD * 2)) + (text.length > SNIPPET_PAD * 2 ? "…" : "");
+  const {at, len} = found;
+  const from = Math.max(0, at - SNIPPET_PAD), to = Math.min(text.length, at + len + SNIPPET_PAD);
+  return (from ? "…" : "") + esc(text.slice(from, at))
+    + `<mark>${esc(text.slice(at, at + len))}</mark>`
+    + esc(text.slice(at + len, to)) + (to < text.length ? "…" : "");
+}
+
+// Records whose text contains `needle`, with the fields that matched — plus how
+// many records could not answer, because a field this search read was shortened
+// by context.py and the match may sit past the cut. Reporting those as a clean
+// miss is the page claiming to have looked at text it never had.
+function scanRecords(records, needle){
+  const hits = [];
+  let censored = 0;
+  for (const rec of records){
+    const all = searchFields(rec);
+    const fields = all.filter(f => f.text.toLowerCase().includes(needle));
+    if (fields.length) hits.push({rec, fields});
+    else if (all.some(f => f.cut)) censored++;
+  }
+  hits.censored = censored;
+  return hits;
+}
+
+function hitBlock(hit, file, query){
+  const {rec, fields} = hit;
+  const el = document.createElement("div");
+  el.className = "hit";
+  el.style.setProperty("--bar", hueFor(file.stage));
+  const source = (rec.meta && rec.meta.dataset_source) || rec.source || file.dataset;
+  const tags = [
+    `<span class="prov">${esc(file.stage === "rlvr" ? REWARDS.families[rewardFamily(rec.reward?.kind)].label : stageLabel(file.stage))}</span>`,
+    `<span>${esc(source)}${rec.topic ? " · " + esc(niceGroup(rec.topic)) : ""}</span>`,
+  ];
+  if (fields.length > 1) tags.push(`<span>${fields.length} fields matched</span>`);
+  el.innerHTML = `<div class="doctags">${tags.join("")}</div>`
+    + fields.map(f => `<p class="field">${esc(f.field)}</p>
+        <div class="snip">${snippet(f.text, query.toLowerCase())}</div>`).join("");
+  if (file.corpus){
+    const a = document.createElement("a");
+    a.className = "shard";
+    a.href = `https://huggingface.co/datasets/${file.dataset}/blob/${file.revision || "main"}/${rec.shard}`;
+    a.target = "_blank"; a.rel = "noopener";
+    a.textContent = rec.shard + " ›";
+    el.appendChild(a);
+  } else {
+    const b = document.createElement("button");
+    b.className = "ctxbtn";
+    b.textContent = "see it in training context ›";
+    b.onclick = () => openContext(rec, file.stage, file.dataset, file.stageName,
+      rec.row != null ? ["search", query, `${file.model}.${file.stage}`, "row-" + rec.row] : null);
+    el.appendChild(b);
+  }
+  return el;
+}
+
+async function renderSearch(query, gen){
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  pendingJump = null;
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", "false"));
+  const box = document.getElementById("q");
+  if (box && document.activeElement !== box) box.value = query;
+
+  const card = document.createElement("section");
+  card.className = "card";
+  const short = query.trim().length < 2;
+  card.innerHTML = `<h2>${short ? "Search the committed samples"
+      : `“${esc(query)}” in the committed samples`}</h2>
+    <p class="sub">Every sampled training example whose text contains this string — every turn
+      of the prompt, system instructions included, the responses each stage fits or prefers,
+      the reference answers its verifier scores against, and the pretraining documents.
+      Matching is literal and case-insensitive.</p>
+    ${short ? `<p class="note">Type at least two characters.</p>` : ""}`;
+  main.appendChild(card);
+  if (short) return;
+  const needle = query.toLowerCase();
+  const files = searchableFiles();
+  const index = await searchIndex();
+  if (gen !== GEN) return;
+
+  // The index maps trigram → files, so a file survives only if it holds every
+  // three-character run of the query — somewhere, not necessarily together, so
+  // the scan below is still what decides. A run the index has never seen is
+  // decisive the other way: nothing to fetch, and the answer is no.
+  const grams = index ? searchGrams(query, index.ngram) : [];
+  let candidates = files, prefiltered = false;
+  if (grams.length){
+    const names = grams
+      .map(g => new Set((index.grams[g] || []).map(i => index.files[i])))
+      .reduce((a, b) => new Set([...a].filter(n => b.has(n))));
+    candidates = files.filter(f => names.has(f.name));
+    prefiltered = true;
+  }
+
+  const progress = document.createElement("p");
+  progress.className = "note";
+  card.appendChild(progress);
+  // Two characters is under the index's trigram, so nothing can be ruled out
+  // and every sample has to be read. Say so — it is several megabytes.
+  if (!prefiltered){
+    const p = document.createElement("p");
+    p.className = "note";
+    p.textContent = index
+      ? `Too short to use the index — reading all ${files.length} samples.`
+      : `No search index in this export — reading all ${files.length} samples.`;
+    card.appendChild(p);
+  }
+
+  let matched = 0, filesWithHits = 0, done = 0, censored = 0;
+  for (const file of candidates){
+    progress.textContent = `reading ${file.model} ${stageLabel(file.stage)} (${++done} of ${candidates.length})…`;
+    const data = await getData(file.name);
+    if (gen !== GEN) return;
+    if (!data) continue;
+    const hits = scanRecords(data.records, needle);
+    censored += hits.censored;
+    if (!hits.length) continue;
+    matched += hits.length;
+    filesWithHits++;
+    // A document sample keeps its dataset and pinned revision on the file, not
+    // on each record, and the shard link needs both.
+    const src = file.corpus
+      ? {...file, dataset: data.dataset || file.dataset, revision: data.revision} : file;
+
+    const h = document.createElement("h3");
+    h.className = "stage";
+    h.style.setProperty("--bar", hueFor(file.stage));
+    h.innerHTML = `<i class="sw"></i>${esc(file.model)} · ${esc(stageLabel(file.stage))}
+      <span class="ds">— ${hits.length} of ${data.records.length} sampled
+        ${file.corpus ? "documents" : "examples"}</span>`;
+    card.appendChild(h);
+    for (const hit of hits.slice(0, MAX_HITS_PER_FILE)) card.appendChild(hitBlock(hit, src, query));
+    if (hits.length > MAX_HITS_PER_FILE){
+      const p = document.createElement("p");
+      p.className = "note";
+      p.textContent = `showing the first ${MAX_HITS_PER_FILE} of ${hits.length} matches in this sample`;
+      card.appendChild(p);
+    }
+  }
+
+  progress.remove();
+  const summary = document.createElement("p");
+  summary.className = "note";
+  summary.style.margin = "0";
+  // Said in both branches. It qualifies a zero more than it qualifies a count,
+  // and a zero is exactly where the page most needs to not overclaim.
+  //
+  // Two separate gaps, and the second is the one that cannot be counted. Records
+  // read here whose fields were cut are countable, and counted. Files the index
+  // ruled out are not: the index is built from these same shortened files, so a
+  // string living only past a cut has no trigrams in it and its file is dropped
+  // before anything looks. Every committed sample contains at least one cut
+  // field, so keeping such files as candidates would keep all of them and the
+  // index would stop being an index. The honest move is to say the bound rather
+  // than pretend to a floor the page cannot reach.
+  const cutNote = censored
+    ? ` ${censored} record${censored > 1 ? "s were" : " was"} shortened to 4,000 characters
+        per field before export, so a match past that could not be seen here;
+        the linked row on HuggingFace is untruncated.`
+    : "";
+  const indexNote = prefiltered && candidates.length < files.length
+    ? ` The index is built from those same shortened fields, so a string that appears
+        only past a cut can have its file ruled out before it is read — a limit of
+        searching the export rather than the mix, which
+        <code>trainspotting grep</code> does not have.`
+    : "";
+  summary.innerHTML = matched
+    ? `<b>${matched}</b> matching example${matched > 1 ? "s" : ""} in ${filesWithHits} of
+       ${files.length} sampled sets${prefiltered && candidates.length < files.length
+         ? ` — ${candidates.length} read, the rest ruled out by the index` : ""}.
+       Sample sizes vary by stage, so this finds instances to read, not a rate:
+       for an exact count over every row of a mix, run
+       <code>trainspotting grep &lt;model&gt; "${esc(query)}"</code>.${cutNote}${indexNote}`
+    : `No match in any of the ${files.length} committed samples${prefiltered ? "" : " read"}.
+       Sample sizes vary by stage. A string absent from these samples can still be common in the mix —
+       <code>trainspotting grep &lt;model&gt; "${esc(query)}"</code> counts every row.${cutNote}${indexNote}`;
+  card.insertBefore(summary, card.querySelector("h3.stage"));
+}
+
+// ------------------------------------------------------------------ routing ---
+// The hash mirrors what is open, so every view is a link:
+//   #<model> | #compare                a tab
+//   #<model>/<stage>/<key>             an open drill-down (key = label or ask-<slug>)
+//   #<model>/<stage>/<key>/row-<n>     one training example, in the context modal
+// In the compare view the key is <model>.<label-or-ask-slug>, so the same two
+// hash forms work with "compare" in the first segment. The search view packs
+// itself into the same four segments — #search/<query>, and
+// #search/<query>/<model>.<stage>/row-<n> for a result opened in the modal —
+// so the query sits in the stage slot and the model in the key slot.
+// GEN discards a render that a newer *view* superseded mid-await; NAV moves on
+// EVERY hash change (even within a view, even app-written ones) and discards
+// any in-flight continuation that would touch the DOM or the hash, so a stale
+// await can't reopen a modal or drill-down the user navigated away from.
+// RENDERED is the generation of the last render that ran to completion: while
+// GEN !== RENDERED the view's DOM is incomplete, so routes must not apply
+// drill-down/modal state to it — the rendering route applies the latest hash
+// when it finishes. Invariant: the end state always matches the latest hash.
+let VIEW = null, SEARCH_Q = null, suppress = 0, GEN = 0, RENDERED = 0, NAV = 0;
+
+function setHash(...parts){
+  const h = "#" + parts.map(encodeURIComponent).join("/");
+  if (location.hash === h) return;
+  suppress++;
+  location.hash = h;
+}
+
+// Compare/search keys start with a registered model followed by a dot. Both
+// model versions and the remaining question key can themselves contain dots.
+function splitModelKey(key, registry){
+  if (typeof key !== "string") return null;
+  const model = Object.keys(registry).filter(m => key.startsWith(m + ".") && key.length > m.length + 1)
+    .sort((a, b) => b.length - a.length)[0];
+  return model ? {model, key: key.slice(model.length + 1)} : null;
+}
+
+// A truncated or hand-edited link can hold a malformed escape ("%E0", "%"),
+// which makes decodeURIComponent throw. Fall back to the raw segment: it just
+// won't match any model/stage/label, so route() lands on the default view and
+// skips the drill-down — and the VALID segments of the hash still apply.
+function decodeSeg(s){
+  try { return decodeURIComponent(s); } catch { return s; }
+}
+
+function parseHash(){
+  const seg = location.hash.replace(/^#/, "").split("/").filter(Boolean).map(decodeSeg);
+  const row = seg[3] && /^row-\d+$/.test(seg[3]) ? +seg[3].slice(4) : null;
+  return {view: seg[0] || null, stage: seg[1], key: seg[2], row};
+}
+
+async function route(){
+  const nav = ++NAV;   // invalidate in-flight work on every hash move, same-view included
+  if (suppress){ suppress--; return; }
+  const st = parseHash();
+  const v = st.view;
+  const view = v && (REG[v] || v === "compare" || v === "search" || v === "lookup")
+    ? v : Object.keys(REG)[0];
+  // Two hashes in the search view can name the same view and different pages:
+  // a new query is a new render, not a state change inside the old results.
+  const query = view === "search" ? (st.stage || "") : null;
+  // An open modal this hash does not keep (no row segment, or a different
+  // view) belongs to the outgoing state: clear its backlink and close it
+  // BEFORE any await, so closing the still-visible dialog mid-render can't
+  // write a stale backlink over the new hash.
+  if (dlg.open && (st.row == null || view !== VIEW)){ dlg._backLink = null; dlg.close(); }
+  if (view !== VIEW || query !== SEARCH_Q){
+    VIEW = view;
+    SEARCH_Q = query;
+    const gen = ++GEN;
+      await (view === "search"  ? renderSearch(query, gen)
+           : view === "compare" ? renderCompare(gen)
+           : view === "lookup"  ? renderLookup(gen)
+           : renderModel(view, gen));
+    if (gen !== GEN) return;   // a newer view render took over mid-await
+    RENDERED = gen;
+    // The hash may have moved within this view while the render was in
+    // flight (those routes bailed on GEN !== RENDERED below), so apply the
+    // NEWEST hash's state, not this route's own — never a stale one.
+    return applyHashState(NAV);
+  }
+  // Same view, but its render is still awaiting data: the DOM is incomplete,
+  // so don't touch it — the rendering route applies this hash on completion.
+  if (GEN !== RENDERED) return;
+  return applyHashState(nav);
+}
+
+// Apply the CURRENT hash's drill-down/modal state to a fully rendered view.
+// Runs synchronously up to the one await, whose continuation re-validates
+// `nav` so a newer hash move discards it.
+async function applyHashState(nav){
+  const st = parseHash();
+  if (st.row == null && dlg.open){ dlg._backLink = null; dlg.close(); }
+  // Search results are all on screen already — there is no panel to open, only
+  // the modal a result link names: #search/<query>/<model>.<stage>/row-<n>.
+  if (VIEW === "search"){
+    if (st.row == null) return;
+    const parsed = splitModelKey(st.key, REG);
+    const model = parsed?.model, stage = parsed?.key;
+    const s = REG[model] && REG[model].stages.find(x => x.stage === stage);
+    let rec = s ? await contextRowFor(model, stage, st.row) : null;
+    if (nav !== NAV) return;
+    // Same guard the bar links use, one layer down: honor only a row that this
+    // hash's own query actually matches, so an edited link can't dress an
+    // unrelated example up as a search result.
+    const needle = (st.stage || "").toLowerCase();
+    if (rec && !searchFields(rec).some(f => f.text.toLowerCase().includes(needle))) rec = null;
+    if (rec) openContext(rec, stage, s.hf_dataset, s.name, ["search", st.stage, st.key, "row-" + st.row]);
+    else if (dlg.open){ dlg._backLink = null; dlg.close(); }
+    return;
+  }
+  // Back/Forward restores a hash; close any panel that hash does not name.
+  const want = st.stage && st.key ? st.stage + "/" + st.key : null;
+  for (const open of document.querySelectorAll("[data-link]"))
+    if (open.dataset.link !== want && open._isOpen()) open._toggle(false);
+  if (!want) return;
+  const el = document.querySelector(`[data-link="${CSS.escape(want)}"]`);
+  if (el){
+    if (!el._isOpen()) el._toggle(false);
+    el.scrollIntoView({block: "center"});
+  }
+  if (st.row != null){
+    // Compare keys are <model>.<key>; per-model views carry the model in the hash root.
+    const model = VIEW === "compare" ? splitModelKey(st.key, REG)?.model : VIEW;
+    // Only honor the row when the stage/key named a real drill-down (`el`
+    // resolved above): a hash whose key names no bar would otherwise claim a
+    // nonexistent label/ask result while a modal lends it false credibility.
+    let rec = el && REG[model] ? await contextRowFor(model, st.stage, st.row) : null;
+    if (nav !== NAV) return;   // any newer hash move makes this modal stale
+    // A context file covers the whole stage, so a stale/edited row number can
+    // resolve to a record behind a DIFFERENT bar (e.g. a capability record
+    // under a helpfulness link). Only honor rows that belong to the bar this
+    // hash names. Match on the row when the bar's records carry one, and fall
+    // back to the prompt prefix for runs committed before they did — the prefix
+    // is ambiguous across duplicate openings, which is exactly why it is the
+    // fallback and not the test.
+    if (rec && !el._records.some(r => r.row != null
+          ? r.row === rec.row
+          : keyPrefix(r.prompt) === rec.key)) rec = null;
+    const s = REG[model] && REG[model].stages.find(x => x.stage === st.stage);
+    if (rec && s) openContext(rec, st.stage, s.hf_dataset, s.name, [VIEW, st.stage, st.key, "row-" + st.row]);
+    // Lookup failed (stale/edited hash naming a row that no longer exists):
+    // an open dialog would keep showing the previous record under a hash
+    // that doesn't name it — clear its backlink and close it.
+    else if (dlg.open){ dlg._backLink = null; dlg.close(); }
+  }
+}
+
+export async function boot(){
+  wireDialog();
+  watchColorScheme();
+  [REG, MANIFEST, LANG_NAMES, REWARDS] = await Promise.all([
+    fetchJSON("registry.json"), fetchJSON("manifest.json"), fetchJSON("language-names.json"),
+    fetchJSON("reward-kinds.json")]);
+  const tabs = document.getElementById("tabs");
+  // A tab label that is not just the view name. Held here rather than inlined
+  // in the loop so a third group does not have to grow another ternary.
+  const TAB_LABEL = {compare: "compare models", lookup: "is my writing in here?"};
+  // Two groups, not one row of look-alike pills: a model tab is a training
+  // pipeline someone was fit to, a dataset tab is a corpus nothing was trained
+  // on, and the answers they give mean different things. `compare` belongs to
+  // the models group — it lines models up against each other.
+  const group = (label, tip, names, cls) => {
+    if (!names.length) return;
+    const g = document.createElement("div");
+    g.className = "tabgroup";
+    g.setAttribute("role", "group");
+    g.setAttribute("aria-label", label);
+    const l = document.createElement("span");
+    l.className = "glabel";
+    l.textContent = label;
+    l.setAttribute("aria-hidden", "true");
+    hover(l, tip);
+    g.appendChild(l);
+    for (const name of names){
+      const b = document.createElement("button");
+      b.textContent = TAB_LABEL[name] || name;
+      b.dataset.m = name;
+      if (cls) b.className = cls;
+      b.onclick = () => { if (name !== VIEW) location.hash = "#" + name; };
+      g.appendChild(b);
+    }
+    tabs.appendChild(g);
+  };
+  group("models", "A model and everything it was trained on, stage by stage: pretraining through RL.",
+        [...Object.keys(REG).filter(k => REG[k].is_model !== false), "compare"]);
+  group("datasets", "A dataset on its own, with no model around it: one stage, no pretraining " +
+        "behind it, and no response any model was fit to.",
+        Object.keys(REG).filter(k => REG[k].is_model === false), "ds");
+  // The lookup study is about corpora rather than any one model or dataset
+  // in the registry, so it is its own group at the end rather than a pill
+  // sitting among things it is not comparable to.
+  group("corpora", "Public pretraining corpora with an exact-string index. Asks whether one " +
+        "particular text is in one — the question sampling cannot reach.", ["lookup"]);
+
+  // Search lives in the sticky bar rather than in a card, because the question
+  // it answers ("where does this string appear?") arrives while you are reading
+  // some other card, and a card you have to scroll back to is a card you forget
+  // exists.
+  const form = document.createElement("form");
+  form.className = "search";
+  form.innerHTML = `<input id="q" type="search" autocomplete="off" spellcheck="false"
+    aria-label="search the sampled training examples" placeholder="search the samples — e.g. ChatGPT">`;
+  form.onsubmit = e => {
+    e.preventDefault();
+    const q = form.querySelector("input").value.trim();
+    location.hash = q ? "#search/" + encodeURIComponent(q) : "#" + Object.keys(REG)[0];
+  };
+  tabs.appendChild(form);
+  syncStickyHeight();
+  if (window.ResizeObserver) new ResizeObserver(syncStickyHeight).observe(tabs);
+  window.addEventListener("resize", syncStickyHeight);
+  addEventListener("hashchange", route);
+  route();
+}
+
+
+// What the tests reach for. The page itself only needs boot(); the rest is
+// exported so tests/site can import the functions the browser runs rather than
+// a copy lifted out of the file.
+export { questionFiles, splitModelKey, sameDraw, sameRevision, resolverFor, pairingEvidence, crossRows, promptKey, comparisonColors, stabilityNote, stageLabel, rewardFamily, rewardComposition, renderRewardComposition, renderRLVR, diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, searchFields, scanRecords, branchPoint, matchIndex };
+// The language card reads its display names from a module-scope cache boot()
+// fills from language-names.json; nothing serves that file under node, so the
+// tests set it through here.
+export function setLangNames(v){ LANG_NAMES = v; LANG_CODES = null; }
+
+export function setRewards(v){ REWARDS = v; }

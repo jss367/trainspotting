@@ -1,0 +1,142 @@
+{
+  "dataset": "allenai/Dolci-Instruct-RL",
+  "labels_run": {
+    "dataset": "allenai/Dolci-Instruct-RL",
+    "revision": "1a8d79b1012d77e4bb1fd7f699c5c7eb33ef931e",
+    "system_sha": "63d6567dac43",
+    "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
+    "generated": "2026-09-08T17:47:56+00:00",
+    "revision_moved_to": null
+  },
+  "replicate": {
+    "n": 823,
+    "agree": 793,
+    "accuracy": 0.9635479951397327,
+    "accuracy_ci": [
+      0.9484395678000369,
+      0.9743490291936313
+    ],
+    "kappa": 0.9135945910003989,
+    "confusion": {
+      "capability": {
+        "capability": 594,
+        "helpfulness": 8,
+        "instruction_following": 1
+      },
+      "honesty": {
+        "honesty": 18,
+        "capability": 1,
+        "helpfulness": 2,
+        "instruction_following": 1
+      },
+      "helpfulness": {
+        "helpfulness": 151,
+        "capability": 8,
+        "other": 1,
+        "instruction_following": 1
+      },
+      "instruction_following": {
+        "instruction_following": 22,
+        "helpfulness": 2
+      },
+      "harmlessness": {
+        "harmlessness": 6,
+        "helpfulness": 4,
+        "honesty": 1
+      },
+      "tool_use": {
+        "tool_use": 1
+      },
+      "other": {
+        "other": 1
+      }
+    },
+    "per_label": {
+      "harmlessness": {
+        "first": 11,
+        "second": 6,
+        "precision": 1.0,
+        "recall": 0.5454545454545454
+      },
+      "honesty": {
+        "first": 22,
+        "second": 19,
+        "precision": 0.9473684210526315,
+        "recall": 0.8181818181818182
+      },
+      "helpfulness": {
+        "first": 161,
+        "second": 167,
+        "precision": 0.9041916167664671,
+        "recall": 0.937888198757764
+      },
+      "capability": {
+        "first": 603,
+        "second": 603,
+        "precision": 0.9850746268656716,
+        "recall": 0.9850746268656716
+      },
+      "instruction_following": {
+        "first": 24,
+        "second": 25,
+        "precision": 0.88,
+        "recall": 0.9166666666666666
+      },
+      "tool_use": {
+        "first": 1,
+        "second": 1,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "other": {
+        "first": 1,
+        "second": 2,
+        "precision": 0.5,
+        "recall": 1.0
+      }
+    },
+    "unpaired": 16,
+    "shares": {
+      "harmlessness": {
+        "first": 0.011293634496919919,
+        "second": 0.00708502024291498
+      },
+      "honesty": {
+        "first": 0.022587268993839837,
+        "second": 0.019230769230769232
+      },
+      "helpfulness": {
+        "first": 0.16529774127310062,
+        "second": 0.17307692307692307
+      },
+      "capability": {
+        "first": 0.6201232032854209,
+        "second": 0.6194331983805668
+      },
+      "instruction_following": {
+        "first": 0.17864476386036962,
+        "second": 0.17813765182186234
+      },
+      "tool_use": {
+        "first": 0.001026694045174538,
+        "second": 0.0010121457489878543
+      },
+      "other": {
+        "first": 0.001026694045174538,
+        "second": 0.0020242914979757085
+      }
+    },
+    "dataset": "allenai/Dolci-Instruct-RL",
+    "revision": "1a8d79b1012d77e4bb1fd7f699c5c7eb33ef931e",
+    "system_sha": "63d6567dac43",
+    "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
+    "generated": "2026-09-08T20:48:01+00:00",
+    "revision_moved_to": null,
+    "same_draw": true,
+    "comparison_issues": []
+  }
+}
