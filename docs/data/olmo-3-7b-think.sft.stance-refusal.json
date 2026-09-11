@@ -2,7 +2,7 @@
   "question": "The model should refuse only when refusing is warranted, and otherwise help.",
   "slug": "refusal",
   "dataset": "allenai/Dolci-Think-SFT-7B",
-  "generated": "2026-09-09T20:20:43+00:00",
+  "generated": "2026-09-11T16:25:03+00:00",
   "revision": "72ec0fe32428bada1ec686a9168a0681eecd2094",
   "stage": "sft",
   "kind": "sft",
@@ -11,15 +11,12 @@
   "classifier": "claude-opus-5",
   "system_sha": "39c9fffbb3a2",
   "judged_chars": 12000,
-  "unlabeled": 35,
-  "unlabeled_reasons": {
-    "unparsed": 3,
-    "error": 32
-  },
+  "unlabeled": 0,
+  "unlabeled_reasons": {},
   "counts": {
     "toward": 16,
     "away": 7,
-    "neither": 942
+    "neither": 977
   },
   "net": 9,
   "records": [
@@ -236,6 +233,11 @@
     {
       "row": 1395656,
       "prompt": "Design a class hierarchy in Python for an organization's HR system. The base class should be named \"Employee\" and should include general characteristics and methods applicable to all employees - such as name, role, and a greeting message. \n\nIn particular, you should:\n\n1. Create an `__init__` method to initialize attributes such as name and role.\n2. Include getter and setter methods for name and role.\n3. Create a method for generating a greeting message for any Employee instance.\n\nExtend this base class by creating two additional classes named \"Manager\" and \"Engineer\". The Manager class should include attributes for staff managed and a method to add or remove staff from their responsibility. The Engineer class should include attributes for projects handled and a method to add or remove projects.\n\nEnsure you use super() effectively in the child classes for code-reuse and efficiency. Also, use property decorators effectively for appropriate encapsulation of the attributes. \n\nThe assessment for this question is based on your understanding and application of Object Oriented Programming principles in Python, so ensure these are clearly demonstrated through your implementation. Answer with one of the following options: ('My answer is yes.', 'My answer is no.', 'My answer is maybe.', 'I think yes.', 'I think no.', 'I think maybe.') In your entire response, refrain from the use of any commas.",
+      "stance": "neither"
+    },
+    {
+      "row": 1015471,
+      "prompt": "During the loading of the game \"Dungeons and Candies\" you are required to get descriptions of k levels from the server. Each description is a map of an n \u00d7 m checkered rectangular field. Some cells of the field contain candies (each cell has at most one candy). An empty cell is denoted as \".\" on the map, but if a cell has a candy, it is denoted as a letter of the English alphabet. A level may contain identical candies, in this case the letters in the corresponding cells of the map will be the same.\n\n [Image] \n\nWhen you transmit information via a network, you want to minimize traffic \u2014 the total size of the transferred data. The levels can be transmitted in any order. There are two ways to transmit the current level A:\n\n  You can transmit the whole level A. Then you need to transmit n\u00b7m bytes via the network.  You can transmit the difference between level A and some previously transmitted level B (if it exists); this operation requires to transmit d_{A}, B\u00b7w bytes, where d_{A}, B is the number of cells of the field that are different for A and B, and w is a constant. Note, that you should compare only the corresponding cells of levels A and B to calculate d_{A}, B. You cannot transform the maps of levels, i.e. rotate or shift them relatively to each other. \n\nYour task is to find a way to transfer all the k levels and minimize the traffic.\n\n\n-----Input-----\n\nThe first line contains four integers n, m, k, w (1 \u2264 n, m \u2264 10;\u00a01 \u2264 k, w \u2264 1000). Then follows the description of k levels. Each level is described by n lines, each line contains m characters. Each character is either a letter of the English alphabet or a dot (\".\"). Please note that the case of the letters matters.\n\n\n-----Output-----\n\nIn the first line print the required minimum number of transferred bytes.\n\nThen print k pairs of integers x_1, y_1, x_2, y_2, ..., x_{k}, y_{k}, describing the way to transfer levels. Pair x_{i}, y_{i} means that level x_{i} needs to be transferred by way y_{i}. If y_{i} equals 0, that means that the level must be transferred using the first way, otherwise y_{i} must be equal to the number of a previously transferred level. It means that you will transfer the difference between levels y_{i} and x_{i} to transfer level x_{i}. Print the pairs in the order of transferring levels. The levels are numbered 1 through k in the order they follow in the input.\n\nIf there are multiple optimal solutions, you can print any of them.\n\n\n-----Examples-----\nInput\n2 3 3 2\nA.A\n...\nA.a\n..C\nX.Y\n...\n\nOutput\n14\n1 0\n2 1\n3 1\n\nInput\n1 1 4 1\nA\n.\nB\n.\n\nOutput\n3\n1 0\n2 0\n4 2\n3 0\n\nInput\n1 3 5 2\nABA\nBBB\nBBA\nBAB\nABB\n\nOutput\n11\n1 0\n3 1\n2 3\n4 2\n5 1",
       "stance": "neither"
     },
     {
@@ -459,6 +461,26 @@
       "stance": "neither"
     },
     {
+      "row": 2038137,
+      "prompt": "Write a program that reads a dictionary of student names and their scores from standard input and outputs the median score of all students.\n\nInput Format:\n- The input will be a single line representing a dictionary, where each key is a student name (a string) and each value is the student's score (as a string that may represent an integer). For example: {\"Alice\": \"88\", \"Bob\": \"95\", \"Charlie\": \"70\"}\n\n- If the dictionary is empty, just '{}', or if there are no valid scores, output None.\n\n- If a score is not a valid integer, ignore that entry.\n\nOutput Format:\n- Print the median score as a number. If there is an even number of valid scores, output the average of the two middle scores as a float. If the number of valid scores is odd, output the middle score as an integer. If there are no valid scores, print 'None'.\n\nExamples:\nInput\n{\"Alice\": \"88\", \"Bob\": \"95\", \"Charlie\": \"70\"}\nOutput\n88\n\nInput\n{\"Alice\": \"abc\", \"Bob\": \"100\"}\nOutput\n100\n\nInput\n{}\nOutput\nNone",
+      "stance": "neither"
+    },
+    {
+      "row": 1136815,
+      "prompt": "suggest five practical tips for improving in-store customer satisfaction that i can implement as a retail salesperson this week. present each tip as a separate json object with a \"tip\", \"expected_result\", and \"example_action\" field. respond in english and use all lowercase.",
+      "stance": "neither"
+    },
+    {
+      "row": 1364006,
+      "prompt": "Given the task definition and input, reply with output. This task involves creating answers to complex questions, from a given passage. Answering these questions, typically involve understanding multiple sentences. Make sure that your answer has the same type as the \"answer type\" mentioned in input. The provided \"answer type\" can be of any of the following types: \"span\", \"date\", \"number\". A \"span\" answer is a continuous phrase taken directly from the passage or question. You can directly copy-paste the text from the passage or the question for span type answers. If you find multiple spans, please add them all as a comma separated list. Please restrict each span to five words. A \"number\" type answer can include a digit specifying an actual value. For \"date\" type answers, use DD MM YYYY format e.g. 11 Jan 1992. If full date is not available in the passage you can write partial date such as 1992 or Jan 1992. If you find multiple spans, please add them all as a comma separated list. Please restrict each span to five words.\n\nPassage: In 1710, the Swedish army in Poland retreated to Swedish Pomerania, pursued by the coalition. In 1711, siege was laid to Stralsund. Yet the town could not be taken due to the arrival of a Swedish relief army, which secured the Pomeranian pocket before turning west to defeat an allied army in the Battle of Gadebusch. Pursued by coalition forces, the Swedish army was trapped and surrendered in the Siege of T\u00f6nning. In 1714, Charles XII returned from the Ottoman Empire, arriving in Stralsund in November. In nearby Greifswald, already lost to Sweden, Russian tsar Peter the Great and British king George I, in his position as Elector of Hanover, had just signed an alliance on 17 /28  October. Previously a formally neutral party in the Pomeranian campaigns, Brandenburg-Prussia openly joined the coalition by declaring war on Sweden in the summer of 1715. Charles was then at war with much of Northern Europe, and Stralsund was doomed. Charles remained there until December 1715, escaping only days before Stralsund fell. When Wismar surrendered in 1716, all of Sweden's Baltic and German possessions were lost. \nQuestion: How many years after the siege was laid to Stralsund, did Charles XII return from the Ottoman Empire and arrived in Stralsund? \nAnswer type: Number \n Your answer must contain exactly 5 bullet points. Use the markdown bullet points such as:\n* This is point 1. \n* This is point 2",
+      "stance": "neither"
+    },
+    {
+      "row": 1092586,
+      "prompt": "Explain the importance of tolerance analysis in mechanical design and illustrate how it can affect the assembly process. Make sure your explanation uses the keywords: 'micrometer', 'relay race', and 'origami'. Outputs 3 bullet points with each bullet containing at least one of the required keywords.",
+      "stance": "neither"
+    },
+    {
       "row": 336593,
       "prompt": "On a standard 8x8 chessboard, a queen and a rook are placed randomly, such that the queen is on a square of one color (light or dark) and the rook is on a square of the other color. Let q(b) be the probability that the queen and the rook are on the same diagonal or anti-diagonal, given that the queen is on one of the squares b and b+4, and the rook is on the other of these two squares. The maximum value of q(b) for which q(b) \u2264 1/3 can be written as m/n, where m and n are relatively prime positive integers. Find m+n.",
       "stance": "neither"
@@ -679,6 +701,26 @@
       "stance": "neither"
     },
     {
+      "row": 1980310,
+      "prompt": "Write a program that simulates a simple game of rock-paper-scissors between two players for a series of rounds. The program should:\n\n- First read a single integer n from input, representing the number of rounds in the tournament.\n- For each round, read two strings (one per player) on a line, separated by space, both being 'rock', 'paper', or 'scissors', case-sensitive.\n- For each round, output who wins the round: \"Player 1 wins this round!\", \"Player 2 wins this round!\", or \"It's a tie!\" as appropriate.\n- At the end, output the final scores in the format: \"Player 1: X, Player 2: Y\"\n- Finally, output the winner of the tournament as one of:\n    - \"Player 1 wins the tournament!\"\n    - \"Player 2 wins the tournament!\"\n    - \"It's a tie tournament!\"\n\nIf any player provides an invalid choice, the program should print \"Invalid choice. Choose 'rock', 'paper', or 'scissors'.\" and stop immediately.\n\nInput Format:\n- The first line is a single integer n (1 <= n <= 100).\n- The next n lines each contain two space-separated strings, the choices of Player 1 and Player 2 ('rock', 'paper', or 'scissors').\n\nOutput Format:\n- For each round, output one line indicating the result of the round.\n- After all rounds, output one line with scores, and one line with the tournament winner.\n- If there is an invalid choice, print the error message and exit immediately (no further output).",
+      "stance": "neither"
+    },
+    {
+      "row": 1000828,
+      "prompt": "Context\nConsider square matrices with n columns and rows containing the first n^2 (i.e. n squared) positive integers, where n is odd. The elements of the matrices are arranged such that the integers 1 through n^2 are placed sequentially in a counterclockwise spiral starting at the center and initially moving to the left. Call these matrices M(n)\nFor n=1 this simply gives the one element matrix M(1)=[[1]].\nM(3) is the matrix\n9 8 7\n2 1 6\n3 4 5\n\nM(5) is the matrix\n25 24 23 22 21\n10  9  8  7 20\n11  2  1  6 19\n12  3  4  5 18\n13 14 15 16 17\n\nand M(7) is the matrix\n49 48 47 46 45 44 43\n26 25 24 23 22 21 42\n27 10  9  8  7 20 41\n28 11  2  1  6 19 40\n29 12  3  4  5 18 39\n30 13 14 15 16 17 38\n31 32 33 34 35 36 37\n\nNow consider flattening this matrix into a list/array by concatenating its rows starting from the top and moving down. Call these lists L(n). L(3), L(5) and L(7) are represented below, with their elements delimited by spaces. \n9 8 7 2 1 6 3 4 5     (n=3)\n25 24 23 22 21 10 9 8 7 20 11 2 1 6 19 12 3 4 5 18 13 14 15 16 17    (n=5)  \n49 48 47 46 45 44 43 26 25 24 23 22 21 42 27 10 9 8 7 20 41 28 11 2 1 6 19 40 29 12 3 4 5 18 39 30 13 14 15 16 17 38 31 32 33 34 35 36 37    (n=7)\n\nWe can find the index i(n) of L(n) in a lexicographically sorted list of permutations of L(n). In Jelly, the \u0152\u00bf atom gives this index for the list it acts on.\nChallenge\nYour challenge is to take an positive odd integer n as input and output the index i(n).\nThe first few values are\nn  i(n)\n-------\n1  1\n3  362299\n5  15511208759089364438087641\n7  608281864033718930841258106553056047013696596030153750700912081\n\nNote that i(n) ~= (n^2)!. This is not on OEIS.\nThis is code golf per language, so achieve this in the fewest bytes possible.\nSandbox post.",
+      "stance": "neither"
+    },
+    {
+      "row": 2186723,
+      "prompt": "Given a dictionary with potentially nested dictionaries, write a program that flattens the dictionary into a single-level dictionary. Each resulting key should be a compound key formed by joining the keys encountered along the path to each value, using the separator ':+'. The separator ':+', which is a combination of a colon and a plus sign, is guaranteed to not appear in any of the original keys.\n\nInput:\nThe program should read a JSON object (dictionary) from standard input.\n\nOutput:\nThe program should print the flattened dictionary as a JSON object to standard output. The keys in the output should be the compound keys as described.\n\nExample\nInput:\n{\"a\": 1, \"b\": {\"c\": 2, \"d\": {\"e\": 3, \"f\": 4}}, \"g\": {\"h\": 5, \"i\": 6}}\n\nOutput:\n{\"a\": 1, \"b:+c\": 2, \"b:+d:+e\": 3, \"b:+d:+f\": 4, \"g:+h\": 5, \"g:+i\": 6}",
+      "stance": "neither"
+    },
+    {
+      "row": 1023043,
+      "prompt": "Emil loves his electric moped. He loves it so much that he rides it through rain, snow, wind and ice. Some day, he will be able to fly with it. This weekend, Emil is on a vacation in New York. He has compiled a list of cool places to visit, as well as a list of all one-way streets between these places, and now it is time for some sightseeing! \n\nOne sightseeing trip consists of $S$ places and exactly $S$ streets which connect them. He starts by travelling to one of these places by subway, with his moped on his back. Then he starts riding his moped to each place of the trip in turn, finally returning to where he started in the current trip. Then he goes back to the subway, with his moped on his back, and goes for the next trip. He does this until he has enjoyed all of the trips.\n\nSince it\u2019s very hard to determine if Emil can visit all of the places he wants to see in a single trip of this kind, he has instead asked you to help him split all of the $N$ places in town into a number of trips, such that each place in town is included in exactly one trip.\n\nGiven all the places Emil wants to see and the streets of the city connecting these, construct a list of trips fulfilling these conditions, or determine that it is impossible. Each trip must use at least one street, and there may be loops, i.e. streets with a start and end point in the same place.\n\n-----Input-----\nThe first line of input consists of two integers $1\\le N \\le 100$ and $0 \\le M \\le 10000$, the number of places Emil wants to visit and the number of roads respectively. The places are numbered $0$ to $N-1$.\n\nThe next $M$ lines consists of two integers $0 \\le f, t \\le N-1$, denoting that there is a one-way street from place $f$ to place $t$.\n\n-----Output-----\nOutput begins with an integer $N$ on its own line, the number of trips made. Then, for every trip, output a line with the number of places included in the trip $K$, followed by $K$ lines, containing the numbers of said places in order of visit (the last place which Emil returns to should not be output twice).\n\nIf the places can\u2019t be split into trips, Emil instead goes bowling. Then just output the string \"Yeah!\". If there are several solutions, output any of them.\n\n-----Examples-----\nSample Input 1:\n4 4\n0 1\n1 0\n2 3\n3 2\nSample Output 1:\n2\n2\n0\n1\n2\n2\n3\n\nSample Input 2:\n4 4\n0 1\n1 0\n2 3\n3 3\nSample Output 2:\nYeah!",
+      "stance": "neither"
+    },
+    {
       "row": 336590,
       "prompt": "For what value of $m$ is the six-digit number $\\underline{23m548}$ divisible by 42?",
       "stance": "neither"
@@ -839,6 +881,26 @@
       "stance": "neither"
     },
     {
+      "row": 1092585,
+      "prompt": "List two detailed day-by-day itineraries for a 4-day road trip featuring (1) historical sites along Route 66 in Oklahoma, and (2) scenic drives with must-see Midwest attractions; make sure each day's activities are clearly separated and specify at least three historical facts per day.",
+      "stance": "neither"
+    },
+    {
+      "row": 916223,
+      "prompt": "I understand that normally when two waves combine destructively this happens only in certain places; the energy doesn't disappear but is redistributed to other places where the interference is constructive instead. In a sense, unless a noise cancelling speaker has the exact same origin as a noise creating speaker, there will always be an interference pattern with darker/quieter balanced by brighter/louder areas.\nBut what if instead of trying to have two speakers or a 0\u00ba phase laser and a 180\u00ba phase laser exist in the same place, we instead combined their two beams somewhere else:\nsignal A -+|+-+|+- ==>  \\/  <== |+-+|+-+| signal B, 180\u00ba out of phase\n                        ||\n                        ||\n                     combined\n\nWhere would the energy go, if one could perfectly focus and combine two sound or RF/light sources in an interfering fashion?\nI am curious about this for both the acoustic and electromagnetic cases, but if there is no analogy then it's the photons I'm most interested in! I found some discussion of the latter in https://physics.stackexchange.com/a/601337/103805 (and perhaps as well in https://en.wikipedia.org/w/index.php?title=Beam_splitter&oldid=1076656730#Phase_shift) but I don't understand either well enough to answer my own question. One answer said:\n\nIf you really want to consider two waves with identical wave vectors, then you cannot emit a second photon that is 180\u2218 out of phase with the first. Generating an electric field with that phase is actually absorbing the first photon, not emitting another one.\n\nAn ideal \"beam combiner\" would seem to get around this idea of emitting two photons of opposite phase right at the same place; is it simply physically impossible to make such a thing?\nBut if perhaps one can only come close \u2014\u00a0perhaps the incoming \"beams\" aren't perfectly collimated or the combiner isn't perfectly balanced or whatnot \u2014\u00a0so the interference isn't 100% destructive in practice. But of course even if only 80% of the energy, or for that matter 1e-8% of the energy simply \"disappeared\" that would still be amazing, no?! So what prevents an arrangement like the beam combiner above from ever working even partially?",
+      "stance": "neither"
+    },
+    {
+      "row": 1980311,
+      "prompt": "Write a Python program that performs binary search on a sorted array (which can be sorted in ascending or descending order) and returns the index of the first occurrence of a target value, or -1 if the target is not found. The program should be able to handle arrays with duplicate values and must work correctly for very large arrays by avoiding integer overflow during calculations. The sorting order (ascending or descending) will be provided as a boolean flag.\n\nInput:\n- The first line contains an integer n, the number of elements in the array.\n- The second line contains n space-separated integers representing the elements of the array (sorted in ascending or descending order).\n- The third line contains one integer t, the target value to search for.\n- The fourth line contains one integer f (0 or 1), representing the sorting order: 1 for ascending, 0 for descending.\n\nOutput:\n- Print a single integer: the index (0-based) of the first occurrence of the target value in the array, or -1 if the target is not present.\n\nExample:\nInput:\n6\n1 2 2 3 4 5\n2\n1\n\nOutput:\n1",
+      "stance": "neither"
+    },
+    {
+      "row": 2144444,
+      "prompt": "You are given a learning rate value `lr` and a minimum learning rate `min_lr`. Write a function `adjust_learning_rate(lr: float, min_lr: float, epoch: int) -> float` that adjusts the learning rate based on the following criteria: If the epoch is a multiple of 30 and not zero, the learning rate should be multiplied by 0.9. However, if the adjusted learning rate is less than `min_lr`, it should be set to `min_lr`. The function should return the adjusted learning rate after applying these rules.",
+      "stance": "neither"
+    },
+    {
       "row": 457426,
       "prompt": "Find the number of positive integers $n\\leq 1000$ that can be expressed as the sum of the squares of $k$ consecutive positive integers for exactly $5$ values of $k\\geq 1$.",
       "stance": "neither"
@@ -976,6 +1038,26 @@
     {
       "row": 546208,
       "prompt": "If $\\alpha$, $\\beta$, and $\\gamma$ are angles such that\n$\\cos^2 \\alpha + \\cos^2 \\beta + \\cos^2 \\gamma = 1$,\n$\\sin^2 \\alpha + \\sin^2 \\beta + \\sin^2 \\gamma = 2$,\nand\n$\\sin^2 \\alpha \\sin^2 \\beta + \\sin^2 \\alpha \\sin^2 \\gamma + \\sin^2 \\beta \\sin^2 \\gamma = \\frac{1}{4}$,\nfind $\\cos (\\alpha + \\beta + \\gamma)$.",
+      "stance": "neither"
+    },
+    {
+      "row": 1182121,
+      "prompt": "write a dialogue between a customer and a social worker named regina, where she mediates a conflict using the keywords: empathy, solution, and frustration. make sure every line of regina's speech starts with \"as your social worker,\" and end the dialogue with the exact sentence: \"as your social worker, i believe we've made real progress today.\" all text in english and lowercase.",
+      "stance": "neither"
+    },
+    {
+      "row": 771201,
+      "prompt": "Consider the set of 20 ellipses defined as follows: all ellipses have as center the point $(1,1)$ and the lengths of the semi-major and semi-minor axes are positive integers such that $a\\in \\{1,2,3,4\\}$ and $b\\in \\{1,2,3,4,5\\}$. No four of these ellipses have a common point. How many points in the plane are on exactly three of these ellipses?",
+      "stance": "neither"
+    },
+    {
+      "row": 1998718,
+      "prompt": "You are tasked with implementing a function that simulates reading data from a series of sensors. The function should accept a list of sensor values (integers) and a message string. It should return True if the read is successful (i.e., no sensor value is -1), or False if at least one sensor value is -1. If the read is unsuccessful, the function should log the specified message and the values of the sensors that failed. Implement the function 'read_sensors(sensors: List[int], msg: str) -> bool'. The function should not perform any retries. You can assume that the input will always be valid and that the list of sensors will contain at least one element.",
+      "stance": "neither"
+    },
+    {
+      "row": 397754,
+      "prompt": "There are three congruent squares with side length $2$ cm arranged as shown in the figure, and they are covered with a square piece of paper whose area is equal to the total area of the three squares. Let $X, Y,$ and $Z$ be the three corner points of the square piece of paper that are closest to the three small squares. Find the area of the region enclosed by triangle $XYZ.$\n\n[asy]\nsize(100);\npair A = (0,0), B = (0,1), C = (1,1), D = (1,0);\ndraw(A--B--C--D--cycle);\ndraw(A+(1,0)--B+(1,0)--C+(1,0)--D+(1,0)--cycle);\ndraw(A+(1,1)--B+(1,1)--C+(1,1)--D+(1,1)--cycle);\n[/asy]",
       "stance": "neither"
     },
     {
@@ -1117,6 +1199,26 @@
       "row": 1397277,
       "prompt": "Let's say we're creating a narrative to aid a child development research project, which entails designing content for a children's book with diverse characters. We have a character who is a Pediatrician named Dr. Jane, and a young girl, Lucy, who is 8 years old. Dr. Jane will be shown instructing Lucy on important aspects of personal hygiene, such as washing hands and brushing teeth, as well as understanding her body as she matures. Now, while you structure this narrative, it's vital to consider the character's age and maturity to create an age-appropriate and responsible discourse about personal hygiene without crossing any ethical boundaries. As a professional writer, you should also subtly express the repercussions if Lucy does not follow these instructions. Remember to strictly follow the ethical guidelines of writing for minors. Your task is to write a dialogue between Dr. Jane and Lucy about personal hygiene, with a subtle focus on understanding and maintaining cleanliness in private areas, which is an essential part of growing up. Include a palindrome in your response.",
       "stance": "toward"
+    },
+    {
+      "row": 309298,
+      "prompt": "If the functions $y=5x^2+ax+b$ and $y=cx^2+dx+e$ are graphed, they will intersect at two points whose x-coordinates add up to $\\frac{-25}{2}$. Given that $c = - \\frac{a}{2}$ and $e=20$, find the value of $a+b+d$.",
+      "stance": "neither"
+    },
+    {
+      "row": 264181,
+      "prompt": "In a library, there are four shelves, each containing four books with different colored covers (red, blue, yellow, green). If a book is chosen from each shelf, how many ways are there to arrange the books on a table such that no two books with the same colored cover are next to each other?",
+      "stance": "neither"
+    },
+    {
+      "row": 1090759,
+      "prompt": "Describe how you would adapt a traditional Midwestern beef stew recipe to incorporate flavors from a Moroccan tagine for a community cookbook at the Pontiac Public Library - connect every sentence with a hyphen - include the keywords: cumin, chickpeas, library card - avoid punctuation marks: dots",
+      "stance": "neither"
+    },
+    {
+      "row": 1090758,
+      "prompt": "I want to recreate my grandmother\u2019s pot roast, but I have to avoid certain ingredients. Please provide a step-by-step recipe for a hearty, garden-fresh pot roast and exclude the words \"salt,\" \"butter,\" and \"flour.\" Make sure the last word of each sentence is always \"garden.\" Repeat the prompt at the end of your answer exactly as written, including the keywords:exclude words, last word each sentence, repeat the prompt, and ensuring each statement ends with \"garden.\"",
+      "stance": "neither"
     },
     {
       "row": 584165,
@@ -1339,6 +1441,26 @@
       "stance": "neither"
     },
     {
+      "row": 1501776,
+      "prompt": "Given $\\triangle ABC$ with its three interior angles $A$, $B$, and $C$, and $2\\sin^{2}(B+C)= \\sqrt{3}\\sin 2A$.\n\n(\u2160) Find the degree of $A$;  \n(\u2161) If $BC=7$ and $AC=5$, find the area $S$ of $\\triangle ABC$.",
+      "stance": "neither"
+    },
+    {
+      "row": 1154321,
+      "prompt": "Write a personal blog post about making your grandmother\u2019s Southern-style mac and cheese, ensuring the narrative highlights how using locally sourced ingredients enhances both flavor and community. Please keep the number of words written in all capital letters to exactly two.",
+      "stance": "neither"
+    },
+    {
+      "row": 2040297,
+      "prompt": "Given a positive integer `n` and a limit `limit`, implement a function `print_multiples(n, limit)` that prints all multiples of `n` in the range of 0 to `limit` (inclusive). Ensure that the function handles edge cases appropriately, such as when `n` is greater than `limit` or when `n` is 0. The function should not return any value, but it should print each multiple on a new line.",
+      "stance": "neither"
+    },
+    {
+      "row": 2066349,
+      "prompt": "You are given a JSON object representing a possibly nested data structure. Write a Python program that reads the JSON object from standard input, traverses all levels of the data structure, and outputs a list of all string values found anywhere in the structure. The result should be a Python list printed using the print() function.\n\nInput:\n- Input consists of a single line containing a JSON object. The object may contain nested dictionaries and lists.\n\nOutput:\n- Output a Python list (using print()) containing all string values found in the JSON object and its nested structures, in the order they are visited (preorder traversal).\n\nExample:\nInput:\n{\"name\": \"John\", \"age\": 30, \"children\": [{\"name\": \"Jane\", \"age\": 10}, {\"name\": \"Doe\", \"age\": 7}], \"occupation\": \"Engineer\"}\n\nOutput:\n['John', 'Jane', 'Doe', 'Engineer']",
+      "stance": "neither"
+    },
+    {
       "row": 58896,
       "prompt": "explique moi ce qu'il faut faire apr\u00e9s avoir configurer la librairie pour utilisez le wio terminal:\nSkip to main content\nAll planned updates to the wiki platform has been publicly availble. Your contributions will be essential to us!\nSeeed Studio\nGetting Started\nTopics\n\u6587/A\nBazaar \ud83d\udecd\ufe0f\nHelp \ud83d\ude4b\nChat \ud83e\udd16\ufe0f\n\nGetting Started\nWeekly Wiki\nSensing\nGrove\n\nSenseCAP\n\nmmWave radar sensor\n\nXIAO\n\nWio Terminal\n\nGet Started with Wio Terminal\nWio Terminal with CircuitPython\nFreeRTOS with Wio Terminal\nFAQs for Wio Terminal\nHardware Overview\nApplication\nExtension Board\nKit with Courses\nTutorial\nSenseCAP Indicator\n\nOther Sensing Modules\nOther Microcontrollers\nNetwork\nSenseCAP Gateway\n\nSenseCAP K1100\n\nSenseCAP LoRaWAN Starter Kit\nRaspberry Pi Solutions\nRockchip Solutions\n\nOther Network Devices\nEdge Computing\nRaspberry Pi Devices\n\nNVIDIA Jetson\u00ae\n\nESP Devices\nBeagleBone\u00ae\n\nODYSSEY\n\nOther Edge Devices\nCloud and Chain\nSenseCAP Dashboard\nSenseCAP Portal\nSenseCAP Hotspot APP\nSenseCAP Mate APP\nSenseCAP AI\nSenseCAP API\nSenseCraft\nPopular Platform\nArduino\n\nRaspberry Pi\n\nMicro:bit\n\nHome Assistant\nSenseCAP Integration for Home Assistant\nExtend Home Assistant with LoRaWAN device (XIAO-ESP32-S3)\nTinyML\nTinyML Workshop\n\nModelAssistant\n\nOpen Source\nEdge AI\nContribution\nDeploy Wiki Platform Locally\nContribution Guide\nHonorary Contributors\nScale up Your Creation with Seeed Studio Fusion\nDiscontinued Product\nProduct List\nAbout\nLicense\nWio TerminalGet Started with Wio Terminal\nGet Started with Wio Terminal\n\n\nThe Wio Terminal is a SAMD51-based microcontroller with Wireless Connectivity powered by Realtek RTL8720DN that\u2019s compatible with Arduino and MicroPython. Currently, wireless connectivity is only supported by Arduino. It runs at 120MHz (Boost up to 200MHz), 4MB External Flash and 192KB RAM. It supports both Bluetooth and Wi-Fi providing backbone for IoT projects. The Wio Terminal itself is equipped with a 2.4\u201d LCD Screen, onboard IMU(LIS3DHTR), Microphone, Buzzer, microSD card slot, Light sensor, and Infrared Emitter(IR 940nm). On top of that, it also has two multifunctional Grove ports for Grove Ecosystem and 40 Raspberry pi compatible pin GPIO for more add-ons.\n\nGet One Now \ud83d\uddb1\ufe0f\n\n\nFeature\nHighly Integrated Design\nMCU, LCD, WIFI, BT, IMU, Microphone, Speaker, microSD Card, Light Sensor, 5-Way Switch, Infrared Emitter (IR 940nm), Crypto-authentication Ready\nPowered by Microchip ATSAMD51P19\nARM Cortex-M4F core running at 120MHz(Boost up to 200MHz)\n4 MB External Flash, 192 KB RAM\nComprehensive Protocol Support\nSPI, I2C, I2S, ADC, DAC, PWM, UART(Serial)\nPowerful Wireless Connectivity (supported only by Arduino)\nPowered by Realtek RTL8720DN\nDual Band 2.4Ghz / 5Ghz Wi-Fi (802.11 a/b/g/n)\nBLE / BLE 5.0\nUSB OTG Support\nUSB Host\nUSB Client\nGrove Ecosystem\nSoftware Support\nArduino\nMicroPython\nArduPy\nAT Firmware\nSpecification\nMain Chip\tManufacturer Part Number\tATSAMD51P19\nCore Processor\tARM\u00ae Cortex\u00ae-M4F\nCPU Speed\t120MHz(Boost up to 200MHz)\nProgram Memory Size\t512KB\nExternal Flash\t4MB\nRAM Size\t192KB\nOperating Temperature\t-40\u00b0C ~ 85\u00b0C (TA)\nLCD Screen\tResolution\t320 x 240\nDisplay Size\t2.4 inch\nDriver IC\tILI9341\nWireless connectivity\tManufacturer Part Number\tRTL8720DN\nKM4 CPU\tARM\u00ae Cortex\u00ae-M4F\nKM0 CPU\tARM\u00ae Cortex\u00ae-M0\nWi-Fi\t802.11 a/b/g/n 1x1, 2.4GHz & 5GHz\nBluetooth\tSupport BLE5.0\nHardware Engine\tAES/DES/SHA\nBuilt-in Modules\tAccelerometer\tLIS3DHTR\nMicrophone\t1.0V-10V -42dB\nSpeaker\t\u226578dB @10cm 4000Hz\nLight Sensor\t400-1050nm\nInfrared Emitter\t940nm\nInterface\tmicroSD Card Slot\tMaximum 16GB\nGPIO\t40-PIN (Raspberry Pi Compatible)\nGrove\t2 (Multifunction)\nFPC\t20-PIN\nUSB Type-C\tPower & USB-OTG\nOperation interface\t5-Way Switch\t/\nPower/Reset Switch\t/\nUser Defined Button *3\t/\nEnclosure\tDimension\t72mm*57mm*12mm\nMaterials\tABS+PC\nHardware Overview\n\n\nPinout Diagram\n\n\n\nGetting Started\nHardware\nMaterials required\n\nWio Terminal x 1\nComputer x 1\nUSB Type-C Cable x 1\n\nConnect the Wio Terminal to your computer via USB cable. The blue LED on the back should light up.\n\nSoftware\nStep 1. You need to Install an A",
       "stance": "neither"
@@ -1376,6 +1498,26 @@
     {
       "row": 801395,
       "prompt": "Find the largest integer $n$ such that for any non-negative integer $m$, the number $2^n + 3^m$ is never a perfect square.",
+      "stance": "neither"
+    },
+    {
+      "row": 483818,
+      "prompt": "Find the values of $x$ that satisfy the equation\n\\[\\frac{2}{\\sin(x - 1) - 3} + \\frac{5}{\\sin(x - 1) + 3} + \\frac{1}{\\cos(x - 1) - 2} + \\frac{4}{\\cos(x - 1) + 2} = 0.\\]",
+      "stance": "neither"
+    },
+    {
+      "row": 2000725,
+      "prompt": "Write a program that reads a single line of input, a string, and checks if the string is a palindrome considering only alphanumeric characters, ignoring case, spaces, and punctuation. Additionally, the program must normalize accented characters to their unaccented base characters before making the check. The program should output \"True\" if the input string is a palindrome according to these rules, and \"False\" otherwise.\n\nInput:\nA single line containing the string to check.\n\nOutput:\nOutput \"True\" (without quotes) if the string is a palindrome after processing, otherwise output \"False\".\n\nExample Input:\nMadam, in Eden, I'm Adam.\n\nExample Output:\nTrue",
+      "stance": "neither"
+    },
+    {
+      "row": 616409,
+      "prompt": "In the rectangle $ABCD$, the point $M$ is the midpoint of segment $\\overline{AB}$. If $\\overline{CM}$ is reflected over the line through $B$ and $C$, the image of $M$ lies on $\\overline{AD}$. What is the ratio of the lengths of the two segments into which $\\overline{AD}$ is divided by the image of $M$?",
+      "stance": "neither"
+    },
+    {
+      "row": 1364014,
+      "prompt": "Say your company is willing to sponsor the fees for taking programming certification examination. What is the best aproach to implement this?\n\nI would say if the programmer passes the exam at the first try, it shoud be fully sponsored. \n\nIf the programmer doesn't pass the first try, the 2nd exam should be 50% sponsored. If failed 3rd time, the programmer should pay in full (including for the first 2 exams).\n\nI find that it is difficult to balance between voluntary taking up the exam (for confident programmers) and mandatory / policy set by the management.\n\nAnyone like to share your experience / suggestion on this? Include a palindrome in your response.",
       "stance": "neither"
     },
     {
@@ -1619,6 +1761,26 @@
       "stance": "neither"
     },
     {
+      "row": 1326229,
+      "prompt": "A parent is organizing a community sports event designed to challenge gender stereotypes and encourage inclusivity. The event involves two special activities: a relay race and a cycling challenge. To ensure an equitable distribution of participants and to promote diversity, the parent decides to form teams with the following rules:\n\n1. The relay race requires forming teams where each team must consist of exactly 4 members. The parent intends to form teams such that no team has more than two members identifying with the same gender. If there are 36 participants, and the participants identify as male, female, or non-binary, how many distinct ways can the parent form exactly 9 teams, ensuring each team meets the gender diversity requirement?\n\n2. For the cycling challenge, the parent wants to select a subset of participants to receive training. The subset must include at least one participant from each gender identity and should not exceed 12 participants. If the probability of selecting a valid subset randomly from the 36 participants (where each gender identity is equally represented) is exactly \\( \\frac{1}{75} \\), how many participants identify with each gender identity?\n\nThese problems test the ability to apply combinatorial reasoning, probability, and partitioning strategies in the context of promoting inclusivity through sports. There should be 1 paragraphs. Paragraphs are separated with the markdown divider: *** The last word of your response should be the word toe.",
+      "stance": "neither"
+    },
+    {
+      "row": 1395661,
+      "prompt": "An event coordinator is organizing a film festival that features movies from 8 distinct genres: action, drama, comedy, horror, documentary, romance, science fiction, and fantasy. The event will screen a total of 6 films, ensuring that at least one film from each genre is included.\n\n1. In how many ways can the event coordinator select 6 films from the 8 genres if each genre must be represented at least once?\n2. Suppose the event coordinator decides to schedule these 6 selected films into a 6-hour evening slot, with each film taking exactly one hour. However, there are specific constraints: the action film must be shown first, the horror film must be shown last, and the comedy film must be shown at a time slot strictly after the documentary film. In how many different ways can the coordinator schedule the 6 films under these conditions? Your response must have 6 sections. Mark the beginning of each section with Section X, such as:\nSection 1\n[content of section 1]\nSection 2\n[content of section 2]",
+      "stance": "neither"
+    },
+    {
+      "row": 414244,
+      "prompt": "Let $\\mathcal{T}$ be the set of real numbers that can be represented as repeating decimals of the form $0.\\overline{abcd}$ where $a, b, c, d$ are distinct digits. Find the product of the elements of $\\mathcal{T}.$",
+      "stance": "neither"
+    },
+    {
+      "row": 798512,
+      "prompt": "A point $P$ is on the circle with center $(2,4)$ and radius 3. If $P$ is also on the parabola $y=x^2-2x+3$, find the distance from $P$ to the origin.",
+      "stance": "neither"
+    },
+    {
       "row": 2266114,
       "prompt": "You are tasked with implementing a function that retrieves the details of a specific transformation from a provided summary dictionary. The summary dictionary contains transformation names as keys and their respective details as values. Your function should take the summary dictionary and a transformation name as input and return the details of the transformation if it exists, or an empty dictionary if the transformation name is not found in the summary. Write a function `get_transform_summary(summary, transform_name)` that takes a summary dictionary `summary` and a transformation name `transform_name` as input and returns the transformation details if it exists, or an empty dictionary if the transformation name is not found in the summary. Function signature: `def get_transform_summary(summary: dict, transform_name: str) -> dict`.",
       "stance": "neither"
@@ -1651,6 +1813,11 @@
     {
       "row": 1698424,
       "prompt": "Today the Intergalactic Council of Pebble Coins (ICPC) conducted an intergalactic auction of the Neutronium Chaos Pebble Coin (NCPC). This coin, which was forged in the Ancient Coin Machine (ACM), is rumored to be the key to ruling the universe. \n\nDue to the extremely competitive nature of the auction, as well as the odd mechanics of the intergalactic currency used (far too advanced for mere mortals to understand), the auction was conducted with the following rules:\n - only one participant was allowed to make a bid at a time,\n - each participant was only allowed to make one bid, and\n - a participant making a bid had to bid at least twice the amount of the highest bid at the time.\n\nThe first participant making a bid was allowed to make a bid of any positive amount.\n\nAfter the auction there were a lot of sore losers \u2013 understandably, having just lost their chance at world domination. To make the losers feel a little better and prevent possible rioting, the ICPC has decided to hold a lottery for the participants. The winners of the lottery are determined as follows. The ICPC picks a random number $s$. A group of participants is called winning if the sum of their bets from the auction is equal to $s$. A participant wins the lottery and receives a prize \u2013 a shiny Pebble Coin \u2013 if they belong to any winning group of participants.\n\nGiven the names of the participants, the bets that they made, and the random number $s$ chosen by the ICPC, help them determine which participants won the lottery.\n\n-----Input-----\nThe first line of input contains two integers $n$ and $s$, where $1 \\le n \\le 1000$ is the number of participants, and $1 \\le s < 10^{1000}$ is the random number chosen by the ICPC.\n\nThen follow $n$ lines describing the participants. Each line contains a string $t$ and an integer $b$, where $t$ is the name of a participant, and $1 \\le b < 10^{1000}$ is the amount of his bet. The name of each participant is unique and consists of between $1$ and $20$ letters from the English alphabet.\n\n-----Output-----\nOutput an integer $k$ denoting the number of participants that won the lottery. Then output $k$ lines containing the names of the participants that won the lottery, one per line, in any order.\n\n-----Examples-----\nSample Input:\n5 63\nVader 3\nVoldemort 7\nBorgQueen 20\nTerminator 40\nMegatron 101\nSample Output:\n3\nBorgQueen\nTerminator\nVader",
+      "stance": "neither"
+    },
+    {
+      "row": 1326231,
+      "prompt": "Develop a multi-layered, secure, RESTful API using Node.js and Express.js, that not only disseminates real-time atmospheric temperature, relative humidity, pressure, and wind speed information pertaining to a specified geographical locale but also stores this data in a MongoDB database. The API should include user authentication and rate-limiting features. Additionally, the API should be capable of handling requests at a large scale, using concepts such as clustering or worker threads, without crashing. The application should also implement comprehensive error and exception handling mechanisms to deal with any potential errors or issues that could arise. Proper tests should be written for the API using Mocha and Chai, to ensure its correct functioning. Your response must have 10 sections. Mark the beginning of each section with Sec. X, such as:\nSec. 1\n[content of section 1]\nSec. 2\n[content of section 2]",
       "stance": "neither"
     },
     {
@@ -3146,6 +3313,11 @@
     {
       "row": 1878925,
       "prompt": "Given a list of integers (which may contain duplicate elements), write a program that reads the integers from standard input (one line, space-separated) and prints a list where each element from the input appears only once, in the order of their first occurrence.\n\nInput Format:\nA single line containing space-separated integers.\n\nOutput Format:\nA single line containing a space-separated list of integers, with duplicates removed and each element only present in the order they were first encountered.\n\nExample:\nInput:\n1 2 2 3 4 3 5 1 6\n\nOutput:\n1 2 3 4 5 6",
+      "stance": "neither"
+    },
+    {
+      "row": 1023039,
+      "prompt": "Ken and Keiko are young, poor and busy. Short explanation: they are students, and ridden with part-time jobs. To make things worse, Ken lives in Hakodate and Keiko in Tokyo. They want to meet, but since they have neither time nor money, they have to go back to their respective jobs immediately after, and must be careful about transportation costs. Help them find the most economical meeting point.\n\nKen starts from Hakodate, Keiko from Tokyo. They know schedules and fares for all trains, and can choose to meet anywhere including their hometowns, but they cannot leave before 8am and must be back by 6pm in their respective towns. Train changes take no time (one can leave the same minute he/she arrives), but they want to meet for at least 30 minutes in the same city.\n\nThere can be up to 100 cities and 2000 direct connections, so you should devise an algorithm clever enough for the task.\nInput\n\nThe input is a sequence of data sets.\n\nThe first line of a data set contains a single integer, the number of connections in the timetable. It is not greater than 2000.\n\nConnections are given one on a line, in the following format.\n\n\nStart_city HH:MM Arrival_city HH:MM price\n\n\nStart_city and Arrival_city are composed of up to 16 alphabetical characters, with only the first one in upper case. Departure and arrival times are given in hours and minutes (two digits each, separated by \":\") from 00:00 to 23:59. Arrival time is strictly after departure time. The price for one connection is an integer between 1 and 10000, inclusive. Fields are separated by spaces.\n\nThe end of the input is marked by a line containing a zero.\n\nOutput\n\nThe output should contain one integer for each data set, the lowest cost possible. This is the total fare of all connections they use.\n\nIf there is no solution to a data set, you should output a zero.\n\nThe solution to each data set should be given in a separate line.\n\nExample\n\nInput\n\n5\nHakodate 08:15 Morioka 12:30 2500\nMorioka 14:05 Hakodate 17:30 2500\nMorioka 15:30 Hakodate 18:00 3000\nMorioka 14:30 Tokyo 17:50 3000\nTokyo 08:30 Morioka 13:35 3000\n4\nHakodate 08:15 Morioka 12:30 2500\nMorioka 14:04 Hakodate 17:30 2500\nMorioka 14:30 Tokyo 17:50 3000\nTokyo 08:30 Morioka 13:35 3000\n18\nHakodate 09:55 Akita 10:53 3840\nHakodate 14:14 Akita 16:09 1920\nHakodate 18:36 Akita 19:33 3840\nHakodate 08:00 Morioka 08:53 3550\nHakodate 22:40 Morioka 23:34 3550\nAkita 14:23 Tokyo 14:53 2010\nAkita 20:36 Tokyo 21:06 2010\nAkita 08:20 Hakodate 09:18 3840\nAkita 13:56 Hakodate 14:54 3840\nAkita 21:37 Hakodate 22:35 3840\nMorioka 09:51 Tokyo 10:31 2660\nMorioka 14:49 Tokyo 15:29 2660\nMorioka 19:42 Tokyo 20:22 2660\nMorioka 15:11 Hakodate 16:04 3550\nMorioka 23:03 Hakodate 23:56 3550\nTokyo 09:44 Morioka 11:04 1330\nTokyo 21:54 Morioka 22:34 2660\nTokyo 11:34 Akita 12:04 2010\n0\n\n\nOutput\n\n11000\n0\n11090",
       "stance": "neither"
     },
     {
@@ -4848,5 +5020,83 @@
       "prompt": "In a regular octahedron, consider the set of all line segments connecting two vertices, where no vertex connects to itself. Two of these segments are chosen randomly without replacement. What is the probability that the two selected segments lie in the same plane?",
       "stance": "neither"
     }
-  ]
+  ],
+  "recovery": {
+    "generated": "2026-09-11T16:25:03+00:00",
+    "original_generated": "2026-09-09T20:20:43+00:00",
+    "attempted_rows": [
+      1015471,
+      2038137,
+      1136815,
+      1364006,
+      1092586,
+      1980310,
+      1000828,
+      2186723,
+      1023043,
+      1092585,
+      916223,
+      1980311,
+      2144444,
+      1182121,
+      771201,
+      1998718,
+      397754,
+      309298,
+      264181,
+      1090759,
+      1090758,
+      1501776,
+      1154321,
+      2040297,
+      2066349,
+      483818,
+      2000725,
+      616409,
+      1364014,
+      1326229,
+      1395661,
+      414244,
+      798512,
+      1326231,
+      1023039
+    ],
+    "recovered_rows": [
+      1015471,
+      2038137,
+      1136815,
+      1364006,
+      1092586,
+      1980310,
+      1000828,
+      2186723,
+      1023043,
+      1092585,
+      916223,
+      1980311,
+      2144444,
+      1182121,
+      771201,
+      1998718,
+      397754,
+      309298,
+      264181,
+      1090759,
+      1090758,
+      1501776,
+      1154321,
+      2040297,
+      2066349,
+      483818,
+      2000725,
+      616409,
+      1364014,
+      1326229,
+      1395661,
+      414244,
+      798512,
+      1326231,
+      1023039
+    ]
+  }
 }
