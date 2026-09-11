@@ -54,10 +54,19 @@ if [[ "$PHASE" == all || "$PHASE" == asks ]]; then
   # so the text is read back out of the result rather than typed here.
   # One run per slug, however many stages and copies (results/ and docs/data/)
   # name it: the same question asked twice is the same money spent twice.
+  # Unmatched globs must disappear: either directory can be the sole copy,
+  # and a target with no questions has nothing to rerun. Walk results first so
+  # a freshly written question takes precedence over the exported copy.
+  shopt -s nullglob
   for kind in ask stance; do
-    for slug in $(ls results/"$TARGET".*."$kind"-*.json docs/data/"$TARGET".*."$kind"-*.json 2>/dev/null \
-                  | sed -E "s/.*\.$kind-//; s/\.json$//" | sort -u); do
-      f=$(ls results/"$TARGET".*."$kind"-"$slug".json docs/data/"$TARGET".*."$kind"-"$slug".json 2>/dev/null | head -1)
+    seen_slugs=("")
+    for f in results/"$TARGET".*."$kind"-*.json docs/data/"$TARGET".*."$kind"-*.json; do
+      slug="${f##*."$kind"-}"
+      slug="${slug%.json}"
+      for seen_slug in "${seen_slugs[@]}"; do
+        if [[ "$slug" == "$seen_slug" ]]; then continue 2; fi
+      done
+      seen_slugs+=("$slug")
       question=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["question"])' "$f")
       step "$kind $TARGET '$slug'"
       "${TS[@]}" "$kind" "$TARGET" "$question" --slug "$slug"
