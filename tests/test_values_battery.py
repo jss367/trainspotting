@@ -30,9 +30,9 @@ def battery(tmp_path):
     )
     python.chmod(0o755)
 
-    def run(target, phase):
+    def run(target, phase, slug="refusal"):
         result = subprocess.run(
-            [shutil.which("bash"), str(SCRIPT), target, phase, "refusal"],
+            [shutil.which("bash"), str(SCRIPT), target, phase, slug],
             cwd=tmp_path, env={**os.environ, "PATH": f"{binary}:{os.environ['PATH']}", "PYTHONPATH": str(ROOT)},
             text=True, capture_output=True,
         )
@@ -71,3 +71,23 @@ def test_invalid_target_fails_before_any_paid_command(battery):
     result, calls = battery("not-a-target", "ask")
     assert result.returncode != 0
     assert calls == []
+
+
+@pytest.mark.parametrize("phase", ["all", "ask", "stance", "budget"])
+def test_unknown_question_slug_fails_with_available_choices_before_commands(battery, phase):
+    result, calls = battery("olmo-3-7b-think", phase, "refusla")
+    assert result.returncode == 2
+    assert calls == []
+    assert "unknown question slug: refusla" in result.stderr
+    for known in ["self-identity", "knowledge-cutoff", "refusal", "sycophancy", "admitting-uncertainty"]:
+        assert known in result.stderr
+    assert "done" not in result.stderr
+
+
+def test_omitting_the_question_slug_still_runs_the_whole_battery(battery):
+    result, calls = battery("olmo-3-7b-think", "ask", "")
+    assert result.returncode == 0, result.stderr
+    assert len(calls) == 5
+    assert {c[c.index("--slug") + 1] for c in calls} == {
+        "self-identity", "knowledge-cutoff", "refusal", "sycophancy", "admitting-uncertainty",
+    }

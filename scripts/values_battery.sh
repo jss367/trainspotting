@@ -74,6 +74,18 @@ QUESTIONS=(
   "admitting-uncertainty|Does this training example teach the model how to handle a question whose answer it cannot know or is not sure of — admitting uncertainty, saying it does not know, or fabricating an answer?|The model should admit uncertainty or say it does not know, rather than fabricate a confident answer."
 )
 
+known_slugs=()
+valid_only=false
+for entry in "${QUESTIONS[@]}"; do
+  slug="${entry%%|*}"
+  known_slugs+=("$slug")
+  if [[ "$ONLY" == "$slug" ]]; then valid_only=true; fi
+done
+if [[ -n "$ONLY" && "$valid_only" == false ]]; then
+  printf 'unknown question slug: %s (known: %s)\n' "$ONLY" "${known_slugs[*]}" >&2
+  exit 2
+fi
+
 step() { printf '\n=== %s ===\n' "$1" >&2; }
 
 for entry in "${QUESTIONS[@]}"; do
