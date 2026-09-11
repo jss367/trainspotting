@@ -21,11 +21,11 @@
 #                      examples that teach saying "I don't know" or hedging
 #                      where the answer is not knowable
 #
-# Each question gets an `ask` over the committed post-training samples and the
-# corpus documents, a `stance` run for the direction on the whole example, and a
-# `budget` roll-up. The stance question is worded separately from the ask
-# question because they are different questions: ask is "is this example about
-# X", stance is "does fitting this push the model toward or away from Y".
+# Each question gets an `ask` over the target's available prompt/corpus stages,
+# a `stance` run where training examples carry direction, and a `budget` roll-up.
+# The stance question is worded separately from the ask question because they
+# are different questions: ask is "is this example about X", stance is "does
+# fitting this push the model toward or away from Y".
 #
 # Usage:
 #   scripts/values_battery.sh [model] [phase] [question-slug]
@@ -35,9 +35,9 @@
 #   slug      run one question only, by its slug below
 #
 # Needs ANTHROPIC_API_KEY for `ask` and `stance`; `budget` only adds up what the
-# other two wrote. Every phase skips nothing: rerunning a question re-scores the
-# same committed rows, which is how a rerun becomes a stability check
-# (`trainspotting agreement`).
+# other two wrote. Targets without training examples (chat datasets and base
+# models) skip stance. Corpus asks reuse stored documents; no new corpus sample
+# is drawn by this script.
 
 set -euo pipefail
 
@@ -50,6 +50,20 @@ case "$PHASE" in
      exit 2 ;;
 esac
 TS=(python3 -m trainspotting.cli)
+
+# Resolve capabilities before any paid command. Dataset targets have no corpus
+# stages; base models have no post-training examples whose direction to judge.
+capabilities=$(python3 - "$MODEL" <<'PYTHON'
+import sys
+from trainspotting import registry
+target = registry.resolve(sys.argv[1])
+has_corpus = bool(registry.pretrain_stages(target))
+has_stance = any(registry.stage_kind(s) in ("sft", "dpo", "rlvr")
+                 for s in registry.post_training_stages(target))
+print(int(has_corpus), int(has_stance))
+PYTHON
+)
+read -r has_corpus has_stance <<< "$capabilities"
 
 # slug | ask question | stance question
 QUESTIONS=(
@@ -70,13 +84,19 @@ for entry in "${QUESTIONS[@]}"; do
   if [[ -n "$ONLY" && "$ONLY" != "$slug" ]]; then continue; fi
 
   if [[ "$PHASE" == all || "$PHASE" == ask ]]; then
-    step "asking: $slug (post-training samples and corpus documents)"
-    "${TS[@]}" ask "$MODEL" "$ask_q" --slug "$slug" --pretrain
+    args=(ask "$MODEL" "$ask_q" --slug "$slug")
+    if [[ "$has_corpus" == 1 ]]; then args+=(--pretrain); fi
+    step "asking: $slug (available prompt and corpus stages)"
+    "${TS[@]}" "${args[@]}"
   fi
 
   if [[ "$PHASE" == all || "$PHASE" == stance ]]; then
-    step "judging direction: $slug"
-    "${TS[@]}" stance "$MODEL" "$stance_q" --slug "$slug"
+    if [[ "$has_stance" == 1 ]]; then
+      step "judging direction: $slug"
+      "${TS[@]}" stance "$MODEL" "$stance_q" --slug "$slug"
+    else
+      step "skipping direction: $MODEL has no supported training examples"
+    fi
   fi
 
   if [[ "$PHASE" == all || "$PHASE" == budget ]]; then
