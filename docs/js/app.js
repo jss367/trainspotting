@@ -3492,7 +3492,10 @@ async function renderModel(model, gen){
 // ------------------------------------------------------- cross-model compare ---
 // Same classification data as the per-model tabs, but every model on one axis
 // per stage, so "does the think variant's post-training differ?" is one glance.
-const MODEL_COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)"];
+const MODEL_COLORS = Array.from({length: 9}, (_, i) => `var(--series-${i + 1})`);
+function comparisonColors(models){
+  return new Map(models.map((model, i) => [model, MODEL_COLORS[i]]));
+}
 const shortName = m => m.replace(/^olmo-3-/, "");
 
 // ---- lookup study ----
@@ -3768,8 +3771,7 @@ async function renderCompare(gen){
   // model; a base model that was never post-trained is the same case for the
   // same reason. Every card below is built from stages with an `hf_dataset`, so
   // such a target can contribute neither a bar nor a missing-run note — only a
-  // legend entry for a series that never arrives, in a colour it takes by
-  // wrapping the ramp and collides with the first model's.
+  // legend entry for a series that never arrives.
   const models = Object.keys(REG).filter(k =>
     REG[k].is_model !== false && (REG[k].stages || []).some(s => s.hf_dataset));
   // Named rather than dropped: the tab strip offers these models, so a reader
@@ -3781,11 +3783,11 @@ async function renderCompare(gen){
   main.innerHTML = "";
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === "compare"));
 
-  const color = m => MODEL_COLORS[models.indexOf(m) % MODEL_COLORS.length];
+  const colors = comparisonColors(models);
+  const color = m => colors.get(m);
   // Colors are keyed to the list of compared models, so a model keeps its color
   // even in a legend that only names a subset (the per-bucket ask legends
-  // below) — and the ramp is only ever asked for as many colours as there are
-  // series, so no model wraps onto another's.
+  // below). Each compared model has its own palette slot; colors never wrap.
   const legendFor = ms => `<div class="legend" style="margin:0 0 4px">${ms.map(m =>
     `<span class="k"><i style="background:${color(m)}"></i>${m}</span>`).join("")}</div>`;
   const legend = legendFor(models);
@@ -4542,7 +4544,7 @@ export async function boot(){
 // What the tests reach for. The page itself only needs boot(); the rest is
 // exported so tests/site can import the functions the browser runs rather than
 // a copy lifted out of the file.
-export { stabilityNote, stageLabel, rewardFamily, rewardComposition, renderRewardComposition, renderRLVR, diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, searchFields, scanRecords, branchPoint, matchIndex };
+export { comparisonColors, stabilityNote, stageLabel, rewardFamily, rewardComposition, renderRewardComposition, renderRLVR, diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, searchFields, scanRecords, branchPoint, matchIndex };
 // The language card reads its display names from a module-scope cache boot()
 // fills from language-names.json; nothing serves that file under node, so the
 // tests set it through here.
