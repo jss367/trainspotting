@@ -1509,9 +1509,8 @@ function promptKey(prompt){
 
 // Two joins, and the row is the real one. The prompt-prefix map cannot tell
 // apart two rows that open with the same 400 characters, and it keeps the first
-// — rare in a curated mix, routine in a chat log, where 64 of WildChat's 299
-// sampled prompts share an opening and 39 of them are the same Midjourney
-// preamble in front of 39 different conversations. Result records now carry the
+// — rare in a curated mix, routine in a chat log, where WildChat repeats the
+// same Midjourney preamble before different conversations. Result records carry the
 // sampled row index; the prefix map stays for runs committed before they did.
 async function ctxMaps(model, stage){
   const f = ctxFile(model, stage);
@@ -2039,9 +2038,9 @@ function valueByKey(records, col){
 // With equal known dataset revisions and row numbers on both runs, a prompt's
 // metadata can be looked up by row without ambiguity. The
 // prefix hash exists because a labels file older than the row field has nothing
-// else to join on, and it is lossy in exactly the way this avoids: it drops 39
-// of WildChat's 299 language records, whose shared Midjourney opening spans
-// several models, and nine in the 7B Think DPO run.
+// else to join on, and it is lossy in exactly the way this avoids: shared
+// Midjourney openings in WildChat span several models, so ambiguous hashes
+// must be dropped.
 function rowResolver(profileRecords, col){
   const byRow = new Map();
   for (const r of profileRecords)
@@ -3196,11 +3195,9 @@ async function renderModel(model, gen){
   // draws its bars when someone opens it.
   //
   // Where the dataset ships its own `language` column, this card holds both
-  // readings. They used to sit in two cards three screens apart — the column
-  // saying WildChat is 56.2% English, this saying 52.2% — with nothing to say
-  // the gap is the prompts the detector refuses to call and the column has no
-  // bucket for. Two numbers for one question, far enough apart to read as the
-  // page arguing with itself.
+  // readings. Keeping them together makes their different coverage visible,
+  // including prompts the detector leaves uncalled while the dataset column
+  // assigns a language.
   const langCard = document.createElement("section");
   langCard.className = "card";
   langCard.id = "card-languages";

@@ -22,10 +22,13 @@ The two things a dataset changes about how a result reads:
   cards still stack up; what changes is the claim each bar makes.
 - It brings its own labels. WildChat records the model, language, country and
   redaction status of every conversation, so the `languages` layer becomes a
-  check on py3langid rather than the only breakdown available. It passes: the
-  dataset's own column says 56.2% English / 14.9% Chinese / 10.4% Russian, and
-  the detector reads the committed 300-prompt sample as 52.2% / 15.7% / 10.7%,
-  with the 10.4% it declines to call covering most of the gap.
+  check on py3langid rather than the only breakdown available. The dataset's
+  own column says 56.2% English / 14.9% Chinese / 10.4% Russian. In the
+  [committed detector run](data/wildchat-1m.chat.languages.json), 996 prompts
+  remain from a requested 1,000-row draw: 55.8% English (556), 12.1% Chinese
+  (121), 10.2% Russian (102), and 9.3% undetermined (93). These shares use the
+  retained prompts as their denominator; the dataset-wide column and sampled
+  detector also differ in coverage and whether they leave a language uncalled.
 
 See [Adding a dataset](#adding-a-dataset).
 
