@@ -2644,6 +2644,21 @@ async function agreementNote(model, stage, labels){
   return p;
 }
 
+// The model prefix is already known. Strip it before parsing the stage and
+// question so a version dot in a model key is never mistaken for a separator.
+function questionFiles(model, manifest, kind){
+  const bySlug = {};
+  const prefix = model + ".";
+  for (const file of manifest){
+    if (!file.startsWith(prefix)) continue;
+    const match = file.slice(prefix.length).match(/^([^.]+)\.(ask|stance)-(.+)\.json$/);
+    if (!match || match[2] !== kind) continue;
+    const [, stage, , slug] = match;
+    (bySlug[slug] ||= []).push([stage, file]);
+  }
+  return bySlug;
+}
+
 async function renderModel(model, gen){
   const m = REG[model];
   const main = document.getElementById("main");
@@ -3341,20 +3356,11 @@ async function renderModel(model, gen){
   if (post.length) main.appendChild(langCard);
 
   // ---- custom questions (trainspotting ask) ----
-  const askFiles = MANIFEST.filter(f => f.startsWith(model + ".") && f.includes(".ask-"));
-  const bySlug = {};
-  for (const f of askFiles){
-    const [, stage, rest] = f.match(/^[^.]+\.([^.]+)\.ask-(.+)\.json$/) || [];
-    if (stage) (bySlug[rest] ||= []).push([stage, f]);
-  }
-  // A stance run is optional and lands per stage under the same slug, so index
-  // them once here rather than re-scanning the manifest inside the loop.
-  const stanceStages = {};
-  for (const f of MANIFEST){
-    if (!f.startsWith(model + ".")) continue;
-    const [, stage, slug] = f.match(/^[^.]+\.([^.]+)\.stance-(.+)\.json$/) || [];
-    if (stage) (stanceStages[slug] ||= []).push(stage);
-  }
+  const bySlug = questionFiles(model, MANIFEST, "ask");
+  // Stance-only slugs also drive their own direction and budget cards below.
+  const stanceStages = Object.fromEntries(
+    Object.entries(questionFiles(model, MANIFEST, "stance"))
+      .map(([slug, files]) => [slug, files.map(([stage]) => stage)]));
   for (const slug in stanceStages){
     const order = m.stages.map(x => x.stage);
     stanceStages[slug].sort((a, b) => order.indexOf(a) - order.indexOf(b));
@@ -4356,6 +4362,15 @@ function setHash(...parts){
   location.hash = h;
 }
 
+// Compare/search keys start with a registered model followed by a dot. Both
+// model versions and the remaining question key can themselves contain dots.
+function splitModelKey(key, registry){
+  if (typeof key !== "string") return null;
+  const model = Object.keys(registry).filter(m => key.startsWith(m + ".") && key.length > m.length + 1)
+    .sort((a, b) => b.length - a.length)[0];
+  return model ? {model, key: key.slice(model.length + 1)} : null;
+}
+
 // A truncated or hand-edited link can hold a malformed escape ("%E0", "%"),
 // which makes decodeURIComponent throw. Fall back to the raw segment: it just
 // won't match any model/stage/label, so route() lands on the default view and
@@ -4416,9 +4431,9 @@ async function applyHashState(nav){
   // the modal a result link names: #search/<query>/<model>.<stage>/row-<n>.
   if (VIEW === "search"){
     if (st.row == null) return;
-    const cut = (st.key || "").lastIndexOf(".");   // model names carry no dot; stage names carry none either
-    const model = st.key.slice(0, cut), stage = st.key.slice(cut + 1);
-    const s = cut > 0 && REG[model] && REG[model].stages.find(x => x.stage === stage);
+    const parsed = splitModelKey(st.key, REG);
+    const model = parsed?.model, stage = parsed?.key;
+    const s = REG[model] && REG[model].stages.find(x => x.stage === stage);
     let rec = s ? await contextRowFor(model, stage, st.row) : null;
     if (nav !== NAV) return;
     // Same guard the bar links use, one layer down: honor only a row that this
@@ -4442,7 +4457,7 @@ async function applyHashState(nav){
   }
   if (st.row != null){
     // Compare keys are <model>.<key>; per-model views carry the model in the hash root.
-    const model = VIEW === "compare" ? st.key.split(".", 1)[0] : VIEW;
+    const model = VIEW === "compare" ? splitModelKey(st.key, REG)?.model : VIEW;
     // Only honor the row when the stage/key named a real drill-down (`el`
     // resolved above): a hash whose key names no bar would otherwise claim a
     // nonexistent label/ask result while a modal lends it false credibility.
@@ -4539,7 +4554,7 @@ export async function boot(){
 // What the tests reach for. The page itself only needs boot(); the rest is
 // exported so tests/site can import the functions the browser runs rather than
 // a copy lifted out of the file.
-export { sameDraw, sameRevision, resolverFor, pairingEvidence, crossRows, promptKey, comparisonColors, stabilityNote, stageLabel, rewardFamily, rewardComposition, renderRewardComposition, renderRLVR, diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, searchFields, scanRecords, branchPoint, matchIndex };
+export { questionFiles, splitModelKey, sameDraw, sameRevision, resolverFor, pairingEvidence, crossRows, promptKey, comparisonColors, stabilityNote, stageLabel, rewardFamily, rewardComposition, renderRewardComposition, renderRLVR, diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, searchFields, scanRecords, branchPoint, matchIndex };
 // The language card reads its display names from a module-scope cache boot()
 // fills from language-names.json; nothing serves that file under node, so the
 // tests set it through here.
