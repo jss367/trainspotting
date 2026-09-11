@@ -52,7 +52,7 @@ def test_question_with_only_one_copy_is_rerun(refresh, directory):
     write, run = refresh
     question = 'Does it say "hello"?\nOr use $(a shell command)?'
     write(directory, "sft", "greeting", question)
-    assert run() == [["ask", "target", question, "--slug", "greeting"]]
+    assert run() == [["ask", "target", question, "--slug", "greeting", "--stage", "sft"]]
 
 
 def test_no_questions_is_a_successful_noop(refresh):
@@ -60,7 +60,7 @@ def test_no_questions_is_a_successful_noop(refresh):
     assert run() == []
 
 
-def test_each_slug_runs_once_and_results_wins_across_stages_and_copies(refresh):
+def test_each_stage_slug_runs_once_and_results_wins_over_its_exported_copy(refresh):
     write, run = refresh
     write("docs/data", "dpo", "topic", "exported wording")
     write("docs/data", "sft", "topic", "exported wording")
@@ -72,8 +72,41 @@ def test_each_slug_runs_once_and_results_wins_across_stages_and_copies(refresh):
     write("results", "sft", "topic", "which direction?", kind="stance")
     write("docs/data", "sft", "topic", "old direction?", kind="stance")
     assert sorted(run()) == sorted([
-        ["ask", "target", "fresh wording", "--slug", "topic"],
-        ["ask", "target", "only in export", "--slug", "export-only"],
-        ["ask", "target", "only in results", "--slug", "new"],
-        ["stance", "target", "which direction?", "--slug", "topic"],
+        ["ask", "target", "fresh wording", "--slug", "topic", "--stage", "sft"],
+        ["ask", "target", "fresh wording", "--slug", "topic", "--stage", "rlvr"],
+        ["ask", "target", "exported wording", "--slug", "topic", "--stage", "dpo"],
+        ["ask", "target", "only in export", "--slug", "export-only", "--stage", "sft"],
+        ["ask", "target", "only in results", "--slug", "new", "--stage", "sft"],
+        ["stance", "target", "which direction?", "--slug", "topic", "--stage", "sft"],
     ])
+
+
+@pytest.mark.parametrize("stage", ["pretrain", "midtrain", "long-context"])
+def test_corpus_only_question_refreshes_only_its_saved_stage(refresh, stage):
+    write, run = refresh
+    write("docs/data", stage, "topic", "old corpus wording")
+    write("results", stage, "topic", "fresh corpus wording")
+    assert run() == [[
+        "ask", "target", "fresh corpus wording", "--slug", "topic",
+        "--stage", stage, "--pretrain-only",
+    ]]
+
+
+def test_mixed_question_keeps_each_stage_and_its_own_wording(refresh):
+    write, run = refresh
+    write("docs/data", "pretrain", "topic", "old corpus wording")
+    write("results", "pretrain", "topic", "fresh corpus wording")
+    write("docs/data", "long-context", "topic", "long document wording")
+    write("results", "sft", "topic", "prompt wording")
+    write("docs/data", "sft", "topic", "old prompt wording")
+    assert sorted(run()) == sorted([
+        ["ask", "target", "fresh corpus wording", "--slug", "topic", "--stage", "pretrain", "--pretrain-only"],
+        ["ask", "target", "long document wording", "--slug", "topic", "--stage", "long-context", "--pretrain-only"],
+        ["ask", "target", "prompt wording", "--slug", "topic", "--stage", "sft"],
+    ])
+
+
+def test_dataset_stage_does_not_receive_a_corpus_flag(refresh):
+    write, run = refresh
+    write("results", "chat", "topic", "chat wording")
+    assert run() == [["ask", "target", "chat wording", "--slug", "topic", "--stage", "chat"]]

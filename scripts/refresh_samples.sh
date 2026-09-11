@@ -17,8 +17,8 @@
 #   phase   all (default) | free | labels | asks | export
 #           free    context + languages, no API key needed
 #           labels  classify (needs ANTHROPIC_API_KEY)
-#           asks    re-run every ask question already committed for the target
-#                   (needs ANTHROPIC_API_KEY); stance runs are re-run too
+#           asks    re-run existing ask/stance questions in their saved stages
+#                   (needs ANTHROPIC_API_KEY); corpus asks reuse stored documents
 #           export  scripts/export_site_data.py
 #
 # Reruns overwrite the previous files. Commit the old ones first if you want the
@@ -52,24 +52,35 @@ if [[ "$PHASE" == all || "$PHASE" == asks ]]; then
   # Every question already asked of this target, by slug, with the wording the
   # committed file recorded. Rewording a question is a different measurement,
   # so the text is read back out of the result rather than typed here.
-  # One run per slug, however many stages and copies (results/ and docs/data/)
-  # name it: the same question asked twice is the same money spent twice.
+  # One run per stage and slug, however many copies (results/ and docs/data/)
+  # name it. Keep each question in its existing stages: expanding a corpus-only
+  # question to post-training would pay for an unrelated measurement.
   # Unmatched globs must disappear: either directory can be the sole copy,
   # and a target with no questions has nothing to rerun. Walk results first so
   # a freshly written question takes precedence over the exported copy.
   shopt -s nullglob
   for kind in ask stance; do
-    seen_slugs=("")
+    seen_runs=("")
     for f in results/"$TARGET".*."$kind"-*.json docs/data/"$TARGET".*."$kind"-*.json; do
       slug="${f##*."$kind"-}"
       slug="${slug%.json}"
-      for seen_slug in "${seen_slugs[@]}"; do
-        if [[ "$slug" == "$seen_slug" ]]; then continue 2; fi
+      name="${f##*/}"
+      stage="${name#"$TARGET".}"
+      stage="${stage%."$kind"-"$slug".json}"
+      run="$stage.$slug"
+      for seen_run in "${seen_runs[@]}"; do
+        if [[ "$run" == "$seen_run" ]]; then continue 2; fi
       done
-      seen_slugs+=("$slug")
+      seen_runs+=("$run")
       question=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["question"])' "$f")
-      step "$kind $TARGET '$slug'"
-      "${TS[@]}" "$kind" "$TARGET" "$question" --slug "$slug"
+      args=("$kind" "$TARGET" "$question" --slug "$slug" --stage "$stage")
+      if [[ "$kind" == ask ]]; then
+        case "$stage" in
+          pretrain|midtrain|long-context) args+=(--pretrain-only) ;;
+        esac
+      fi
+      step "$kind $TARGET $stage '$slug'"
+      "${TS[@]}" "${args[@]}"
     done
   done
 fi
