@@ -2036,8 +2036,8 @@ function valueByKey(records, col){
   return {map, dropped};
 }
 
-// Where the two runs both recorded the sampler's row numbers, a prompt's
-// metadata is looked up by row and there is nothing to be undecided about. The
+// With equal known dataset revisions and row numbers on both runs, a prompt's
+// metadata can be looked up by row without ambiguity. The
 // prefix hash exists because a labels file older than the row field has nothing
 // else to join on, and it is lossy in exactly the way this avoids: it drops 39
 // of WildChat's 299 language records, whose shared Midjourney opening spans
@@ -2062,9 +2062,17 @@ function hashResolver(profileRecords, col){
   };
 }
 
-// Row identities when both sides have them, the prefix hash when they do not.
+// Numeric positions identify prompts only within the same known dataset tree.
+function sameRevision(profile, run){
+  return Boolean(profile.dataset && profile.dataset === run.dataset
+    && profile.revisions?.context && profile.revisions.context === run.revision
+    && !run.revision_moved_to && !(profile.revisions?.moved || []).length);
+}
+
+// Otherwise corroborate the prompt opening; never trust an unproven row ID
+// even if most of the other prompts match and the overall join passes.
 function resolverFor(profile, run, col){
-  const usable = profile.records.every(r => r.row != null)
+  const usable = sameRevision(profile, run) && profile.records.every(r => r.row != null)
     && (run.records || []).every(r => r.row != null);
   return usable ? rowResolver(profile.records, col) : hashResolver(profile.records, col);
 }
@@ -2131,21 +2139,13 @@ function sameDraw(profile, run){
   return null;
 }
 
-// What is left when the metadata cannot settle it. Every committed labels and
-// languages run predates revision stamping while the profiles now carry one, so
-// for those pairs the stamps prove nothing — refusing on that basis would take
-// down every grid on the page over a hypothetical.
-//
-// The join is the evidence instead, and it is better evidence than a stamp: the
-// key is a hash of a prompt's opening, so two runs that sampled different rows
-// do not match on them. A complete join is a demonstration that the same rows
-// were drawn. A poor one is the failure this guards against, and it refuses.
+// Legacy runs can lack revision stamps. Their prompt openings provide a
+// fallback, with ambiguous metadata keys excluded by hashResolver. A poor
+// match rate refuses the grid; a high rate never admits an unmatched record.
 const JOIN_FLOOR = 0.9;
 
-// Where both sides kept row indices there is nothing to infer: the sampler's
-// own numbering says whether two runs drew the same rows. A languages run
-// records one per prompt and so does a profile, so that pair is decided here
-// and never reaches the hash-rate evidence below.
+// Row-set equality is evidence of the same draw only after sameRevision has
+// established that those positions belong to the same dataset tree.
 function sameRows(profile, run){
   const mine = profile.records.map(r => r.row).filter(r => r != null);
   const theirs = (run.records || []).map(r => r.row).filter(r => r != null);
@@ -2157,11 +2157,11 @@ function sameRows(profile, run){
 }
 
 function joinEvidence(matched, total, profile, run){
-  const proven = profile.revisions && profile.revisions.context && run.revision;
+  const proven = sameRevision(profile, run);
   const rate = total ? matched / total : 1;
   if (rate < JOIN_FLOOR)
     return {refuse: `only ${matched} of ${total} prompts in that run match a sampled example`
-      + `${proven ? "" : ", and neither run is pinned to a dataset revision"} — these are not the same draw`};
+      + `${proven ? "" : ", and the runs are not both pinned to the same dataset revision"} — these are not the same draw`};
   return {note: proven || rate === 1 ? null
     : `The runs are not both pinned to a dataset revision, so their pairing rests on ${matched} of ${total} prompts matching a sampled example rather than on the stamps.`};
 }
@@ -2172,7 +2172,7 @@ function joinEvidence(matched, total, profile, run){
 // `classify` records a row per label exactly as `languages` does — only the
 // files committed before it did are legacy.
 function pairingEvidence(profile, run, matched, total){
-  const rows = sameRows(profile, run);
+  const rows = sameRevision(profile, run) ? sameRows(profile, run) : null;
   if (!rows) return joinEvidence(matched, total, profile, run);
   return rows.identical ? {note: null}
     : {refuse: `they drew different rows — ${rows.shared} of ${rows.theirs} in that run are among the ${rows.mine} sampled examples`};
@@ -2184,9 +2184,8 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
   card.innerHTML = `<h2>Where in the mix each kind of content comes from</h2>
     <p class="sub">The same sampled prompts as the card above, crossed against the source column
       their row carries. A cell is the count; its colour is that share of the row. Click one to read
-      the prompts behind it. Where both runs recorded the sampler's row numbers the two are joined on
-      those; for a run committed before they were recorded, the join is the prompt's opening, the
-      same one every drill-down on this page uses.</p>`;
+      the prompts behind it. Row numbers join the runs when both record the same dataset revision.
+      Otherwise, the join checks each prompt's opening and excludes ambiguous matches.</p>`;
   let any = false;
   for (const s of post){
     const p = profiles[s.stage];
@@ -2242,8 +2241,7 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
         + `Re-run one of them so both describe the same draw.`);
     } else if (labeled.length){
       const cross = crossRows(labeled, resolverFor(p, labels, col), r => r.label);
-      // Row identities when the run recorded them, the match rate when it did
-      // not — everything the join placed against everything it was given.
+      // Proven row identities when available, otherwise the prompt match rate.
       const evidence = pairingEvidence(p, labels, labeled.length - cross.unmatched, labeled.length);
       if (evidence.refuse){
         noLabels(card, `the sampled examples and the classification run cannot be crossed: ${evidence.refuse}.`);
@@ -2275,10 +2273,7 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
         {key: "…", short: "…", label: "every other language"}];
       const build = parent => {
         const cross = crossRows(langs.records, resolverFor(p, langs, col), r => top.includes(r.label) ? r.label : "…");
-        // Same guard as the taxonomy grid, one better where it can be: these
-        // records carry row indices, so the two runs are compared on the
-        // sampler's own numbering rather than on how many prompts happen to
-        // hash into the map.
+        // The same provenance and prompt-evidence guard as the taxonomy grid.
         const evidence = pairingEvidence(p, langs, langs.records.length - cross.unmatched, langs.records.length);
         if (evidence.refuse){
           noLabels(parent, `the language run cannot be crossed against these examples: ${evidence.refuse}.`);
@@ -4544,7 +4539,7 @@ export async function boot(){
 // What the tests reach for. The page itself only needs boot(); the rest is
 // exported so tests/site can import the functions the browser runs rather than
 // a copy lifted out of the file.
-export { comparisonColors, stabilityNote, stageLabel, rewardFamily, rewardComposition, renderRewardComposition, renderRLVR, diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, searchFields, scanRecords, branchPoint, matchIndex };
+export { sameDraw, sameRevision, resolverFor, pairingEvidence, crossRows, promptKey, comparisonColors, stabilityNote, stageLabel, rewardFamily, rewardComposition, renderRewardComposition, renderRLVR, diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, searchFields, scanRecords, branchPoint, matchIndex };
 // The language card reads its display names from a module-scope cache boot()
 // fills from language-names.json; nothing serves that file under node, so the
 // tests set it through here.

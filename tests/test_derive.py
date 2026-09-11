@@ -412,7 +412,7 @@ def test_the_page_refuses_to_guess_when_two_sampled_rows_share_a_key():
         f"const KEY_CHARS = {derive.KEY_CHARS};\n{site_const('keyPrefix')}\n"
         f"{site_function('promptKey')}\n{site_function('valueByKey')}\n"
         f"{site_function('hashResolver')}\n{site_function('rowResolver')}\n"
-        f"{site_function('resolverFor')}\n{site_function('crossRows')}\n"
+        f"{site_function('sameRevision')}\n{site_function('resolverFor')}\n{site_function('crossRows')}\n"
         """
         const records = [
           {k: "aaa", m: {src: "one"}},            // collides, disagrees
@@ -438,9 +438,9 @@ def test_the_page_refuses_to_guess_when_two_sampled_rows_share_a_key():
           {k: promptKey("conflicted prompt"), m: {src: "two"}},
         ]};
         const cross = crossRows(labeled, resolverFor(profile, {records: labeled}, "src"), r => r.label);
-        // Given rows on both sides there is no ambiguity to resolve at all:
+        // Given rows and equal known revisions, there is no ambiguity:
         // three prompts, three metadata lookups, nothing dropped.
-        const withRows = {records: [
+        const withRows = {dataset: "x/y", revisions: {context: "rev1"}, records: [
           {row: 1, m: {src: "one"}}, {row: 2, m: {src: "two"}}, {row: 3, m: {src: "one"}},
         ]};
         const labelledRows = [
@@ -448,7 +448,7 @@ def test_the_page_refuses_to_guess_when_two_sampled_rows_share_a_key():
           {row: 2, prompt: "same opening", label: "honesty"},
           {row: 3, prompt: "same opening", label: "capability"},
         ];
-        const byRow = crossRows(labelledRows, resolverFor(withRows, {records: labelledRows}, "src"), r => r.label);
+        const byRow = crossRows(labelledRows, resolverFor(withRows, {dataset: "x/y", revision: "rev1", records: labelledRows}, "src"), r => r.label);
 
         console.log(JSON.stringify({
           kept: [...map.entries()].sort(),

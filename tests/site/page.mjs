@@ -20,6 +20,7 @@ const ROOT = path.resolve(import.meta.dirname, "..", "..");
 // here rather than as `undefined is not a function` halfway through a suite.
 const EXPORTS = [
   "stabilityNote", "comparisonColors",
+  "sameDraw", "sameRevision", "resolverFor", "pairingEvidence", "crossRows", "promptKey",
   "stageLabel", "rewardFamily", "rewardComposition", "renderRewardComposition", "renderRLVR", "setRewards",
   // the DPO gradient panel
   "diffPair", "opChars", "uniqueChars", "sideText", "sideCut", "demotePrefix",
