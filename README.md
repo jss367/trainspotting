@@ -78,7 +78,10 @@ Sampled layers draw 1,000 rows per stage by default (`--sample`, `--seed`).
 The runs committed under `results/` before September 2026 were drawn at 300;
 each result file records its own `sample`. `scripts/refresh_samples.sh <target>`
 re-draws every layer of a target at the current default, in the order the
-row-index joins between them require.
+row-index joins between them require. Its `labels` phase also refreshes existing
+replicate runs and their agreement summaries, adding one classifier run for each
+stage that already has a replicate or agreement artifact. It preserves saved
+classifiers for both runs and does not add repeatability checks to new stages.
 
 ## Checking the classifier
 

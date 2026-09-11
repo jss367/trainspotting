@@ -34,7 +34,7 @@ def refresh(tmp_path):
     python.chmod(0o755)
 
     def write(directory, stage, slug=None, question=None, kind="ask", target=TARGET, **metadata):
-        suffix = kind if kind in ("labels", "labels-replicate") else f"{kind}-{slug}"
+        suffix = kind if kind in ("labels", "labels-replicate", "agreement") else f"{kind}-{slug}"
         path = tmp_path / directory / f"{target}.{stage}.{suffix}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({"question": question, **metadata}))
@@ -150,9 +150,13 @@ def test_labels_keep_each_stages_classifier_and_still_run_new_stages(refresh, ph
         ["classify", target, "--stage", "sft", "--classifier", "fresh-judge"],
         ["classify", target, "--stage", "dpo", "--classifier", "exported-judge"],
         ["classify", target, "--stage", "rlvr"],
+        ["classify", target, "--stage", "rlvr", "--replicate", "--classifier", "replicate-judge"],
     ]
+    assert [c for c in calls if c[0] == "agreement"] == [["agreement", target, "--stage", "rlvr"]]
     if phase == "all":
-        assert [c[0] for c in calls] == ["context", "languages", "classify", "classify", "classify", "export"]
+        assert [c[0] for c in calls] == [
+            "context", "languages", "classify", "classify", "classify", "classify", "agreement", "export",
+        ]
 
 
 @pytest.mark.parametrize("metadata", [{}, {"classifier": None}])
@@ -200,3 +204,64 @@ def test_canonical_base_only_target_can_still_refresh_saved_corpus_questions(ref
     assert run(target=target.upper()) == [[
         "ask", target, "corpus wording", "--slug", "topic", "--stage", "pretrain", "--pretrain-only",
     ]]
+
+
+@pytest.mark.parametrize("phase", ["labels", "all"])
+@pytest.mark.parametrize("directory", ["results", "docs/data"])
+def test_saved_repeatability_runs_refresh_in_order_with_their_own_classifiers(refresh, phase, directory):
+    write, run = refresh
+    target = "wildchat-1m"
+    write(directory, "chat", kind="labels", target=target, classifier="main-judge")
+    write(directory, "chat", kind="labels-replicate", target=target, classifier="replicate-judge")
+    # A stale exported copy or summary must not replace the saved instrument.
+    if directory == "results":
+        write("docs/data", "chat", kind="labels-replicate", target=target, classifier="stale-judge")
+    write(directory, "chat", kind="agreement", target=target, replicate={"classifier": "summary-judge"})
+    calls = run(target=target, phase=phase)
+    assert [c for c in calls if c[0] in ("classify", "agreement")] == [
+        ["classify", target, "--stage", "chat", "--classifier", "main-judge"],
+        ["classify", target, "--stage", "chat", "--replicate", "--classifier", "replicate-judge"],
+        ["agreement", target, "--stage", "chat"],
+    ]
+    if phase == "all":
+        assert [c[0] for c in calls] == ["context", "languages", "classify", "classify", "agreement", "export"]
+
+
+@pytest.mark.parametrize("directory", ["results", "docs/data"])
+def test_agreement_only_artifact_recovers_both_classifiers_before_refresh(refresh, directory):
+    write, run = refresh
+    target = "wildchat-1m"
+    write(directory, "chat", kind="agreement", target=target,
+          labels_run={"classifier": "main-judge"}, replicate={"classifier": "replicate-judge"})
+    if directory == "results":
+        write("docs/data", "chat", kind="agreement", target=target,
+              labels_run={"classifier": "stale-main"}, replicate={"classifier": "stale-replicate"})
+    assert run(target=target, phase="labels") == [
+        ["classify", target, "--stage", "chat", "--classifier", "main-judge"],
+        ["classify", target, "--stage", "chat", "--replicate", "--classifier", "replicate-judge"],
+        ["agreement", target, "--stage", "chat"],
+    ]
+
+
+@pytest.mark.parametrize("kind", ["labels-replicate", "agreement"])
+@pytest.mark.parametrize("classifier", [None, "main-judge"])
+def test_legacy_repeatability_without_a_classifier_reuses_the_main_instrument(refresh, kind, classifier):
+    write, run = refresh
+    target = "wildchat-1m"
+    write("results", "chat", kind="labels", target=target, classifier=classifier)
+    write("docs/data", "chat", kind=kind, target=target)
+    instrument = ["--classifier", classifier] if classifier else []
+    assert run(target=target, phase="labels") == [
+        ["classify", target, "--stage", "chat", *instrument],
+        ["classify", target, "--stage", "chat", "--replicate", *instrument],
+        ["agreement", target, "--stage", "chat"],
+    ]
+
+
+def test_main_only_stage_does_not_add_a_paid_repeatability_run(refresh):
+    write, run = refresh
+    target = "wildchat-1m"
+    write("results", "chat", kind="labels", target=target, classifier="main-judge")
+    assert run(target=target, phase="labels") == [
+        ["classify", target, "--stage", "chat", "--classifier", "main-judge"],
+    ]

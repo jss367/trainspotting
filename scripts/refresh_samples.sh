@@ -16,7 +16,8 @@
 #
 #   phase   all (default) | free | labels | asks | export
 #           free    context + languages, no API key needed
-#           labels  classify (needs ANTHROPIC_API_KEY)
+#           labels  classify, plus existing replicate/agreement checks
+#                   (needs ANTHROPIC_API_KEY; one extra judging run per replicate)
 #           asks    re-run existing ask/stance questions in their saved stages
 #                   (needs ANTHROPIC_API_KEY); corpus asks reuse stored documents
 #           export  scripts/export_site_data.py
@@ -45,6 +46,23 @@ read -r TARGET label_stages <<< "$selection"
 TS=(python3 -m trainspotting.cli)
 step() { printf '\n=== %s ===\n' "$1" >&2; }
 
+# Match exact artifacts, preferring the working result to its exported copy.
+saved_run() {
+  local f
+  for f in results/"$TARGET"."$1"."$2".json docs/data/"$TARGET"."$1"."$2".json; do
+    if [[ -f "$f" ]]; then printf '%s\n' "$f"; return; fi
+  done
+}
+classifier_in() {
+  python3 - "$@" <<'PYTHON'
+import json, sys
+run = json.load(open(sys.argv[1]))
+for key in sys.argv[2:]:
+    run = run.get(key) or {}
+print(run.get("classifier") or "")
+PYTHON
+}
+
 if [[ "$PHASE" == all || "$PHASE" == free ]]; then
   step "context $TARGET (the examples the site drills into)"
   "${TS[@]}" context "$TARGET"
@@ -59,18 +77,40 @@ if [[ "$PHASE" == all || "$PHASE" == labels ]]; then
     exit 1
   fi
   for stage in $label_stages; do
+    # Capture both instruments before overwriting either run. Agreement alone
+    # can retain them when the raw runs are missing from this checkout.
+    labels_file=$(saved_run "$stage" labels)
+    replicate_file=$(saved_run "$stage" labels-replicate)
+    agreement_file=$(saved_run "$stage" agreement)
     classifier=""
-    # Exact main-label filenames only; a replicate is a separate run.
-    for f in results/"$TARGET"."$stage".labels.json docs/data/"$TARGET"."$stage".labels.json; do
-      if [[ ! -f "$f" ]]; then continue; fi
-      classifier=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("classifier") or "")' "$f")
-      break
-    done
+    if [[ -n "$labels_file" ]]; then
+      classifier=$(classifier_in "$labels_file")
+    elif [[ -n "$agreement_file" ]]; then
+      classifier=$(classifier_in "$agreement_file" labels_run)
+    fi
+    replicate_classifier=""
+    if [[ -n "$replicate_file" ]]; then
+      replicate_classifier=$(classifier_in "$replicate_file")
+    elif [[ -n "$agreement_file" ]]; then
+      replicate_classifier=$(classifier_in "$agreement_file" replicate)
+    fi
+    # With no recorded replicate instrument, repeat the main one. Preserve an
+    # explicit different classifier; agreement flags it as a comparison instead
+    # of claiming repeatability.
+    replicate_classifier="${replicate_classifier:-$classifier}"
     args=(classify "$TARGET" --stage "$stage")
     # A new stage or a legacy file without a classifier uses the CLI default.
     if [[ -n "$classifier" ]]; then args+=(--classifier "$classifier"); fi
     step "classify $TARGET $stage (needs ANTHROPIC_API_KEY)"
     "${TS[@]}" "${args[@]}"
+    if [[ -n "$replicate_file" || -n "$agreement_file" ]]; then
+      args=(classify "$TARGET" --stage "$stage" --replicate)
+      if [[ -n "$replicate_classifier" ]]; then args+=(--classifier "$replicate_classifier"); fi
+      step "classify $TARGET $stage --replicate (additional judging run)"
+      "${TS[@]}" "${args[@]}"
+      step "agreement $TARGET $stage"
+      "${TS[@]}" agreement "$TARGET" --stage "$stage"
+    fi
   done
 fi
 
