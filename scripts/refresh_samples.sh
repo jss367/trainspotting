@@ -33,6 +33,15 @@ case "$PHASE" in
   all|free|labels|asks|export) ;;
   *) printf 'unknown phase: %s\n' "$PHASE" >&2; exit 2 ;;
 esac
+# Resolve once so every phase discovers and writes the same canonical files.
+selection=$(python3 - "$TARGET" <<'PYTHON'
+import sys
+from trainspotting import registry
+target = registry.resolve(sys.argv[1])
+print(target["target"], *(s["stage"] for s in registry.post_training_stages(target)))
+PYTHON
+)
+read -r TARGET label_stages <<< "$selection"
 TS=(python3 -m trainspotting.cli)
 step() { printf '\n=== %s ===\n' "$1" >&2; }
 
@@ -45,30 +54,22 @@ fi
 
 if [[ "$PHASE" == all || "$PHASE" == labels ]]; then
   # Visit every registered prompt stage, including stages without a prior run.
-  # Resolve the canonical target key so case variants find the saved artifact.
-  selection=$(python3 - "$TARGET" <<'PYTHON'
-import sys
-from trainspotting import registry
-target = registry.resolve(sys.argv[1])
-stages = registry.post_training_stages(target)
-if not stages:
-    sys.exit(f"{sys.argv[1]} has no post-training stages")
-print(target["target"], *(s["stage"] for s in stages))
-PYTHON
-)
-  read -r labels_target label_stages <<< "$selection"
+  if [[ -z "$label_stages" ]]; then
+    printf '%s has no post-training stages\n' "$TARGET" >&2
+    exit 1
+  fi
   for stage in $label_stages; do
     classifier=""
     # Exact main-label filenames only; a replicate is a separate run.
-    for f in results/"$labels_target"."$stage".labels.json docs/data/"$labels_target"."$stage".labels.json; do
+    for f in results/"$TARGET"."$stage".labels.json docs/data/"$TARGET"."$stage".labels.json; do
       if [[ ! -f "$f" ]]; then continue; fi
       classifier=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("classifier") or "")' "$f")
       break
     done
-    args=(classify "$labels_target" --stage "$stage")
+    args=(classify "$TARGET" --stage "$stage")
     # A new stage or a legacy file without a classifier uses the CLI default.
     if [[ -n "$classifier" ]]; then args+=(--classifier "$classifier"); fi
-    step "classify $labels_target $stage (needs ANTHROPIC_API_KEY)"
+    step "classify $TARGET $stage (needs ANTHROPIC_API_KEY)"
     "${TS[@]}" "${args[@]}"
   done
 fi

@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+TARGET = "olmo-3-7b-think"
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "refresh_samples.sh"
 
 
@@ -32,13 +33,13 @@ def refresh(tmp_path):
     )
     python.chmod(0o755)
 
-    def write(directory, stage, slug=None, question=None, kind="ask", target="target", **metadata):
+    def write(directory, stage, slug=None, question=None, kind="ask", target=TARGET, **metadata):
         suffix = kind if kind in ("labels", "labels-replicate") else f"{kind}-{slug}"
         path = tmp_path / directory / f"{target}.{stage}.{suffix}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({"question": question, **metadata}))
 
-    def run(target="target", phase="asks", expected_status=0):
+    def run(target=TARGET, phase="asks", expected_status=0):
         result = subprocess.run(
             [shutil.which("bash"), str(SCRIPT), target, phase],
             cwd=tmp_path, env={**os.environ, "PATH": f"{binary}:{os.environ['PATH']}", "PYTHONPATH": str(SCRIPT.parent.parent)},
@@ -57,7 +58,7 @@ def test_question_with_only_one_copy_is_rerun(refresh, directory):
     write, run = refresh
     question = 'Does it say "hello"?\nOr use $(a shell command)?'
     write(directory, "sft", "greeting", question)
-    assert run() == [["ask", "target", question, "--slug", "greeting", "--stage", "sft"]]
+    assert run() == [["ask", TARGET, question, "--slug", "greeting", "--stage", "sft"]]
 
 
 def test_no_questions_is_a_successful_noop(refresh):
@@ -77,12 +78,12 @@ def test_each_stage_slug_runs_once_and_results_wins_over_its_exported_copy(refre
     write("results", "sft", "topic", "which direction?", kind="stance")
     write("docs/data", "sft", "topic", "old direction?", kind="stance")
     assert sorted(run()) == sorted([
-        ["ask", "target", "fresh wording", "--slug", "topic", "--stage", "sft"],
-        ["ask", "target", "fresh wording", "--slug", "topic", "--stage", "rlvr"],
-        ["ask", "target", "exported wording", "--slug", "topic", "--stage", "dpo"],
-        ["ask", "target", "only in export", "--slug", "export-only", "--stage", "sft"],
-        ["ask", "target", "only in results", "--slug", "new", "--stage", "sft"],
-        ["stance", "target", "which direction?", "--slug", "topic", "--stage", "sft"],
+        ["ask", TARGET, "fresh wording", "--slug", "topic", "--stage", "sft"],
+        ["ask", TARGET, "fresh wording", "--slug", "topic", "--stage", "rlvr"],
+        ["ask", TARGET, "exported wording", "--slug", "topic", "--stage", "dpo"],
+        ["ask", TARGET, "only in export", "--slug", "export-only", "--stage", "sft"],
+        ["ask", TARGET, "only in results", "--slug", "new", "--stage", "sft"],
+        ["stance", TARGET, "which direction?", "--slug", "topic", "--stage", "sft"],
     ])
 
 
@@ -92,7 +93,7 @@ def test_corpus_only_question_refreshes_only_its_saved_stage(refresh, stage):
     write("docs/data", stage, "topic", "old corpus wording")
     write("results", stage, "topic", "fresh corpus wording")
     assert run() == [[
-        "ask", "target", "fresh corpus wording", "--slug", "topic",
+        "ask", TARGET, "fresh corpus wording", "--slug", "topic",
         "--stage", stage, "--pretrain-only",
     ]]
 
@@ -105,16 +106,16 @@ def test_mixed_question_keeps_each_stage_and_its_own_wording(refresh):
     write("results", "sft", "topic", "prompt wording")
     write("docs/data", "sft", "topic", "old prompt wording")
     assert sorted(run()) == sorted([
-        ["ask", "target", "fresh corpus wording", "--slug", "topic", "--stage", "pretrain", "--pretrain-only"],
-        ["ask", "target", "long document wording", "--slug", "topic", "--stage", "long-context", "--pretrain-only"],
-        ["ask", "target", "prompt wording", "--slug", "topic", "--stage", "sft"],
+        ["ask", TARGET, "fresh corpus wording", "--slug", "topic", "--stage", "pretrain", "--pretrain-only"],
+        ["ask", TARGET, "long document wording", "--slug", "topic", "--stage", "long-context", "--pretrain-only"],
+        ["ask", TARGET, "prompt wording", "--slug", "topic", "--stage", "sft"],
     ])
 
 
 def test_dataset_stage_does_not_receive_a_corpus_flag(refresh):
     write, run = refresh
     write("results", "chat", "topic", "chat wording")
-    assert run() == [["ask", "target", "chat wording", "--slug", "topic", "--stage", "chat"]]
+    assert run() == [["ask", TARGET, "chat wording", "--slug", "topic", "--stage", "chat"]]
 
 
 @pytest.mark.parametrize("kind", ["ask", "stance"])
@@ -123,7 +124,7 @@ def test_refresh_preserves_the_saved_classifier_from_the_preferred_copy(refresh,
     write("docs/data", "sft", "topic", "old wording", kind=kind, classifier="old-judge")
     write("results", "sft", "topic", "saved wording", kind=kind, classifier="alternate-judge")
     assert run() == [[
-        kind, "target", "saved wording", "--slug", "topic", "--stage", "sft",
+        kind, TARGET, "saved wording", "--slug", "topic", "--stage", "sft",
         "--classifier", "alternate-judge",
     ]]
 
@@ -133,7 +134,7 @@ def test_refresh_preserves_the_saved_classifier_from_the_preferred_copy(refresh,
 def test_legacy_questions_without_a_classifier_keep_the_cli_default(refresh, kind, metadata):
     write, run = refresh
     write("results", "sft", "topic", "legacy wording", kind=kind, **metadata)
-    assert run() == [[kind, "target", "legacy wording", "--slug", "topic", "--stage", "sft"]]
+    assert run() == [[kind, TARGET, "legacy wording", "--slug", "topic", "--stage", "sft"]]
 
 
 @pytest.mark.parametrize("phase", ["labels", "all"])
@@ -173,3 +174,29 @@ def test_label_classifier_lookup_uses_the_canonical_target_key(refresh):
 def test_labels_for_a_base_only_target_still_fail_before_any_classification(refresh):
     _, run = refresh
     assert run(target="pythia-12b-deduped", phase="labels", expected_status=1) == []
+
+
+@pytest.mark.parametrize("phase", ["asks", "all"])
+def test_all_refresh_phases_use_the_canonical_target_for_saved_questions(refresh, phase):
+    write, run = refresh
+    target = "wildchat-1m"
+    write("results", "chat", "topic", "saved ask", target=target, classifier="ask-judge")
+    write("docs/data", "chat", "topic", "old ask", target=target)
+    write("docs/data", "chat", "topic", "saved stance", kind="stance", target=target)
+    calls = run(target=target.upper(), phase=phase)
+    assert [c for c in calls if c[0] in ("ask", "stance")] == [
+        ["ask", target, "saved ask", "--slug", "topic", "--stage", "chat", "--classifier", "ask-judge"],
+        ["stance", target, "saved stance", "--slug", "topic", "--stage", "chat"],
+    ]
+    assert all(c[1] == target for c in calls if c[0] != "export")
+    if phase == "all":
+        assert [c[0] for c in calls] == ["context", "languages", "classify", "ask", "stance", "export"]
+
+
+def test_canonical_base_only_target_can_still_refresh_saved_corpus_questions(refresh):
+    write, run = refresh
+    target = "pythia-12b-deduped"
+    write("results", "pretrain", "topic", "corpus wording", target=target)
+    assert run(target=target.upper()) == [[
+        "ask", target, "corpus wording", "--slug", "topic", "--stage", "pretrain", "--pretrain-only",
+    ]]
