@@ -89,9 +89,8 @@ def _sample_rows(stage, sample, seed):
     The index is the row's absolute position in the split, and it is what every
     result record stores to address its training example. Joining on the prompt
     instead cannot tell two rows apart that open with the same 400 characters,
-    which is rare in a curated mix and routine in a chat log: 64 of WildChat's
-    299 sampled prompts share an opening with another, 39 of them the same
-    Midjourney prompt-generator preamble in front of 39 different conversations.
+    which is rare in a curated mix and routine in a chat log: WildChat repeats
+    the same Midjourney prompt-generator preamble before different conversations.
     """
     print(f"sampling {sample} rows from {stage['hf_dataset']} ...", file=sys.stderr)
     rows = hf.sample_rows_with_index(stage["hf_dataset"], sample, seed=seed)
@@ -208,7 +207,7 @@ def _filename_part(part: str) -> str:
 def _fmt_est(n: float | None) -> str:
     """An estimated token count, at the resolution the estimate supports.
 
-    Three significant figures at most: these come from a 300-draw rate times a
+    Three significant figures at most: these come from a sampled rate times a
     mean length, and printing 41,283,915 would claim precision the sample has
     nowhere near.
     """

@@ -13,8 +13,8 @@ def _viewer_search_url(dataset: str, query: str, split: str = "train") -> str:
     The viewer's `?q=` runs the same datasets-server index `hf.search_count`
     counts with, so this lands on the rows behind a count rather than on a
     sample that might contain one. That distinction is why `trace` links here
-    instead of at `trainspotting search`, which draws 300 random rows and so
-    finds none of the matches for the rare strings a trace is made of.
+    instead of at `trainspotting search`, whose random sample can miss rare
+    strings even when the index has matches.
     """
     return (
         f"{hf.HUB}/datasets/{dataset}/viewer/default/{split}"
@@ -44,8 +44,7 @@ def cmd_trace(args):
     phrase, so the count is an upper bound on verbatim occurrences. And it
     counts rows, not sides — so a run ends by linking the matched rows in the
     dataset viewer, which runs the same index, rather than at `trainspotting
-    search`, whose 300-row draw finds none of the matches for a string this
-    rare.
+    search`, whose random sample can miss rare strings.
     """
     text = sys.stdin.read() if args.text == "-" else args.text
     queries = behavior.distinctive_ngrams(text, max_queries=args.max_queries)
@@ -227,15 +226,12 @@ def cmd_trace(args):
             " searches the same index:\n"
             f"  {_viewer_search_url(top['dataset'], max(top['per_query'], key=top['per_query'].get))}"
         )
-        # Not `trainspotting search`: it draws 300 random rows, so at the
-        # densities a signature string produces — 100/M is a 3% chance of one
-        # hit in that draw — it answers "how common is this" and almost never
-        # "here is one". Pointing at it for a rare phrase would send the reader
-        # to a confident zero.
+        # Search estimates prevalence from a random sample. Link the index's
+        # matched rows so a rare phrase cannot disappear in a separate draw.
         print(
             "`trainspotting search` reports which side of an example a hit lands"
-            " on, but over a 300-row random draw rather than the matched rows, so"
-            " for a phrase this rare it will usually find none of them."
+            " on, but over a random sample rather than these matched rows;"
+            " a rare phrase can be absent from that sample."
         )
         # `top` is the largest number, which is only the largest *density* when
         # every stage was fully indexed. Say so rather than letting a bound that

@@ -59,9 +59,9 @@ def cmd_grep(args):
     """Count rows of every post-training mix whose text contains a pattern.
 
     Exact, over all rows, which is the half of the question sampling cannot do.
-    `classify` and `ask` estimate an unconditional rate from 300 prompts; a
-    pattern that occurs in 0.1% of a mix is expected to miss such a sample
-    entirely, and no interval around zero tells you it is there.
+    `classify` and `ask` estimate an unconditional rate from sampled prompts;
+    a rare pattern can be absent from that sample, and no interval around zero
+    tells you it is there.
     """
     con = grep.connect()
     stages = _select_stages(args, registry.post_training_stages, "post-training")

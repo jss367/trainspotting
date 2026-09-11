@@ -298,11 +298,8 @@ def test_a_bound_above_every_exact_density_is_the_stage_to_read(monkeypatch, cap
 
 
 def test_the_handoff_goes_to_the_matched_rows_not_a_random_draw(monkeypatch, capsys):
-    """`trainspotting search` attributes a hit to a side, but over 300 random
-    rows: at the densities a signature string produces it finds none of the
-    matches, so a trace that recommended it was sending the reader to a
-    confident zero. The viewer's `?q=` runs the same index the count came
-    from."""
+    """Search attributes a hit to a side within a random sample, which can miss
+    rare phrases. The viewer's `?q=` runs the same index the count came from."""
     out = _run_trace(
         monkeypatch,
         capsys,
@@ -314,7 +311,8 @@ def test_the_handoff_goes_to_the_matched_rows_not_a_random_draw(monkeypatch, cap
         },
     )
     assert "?q=" in out
-    assert "300-row random draw" in out
+    assert "random sample rather than these matched rows" in out
+    assert "a rare phrase can be absent" in out
     # Not presented as the way to see these rows.
     assert "trainspotting search olmo-3-7b-instruct" not in out
 

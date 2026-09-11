@@ -42,8 +42,8 @@ model:
 7. **Strings, over every row** — how many rows of a mix contain a given string,
    exactly, over the whole mix rather than a sample. The same question as the
    layer above with the sampling removed, which is what turns instances into a
-   rate: a pattern in 0.1% of a mix is expected to miss a 300-row sample
-   entirely, and no interval around zero says whether it is absent or just rare.
+   rate: a rare pattern can be absent from a random sample, and no interval
+   around zero says whether it is absent from the mix or just rare.
    Counts are then read across the pipeline as a ranking — which stage most
    plausibly taught the string, by rate rather than by hits.
    See [Searching for a string](#searching-for-a-string).
@@ -922,8 +922,8 @@ The markup is the instrument, so it has to survive the character budget. Each
 part of an example is cut to its own share rather than the joined text being cut
 once at the end: a single excerpt over the whole thing sliced straight through
 `[DISPREFERRED — training pushes away from this]` on 16 of 300 sampled
-Dolci-Think-DPO pairs, and a pair whose side marker is gone still looks
-well-formed while reading exactly backwards.
+Dolci-Think-DPO pairs in an earlier run. A pair whose side marker is gone still
+looks well-formed while reading exactly backwards.
 
 A `chat` target is refused rather than judged. Nothing was fit to a log, so it
 has no direction — the same reason the context view marks no turn in one as a
@@ -942,7 +942,8 @@ trainspotting budget olmo-3-7b-think caring-about-human-lives
 ```
 
 multiplies each stage's rate by its size and adds them up. No API key, no
-network — it only reads runs that already happened.
+network — it only reads runs that already happened. This historical output
+used earlier 300-row post-training runs; fresh runs use the current sample default.
 
 ```
 stage          fit tokens         by row  by length    matching tokens
@@ -974,9 +975,9 @@ Both sides of a pair store the whole conversation, so the split is at the point
 the two actually diverge, not by role — `context.branch_point`, the same line
 `search` draws. An assistant turn before the branch is shared history the pair
 is judged in, and counting it once per side charges the stage twice for text
-neither completion was preferred for. That is 12 of the 300 sampled
-Dolci-Instruct-DPO pairs and 5.9% of that stage's fit characters; the think
-mixes are single-turn throughout, so nothing there moves.
+neither completion was preferred for. In an earlier 300-row run, that affected
+12 Dolci-Instruct-DPO pairs and 5.9% of the sampled fit characters; the think
+mixes in that run were single-turn throughout, so nothing there moved.
 
 RL is the honest gap, and the table marks it `*`. The published mix holds
 prompts, verifiers and some reference generations, not the text the policy was
@@ -1035,10 +1036,11 @@ The interval is the count-based one — cluster-corrected for corpora, where the
 `ask` run already stored it — rescaled by the weighed rate over the count rate,
 which is exactly 1 for a shard-drawn corpus stage. It is computed over the rows the point
 estimate was actually built from, which for an RL stage is much smaller than the
-sample: Dolci-Instruct-RL stores a reference generation for 60 of 300 judged
-rows, and taking the interval over all 300 claimed five times the evidence there
-is — a 5.6% upper bound where the honest one is 13.7%. What it still does not
-carry is the extra uncertainty in the length ratio, so it is narrower than the
+sample: in an earlier run, Dolci-Instruct-RL stored a reference generation for
+60 of 300 judged rows, and taking the interval over all 300 claimed five times
+the evidence available — a 5.6% upper bound where the supported one was 13.7%.
+What it still does not carry is the extra uncertainty in the length ratio, so it
+is narrower than the
 truth by that much, and the output says so whenever the reweighting rests on
 fewer than ten matching examples.
 
