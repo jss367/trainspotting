@@ -213,8 +213,10 @@ sampling run that quietly labels nothing.
   is over the labeled prompts, so this is the part of the sample the numbers do
   not describe — and refusals land on jailbreak-style prompts, which is the
   content the harmlessness share is about, so the gap is not random.
-- Sampled estimates come with Wilson 95% intervals in `report`; 300 samples
-  gives roughly ±5% worst case. Post-training intervals assume independent draws.
+- Sampled estimates come with Wilson 95% intervals in `report`; the default
+  1,000 post-training samples give roughly ±3 percentage points in the worst
+  case. Actual intervals use each run's labeled count. Post-training intervals
+  assume independent draws.
   Corpus intervals do not: they are widened by the measured design effect of
   clustering by whatever unit the sample was drawn in — the shard on the shard
   route, the page of ten adjacent rows on the direct one — so `--docs-per-shard`

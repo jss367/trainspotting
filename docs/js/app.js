@@ -1570,7 +1570,7 @@ function jumpToStage(stage){
 //
 // The numbers are not all of one kind and the card never pretends otherwise:
 // a corpus stage's tokens are published in the paper, a post-training stage's
-// are estimated from the same 300 examples every other card samples. What makes
+// are estimated from the same examples every other card samples. What makes
 // the comparison worth drawing anyway is its size — the gap is four orders of
 // magnitude, and no plausible tokenizer moves it by one.
 
@@ -1753,9 +1753,8 @@ function tokenBudgetCard(m, rows){
     // completion) and would have to include RL's generated rollouts, which are
     // not in the dataset at any length and cannot be recovered from it.
     + " The interval is over the sampler's draws rather than its rows: rows arrive in"
-    + " chunks of ten consecutive positions and neighbours on disk are correlated, so 300 rows"
-    + " are about thirty independent draws and treating them as 300 would make every whisker"
-    + " here about twice too narrow."
+    + " chunks of ten consecutive positions and neighbours on disk are correlated. Treating"
+    + " every row as an independent draw would make the whiskers too narrow."
     + " These are tokens of text in each stage's data, not tokens processed during training."
     + " A DPO example's shared prompt is read once with each completion at training time and is"
     + " counted once here; an RL stage is only its prompts, because the completions RL actually"
@@ -2320,7 +2319,7 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
 // A divider between the two halves of the pipeline, so the page reads top to
 // bottom in the same order as the tiles at the top of it.
 // Mirrors cli._fmt_est: three significant figures at most, because these are a
-// 300-draw rate times a mean length and anything more claims precision the
+// sampled rate times a mean length and anything more claims precision the
 // sample has nowhere near.
 function tokens(n){
   if (n == null) return "—";
@@ -2961,7 +2960,7 @@ async function renderModel(model, gen){
     //
     // "Counted, not sampled" is the claim worth making here, and it survives a
     // stats API that stopped early — these are still every row it read, not a
-    // draw of 300 prompts. "Exact", the word that was here, does not: on a
+    // draw of prompts. "Exact", the word that was here, does not: on a
     // partial stage the per-stage note directly underneath says the shares are
     // over a fraction of the split, so the subtitle was arguing with the line
     // below it.
@@ -3973,7 +3972,7 @@ async function renderCompare(gen){
 // the pretraining documents. The bar drill-downs only reach a prompt whose bar
 // you already guessed, and no bar covers the response side at all; this does.
 //
-// What it searches is the sample, not the mix: 300 rows per stage, so it finds
+// What it searches is the sample, not the mix; sample sizes vary by stage. It finds
 // instances to read, never a rate. `trainspotting grep` is the other half —
 // exact counts over every row of a mix, no sample.
 
@@ -4324,11 +4323,11 @@ async function renderSearch(query, gen){
     ? `<b>${matched}</b> matching example${matched > 1 ? "s" : ""} in ${filesWithHits} of
        ${files.length} sampled sets${prefiltered && candidates.length < files.length
          ? ` — ${candidates.length} read, the rest ruled out by the index` : ""}.
-       These are the 300-row-per-stage samples, so this finds instances to read, not a rate:
+       Sample sizes vary by stage, so this finds instances to read, not a rate:
        for an exact count over every row of a mix, run
        <code>trainspotting grep &lt;model&gt; "${esc(query)}"</code>.${cutNote}${indexNote}`
     : `No match in any of the ${files.length} committed samples${prefiltered ? "" : " read"}.
-       A string this rare in a 300-row sample can still be common in the mix —
+       Sample sizes vary by stage. A string absent from these samples can still be common in the mix —
        <code>trainspotting grep &lt;model&gt; "${esc(query)}"</code> counts every row.${cutNote}${indexNote}`;
   card.insertBefore(summary, card.querySelector("h3.stage"));
 }
