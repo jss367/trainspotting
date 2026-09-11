@@ -14,14 +14,14 @@ every stage's answer on one scale, and the tenth is the only one that opens the
 model:
 
 1. **Facts** — stage sizes for a model's whole training pipeline (pretrain →
-   midtrain → long-context → SFT → DPO → RLVR), hardcoded in a registry.
+   midtrain → long-context → SFT → DPO → reinforcement learning), hardcoded in a registry.
 2. **Sources** — exact composition of each post-training mix (which source
    datasets, which domains, which reward types), computed from HuggingFace's
    precomputed column statistics. No downloads, exact counts.
 3. **Values** — how much of the post-training data is about being **helpful,
    honest, and harmless** versus pure skill content (math, code, formatting,
    tool use). No such labels exist in the data, so this layer samples prompts
-   and classifies them with Claude — except where an RLVR row's verifier already
+   and classifies them with Claude — except where an RL row's verifier already
    settles what it teaches, which the prompt can contradict (see
    [Taxonomy](methods.md#taxonomy)).
 4. **Language** — which natural language each prompt is written in. The Dolci
@@ -389,7 +389,7 @@ column it was read from and a side per hit:
 |---|---|
 | SFT | `prompt` (user and system turns), `response` (assistant turns) |
 | DPO | `prompt` (everything before the pair branches, counted once), `chosen`, `rejected` |
-| RLVR | `prompt`, `verifier` (ground truth, solution, constraint), `rollout` (stored reference generations) |
+| RL (programmatic rewards or AI feedback) | `prompt`, `verifier` (ground truth, solution, constraint), `rollout` (stored reference generations) |
 | chat (a dataset like WildChat-1M) | `prompt`, `reply` — a log, so nothing was fit to either |
 
 The side is the finding, not a detail of it. "I am ChatGPT" in a rejected
@@ -659,7 +659,7 @@ unsearched. Any of them makes the result inconclusive — nothing matched *in wh
 was read* — and keeps it out of the stage-wide claim. A run written before result files
 recorded which sides the mix has usually cannot demonstrate it read all of them,
 so it lands there too — unless its `fields` already holds every side this layer
-maps, which no narrowing could have produced and which the older RLVR sweeps
+maps, which no narrowing could have produced and which the older RL sweeps
 do. A pattern absent from every stage read end to end does get
 said outright: 0 of N rows, exact over all of them, so a model that produces the
 string anyway did not take it from those stages. What that points at depends on
@@ -703,7 +703,7 @@ moved file still carries the contested one in its payload.
 
 What the ranking deliberately does not do is weight the stages against each
 other. Identity behaviour is mostly set after pretraining, so the same rate in
-RLVR and in Dolma 3 are not the same evidence — but by how much is not something
+RL and in Dolma 3 are not the same evidence — but by how much is not something
 these counts measure, and folding a guess into a score would bury it. It is
 printed as a caveat and the rates stay comparable on their own terms.
 
@@ -890,7 +890,7 @@ response, and for a preference pair it is a claim about *which* response.
 `search` reads that half but only matches strings.
 
 The wrong shape, because yes/no cannot represent training that points the other
-way, and this data contains some — the anti-vaccine RLVR row under
+way, and this data contains some — the anti-vaccine RL row under
 [Taxonomy](methods.md#taxonomy) is a `yes` under `ask` and teaches the opposite.
 
 ```bash
@@ -907,7 +907,7 @@ net, `toward − away`.
 |---|---|---|
 | SFT | the prompt and the assistant turns the model is fit to | the target response itself cuts against the question |
 | DPO | the shared prefix, then both completions marked preferred / dispreferred | the *dispreferred* completion is the one that serves the question |
-| RLVR | the prompt, the verifier and what it checks, and the pass rate | the reward pays for output that cuts against the question |
+| RL | the prompt, the verifier and what it checks, and the pass rate | the reward pays for output that cuts against the question |
 
 An RL row's stored reference generation is deliberately left out of that. The
 schema records a row's `outputs` and an aggregate `total_correct_rollouts` with
@@ -977,7 +977,7 @@ neither completion was preferred for. That is 12 of the 300 sampled
 Dolci-Instruct-DPO pairs and 5.9% of that stage's fit characters; the think
 mixes are single-turn throughout, so nothing there moves.
 
-RLVR is the honest gap, and the table marks it `*`. The published mix holds
+RL is the honest gap, and the table marks it `*`. The published mix holds
 prompts, verifiers and some reference generations, not the text the policy was
 fit to, and how many rollouts per prompt the run took is not in the data. What
 the table reports is a **floor**: one reference rollout per prompt.

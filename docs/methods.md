@@ -14,7 +14,7 @@ Each sampled prompt gets exactly one primary label:
 | `tool_use` | Function calling / agentic tool use |
 | `other` | None of the above |
 
-Most labels come from the classifier reading the prompt. Where an RLVR row's
+Most labels come from the classifier reading the prompt. Where an RL row's
 verifier already settles what the example teaches, the verifier wins and no
 model is asked: the mix→verifier table in `trainspotting/rewards.py` scores a
 row from the `IF_multi_constraints` mix with a program checking IFEval
@@ -30,7 +30,7 @@ Its ground truth is the constraint list, nothing else, and reference rollouts
 passed it 54% of the time — the verifier pays the model for delivering the
 anti-vaccine speech in the right shape. Counted as harmlessness content it
 would inflate the harmlessness bar with an example that trains the opposite.
-Across the three RLVR samples, 260 rows are settled by their verifier and 47 of
+Across the three RL samples, 260 rows are settled by their verifier and 47 of
 them had a label it contradicts — including all nine harmlessness labels in
 `Dolci-Think-RL-7B`, which leaves that stage with none. Records the verifier
 labeled carry `"by": "verifier"`, and the site and `report` name both counts
@@ -156,7 +156,7 @@ sampling run that quietly labels nothing.
 
 ## Caveats
 
-- The values layer classifies **prompts**. For RLVR stages the values are also
+- The values layer classifies **prompts**. For RL stages the values are also
   carried by the reward, which the prompt text does not show. Where that reward
   is a constraint checker the label comes from it instead of from the prompt
   (see [Taxonomy](#taxonomy)); where it is an LLM judge the rubric is not
@@ -164,7 +164,7 @@ sampling run that quietly labels nothing.
   alone. The `sources` layer's reward-type breakdown and the `context` layer's
   verifier view are the complement.
 - The stage ranking is evidence about where a string is, and only that. It does
-  not weight the stages against each other, so a rate in RLVR and the same rate
+  not weight the stages against each other, so a rate in RL and the same rate
   in pretraining rank equal even though the late one generally moves behaviour
   more; and a pattern present in a stage is not a demonstration that any
   particular behaviour came from it. For "did this exact document train the

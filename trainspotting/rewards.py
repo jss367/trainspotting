@@ -1,8 +1,8 @@
-"""What each RLVR mix's reward actually checks.
+"""What each reinforcement learning mix's reward actually checks.
 
-The RL datasets don't label their reward functions — each row only names the
-mix it came from. But every mix has exactly one verifier, so a mix→verifier
-table turns those names into exact reward-type counts. This module is the
+The mix names identify broad reward types; row-level `dataset` tags can further
+distinguish reference-based from open-ended judging within a general chat mix.
+A mix→reward table turns source counts into broad reward-type counts. This module is the
 single source of that table: the context layer uses it to explain one row,
 and the site (via the reward-kinds.json export) uses it to roll a whole
 stage's dataset_source counts up into "what fraction of RL is scored by what".
@@ -14,12 +14,14 @@ the rename.
 
 KINDS = {
     "exact answer match": {
+        "family": "rlvr",
         "explain": (
             "The final answer is extracted from the response and compared to the "
             "ground truth below. Reward 1 on a match, 0 otherwise."
         ),
     },
     "unit tests": {
+        "family": "rlvr",
         "explain": (
             "The response's code is executed against test cases. Reward is the "
             "fraction of tests that pass."
@@ -27,6 +29,7 @@ KINDS = {
         "gt_label": "test cases the answer is run against",
     },
     "constraint checker": {
+        "family": "rlvr",
         "explain": (
             "A program checks the response against the constraints listed below. "
             "Reward 1 when every constraint holds, 0 otherwise."
@@ -34,15 +37,34 @@ KINDS = {
         "gt_label": "checker configuration",
     },
     "LLM judge": {
+        "family": "rlaif",
         "explain": (
-            "No rule can grade a free-form answer, so a judge model compares the "
-            "response to the stored reference answer and rewards a match. The "
-            "grading itself is another model call."
+            "A judge model scores the response's quality, with a reference answer "
+            "when the task provides one. The reward comes from another model's "
+            "assessment. General chat mixes include reference-based and open-ended judging."
         ),
-        "gt_label": "reference answer the judge compares against",
+        "gt_label": "reference answer, when provided",
     },
     "unknown": {
+        "family": "unknown",
         "explain": "This mix's reward function isn't identifiable from the row's own fields.",
+    },
+}
+
+# These are reward families within one mixed RL stage, not sequential stages.
+# Olmo 3, §§4.4.1 and 5.4: https://arxiv.org/html/2512.13961v2
+FAMILIES = {
+    "rlvr": {
+        "label": "RLVR · programmatic rewards",
+        "explain": "Reinforcement learning with verifiable rewards: a program checks the answer, tests, or constraints.",
+    },
+    "rlaif": {
+        "label": "RLAIF · AI feedback",
+        "explain": "Reinforcement learning from AI feedback: an LLM judge scores the generated answer.",
+    },
+    "unknown": {
+        "label": "RL · reward type unknown",
+        "explain": "The available metadata does not identify how this answer is scored.",
     },
 }
 
@@ -109,6 +131,11 @@ def kind_for(row: dict, dataset: str | None = None) -> str:
     """
     if dataset in WHOLE_MIX:
         return WHOLE_MIX[dataset][0]
+    tags = row.get("dataset") or []
+    if isinstance(tags, str):
+        tags = [tags]
+    if any(t in ("general-quality", "general-quality_ref") for t in tags):
+        return "LLM judge"
     for k in SOURCE_KEYS:
         hit = MIXES.get(row.get(k) or "")
         if hit:
@@ -126,6 +153,8 @@ def kind_for(row: dict, dataset: str | None = None) -> str:
 def site_export() -> dict:
     """The table as the site consumes it (reward-kinds.json)."""
     return {
+        "families": FAMILIES,
         "kinds": KINDS,
+        "whole_mixes": {name: {"kind": kind, "subject": subject} for name, (kind, subject) in WHOLE_MIX.items()},
         "mixes": {name: {"kind": kind, "subject": subject} for name, (kind, subject) in MIXES.items()},
     }

@@ -5,7 +5,7 @@ toward differs by the kind of example, so each kind yields a different record:
 
     sft   the target conversation — the model is fit to the assistant turns
     dpo   a preferred and a dispreferred response, plus where each came from
-    rlvr  no stored response at all — a verifier, what it checks, and how often
+    rlvr  generated training responses — a scorer, what it checks, and how often
           rollouts from the reference model passed it
     chat  a conversation log, where nothing was trained on anything — the other
           side of the exchange is what was said, not a target
@@ -176,6 +176,7 @@ def _reward(row: dict, dataset: str | None = None) -> dict:
     ground_truth = search.flatten(gt)
     return {
         "kind": kind,
+        "family": rewards.KINDS[kind]["family"],
         "explain": explain,
         "style": rm.get("style"),
         "ground_truth": _text(ground_truth) if ground_truth else None,
@@ -241,7 +242,7 @@ def build(row: dict, kind: str, prompt: str, row_index: int, source_columns=(), 
         }
         rec["meta"] = _meta(
             row,
-            [*source_columns, "dataset_source", "data_source", "ability", "difficulty", "setting_name"],
+            [*source_columns, "dataset", "dataset_source", "data_source", "ability", "difficulty", "setting_name"],
         )
         # A mix with one verifier and no provenance column is still from
         # somewhere: the whole mix is one domain, and the site can group by that.

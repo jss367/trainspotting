@@ -15,6 +15,7 @@ const NICE = {helpfulness:"helpful", honesty:"honest", harmlessness:"harmless",
 // they are a different kind of thing anyway. They read as neutral in the pipeline,
 // and their own card is single-series, so one hue there carries no cross-card claim.
 const STAGE_HUE = {sft: "var(--stage-sft)", dpo: "var(--stage-dpo)", rlvr: "var(--stage-rlvr)"};
+const stageLabel = stage => stage === "rlvr" ? "RL" : stage.toUpperCase();
 const hueFor = stage => STAGE_HUE[stage] || "var(--series-1)";
 const fmtBytes = n => n >= 1e12 ? (n/1e12).toFixed(1)+" TB" : n >= 1e9 ? Math.round(n/1e9)+" GB" : Math.round(n/1e6)+" MB";
 const niceGroup = g => g.replace(/_/g, " ");
@@ -109,7 +110,7 @@ const srcLabel = (v, links) => (links && links[v])
 const STAGE_LEDE = {
   sft: "Supervised fine-tuning. The model is fit directly to the assistant turns below — it learns to produce this text after this prompt.",
   dpo: "Direct preference optimization. The model is pushed toward the chosen response and away from the rejected one. Only the difference between the two is the training signal.",
-  rlvr: "Reinforcement learning. No response is stored. The model writes its own answer during training and a verifier scores it, so what gets trained is whatever the verifier rewards.",
+  rlvr: "Reinforcement learning. The response being optimized is generated during training. Each prompt uses its assigned scoring method: a programmatic reward (RLVR) or AI feedback (RLAIF). Reference answers and filtering rollouts may be stored in the dataset.",
 };
 const PREF_EXPLAIN = {
   delta_learning: "Delta learning: the chosen response comes from a larger model and the rejected one from a smaller model. No human or judge compared these two responses — the size gap is the label.",
@@ -786,16 +787,71 @@ function renderDPO(rec, dataset){
     </section>`;
 }
 
-// RL: there is no stored response — show the verifier and what it checks.
+// RL generates the response being optimized; stored references serve the scorer.
+function rewardFamily(kind){
+  return REWARDS.kinds[kind]?.family || "unknown";
+}
+
+// All counts must cover the split before showing exact shares. The source map
+// identifies broad reward families, not the judge's reference/open-ended mode.
+function rewardComposition(st){
+  if (!st || st.partial || !st.total) return null;
+  const whole = REWARDS.whole_mixes?.[st.dataset];
+  if (whole) return {[rewardFamily(whole.kind)]: {count: st.total, kinds: {[whole.kind]: st.total}}};
+  const mapped = Object.values(st.columns || {}).find(freq => {
+    const vals = Object.keys(freq);
+    return vals.length && vals.every(v => REWARDS.mixes[v]) &&
+      vals.reduce((sum, v) => sum + freq[v], 0) === st.total;
+  });
+  if (!mapped) return null;
+  const families = {};
+  for (const [source, count] of Object.entries(mapped)){
+    const kind = REWARDS.mixes[source].kind;
+    const family = rewardFamily(kind);
+    const group = families[family] ||= {count: 0, kinds: {}};
+    group.count += count;
+    group.kinds[kind] = (group.kinds[kind] || 0) + count;
+  }
+  return families;
+}
+
+function renderRewardComposition(st){
+  const groups = rewardComposition(st);
+  const intro = `<p class="stage-sub">Reinforcement learning rewards: RLVR uses programmatic
+    checks; RLAIF uses AI feedback from an LLM judge. ${groups && groups.rlvr && groups.rlaif
+      ? "Both reward families train the same policy within this stage."
+      : "Each prompt uses the scoring method assigned to its source."}
+    <a href="https://arxiv.org/html/2512.13961v2#S4.SS4.SSS1"
+    target="_blank" rel="noopener">Olmo 3 training recipe ↗</a></p>`;
+  if (!groups) return intro + `<p class="note">The available source counts do not cover the full
+    dataset with known reward types, so an exact RLVR/RLAIF split is unavailable.</p>`;
+  const bar = (label, count, explain) => `<div class="row" style="--bar:${hueFor("rlvr")}">
+    <div class="lbl">${esc(label)}</div>
+    <div class="trackbar" data-tip="${escAttr(explain)}"><div class="fill" style="width:${count/st.total*100}%"></div></div>
+    <div class="val">${pct(count/st.total)} <small>${num(count)}</small></div></div>`;
+  return intro + `<p class="stage-sub">Shares of prompts in the released dataset, grouped by reward
+    type. These are not shares of training updates, tokens, or reward strength.</p>`
+    + Object.entries(groups).sort((a, b) => b[1].count - a[1].count).map(([family, group]) => {
+      const info = REWARDS.families[family];
+      return bar(info.label, group.count, info.explain)
+        + `<details><summary>${esc(info.label)} — scoring methods</summary>`
+        + Object.entries(group.kinds).sort((a, b) => b[1] - a[1]).map(([kind, count]) =>
+          bar(kind, count, REWARDS.kinds[kind]?.explain || "")).join("")
+        + `</details>`;
+    }).join("");
+}
+
 function renderRLVR(rec, dataset){
   const r = rec.reward || {};
   const roll = rec.rollouts || {};
+  const family = rewardFamily(r.kind);
+  const familyInfo = REWARDS.families[family];
   const flow = `<div class="flow">
     <div class="step"><div class="t">1 · input</div><div class="v">the prompt</div></div>
     <div class="arrow">→</div>
     <div class="step"><div class="t">2 · rollout</div><div class="v">the model writes its own answer</div></div>
     <div class="arrow">→</div>
-    <div class="step accent"><div class="t">3 · verifier</div><div class="v">${esc(r.kind || "unknown")}</div></div>
+    <div class="step accent"><div class="t">3 · ${family === "rlaif" ? "LLM judge" : family === "rlvr" ? "verifier" : "scorer"}</div><div class="v">${esc(r.kind || "unknown")}</div></div>
     <div class="arrow">→</div>
     <div class="step"><div class="t">4 · reward</div><div class="v">score on that answer</div></div>
   </div>`;
@@ -833,16 +889,19 @@ function renderRLVR(rec, dataset){
 
   return `${chips(rec, dataset)}
     <section class="ctxsec">
+      <h3>${esc(familyInfo.label)}</h3>
+      <p class="kv">${esc(familyInfo.explain)}</p>
+      <p class="note">This prompt uses the scoring method shown below; other sources can use different reward types.</p>
       <h3>how this prompt trains the model</h3>
       ${flow}
       <p class="kv">${esc(kindInfo.explain || r.explain || "")}</p>
     </section>
     ${promptSection(rec)}
-    ${checks.length ? `<section class="ctxsec"><h3>what the verifier checks</h3>
+    ${checks.length ? `<section class="ctxsec"><h3>what the ${family === "rlaif" ? "judge receives" : "verifier checks"}</h3>
       ${checks.map(check).join("")}
-    </section>` : `<section class="ctxsec"><h3>what the verifier checks</h3>
+    </section>` : `<section class="ctxsec"><h3>what the ${family === "rlaif" ? "judge receives" : "verifier checks"}</h3>
       <p class="kv">This row stores no ground truth, constraint, or reference answer for the
-        verifier to read.</p></section>`}
+        scorer to read.</p></section>`}
     ${meter}
     ${roll.sample ? `<section class="ctxsec"><h3>one sampled rollout</h3>
       <details><summary>show the answer the reference model produced</summary>${textBlock(roll.sample.text, roll.sample.chars)}</details>
@@ -901,7 +960,7 @@ function openContext(rec, stage, dataset, stageName, link){
   }
   else dlg._backLink = dlg._modalHash = null;
   document.getElementById("ctxtitle").innerHTML =
-    `<i class="sw" style="background:${hueFor(stage)}"></i>${esc(stage.toUpperCase())} — ${esc(stageName)}`;
+    `<i class="sw" style="background:${hueFor(stage)}"></i>${esc(stage === "rlvr" ? REWARDS.families[rewardFamily(rec.reward?.kind)].label : stageLabel(stage))} — ${esc(stageName)}`;
   document.getElementById("ctxlede").textContent = STAGE_LEDE[stage] || "";
   const body = document.getElementById("ctxbody");
   body.innerHTML = (RENDER[stage] || RENDER.sft)(rec, dataset);
@@ -1337,7 +1396,7 @@ function treemapLayout(items, W, H, minSide = 3){
   return rects;
 }
 
-let REG, MANIFEST, LANG_NAMES = {}, REWARDS = {kinds:{}, mixes:{}}, DATA = {}, CTXMAPS = {};
+let REG, MANIFEST, LANG_NAMES = {}, REWARDS = {families:{}, kinds:{}, mixes:{}}, DATA = {}, CTXMAPS = {};
 const langName = c => LANG_NAMES[c] || c;
 const UNDET = "undetermined";
 
@@ -1595,7 +1654,7 @@ function tokenBudgetCard(m, rows){
   const postTokens = post.reduce((a, r) => a + r.tokens, 0);
   const share = postTokens / total;
   const legend = `<div class="legend" style="margin:0 0 14px">${sized.map(r =>
-    `<span class="k"><i style="background:${r.color}"></i>${esc(r.stage)}</span>`).join("")}</div>`;
+    `<span class="k"><i style="background:${r.color}"></i>${esc(stageLabel(r.stage))}</span>`).join("")}</div>`;
   // With no post-training stage sized there is no estimate to explain and no
   // share to lead with — the card is then just the corpus stages against each
   // other, which is still worth drawing.
@@ -1611,7 +1670,7 @@ function tokenBudgetCard(m, rows){
         in the order training happened; this is the same pipeline to scale.</div></div>` : ""}
     ${legend}`;
   stackedStrip(card, "text in each stage, in tokens", fmtTok(total) + " total", sized.map(r => ({
-    k: `${r.stage} — ${r.name}`, v: r.tokens, c: r.color,
+    k: `${stageLabel(r.stage)} — ${r.name}`, v: r.tokens, c: r.color,
     detail: `${fmtTok(r.tokens)} tokens${r.estimated ? " (estimated)" : ""}`,
   })));
   const sampledRows = rows.filter(r => r.sampled);
@@ -1619,7 +1678,7 @@ function tokenBudgetCard(m, rows){
     const totalSampled = sampledRows.reduce((a, r) => a + r.sampled, 0);
     stackedStrip(card, "examples and documents sampled for this page",
       num(totalSampled) + " sampled", sampledRows.map(r => ({
-        k: `${r.stage} — ${r.name}`, v: r.sampled, c: r.color,
+        k: `${stageLabel(r.stage)} — ${r.name}`, v: r.sampled, c: r.color,
         detail: `${num(r.sampled)} sampled` + (r.examples ? ` of ${num(r.examples)} examples (${(r.sampled/r.examples*100).toFixed(3)}%)` : " documents"),
       })));
     // A stage with tokens but no committed sample is missing from the second
@@ -1658,12 +1717,12 @@ function tokenBudgetCard(m, rows){
   grp.textContent = "the same tokens on a log axis";
   card.appendChild(grp);
   logChart(card, sized.map(r => ({
-    label: `${esc(r.stage.toUpperCase())}`,
+    label: `${esc(stageLabel(r.stage))}`,
     v: r.tokens, lo: r.lo, hi: r.hi, c: r.color,
     value: fmtTok(r.tokens),
     note: r.stage === "rlvr" ? "prompts only" : r.estimated ? "est" : "paper",
-    tip: `<b>${esc(r.stage)}</b> — ${esc(r.name)}<br>${fmtTok(r.tokens)} tokens`
-      + (r.stage === "rlvr" ? "<br>the prompt set only — RL's completions are generated during training and stored nowhere, so the tokens this stage actually processes cannot be counted from the data" : "")
+    tip: `<b>${esc(stageLabel(r.stage))}</b> — ${esc(r.name)}<br>${fmtTok(r.tokens)} tokens`
+      + (r.stage === "rlvr" ? "<br>the prompt set only — RL's training completions are generated during the run and are not released in full, so the tokens this stage actually processes cannot be counted from the data" : "")
       + (r.estimated
         ? `<br>estimated: ${num(Math.round(r.perExample))} tokens/example × ${num(r.examples)} examples`
           + (r.lo != null
@@ -1700,7 +1759,7 @@ function tokenBudgetCard(m, rows){
     + " These are tokens of text in each stage's data, not tokens processed during training."
     + " A DPO example's shared prompt is read once with each completion at training time and is"
     + " counted once here; an RL stage is only its prompts, because the completions RL actually"
-    + " trains on are generated during the run and stored nowhere. Read the RL bar as the size of"
+    + " trains on are generated during the run and are not released in full. Read the RL bar as the size of"
     + " the prompt set, not the size of the RL update.";
   card.appendChild(note);
   return card;
@@ -1724,7 +1783,7 @@ function fitCard(m, rows){
   const FIT_NOTE = {
     sft: "the assistant turns, reasoning span included",
     dpo: "both completions after the branch — chosen positively, rejected negatively",
-    rlvr: "nothing in the data — the response RL fits is generated during the run, scored by the verifier, and stored nowhere, so this share is 0% of the stored text rather than 0% of the update",
+    rlvr: "the full set of training responses is not released — RL generates and scores them during the run, so this share is 0% of the stored text rather than 0% of the update",
     chat: "nothing — a chat log is not a training example",
   };
   for (const r of usable){
@@ -1732,11 +1791,11 @@ function fitCard(m, rows){
     row.className = "row";
     const what = r.base ? "every token is a next-token target" : (FIT_NOTE[r.stage] || "");
     row.innerHTML = `
-      <div class="lbl">${esc(r.stage.toUpperCase())}</div>
+      <div class="lbl">${esc(stageLabel(r.stage))}</div>
       <div class="trackbar"><div class="fill ${r.fitShare ? "" : "zero"}" style="width:${r.fitShare*100}%;background:${r.color}"></div></div>
       <div class="val">${pct(r.fitShare)}${r.fitTokens ? ` <small>${fmtTok(r.fitTokens)} tok</small>` : ""}</div>`;
     hover(row.querySelector(".trackbar"),
-      `<b>${esc(r.stage)}</b> — ${esc(what)}`
+      `<b>${esc(stageLabel(r.stage))}</b> — ${esc(what)}`
       + (r.base ? "" : `<br>${num(Math.round(r.targetLengths.mean))} of ${num(Math.round(r.lengths.mean))} characters per example, on average`)
       + (r.fitTokens ? `<br>≈ ${fmtTok(r.fitTokens)} of ${fmtTok(r.tokens)} tokens` : ""));
     card.appendChild(row);
@@ -1759,8 +1818,8 @@ function lengthCard(m, rows){
       chart: a pretraining document, an SFT conversation and an RL prompt are three orders of
       magnitude apart.</p>`;
   for (const r of usable){
-    histRow(card, `${esc(r.stage.toUpperCase())}`, r.lengths, r.color,
-      `${r.stage} — ${r.base ? "documents" : "examples"}`);
+    histRow(card, `${esc(stageLabel(r.stage))}`, r.lengths, r.color,
+      `${stageLabel(r.stage)} — ${r.base ? "documents" : "examples"}`);
   }
   // Ticks sit on their own bin edge rather than being spread evenly: the bins
   // are equal-width, so an evenly spread label row would put "1M" a tenth of
@@ -1777,7 +1836,7 @@ function lengthCard(m, rows){
   const longest = usable.reduce((a, r) => r.lengths.max > a.lengths.max ? r : a);
   note.textContent = `Bars are counts within the sample, each row on its own vertical scale; the `
     + `median is printed beside it. The longest single item sampled is ${num(Math.round(longest.lengths.max))} `
-    + `characters, in ${longest.stage}. Anything past ${fmtChars(HIST_EDGES[11])} characters is counted in the last bin.`;
+    + `characters, in ${stageLabel(longest.stage)}. Anything past ${fmtChars(HIST_EDGES[11])} characters is counted in the last bin.`;
   card.appendChild(note);
   return card;
 }
@@ -1809,7 +1868,7 @@ function appendTreemap(parent, m, rows, corpusSummaries){
   const postTokens = post.reduce((a, r) => a + r.tokens, 0);
   const stages = base.map(r => ({...r, children: childrenOf(r, corpusSummaries)}));
   if (postTokens) stages.push({
-    stage: "post-training", name: post.map(r => r.stage).join(" + "), tokens: postTokens,
+    stage: "post-training", name: post.map(r => stageLabel(r.stage)).join(" + "), tokens: postTokens,
     color: hueFor(post[0].stage), estimated: true, children: null,
   });
 
@@ -1868,7 +1927,7 @@ function tile(item, x, y, w, h, color, kind, tipHtml){
   el.style.color = inkOn(color);
   if (kind === "child") el.style.boxShadow = "inset 0 0 0 1px var(--surface-1)";
   const fits = w > 74 && h > (kind === "head" ? 18 : 30);
-  if (fits) el.innerHTML = `<b>${esc(kind === "head" ? item.stage.toUpperCase() : item.stage)}</b>`
+  if (fits) el.innerHTML = `<b>${esc(kind === "head" ? stageLabel(item.stage) : item.stage)}</b>`
     + (kind === "head" || h > 42 ? `<span>${fmtTok(item.tokens)}${item.unit ? " " + item.unit : ""}</span>` : "");
   hover(el, tipHtml);
   return el;
@@ -2139,7 +2198,7 @@ async function crosstabCard(model, m, post, profiles, ctxFor, gen){
     const h = document.createElement("h3");
     h.className = "stage";
     h.style.setProperty("--bar", hueFor(s.stage));
-    h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())}
+    h.innerHTML = `<i class="sw"></i>${esc(stageLabel(s.stage))}
       <span class="ds">— ${esc(s.name)}${col ? ` · by <code>${esc(col)}</code>` : ""}</span>`;
     card.appendChild(h);
     if (!col){
@@ -2317,12 +2376,12 @@ async function budgetCard(main, model, slug){
     if (!st.measured){
       // "never asked" and "asked, but nothing came back that could be weighed"
       // are different facts about the stage.
-      tr.innerHTML = `<td>${esc(st.stage)}</td><td>${size}</td>`
+      tr.innerHTML = `<td>${esc(stageLabel(st.stage))}</td><td>${size}</td>`
         + `<td colspan="3">${esc(st.unusable || "never asked this question")}</td>`;
     } else {
       const ci = st.matching_tokens_ci
         ? `<span class="est">${tokens(st.matching_tokens_ci[0])}–${tokens(st.matching_tokens_ci[1])}</span>` : "";
-      tr.innerHTML = `<td>${esc(st.stage)}</td><td>${size}</td>`
+      tr.innerHTML = `<td>${esc(stageLabel(st.stage))}</td><td>${size}</td>`
         + `<td>${st.matched}/${st.n} · ${pct(st.count_rate)}</td>`
         + `<td>${pct(st.rate)}</td>`
         + `<td>${tokens(st.matching_tokens)}${ci}</td>`;
@@ -2412,7 +2471,7 @@ async function budgetCard(main, model, slug){
       + `The rollouts the policy was actually fit to are not in the published mix.`);
   }
   if (all.unsized.length) notes.push(`No size for ${all.unsized.join(", ")}; excluded from the total.`);
-  for (const st of est.stages) for (const n of (st.notes || [])) notes.push(`${st.stage}: ${n}`);
+  for (const st of est.stages) for (const n of (st.notes || [])) notes.push(`${stageLabel(st.stage)}: ${n}`);
   // The rate column is not one rule, because the correction that is right for
   // one sampling design double-counts on another. Which one applies is a
   // property of how a stage was *drawn*, not of what kind of stage it is: a
@@ -2515,7 +2574,7 @@ function stanceGroup(main, slug, rows, ctxFor, post, showQuestion){
   // scale, the bar widths, the percentages and the intervals — the ask and HHH
   // cards already show a no-labels state for it instead.
   for (const {stage} of rows.filter(r => !r.d.records.length)){
-    noLabels(card, `${stage.toUpperCase()} — every sampled example went unjudged, so there is no direction to show`);
+    noLabels(card, `${stageLabel(stage)} — every sampled example went unjudged, so there is no direction to show`);
   }
   const scored = rows.filter(r => r.d.records.length);
   const max = Math.max(...scored.flatMap(r => ["toward","away"].map(k => r.d.counts[k] / r.d.records.length)), 0.01);
@@ -2525,7 +2584,7 @@ function stanceGroup(main, slug, rows, ctxFor, post, showQuestion){
     const head = document.createElement("div");
     head.className = "lbl";
     head.style.cssText = "font-size:12px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);margin:14px 0 4px";
-    head.textContent = `${stage.toUpperCase()} — ${d.dataset.split("/")[1]} · net ${d.net > 0 ? "+" : ""}${d.net}`;
+    head.textContent = `${stageLabel(stage)} — ${d.dataset.split("/")[1]} · net ${d.net > 0 ? "+" : ""}${d.net}`;
     card.appendChild(head);
     for (const k of ["toward", "away", "neither"]){
       const c = d.counts[k], [lo, hi] = wilson(c, n);
@@ -2630,8 +2689,11 @@ async function renderModel(model, gen){
     if (STAGE_HUE[s.stage]) t.style.setProperty("--bar", STAGE_HUE[s.stage]);
     const size = s.tokens ? fmtTok(s.tokens) + " tok"
       : (sources && sources[s.stage] ? fmtEx(sources[s.stage].total) + " ex" : "—");
-    t.innerHTML = `<div class="k">${s.stage}</div><div class="v">${size}</div><div class="d">${s.name}</div>`;
+    const rewardGroups = s.stage === "rlvr" ? rewardComposition(sources?.[s.stage]) : null;
+    const rewardNames = rewardGroups ? Object.keys(rewardGroups).map(f => REWARDS.families[f].label).join(" + ") : "";
+    t.innerHTML = `<div class="k">${esc(stageLabel(s.stage))}</div><div class="v">${size}</div><div class="d">${s.name}${rewardNames ? " · " + esc(rewardNames) : ""}</div>`;
     const tipParts = [];
+    if (s.stage === "rlvr") tipParts.push("Reinforcement learning: each prompt uses its assigned programmatic scorer or AI judge.");
     if (sources && sources[s.stage] && !s.tokens) tipParts.push(`${sources[s.stage].total.toLocaleString()} examples`);
     if (s.note) tipParts.push(esc(s.note));
     tipParts.push(`<span style="color:var(--muted)">click to jump to this stage ↓</span>`);
@@ -2706,7 +2768,7 @@ async function renderModel(model, gen){
       const link = s.hf
         ? `<span class="chip link"><a href="https://huggingface.co/datasets/${escAttr(s.hf)}"
              target="_blank" rel="noopener">${esc(s.hf)} ↗</a></span>` : "";
-      div.innerHTML = `<h3 class="stage"><i class="sw" style="background:var(--baseline)"></i>${esc(s.stage.toUpperCase())}
+      div.innerHTML = `<h3 class="stage"><i class="sw" style="background:var(--baseline)"></i>${esc(stageLabel(s.stage))}
           <span class="ds">— ${esc(s.name)}${s.tokens ? " · " + fmtTok(s.tokens) + " tokens" : ""}</span>${link}</h3>
         <p class="kv" style="margin:2px 0 8px">${esc(s.note || "No further details recorded in the registry.")}</p>`;
       if (s.composition && s.composition.length){
@@ -2779,7 +2841,7 @@ async function renderModel(model, gen){
       const h = document.createElement("h3");
       h.className = "stage";
       h.id = "docs-" + s.stage;
-      h.innerHTML = `<i class="sw" style="background:var(--baseline)"></i>${esc(s.stage.toUpperCase())}
+      h.innerHTML = `<i class="sw" style="background:var(--baseline)"></i>${esc(stageLabel(s.stage))}
         <span class="ds">— ${esc(d.dataset)} · ${fmtTok(s.tokens)} tokens</span>`;
       card.appendChild(h);
 
@@ -2912,7 +2974,7 @@ async function renderModel(model, gen){
       h.style.setProperty("--bar", hueFor(s.stage));
       // Link the tree these counts were taken from, not just the dataset root:
       // "exact composition" is a claim about one revision, and `main` moves.
-      h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())}
+      h.innerHTML = `<i class="sw"></i>${esc(stageLabel(s.stage))}
         <span class="ds">— <a href="https://huggingface.co/datasets/${escAttr(st.dataset)}"
           target="_blank" rel="noopener">${esc(st.dataset)} ↗</a>${revLink(st)} (${st.total.toLocaleString()} examples)</span>`;
       mix.appendChild(h);
@@ -2928,47 +2990,11 @@ async function renderModel(model, gen){
           + `(${pct(denom/st.total)}) HuggingFace's stats API scanned, not all ${st.total.toLocaleString()}`;
         mix.appendChild(note);
       }
-      // RL mixes don't label their reward functions, but each mix has exactly
-      // one verifier, so when every value in a mix-name column is in the
-      // mix→verifier table the reward-type shares are exact — the same counts,
-      // grouped by what scores the response instead of where the prompt came from.
-      // Column stats can be sparse (nulls / long tails), so also require the
-      // counts to cover every row — otherwise "exact" would be a lie.
       if (s.stage === "rlvr"){
-        const mapped = st.partial ? null : Object.values(st.columns).find(freq => {
-          const vals = Object.keys(freq);
-          return vals.length && vals.every(v => REWARDS.mixes[v]) &&
-            vals.reduce((sum, v) => sum + freq[v], 0) === st.total;
-        });
-        if (mapped){
-          const agg = {};
-          for (const [v, c] of Object.entries(mapped)){
-            const mx = REWARDS.mixes[v];
-            if (!agg[mx.kind]) agg[mx.kind] = {count: 0, subjects: new Set()};
-            agg[mx.kind].count += c;
-            agg[mx.kind].subjects.add(mx.subject);
-          }
-          const sub = document.createElement("p");
-          sub.className = "stage-sub";
-          sub.textContent = "what scores the response — each mix below uses exactly one verifier, so these counts are exact";
-          mix.appendChild(sub);
-          const kinds = Object.entries(agg).sort((a, b) => b[1].count - a[1].count);
-          const maxk = Math.max(...kinds.map(([, g]) => g.count/denom));
-          for (const [kind, g] of kinds){
-            const f = g.count/denom;
-            const info = REWARDS.kinds[kind] || {};
-            const row = document.createElement("div");
-            row.className = "row";
-            row.style.setProperty("--bar", hueFor(s.stage));
-            row.innerHTML = `
-              <div class="lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(kind)}</div>
-              <div class="trackbar"><div class="fill" style="width:${f/maxk*100}%"></div></div>
-              <div class="val">${pct(f)} <small>${g.count.toLocaleString()}</small></div>`;
-            hover(row.querySelector(".trackbar"),
-              `<b>${esc(kind)}</b> — ${esc([...g.subjects].join(", "))}<br>${esc(info.explain || "")}<br>${g.count.toLocaleString()} of ${denom.toLocaleString()} (${pct(f)})`);
-            mix.appendChild(row);
-          }
-        }
+        const rewards = document.createElement("div");
+        rewards.innerHTML = renderRewardComposition(st);
+        wireTips(rewards);
+        mix.appendChild(rewards);
       }
       // The language column is drawn in the language card below instead, on the
       // same bars as the detector's own reading. Two breakdowns of the same
@@ -3058,7 +3084,7 @@ async function renderModel(model, gen){
     h.className = "stage";
     h.id = "hhh-" + s.stage;
     h.style.setProperty("--bar", hueFor(s.stage));
-    h.innerHTML = `<i class="sw"></i>${esc(s.stage.toUpperCase())} <span class="ds">— ${esc(s.name)}</span>`;
+    h.innerHTML = `<i class="sw"></i>${esc(stageLabel(s.stage))} <span class="ds">— ${esc(s.name)}</span>`;
     const sub = document.createElement("p");
     sub.className = "stage-sub";
     // Two things the count alone would hide. Some RLVR rows are labeled by
@@ -3112,7 +3138,7 @@ async function renderModel(model, gen){
     legend.className = "legend";
     legend.style.margin = "2px 0 8px";
     legend.innerHTML = perStage.map(p =>
-      `<span class="k"><i style="background:${hueFor(p.s.stage)};border-radius:50%"></i>${esc(p.s.stage)}</span>`).join("");
+      `<span class="k"><i style="background:${hueFor(p.s.stage)};border-radius:50%"></i>${esc(stageLabel(p.s.stage))}</span>`).join("");
     glance.appendChild(legend);
     let lastGrp = null;
     for (const l of LABELS){
@@ -3123,7 +3149,7 @@ async function renderModel(model, gen){
       }
       dotRow(glance, NICE[l], perStage.map(p => ({
         stage: p.s.stage, f: (p.counts[l]||0)/p.n, c: hueFor(p.s.stage),
-        tip: `<b>${p.s.stage}</b> · ${NICE[l]}<br>${p.counts[l]||0} of ${p.n} sampled prompts (${pct((p.counts[l]||0)/p.n)})`,
+        tip: `<b>${stageLabel(p.s.stage)}</b> · ${NICE[l]}<br>${p.counts[l]||0} of ${p.n} sampled prompts (${pct((p.counts[l]||0)/p.n)})`,
       })), max, VALUE_LABELS.has(l));
     }
     const axis = document.createElement("div");
@@ -3199,7 +3225,7 @@ async function renderModel(model, gen){
     // else, and left the number a reader wants to compare — English — to be
     // found by opening the stage and doing the subtraction.
     det.innerHTML = `<summary>
-      <i class="sw"></i><b>${esc(s.stage.toUpperCase())}</b>
+      <i class="sw"></i><b>${esc(stageLabel(s.stage))}</b>
       <span class="ds">— ${esc(s.name)}</span>
       <span class="ds">${esc(d.dataset)}${revLink(d)}</span>
       <span class="lsum"><em>${pct(enK/n)}</em> English${col ? ` here, ${pct(col.english)} by its own column` : ""} ·
@@ -3373,7 +3399,7 @@ async function renderModel(model, gen){
       const max = Math.max(...rows.map(r => r.ci[1]), 0.01);
       for (const r of rows){
         if (!r.n){
-          noLabels(card, `${r.stage.toUpperCase()} — every sampled item went unjudged, so there is no rate to show`);
+          noLabels(card, `${stageLabel(r.stage)} — every sampled item went unjudged, so there is no rate to show`);
           continue;
         }
         const s = post.find(p => p.stage === r.stage) || {stage: r.stage, hf_dataset: r.d.dataset, name: r.d.dataset};
@@ -3392,8 +3418,8 @@ async function renderModel(model, gen){
         const ciNote = clustered
           ? `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])} — widened for clustering, effective n ${r.nEff.toFixed(0)} of ${r.n} (documents drawn together are correlated)`
           : `<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`;
-        barRow(card, r.stage.toUpperCase() + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
-          `<b>${r.stage}</b> · ${esc(r.d.dataset)}${revLink(r.d)}<br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})${ciNote}${skipNote}<br>click to read them`,
+        barRow(card, stageLabel(r.stage) + " — " + r.d.dataset.split("/")[1], r.k/r.n, r.ci[0], r.ci[1], max,
+          `<b>${stageLabel(r.stage)}</b> · ${esc(r.d.dataset)}${revLink(r.d)}<br>${r.k} of ${r.n} sampled ${unit} match (${pct(r.k/r.n)})${ciNote}${skipNote}<br>click to read them`,
           false,
           r.d.records.filter(x => x.match), {...ctxFor(s), isCorpus, linkKey: "ask-" + slug});
       }
@@ -3801,7 +3827,7 @@ async function renderCompare(gen){
     if (!per.length && !missing.length) continue;
     const h = document.createElement("h3");
     h.className = "stage";
-    h.textContent = stage.toUpperCase();
+    h.textContent = stageLabel(stage);
     hhh.appendChild(h);
     // Say so when a legend model has no committed run for this stage, so a
     // partial experiment doesn't silently read as a complete comparison.
@@ -3901,7 +3927,7 @@ async function renderCompare(gen){
         if (!rows.length && !missing.length) continue;
         const h = document.createElement("h3");
         h.className = "stage";
-        h.textContent = stage.toUpperCase();
+        h.textContent = stageLabel(stage);
         card.appendChild(h);
         for (const m of missing){
           const p = document.createElement("p");
@@ -3921,7 +3947,7 @@ async function renderCompare(gen){
             continue;
           }
           barRow(card, shortName(r.m), r.k/r.n, r.ci[0], r.ci[1], max,
-            `<b>${r.m}</b> · ${stage}${revLink(r.d)}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`
+            `<b>${r.m}</b> · ${stageLabel(stage)}${revLink(r.d)}<br>${r.k} of ${r.n} sampled prompts match (${pct(r.k/r.n)})<br>95% CI ${pct(r.ci[0])}–${pct(r.ci[1])}`
             + (r.skipped ? `<br>${esc(r.skipped.text)}` : "") + `<br>click to read them`,
             false,
             r.d.records.filter(x => x.match), {...ctxOf(r.m, stage, r.d.dataset), linkKey: `${r.m}.ask-${slug}`}, color(r.m));
@@ -4149,7 +4175,7 @@ function hitBlock(hit, file, query){
   el.style.setProperty("--bar", hueFor(file.stage));
   const source = (rec.meta && rec.meta.dataset_source) || rec.source || file.dataset;
   const tags = [
-    `<span class="prov">${esc(file.stage.toUpperCase())}</span>`,
+    `<span class="prov">${esc(file.stage === "rlvr" ? REWARDS.families[rewardFamily(rec.reward?.kind)].label : stageLabel(file.stage))}</span>`,
     `<span>${esc(source)}${rec.topic ? " · " + esc(niceGroup(rec.topic)) : ""}</span>`,
   ];
   if (fields.length > 1) tags.push(`<span>${fields.length} fields matched</span>`);
@@ -4229,7 +4255,7 @@ async function renderSearch(query, gen){
 
   let matched = 0, filesWithHits = 0, done = 0, censored = 0;
   for (const file of candidates){
-    progress.textContent = `reading ${file.model} ${file.stage} (${++done} of ${candidates.length})…`;
+    progress.textContent = `reading ${file.model} ${stageLabel(file.stage)} (${++done} of ${candidates.length})…`;
     const data = await getData(file.name);
     if (gen !== GEN) return;
     if (!data) continue;
@@ -4246,7 +4272,7 @@ async function renderSearch(query, gen){
     const h = document.createElement("h3");
     h.className = "stage";
     h.style.setProperty("--bar", hueFor(file.stage));
-    h.innerHTML = `<i class="sw"></i>${esc(file.model)} · ${esc(file.stage.toUpperCase())}
+    h.innerHTML = `<i class="sw"></i>${esc(file.model)} · ${esc(stageLabel(file.stage))}
       <span class="ds">— ${hits.length} of ${data.records.length} sampled
         ${file.corpus ? "documents" : "examples"}</span>`;
     card.appendChild(h);
@@ -4508,8 +4534,10 @@ export async function boot(){
 // What the tests reach for. The page itself only needs boot(); the rest is
 // exported so tests/site can import the functions the browser runs rather than
 // a copy lifted out of the file.
-export { diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, searchFields, scanRecords, branchPoint, matchIndex };
+export { stageLabel, rewardFamily, rewardComposition, renderRewardComposition, renderRLVR, diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, searchFields, scanRecords, branchPoint, matchIndex };
 // The language card reads its display names from a module-scope cache boot()
 // fills from language-names.json; nothing serves that file under node, so the
 // tests set it through here.
 export function setLangNames(v){ LANG_NAMES = v; LANG_CODES = null; }
+
+export function setRewards(v){ REWARDS = v; }

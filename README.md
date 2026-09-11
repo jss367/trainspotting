@@ -17,7 +17,7 @@ Each is a command; each is a layer of the same audit.
 
 | Layer | Command | What it says |
 |---|---|---|
-| Facts | `facts` | Stage sizes for the whole pipeline (pretrain → midtrain → long-context → SFT → DPO → RLVR). |
+| Facts | `facts` | Stage sizes for the whole pipeline (pretrain → midtrain → long-context → SFT → DPO → reinforcement learning). |
 | Sources | `sources` | Exact composition of each post-training mix, from precomputed column statistics. |
 | Values | `classify`, `ask` | How much of the post-training data is about being helpful, honest and harmless versus skill content, by sampling prompts and labeling them with Claude. |
 | Language | `languages` | Which natural language each sampled prompt is in, detected locally. |
@@ -34,6 +34,17 @@ Each is a command; each is a layer of the same audit.
 
 Full descriptions, worked examples and the result-file formats are in
 [docs/commands.md](docs/commands.md).
+
+The Olmo 3 Instruct and Think pipelines' final stage mixes **RLVR** (reinforcement
+learning with verifiable, programmatic rewards) and **RLAIF** (reinforcement
+learning from AI feedback, using an LLM judge). They train the same policy
+within one stage after preference tuning; neither is a later stage than the
+other. The site separates these reward families in the mix composition and
+individual examples. Prompt counts describe the released dataset, not shares
+of training updates. See the [Olmo 3 reward design](https://arxiv.org/html/2512.13961v2#S4.SS4.SSS1).
+The historical `rlvr` identifier remains in CLI arguments, data paths, and
+permalinks for this shared stage. The RL-Zero models train directly from the
+base model; their reward families depend on the selected domain.
 
 ## Install
 
