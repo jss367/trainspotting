@@ -29,10 +29,10 @@ def refresh(tmp_path):
     )
     python.chmod(0o755)
 
-    def write(directory, stage, slug, question, kind="ask"):
+    def write(directory, stage, slug, question, kind="ask", **metadata):
         path = tmp_path / directory / f"target.{stage}.{kind}-{slug}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"question": question}))
+        path.write_text(json.dumps({"question": question, **metadata}))
 
     def run():
         result = subprocess.run(
@@ -110,3 +110,22 @@ def test_dataset_stage_does_not_receive_a_corpus_flag(refresh):
     write, run = refresh
     write("results", "chat", "topic", "chat wording")
     assert run() == [["ask", "target", "chat wording", "--slug", "topic", "--stage", "chat"]]
+
+
+@pytest.mark.parametrize("kind", ["ask", "stance"])
+def test_refresh_preserves_the_saved_classifier_from_the_preferred_copy(refresh, kind):
+    write, run = refresh
+    write("docs/data", "sft", "topic", "old wording", kind=kind, classifier="old-judge")
+    write("results", "sft", "topic", "saved wording", kind=kind, classifier="alternate-judge")
+    assert run() == [[
+        kind, "target", "saved wording", "--slug", "topic", "--stage", "sft",
+        "--classifier", "alternate-judge",
+    ]]
+
+
+@pytest.mark.parametrize("kind", ["ask", "stance"])
+@pytest.mark.parametrize("metadata", [{}, {"classifier": None}])
+def test_legacy_questions_without_a_classifier_keep_the_cli_default(refresh, kind, metadata):
+    write, run = refresh
+    write("results", "sft", "topic", "legacy wording", kind=kind, **metadata)
+    assert run() == [[kind, "target", "legacy wording", "--slug", "topic", "--stage", "sft"]]

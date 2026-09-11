@@ -51,7 +51,8 @@ fi
 if [[ "$PHASE" == all || "$PHASE" == asks ]]; then
   # Every question already asked of this target, by slug, with the wording the
   # committed file recorded. Rewording a question is a different measurement,
-  # so the text is read back out of the result rather than typed here.
+  # so the text and classifier are read back out of the result. Legacy files
+  # without a classifier use the CLI default.
   # One run per stage and slug, however many copies (results/ and docs/data/)
   # name it. Keep each question in its existing stages: expanding a corpus-only
   # question to post-training would pay for an unrelated measurement.
@@ -73,7 +74,9 @@ if [[ "$PHASE" == all || "$PHASE" == asks ]]; then
       done
       seen_runs+=("$run")
       question=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["question"])' "$f")
+      classifier=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("classifier") or "")' "$f")
       args=("$kind" "$TARGET" "$question" --slug "$slug" --stage "$stage")
+      if [[ -n "$classifier" ]]; then args+=(--classifier "$classifier"); fi
       if [[ "$kind" == ask ]]; then
         case "$stage" in
           pretrain|midtrain|long-context) args+=(--pretrain-only) ;;
