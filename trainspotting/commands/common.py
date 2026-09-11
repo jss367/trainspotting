@@ -7,6 +7,7 @@ import sys
 from datetime import datetime, timezone
 
 from .. import extract, hf, registry
+from ..redact import redact_credentials
 
 
 def _fmt_tokens(n: int) -> str:
@@ -108,7 +109,7 @@ def _sample_prompts(stage, sample, seed):
 def _write_json(path, payload):
     """Write a result file, creating results/ if this is the first one."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2))
+    path.write_text(redact_credentials(json.dumps(payload, indent=2)))
     return path
 
 

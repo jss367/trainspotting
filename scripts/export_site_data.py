@@ -15,7 +15,6 @@ box avoids downloading them all.
 import json
 import math
 import re
-import shutil
 import sys
 from pathlib import Path
 
@@ -30,6 +29,7 @@ from trainspotting import (  # noqa: E402
     paths,
     registry,
     rewards,
+    redact,
     searchindex,
 )
 
@@ -120,9 +120,9 @@ for f in sorted((ROOT / "results").glob("*.json")):
     if ".budget-" in f.name or any(marker in f.name for marker in UNRENDERED):
         continue
     if f.name.endswith(BULK):
-        (out / f.name).write_text(json.dumps(json.loads(f.read_text()), separators=(",", ":")))
+        (out / f.name).write_text(redact.redact_credentials(json.dumps(json.loads(f.read_text()), separators=(",", ":"))))
     else:
-        shutil.copy(f, out / f.name)
+        (out / f.name).write_text(redact.redact_credentials(f.read_text()))
     total += (out / f.name).stat().st_size
     copied.append(f.name)
 
@@ -132,6 +132,13 @@ for f in sorted((ROOT / "results").glob("*.json")):
 # written means the summaries always describe the sample the site actually
 # serves, instead of going stale the moment a re-sample lands from another
 # machine.
+for f in sorted(out.glob("*.json")):
+    if f.name.endswith(BULK):
+        original = f.read_text()
+        cleaned = redact.redact_credentials(original)
+        if cleaned != original:
+            f.write_text(cleaned)
+
 derived = []
 
 # Significant digits kept for a derived float. Everything under this heading is

@@ -312,3 +312,12 @@ sampling run that quietly labels nothing.
   [release blog](https://allenai.org/blog/olmo3); Pythia's from the Pythia paper
   ([arXiv:2304.01373](https://arxiv.org/abs/2304.01373)) and the Pile paper
   ([arXiv:2101.00027](https://arxiv.org/abs/2101.00027)).
+
+## Redacted credentials in sampled text
+
+Stored examples replace Discord bot tokens with `[REDACTED_DISCORD_TOKEN]`.
+The result writer and site exporter apply this targeted redaction because public
+training data can contain credentials. Dataset revisions, row identifiers,
+original character counts, and existing classifier judgments remain unchanged;
+the marker changes only the displayed text. Other types of credentials are not
+covered by this detector.
