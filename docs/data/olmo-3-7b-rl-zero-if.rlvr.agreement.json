@@ -1,12 +1,14 @@
 {
   "dataset": "allenai/Dolci-RL-Zero-IF-7B",
   "labels_run": {
+    "dataset": "allenai/Dolci-RL-Zero-IF-7B",
+    "revision": "c96e4e424c0a5d416f725c488ec7c61b7f758d85",
+    "system_sha": "63d6567dac43",
+    "classifier": "claude-opus-5",
     "sample": 1000,
     "seed": 0,
-    "classifier": "claude-opus-5",
-    "system_sha": "63d6567dac43",
-    "revision": "c96e4e424c0a5d416f725c488ec7c61b7f758d85",
-    "generated": "2026-09-08T16:47:32+00:00"
+    "generated": "2026-09-08T16:47:32+00:00",
+    "revision_moved_to": null
   },
   "replicate": {
     "n": 0,
@@ -20,9 +22,21 @@
     "confusion": {},
     "per_label": {},
     "unpaired": 0,
-    "shares": {},
+    "shares": {
+      "instruction_following": {
+        "first": 1.0,
+        "second": 1.0
+      }
+    },
+    "dataset": "allenai/Dolci-RL-Zero-IF-7B",
+    "revision": "c96e4e424c0a5d416f725c488ec7c61b7f758d85",
+    "system_sha": "63d6567dac43",
     "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
     "generated": "2026-09-08T19:46:54+00:00",
-    "same_draw": true
+    "revision_moved_to": null,
+    "same_draw": true,
+    "comparison_issues": []
   }
 }

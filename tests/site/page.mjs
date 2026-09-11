@@ -19,6 +19,7 @@ const ROOT = path.resolve(import.meta.dirname, "..", "..");
 // Every name a suite asks for, collected in one place so a rename fails loudly
 // here rather than as `undefined is not a function` halfway through a suite.
 const EXPORTS = [
+  "stabilityNote",
   "stageLabel", "rewardFamily", "rewardComposition", "renderRewardComposition", "renderRLVR", "setRewards",
   // the DPO gradient panel
   "diffPair", "opChars", "uniqueChars", "sideText", "sideCut", "demotePrefix",

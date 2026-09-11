@@ -113,7 +113,8 @@ def compare(first: list[dict], second: list[dict]) -> dict:
     rather than as disagreements: a refusal on the second pass is a fact about
     coverage, and the agreement figure should be about the labels both runs
     committed to. Verifier-settled rows are fixed by construction and are
-    left out, so they cannot inflate the agreement.
+    left out of agreement statistics, so they cannot inflate agreement.
+    Headline shares include every labeled row, including verifier-settled rows.
     """
     a = {_join_key(r): r["label"] for r in first if r.get("label") and r.get("by") != "verifier"}
     b = {_join_key(r): r["label"] for r in second if r.get("label") and r.get("by") != "verifier"}
@@ -124,12 +125,14 @@ def compare(first: list[dict], second: list[dict]) -> dict:
     # What a rerun does to the headline: the share of each label, both times.
     # A kappa of 0.8 can hide a share that moved by a third if the flips all
     # land on one rare label, and the share is what the site prints.
+    all_a = [r["label"] for r in first if r.get("label")]
+    all_b = [r["label"] for r in second if r.get("label")]
     out["shares"] = {
         label: {
-            "first": sum(v == label for v in a.values()) / len(a) if a else None,
-            "second": sum(v == label for v in b.values()) / len(b) if b else None,
+            "first": sum(v == label for v in all_a) / len(all_a) if all_a else None,
+            "second": sum(v == label for v in all_b) / len(all_b) if all_b else None,
         }
         for label in LABELS
-        if any(v == label for v in a.values()) or any(v == label for v in b.values())
+        if label in all_a or label in all_b
     }
     return out

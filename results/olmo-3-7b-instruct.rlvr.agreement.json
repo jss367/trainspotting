@@ -1,12 +1,14 @@
 {
   "dataset": "allenai/Dolci-Instruct-RL",
   "labels_run": {
+    "dataset": "allenai/Dolci-Instruct-RL",
+    "revision": "1a8d79b1012d77e4bb1fd7f699c5c7eb33ef931e",
+    "system_sha": "63d6567dac43",
+    "classifier": "claude-opus-5",
     "sample": 1000,
     "seed": 0,
-    "classifier": "claude-opus-5",
-    "system_sha": "63d6567dac43",
-    "revision": "1a8d79b1012d77e4bb1fd7f699c5c7eb33ef931e",
-    "generated": "2026-09-08T21:11:55+00:00"
+    "generated": "2026-09-08T21:11:55+00:00",
+    "revision_moved_to": null
   },
   "replicate": {
     "n": 821,
@@ -94,36 +96,43 @@
     "unpaired": 17,
     "shares": {
       "harmlessness": {
-        "first": 0.0097442143727162,
-        "second": 0.00954653937947494
+        "first": 0.008238928939237899,
+        "second": 0.008097165991902834
       },
       "honesty": {
-        "first": 0.024360535931790498,
-        "second": 0.025059665871121718
+        "first": 0.02059732234809475,
+        "second": 0.02125506072874494
       },
       "helpfulness": {
-        "first": 0.20341047503045068,
-        "second": 0.20047732696897375
+        "first": 0.17198764160659114,
+        "second": 0.1700404858299595
       },
       "capability": {
-        "first": 0.730816077953715,
-        "second": 0.7291169451073986
+        "first": 0.6179196704428425,
+        "second": 0.618421052631579
       },
       "instruction_following": {
-        "first": 0.030450669914738125,
-        "second": 0.028639618138424822
+        "first": 0.18022657054582905,
+        "second": 0.17611336032388664
       },
       "tool_use": {
-        "first": 0.001218026796589525,
-        "second": 0.0011933174224343676
+        "first": 0.0010298661174047373,
+        "second": 0.0010121457489878543
       },
       "other": {
         "first": 0.0,
-        "second": 0.0059665871121718375
+        "second": 0.005060728744939271
       }
     },
+    "dataset": "allenai/Dolci-Instruct-RL",
+    "revision": "1a8d79b1012d77e4bb1fd7f699c5c7eb33ef931e",
+    "system_sha": "63d6567dac43",
     "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
     "generated": "2026-09-08T18:44:08+00:00",
-    "same_draw": true
+    "revision_moved_to": null,
+    "same_draw": true,
+    "comparison_issues": []
   }
 }

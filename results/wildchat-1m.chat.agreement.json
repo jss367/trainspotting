@@ -1,12 +1,14 @@
 {
   "dataset": "allenai/WildChat-1M",
   "labels_run": {
+    "dataset": "allenai/WildChat-1M",
+    "revision": "7d6490e462285cf85d91eabea0f9a954fbddcd1f",
+    "system_sha": "d164ae2f6ec0",
+    "classifier": "claude-opus-5",
     "sample": 1000,
     "seed": 0,
-    "classifier": "claude-opus-5",
-    "system_sha": "d164ae2f6ec0",
-    "revision": "7d6490e462285cf85d91eabea0f9a954fbddcd1f",
-    "generated": "2026-09-09T00:36:54+00:00"
+    "generated": "2026-09-09T00:36:54+00:00",
+    "revision_moved_to": null
   },
   "replicate": {
     "n": 995,
@@ -127,8 +129,15 @@
         "second": 0.020080321285140562
       }
     },
+    "dataset": "allenai/WildChat-1M",
+    "revision": "7d6490e462285cf85d91eabea0f9a954fbddcd1f",
+    "system_sha": "d164ae2f6ec0",
     "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
     "generated": "2026-09-08T19:27:00+00:00",
-    "same_draw": true
+    "revision_moved_to": null,
+    "same_draw": true,
+    "comparison_issues": []
   }
 }

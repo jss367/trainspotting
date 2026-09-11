@@ -1,12 +1,14 @@
 {
   "dataset": "allenai/Dolci-Think-DPO-32B",
   "labels_run": {
+    "dataset": "allenai/Dolci-Think-DPO-32B",
+    "revision": "0898aac9657c0fa79b02c0e91627b370bed2a127",
+    "system_sha": "63d6567dac43",
+    "classifier": "claude-opus-5",
     "sample": 1000,
     "seed": 0,
-    "classifier": "claude-opus-5",
-    "system_sha": "63d6567dac43",
-    "revision": "0898aac9657c0fa79b02c0e91627b370bed2a127",
-    "generated": "2026-09-08T23:54:51+00:00"
+    "generated": "2026-09-08T23:54:51+00:00",
+    "revision_moved_to": null
   },
   "replicate": {
     "n": 995,
@@ -112,8 +114,15 @@
         "second": 0.001004016064257028
       }
     },
+    "dataset": "allenai/Dolci-Think-DPO-32B",
+    "revision": "0898aac9657c0fa79b02c0e91627b370bed2a127",
+    "system_sha": "63d6567dac43",
     "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
     "generated": "2026-09-08T19:05:57+00:00",
-    "same_draw": true
+    "revision_moved_to": null,
+    "same_draw": true,
+    "comparison_issues": []
   }
 }

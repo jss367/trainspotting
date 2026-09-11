@@ -1,12 +1,14 @@
 {
   "dataset": "allenai/Dolci-Think-SFT-32B",
   "labels_run": {
+    "dataset": "allenai/Dolci-Think-SFT-32B",
+    "revision": "7668c638cc84100951973b456069a1a462d6d915",
+    "system_sha": "63d6567dac43",
+    "classifier": "claude-opus-5",
     "sample": 1000,
     "seed": 0,
-    "classifier": "claude-opus-5",
-    "system_sha": "63d6567dac43",
-    "revision": "7668c638cc84100951973b456069a1a462d6d915",
-    "generated": "2026-09-08T23:49:08+00:00"
+    "generated": "2026-09-08T23:49:08+00:00",
+    "revision_moved_to": null
   },
   "replicate": {
     "n": 996,
@@ -115,8 +117,15 @@
         "second": 0.002004008016032064
       }
     },
+    "dataset": "allenai/Dolci-Think-SFT-32B",
+    "revision": "7668c638cc84100951973b456069a1a462d6d915",
+    "system_sha": "63d6567dac43",
     "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
     "generated": "2026-09-08T18:56:14+00:00",
-    "same_draw": true
+    "revision_moved_to": null,
+    "same_draw": true,
+    "comparison_issues": []
   }
 }

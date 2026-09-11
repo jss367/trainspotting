@@ -16,6 +16,23 @@ from ..paths import RESULTS
 from .common import _select_stages, _write_json
 
 
+PROVENANCE = ("dataset", "revision", "system_sha", "classifier", "sample", "seed")
+
+
+def _comparison_issues(first, second):
+    """Matching row numbers establish repeatability only for a known instrument/draw."""
+    issues = []
+    for key in PROVENANCE:
+        a, b = first.get(key), second.get(key)
+        if a is None or a == "" or b is None or b == "":
+            issues.append(f"unknown {key}")
+        elif a != b:
+            issues.append(f"different {key}")
+    if first.get("revision_moved_to") or second.get("revision_moved_to"):
+        issues.append("dataset revision moved during a run")
+    return issues
+
+
 def _load(path):
     return json.loads(path.read_text())
 
@@ -45,24 +62,24 @@ def cmd_agreement(args):
             continue
         labels, rep = _load(labels_path), _load(rep_path)
         compared = agreement.compare(labels["records"], rep["records"])
-        compared["classifier"] = rep.get("classifier")
-        compared["generated"] = rep.get("generated")
-        # Only rows both runs drew compare, so a replicate at another --sample
-        # or --seed is a smaller check than it looks; say so rather than let
-        # the pair count stand in for the sample size.
-        compared["same_draw"] = (rep.get("sample"), rep.get("seed")) == (
-            labels.get("sample"),
-            labels.get("seed"),
-        )
+        # Raw intersecting-row statistics remain available for inspection, but
+        # unknown or changed provenance cannot establish repeatability.
+        issues = _comparison_issues(labels, rep)
+        compared.update({k: rep.get(k) for k in (*PROVENANCE, "generated", "revision_moved_to")})
+        compared["same_draw"] = not issues
+        compared["comparison_issues"] = issues
         out = {
-            "dataset": labels["dataset"],
+            "dataset": labels.get("dataset"),
             "labels_run": {
-                k: labels.get(k) for k in ("sample", "seed", "classifier", "system_sha", "revision", "generated")
+                k: labels.get(k) for k in (*PROVENANCE, "generated", "revision_moved_to")
             },
             "replicate": compared,
         }
         path = _write_json(RESULTS / f"{args.target}.{s['stage']}.agreement.json", out)
-        note = "" if compared["same_draw"] else "\n  note: the replicate was drawn with a different --sample/--seed; only shared rows compare"
+        note = "" if not issues else (
+            "\n  note: not a repeatability check: " + "; ".join(issues)
+            + "; statistics join shared row identifiers only"
+        )
         print(
             f"{s['stage']}: vs a second run of {rep.get('classifier')}: {_fmt(compared)}{note}\n  -> {path}",
             file=sys.stderr,

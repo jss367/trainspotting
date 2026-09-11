@@ -50,6 +50,25 @@ class TestCompare:
             r["by"] = "verifier"
         c = agreement.compare(first, second)
         assert c["n"] == 1 and c["agree"] == 0
+        assert c["shares"]["instruction_following"] == {"first": 5 / 6, "second": 5 / 6}
+        assert c["shares"]["honesty"] == {"first": 1 / 6, "second": 0}
+        assert c["shares"]["helpfulness"] == {"first": 0, "second": 1 / 6}
+
+    def test_all_verifier_run_has_headline_shares_but_no_agreement(self):
+        records = _records(["instruction_following"] * 3)
+        for record in records:
+            record["by"] = "verifier"
+        c = agreement.compare(records, records)
+        assert c["n"] == 0 and c["accuracy"] is None and c["kappa"] is None
+        assert c["shares"] == {"instruction_following": {"first": 1, "second": 1}}
+
+    def test_headline_counts_all_records_despite_legacy_join_key_collisions(self):
+        first = [{"prompt": "same", "label": label} for label in ["honesty", "capability"]]
+        second = [{"prompt": "same", "label": "honesty"}]
+        c = agreement.compare(first, second)
+        assert c["shares"]["honesty"] == {"first": 0.5, "second": 1}
+        assert c["shares"]["capability"] == {"first": 0.5, "second": 0}
+
 
     def test_shares_show_what_a_rerun_does_to_the_headline(self):
         first = _records(["honesty", "honesty", "capability", "capability"])

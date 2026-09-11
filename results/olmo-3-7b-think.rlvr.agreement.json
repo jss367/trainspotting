@@ -1,12 +1,14 @@
 {
   "dataset": "allenai/Dolci-Think-RL-7B",
   "labels_run": {
+    "dataset": "allenai/Dolci-Think-RL-7B",
+    "revision": "0fb6466d31ef3a9dd16985ef635e6429e05a6491",
+    "system_sha": "63d6567dac43",
+    "classifier": "claude-opus-5",
     "sample": 1000,
     "seed": 0,
-    "classifier": "claude-opus-5",
-    "system_sha": "63d6567dac43",
-    "revision": "0fb6466d31ef3a9dd16985ef635e6429e05a6491",
-    "generated": "2026-09-08T17:37:14+00:00"
+    "generated": "2026-09-08T17:37:14+00:00",
+    "revision_moved_to": null
   },
   "replicate": {
     "n": 626,
@@ -81,32 +83,39 @@
     "unpaired": 14,
     "shares": {
       "harmlessness": {
-        "first": 0.0046875,
-        "second": 0.004792332268370607
+        "first": 0.003,
+        "second": 0.0030425963488843813
       },
       "honesty": {
-        "first": 0.0109375,
-        "second": 0.007987220447284345
+        "first": 0.007,
+        "second": 0.005070993914807302
       },
       "helpfulness": {
-        "first": 0.1140625,
-        "second": 0.12300319488817892
+        "first": 0.073,
+        "second": 0.07809330628803246
       },
       "capability": {
-        "first": 0.853125,
-        "second": 0.8482428115015974
+        "first": 0.546,
+        "second": 0.5385395537525355
       },
       "instruction_following": {
-        "first": 0.015625,
-        "second": 0.01597444089456869
+        "first": 0.37,
+        "second": 0.3752535496957404
       },
       "other": {
-        "first": 0.0015625,
+        "first": 0.001,
         "second": 0.0
       }
     },
+    "dataset": "allenai/Dolci-Think-RL-7B",
+    "revision": "0fb6466d31ef3a9dd16985ef635e6429e05a6491",
+    "system_sha": "63d6567dac43",
     "classifier": "claude-opus-5",
+    "sample": 1000,
+    "seed": 0,
     "generated": "2026-09-08T18:13:13+00:00",
-    "same_draw": true
+    "revision_moved_to": null,
+    "same_draw": true,
+    "comparison_issues": []
   }
 }

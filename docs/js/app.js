@@ -2623,21 +2623,30 @@ function part(title, note){
 // of itself over the same draw (`classify --replicate`, then `agreement`).
 // Nothing is shown for a stage nobody has checked — an absent line is the
 // honest state, not a default of "fine".
-async function agreementNote(model, stage){
+function stabilityNote(a, labels){
+  const r = a?.replicate;
+  if (!r?.n || r.same_draw !== true || r.comparison_issues?.length) return null;
+  // A saved check can outlive the main labels run it qualified. Only display
+  // it beside that run, with known, matching provenance on both sides.
+  const keys = ["dataset", "revision", "system_sha", "classifier", "sample", "seed"];
+  if (!labels || !a.labels_run || labels.revision_moved_to
+      || a.labels_run.revision_moved_to || r.revision_moved_to) return null;
+  if (keys.some(k => labels[k] == null || labels[k] === ""
+      || labels[k] !== a.labels_run[k] || labels[k] !== r[k])) return null;
+  if (!labels.generated || labels.generated !== a.labels_run.generated) return null;
+  const kappa = r.kappa == null ? "κ undefined" : `κ ${r.kappa.toFixed(2)}`;
+  return `<b>Stability check</b> — a second run of ${esc(r.classifier)} over the same `
+    + `${num(r.n)} prompts agreed with the first on <b>${pct(r.accuracy)}</b>, ${kappa}.`;
+}
+
+async function agreementNote(model, stage, labels){
   const name = `${model}.${stage}.agreement.json`;
   if (!MANIFEST.includes(name)) return null;
-  const a = await getData(name);
-  if (!a) return null;
-  const kappa = x => x == null ? "κ undefined" : `κ ${x.toFixed(2)}`;
-  const parts = [];
-  if (a.replicate && a.replicate.n)
-    parts.push(`a second run of ${esc(a.replicate.classifier || "the classifier")} over the same `
-      + `${num(a.replicate.n)} prompts agreed with the first on <b>${pct(a.replicate.accuracy)}</b>, `
-      + `${kappa(a.replicate.kappa)}`);
-  if (!parts.length) return null;
+  const note = stabilityNote(await getData(name), labels);
+  if (!note) return null;
   const p = document.createElement("p");
   p.className = "stage-sub";
-  p.innerHTML = `<b>Stability check</b> — ${parts.join("; ")}.`;
+  p.innerHTML = note;
   return p;
 }
 
@@ -3104,7 +3113,7 @@ async function renderModel(model, gen){
     sub.innerHTML = `${esc(d.dataset)}${revLink(d)} · ${who}`
       + (skipped ? ` · <b>${skipped}</b> unlabeled${why ? ` (${esc(why)})` : ""} and excluded` : "");
     hhh.append(h, sub);
-    const check = await agreementNote(model, s.stage);
+    const check = await agreementNote(model, s.stage, d);
     if (gen !== GEN) return;
     if (check) hhh.appendChild(check);
     if (!n){
@@ -4534,7 +4543,7 @@ export async function boot(){
 // What the tests reach for. The page itself only needs boot(); the rest is
 // exported so tests/site can import the functions the browser runs rather than
 // a copy lifted out of the file.
-export { stageLabel, rewardFamily, rewardComposition, renderRewardComposition, renderRLVR, diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, searchFields, scanRecords, branchPoint, matchIndex };
+export { stabilityNote, stageLabel, rewardFamily, rewardComposition, renderRewardComposition, renderRLVR, diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, searchFields, scanRecords, branchPoint, matchIndex };
 // The language card reads its display names from a module-scope cache boot()
 // fills from language-names.json; nothing serves that file under node, so the
 // tests set it through here.
