@@ -421,6 +421,29 @@
   .striprow .t em { font-style: normal; color: var(--muted); }
   .striprow .strip { height: 18px; margin: 0; }
   .striprow .strip > div { cursor: default; }
+  .striprow .t .tr { display: inline-flex; align-items: center; gap: 10px; }
+  /* bar / pie. Small enough to read as a control on the chart rather than as
+     navigation, which is what the page's other pills are. */
+  .viewpick { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px;
+    background: var(--track); }
+  .viewpick button {
+    font: inherit; font-size: 11px; font-weight: 600; letter-spacing: .02em;
+    padding: 2px 9px; border: 0; border-radius: 999px; cursor: pointer;
+    background: none; color: var(--muted); transition: color .15s, background .15s;
+  }
+  .viewpick button:hover { color: var(--text-primary); }
+  .viewpick button[aria-pressed="true"] { background: var(--surface-1); color: var(--text-primary); }
+  /* The pie is the same numbers as the strip above it, so it keeps the strip's
+     width and sits at the left edge rather than centred in the card. */
+  .piewrap { margin: 4px 0 0; }
+  .pie { width: 190px; height: 190px; display: block; overflow: visible; }
+  /* A 1.5px surface stroke is the pie's version of the strip's 2px gap: it
+     separates adjacent fills without adding a colour of its own. */
+  .pie path { stroke: var(--surface-1); stroke-width: 1.5; stroke-linejoin: round; }
+  .pie text {
+    font-size: 11px; font-weight: 650; text-anchor: middle; dominant-baseline: middle;
+    pointer-events: none; font-variant-numeric: tabular-nums;
+  }
   /* ---- log axis ---- */
   .logwrap { position: relative; padding-bottom: 18px; margin-top: 10px; }
   /* Offsets are the .row grid: the 170px label column plus its 10px gap on the

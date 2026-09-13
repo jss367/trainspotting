@@ -344,7 +344,7 @@ The site draws four things from that:
 
 | View | What it says |
 |---|---|
-| **Where the token budget went** | Every stage on one strip to scale, and again on a log axis. Corpus tokens are the paper's; post-training tokens are estimated, with the 95% interval on the sampled mean. A second strip shows what *this page* sampled per stage — roughly equal everywhere, which is the inverse of the first strip. |
+| **Where the token budget went** | Every stage on one strip to scale, and again on a log axis. Corpus tokens are the paper's; post-training tokens are estimated, with the 95% interval on the sampled mean. A second strip shows what *this page* sampled per stage — roughly equal everywhere, which is the inverse of the first strip. Either strip switches to a pie with the toggle beside it; a pie of the token budget is one grey circle with two invisible slices, which is the same finding said another way. |
 | **How much of it the model is fit to** | The gradient-bearing share per stage: all of pretraining, the assistant turns of an SFT example, both completions after a DPO pair branches, and none of an RL row — the response there is generated during training and never stored. |
 | **How long is one example?** | Characters per example per stage on shared half-decade bins, which is what makes an example count and a token count the same kind of statement. |
 | **The whole pipeline as area** | A treemap where area is tokens: Common Crawl against FineMath against the whole of post-training in one frame. Boxes whose true area is under a pixel are drawn at 3px and the card says how many. |

@@ -1193,16 +1193,114 @@ function inkOn(color){
 // worth 0.03% of the total is a hairline — which is the finding, not a defect.
 // A 2px gap separates fills; identity comes from the card's legend and the
 // tooltip, never from the segment alone.
+//
+// The same segments also draw as a pie, behind a toggle. The bar is what loads,
+// because length is easier to compare than angle and a hairline is at least
+// still visible. The pie is one click away because it is the shape most people
+// picture when they ask what fraction of training was pretraining.
 function stackedStrip(parent, title, right, segments){
   const total = segments.reduce((a, s) => a + s.v, 0) || 1;
+  // Tooltips are built once and shared, so a slice and the bar segment it
+  // replaces cannot drift into saying different things about the same number.
+  const shown = segments.filter(s => s.v > 0).map(s => ({...s,
+    tip: `<b>${escAttr(s.k)}</b><br>${escAttr(s.detail)}<br>${pct(s.v/total)} of the total`}));
   const wrap = document.createElement("div");
   wrap.className = "striprow";
-  wrap.innerHTML = `<div class="t"><span>${title}</span><em>${right}</em></div>
-    <div class="strip">${segments.filter(s => s.v > 0).map(s =>
-      `<div style="flex:${s.v};background:${s.c}" data-tip="<b>${escAttr(s.k)}</b><br>${escAttr(s.detail)}<br>${pct(s.v/total)} of the total"></div>`
-    ).join("")}</div>`;
+  // One toggle per strip rather than one for the card: the budget card's two
+  // strips answer different questions, and a reader wants the form that suits
+  // the one they are asking.
+  wrap.innerHTML = `<div class="t"><span>${title}</span>
+    <span class="tr"><em>${right}</em>${shown.length > 1 ? `<span class="viewpick" role="group" aria-label="chart form">
+      <button type="button" data-view="bar" aria-pressed="true">bar</button>
+      <button type="button" data-view="pie" aria-pressed="false">pie</button>
+    </span>` : ""}</span></div>
+    <div class="stripbody"></div>`;
+  const body = wrap.querySelector(".stripbody");
+  const bar = () => {
+    body.innerHTML = `<div class="strip">${shown.map(s =>
+      `<div style="flex:${s.v};background:${s.c}" data-tip="${s.tip}"></div>`).join("")}</div>`;
+  };
+  const pie = () => {
+    body.innerHTML = "";
+    body.appendChild(pieChart(shown, title));
+  };
+  bar();
+  wrap.querySelectorAll(".viewpick button").forEach(b => b.addEventListener("click", () => {
+    wrap.querySelectorAll(".viewpick button").forEach(o =>
+      o.setAttribute("aria-pressed", String(o === b)));
+    if (b.dataset.view === "pie") pie(); else bar();
+    wireTips(body);
+  }));
   wireTips(wrap);
   parent.appendChild(wrap);
+  return wrap;
+}
+
+// ------------------------------------------------------------------- pie ---
+// Slice geometry: SVG path data on a circle of radius `r` centred at the
+// origin, starting at twelve o'clock and running clockwise, in the order given.
+// Pure and exported, because this is the part that can be wrong in a way nobody
+// sees — a slice drawn with the wrong sweep flag is still a slice.
+function pieSlices(segments, r){
+  const vals = segments.map(s => Math.max(0, s.v));
+  const total = vals.reduce((a, v) => a + v, 0);
+  if (!total) return [];
+  const at = t => [r * Math.sin(t * 2 * Math.PI), -r * Math.cos(t * 2 * Math.PI)];
+  const fx = n => (Math.abs(n) < 1e-9 ? 0 : n).toFixed(3);
+  let acc = 0;
+  return segments.map((s, i) => {
+    const frac = vals[i] / total, from = acc;
+    acc += frac;
+    const [x0, y0] = at(from), [x1, y1] = at(acc);
+    // A slice worth the whole circle starts and ends at the same point, and an
+    // arc between two identical points draws nothing — a blank card where the
+    // single-stage answer should be. Two half circles instead.
+    const d = frac >= 1
+      ? `M 0 ${fx(-r)} A ${r} ${r} 0 1 1 0 ${fx(r)} A ${r} ${r} 0 1 1 0 ${fx(-r)} Z`
+      : `M 0 0 L ${fx(x0)} ${fx(y0)} A ${r} ${r} 0 ${frac > 0.5 ? 1 : 0} 1 ${fx(x1)} ${fx(y1)} Z`;
+    return {...s, frac, d, mid: (from + acc) / 2};
+  }).filter(s => s.frac > 0);
+}
+
+const PIE_R = 78;
+// Below this a slice has no room for a number inside it, and a leader line out
+// to a 0.1% slice points at nothing. The legend and the tooltip carry those.
+const PIE_LABEL_MIN = 0.07;
+// Under a degree: drawn to scale, which at this radius is a pixel of arc. The
+// pie can then say "effectively all of it is pretraining" and nothing finer.
+const PIE_THIN = 1 / 360;
+
+// One pie, to scale, with no minimum slice size — the same numbers and the same
+// tooltips as the strip it replaces.
+function pieChart(segments, title){
+  const slices = pieSlices(segments, PIE_R);
+  const wrap = document.createElement("div");
+  wrap.className = "piewrap";
+  const box = PIE_R + 2;
+  const label = s => {
+    const x = PIE_R * 0.62 * Math.sin(s.mid * 2 * Math.PI);
+    const y = -PIE_R * 0.62 * Math.cos(s.mid * 2 * Math.PI);
+    return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" fill="${inkOn(s.c)}">${pct(s.frac)}</text>`;
+  };
+  // Labels in a second pass, so a number is never covered by the slice drawn
+  // after it. The whole thing is one `role="img"` named by the strip's title.
+  wrap.innerHTML = `<svg class="pie" viewBox="${-box} ${-box} ${box*2} ${box*2}"
+      role="img" aria-label="${escAttr(title)}, as a pie">
+    ${slices.map(s => `<path d="${s.d}" fill="${s.c}" data-tip="${s.tip}"></path>`).join("")}
+    ${slices.filter(s => s.frac >= PIE_LABEL_MIN).map(label).join("")}
+  </svg>`;
+  const thin = slices.filter(s => s.frac < PIE_THIN);
+  if (thin.length){
+    const p = document.createElement("p");
+    p.className = "note";
+    p.textContent = `${thin.length === 1 ? "One slice is" : thin.length + " slices are"} `
+      + `thinner than a degree and drawn to scale, which at this size means `
+      + `${thin.length === 1 ? "it is" : "they are"} invisible: `
+      + `${thin.map(s => String(s.k).split(" — ")[0]).join(", ")}. `
+      + `That is the finding, not a defect. The bar puts a 2px minimum on every `
+      + `segment and the log chart below carries the values.`;
+    wrap.appendChild(p);
+  }
   return wrap;
 }
 
@@ -4551,7 +4649,7 @@ export async function boot(){
 // What the tests reach for. The page itself only needs boot(); the rest is
 // exported so tests/site can import the functions the browser runs rather than
 // a copy lifted out of the file.
-export { questionFiles, splitModelKey, sameDraw, sameRevision, resolverFor, pairingEvidence, crossRows, promptKey, comparisonColors, stabilityNote, stageLabel, rewardFamily, rewardComposition, renderRewardComposition, renderRLVR, diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, searchFields, scanRecords, branchPoint, matchIndex };
+export { questionFiles, splitModelKey, sameDraw, sameRevision, resolverFor, pairingEvidence, crossRows, promptKey, comparisonColors, stabilityNote, stageLabel, rewardFamily, rewardComposition, renderRewardComposition, renderRLVR, diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, pieSlices, searchFields, scanRecords, branchPoint, matchIndex };
 // The language card reads its display names from a module-scope cache boot()
 // fills from language-names.json; nothing serves that file under node, so the
 // tests set it through here.
