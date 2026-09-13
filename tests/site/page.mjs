@@ -30,6 +30,8 @@ const EXPORTS = [
   "langCode", "columnLangShares", "langSummary", "langColumn", "wilson",
   // the pipeline treemap
   "childrenOf", "treemapLayout",
+  // the bar/pie toggle on a part-to-whole strip
+  "pieSlices",
   // the search box
   "searchFields", "scanRecords", "branchPoint", "matchIndex",
   // the one hook into page internals: the language card reads its display
