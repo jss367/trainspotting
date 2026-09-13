@@ -142,6 +142,15 @@ for (const s of T.pieSlices([seg("a", 1), seg("b", 1)], R))
      "the pressed button is styled, so the current form is visible without a hover");
   ok(/\.pie path \{[^}]*stroke: var\(--surface-1\)/.test(css),
      "slices are separated by a surface stroke, the pie's version of the strip's gap");
+  // A label's ink is resolved against its fill once, at draw time. The fills
+  // are CSS variables that flip ends of the ramp with the colour scheme, so a
+  // pie left on screen through a theme change would keep black text on what is
+  // now a dark slice. Dropping the cache only fixes the next pie drawn.
+  ok(/data-ink="/.test(src), "marks wearing computed ink record the fill they were resolved against");
+  ok(/INK = \{\};\s*\n\s*repaintInk\(\);/.test(src),
+     "a colour-scheme change repaints existing ink, not just the cache");
+  ok(/el\.ownerSVGElement/.test(src),
+     "the repaint knows an SVG label wears `fill` and an HTML tile wears `color`");
 }
 
 console.log(failures ? `\n${failures} failed` : "\nall passed");

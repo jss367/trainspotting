@@ -1169,11 +1169,29 @@ const fmtChars = n => trim(n >= 1e6 ? (n/1e6).toFixed(1) + "M" : n >= 1e3 ? Math
 // rather than deciding per step. Cached, and the cache is dropped when the
 // mode changes under a live page.
 let INK = {};
+// Dropping the cache is enough for marks drawn after the change and no help at
+// all to the ones already on screen: a pie label or a treemap caption keeps the
+// ink it was built with, which is the wrong one the moment its fill flips ends
+// of the ramp — black text on `--corpus-1` after it goes from #b3b2a7 to
+// #504f4a. Every mark wearing computed ink records the fill it was resolved
+// against, so one walk repaints all of them.
+function repaintInk(root = document){
+  root.querySelectorAll("[data-ink]").forEach(el => {
+    const ink = inkOn(el.dataset.ink);
+    // An SVG label carries its ink as a `fill` attribute; an HTML tile wears it
+    // as `color`. Same decision, two places to put the answer.
+    if (el.ownerSVGElement) el.setAttribute("fill", ink);
+    else el.style.color = ink;
+  });
+}
 // Guarded for a non-browser evaluator: tests/site runs this script under
 // node, where `window` is not defined at all.
 function watchColorScheme(){
   if (window.matchMedia)
-    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { INK = {}; });
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+      INK = {};
+      repaintInk();
+    });
 }
 function inkOn(color){
   if (INK[color]) return INK[color];
@@ -1280,7 +1298,8 @@ function pieChart(segments, title){
   const label = s => {
     const x = PIE_R * 0.62 * Math.sin(s.mid * 2 * Math.PI);
     const y = -PIE_R * 0.62 * Math.cos(s.mid * 2 * Math.PI);
-    return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" fill="${inkOn(s.c)}">${pct(s.frac)}</text>`;
+    return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" fill="${inkOn(s.c)}"`
+      + ` data-ink="${escAttr(s.c)}">${pct(s.frac)}</text>`;
   };
   // Labels in a second pass, so a number is never covered by the slice drawn
   // after it. The whole thing is one `role="img"` named by the strip's title.
@@ -2021,6 +2040,7 @@ function tile(item, x, y, w, h, color, kind, tipHtml){
   const el = document.createElement("div");
   el.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;background:${color}`;
   el.style.color = inkOn(color);
+  el.dataset.ink = color;
   if (kind === "child") el.style.boxShadow = "inset 0 0 0 1px var(--surface-1)";
   const fits = w > 74 && h > (kind === "head" ? 18 : 30);
   if (fits) el.innerHTML = `<b>${esc(kind === "head" ? stageLabel(item.stage) : item.stage)}</b>`
