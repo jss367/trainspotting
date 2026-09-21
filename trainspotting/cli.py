@@ -11,11 +11,13 @@ name rather than reached through the package.
 import argparse
 import math
 import sys
+from pathlib import Path
 
 from . import benchmarks, casestudy, grep, infinigram, lookup, registry
 from .commands.agreement import cmd_agreement
 from .commands.bif import cmd_bif
 from .commands.budget import cmd_budget
+from .commands.changes import cmd_changes
 from .commands.case_study import cmd_case_study
 from .commands.contaminate import CONTAM_DEFAULTS, cmd_contaminate
 from .commands.context import cmd_context
@@ -131,6 +133,13 @@ def _nonnegative_int(value: str) -> int:
 def main():
     ap = argparse.ArgumentParser(prog="trainspotting")
     sub = ap.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("changes", help="measure weight and behavior changes between training checkpoints")
+    p.add_argument("target", help=TARGET_HELP)
+    p.add_argument("--plan", type=Path, help="JSON phase/checkpoint plan (Pythia has a default)")
+    p.add_argument("--probes", type=Path, help="JSON list of fixed {topic, prompt} probes")
+    p.add_argument("--device", default="cpu", help="inference device: cpu, mps, or cuda")
+    p.set_defaults(fn=cmd_changes)
 
     for name, fn in [("facts", cmd_facts), ("sources", cmd_sources), ("report", cmd_report)]:
         p = sub.add_parser(name)

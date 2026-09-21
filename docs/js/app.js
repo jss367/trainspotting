@@ -4,6 +4,8 @@
 // effects and a test can call any exported function on its own.
 //
 // ES modules do not load over file://. Preview with:  python -m http.server -d docs
+import { trainingChangeCard } from "./training-change.js";
+
 const LABELS = ["helpfulness","honesty","harmlessness","capability","instruction_following","tool_use","other"];
 const VALUE_LABELS = new Set(["helpfulness","honesty","harmlessness"]);
 const NICE = {helpfulness:"helpful", honesty:"honest", harmlessness:"harmless",
@@ -2846,6 +2848,14 @@ async function renderModel(model, gen){
     pipe.appendChild(t);
   });
   main.appendChild(facts);
+
+  if (m.is_model !== false){
+    const [measurements, evaluations] = await Promise.all([
+      getData(`${model}.changes.json`), getData(`${model}.evaluations.json`),
+    ]);
+    if (gen !== GEN) return;
+    main.appendChild(trainingChangeCard(m, measurements, evaluations));
+  }
 
   // ---- pretraining documents ----
   const corpusStages = m.stages.filter(s => s.sample_dataset);

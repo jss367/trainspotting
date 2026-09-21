@@ -29,6 +29,7 @@ Each is a command; each is a layer of the same audit.
 | Behaviour | `trace` | From a transcript to the stages that most densely hold its distinctive phrases. |
 | Benchmarks | `contaminate` | Whether a benchmark's test items are in the training data, at which stage, on which side. |
 | Training order | `steps` | For Pythia, where along the run a string was seen. |
+| Model development | `changes` | Checkpoint weight distances and prediction changes on fixed prompts; the site also compares published stage evaluations. |
 | Corpora | `pretrain`, `lookup`, `find` | Random documents from the pretraining mixes, and exact counts of one text in an indexed corpus. |
 | Loss sensitivity | `bif` | Experimental: local loss covariances on standalone text, Pythia-70m only. |
 
@@ -54,8 +55,12 @@ pip install -e .
 
 `classify`, `ask` and `stance` need an Anthropic API key (`ANTHROPIC_API_KEY`).
 `grep` and `contaminate` need DuckDB (`pip install -e '.[grep]'`). `bif` needs
-torch and transformers (`pip install -e '.[bif]'`) and downloads weights;
-nothing else touches a model. `steps` needs `tokenizers` (`pip install -e '.[steps]'`).
+torch and transformers (`pip install -e '.[bif]'`) and downloads weights.
+`steps` needs `tokenizers` (`pip install -e '.[steps]'`).
+
+`changes` also downloads weights and runs local inference; install
+`pip install -e '.[changes]'`. See [the training-change guide](docs/training-change.md)
+for measurements, coverage, and reproduction.
 
 ## Start here
 

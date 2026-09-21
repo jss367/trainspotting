@@ -18,8 +18,9 @@ trainspotting = "trainspotting.cli:main"
 # every other layer talks to the datasets-server over HTTP.
 grep = ["duckdb>=1.0"]
 # Experimental standalone-text sampling on Pythia-70m. Torch also runs the
-# exact-posterior CPU validation; other commands do not import these packages.
+# exact-posterior CPU validation. Imports stay local to the model-based commands.
 bif = ["torch>=2.2", "transformers>=4.57"]
+changes = ["torch>=2.2", "transformers>=4.57"]
 # Only the steps layer decodes tokens: Pythia's training order is published as
 # token ids, not text, so reading a batch back means the GPT-NeoX tokenizer.
 steps = ["tokenizers>=0.15"]
@@ -31,6 +32,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["trainspotting*"]
+
+[tool.setuptools.package-data]
+trainspotting = ["probes/*.json"]
 
 [tool.ruff.lint]
 # Ruff's own default set, written down. Unwritten, it is whatever the ruff on the
