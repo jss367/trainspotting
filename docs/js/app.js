@@ -1378,7 +1378,15 @@ function histRow(parent, label, stats, color, tipHead, valueHtml){
   row.innerHTML = `<div class="lbl">${label}</div>
     <div class="spark">${bins.map((c, i) => {
       const from = HIST_EDGES[i], to = HIST_EDGES[i+1];
-      return `<i style="height:${Math.max(c ? 2 : 0, c/max*100)}%;background:${color}" data-tip="<b>${escAttr(tipHead)}</b><br>${c} of ${stats.n} sampled (${pct(c/stats.n)})<br>${fmtChars(from)}–${fmtChars(to)} characters"></i>`;
+      // The two end bins are open, not bounded: `derive.histogram` clamps a
+      // positive value below the first edge into the first bin and anything
+      // above the last edge into the last one, so labelling them as ranges
+      // tells a reader the bin holds less than it does — and the overflow bin
+      // is where the long completions this page cares about land.
+      const range = i === 0 ? `&lt;${fmtChars(to)}`
+        : i === bins.length - 1 ? `≥${fmtChars(from)}`
+        : `${fmtChars(from)}–${fmtChars(to)}`;
+      return `<i style="height:${Math.max(c ? 2 : 0, c/max*100)}%;background:${color}" data-tip="<b>${escAttr(tipHead)}</b><br>${c} of ${stats.n} sampled (${pct(c/stats.n)})<br>${range} characters"></i>`;
     }).join("")}</div>
     <div class="val">${valueHtml ?? `${fmtChars(stats.median)} <small>median</small>`}</div>`;
   wireTips(row);
@@ -2002,14 +2010,27 @@ function pairsCard(model, m, post, runs){
     sub.className = "stage-sub";
     sub.innerHTML = `n=${num(d.n)} sampled pairs`
       + (d.ties ? ` · ${num(d.ties)} tie on length and are left out of the rate below` : "")
-      + (d.degenerate ? ` · <b>${num(d.degenerate)}</b> have two identical completions, so the DPO loss cancels and they train nothing` : "");
+      + (d.degenerate ? ` · <b>${num(d.degenerate)}</b> have two identical completions, so the DPO loss cancels exactly and they train nothing` : "");
     card.appendChild(sub);
 
     const rule = d.length_rule;
-    barRow(card, "longer side is the chosen one", rule.rate, rule.lo, rule.hi, 1,
-      `<b>longer side is the chosen one</b><br>${num(rule.k)} of ${num(rule.n)} pairs whose sides differ in length (${pct(rule.rate)})`
-      + `<br>95% CI ${pct(rule.lo)}–${pct(rule.hi)}`
-      + `<br>a coin would be 50%`, true, null, null, PAIR_HUE.chosen);
+    // A stage where every sampled pair ties has no pair the rule can answer, so
+    // the file carries `{k: 0, n: 0}` and no rate — `pct(undefined)` renders
+    // "NaN%" and the bar comes out at NaN width, which is a broken chart rather
+    // than a missing one. A 0% bar would be worse still: it reads as "length
+    // never picks the chosen side" where the truth is that length picks neither.
+    if (!rule.n){
+      const none = document.createElement("p");
+      none.className = "note";
+      none.textContent = `All ${num(d.n)} sampled pairs tie on length, so the length rule has no pair `
+        + `to be right or wrong about and there is no rate to draw.`;
+      card.appendChild(none);
+    } else {
+      barRow(card, "longer side is the chosen one", rule.rate, rule.lo, rule.hi, 1,
+        `<b>longer side is the chosen one</b><br>${num(rule.k)} of ${num(rule.n)} pairs whose sides differ in length (${pct(rule.rate)})`
+        + `<br>95% CI ${pct(rule.lo)}–${pct(rule.hi)}`
+        + `<br>a coin would be 50%`, true, null, null, PAIR_HUE.chosen);
+    }
     const mr = d.models?.rule;
     if (mr)
       // No interval: this rule is read off the same rows it is scored on, so

@@ -224,11 +224,24 @@ def _report_pairs(target_name: str, target: dict) -> None:
         d = json.loads(path.read_text())
         rule, delta = d["length_rule"], d["delta"]
         print(f"### {s['stage']} — {d['dataset']} (n={d['n']} pairs)\n")
-        print(
-            f"- longer side chosen: {rule['rate'] * 100:.1f}%  ({rule['k']}/{rule['n']},"
-            f" 95% CI {rule['lo'] * 100:.1f}–{rule['hi'] * 100:.1f}%)"
-            + (f" — {d['ties']} pairs tie on length and are not counted" if d["ties"] else "")
-        )
+        # A stage where every sampled pair ties has no pair the length rule can
+        # answer, so `pairs._rate([])` carries back a denominator of zero and no
+        # rate at all — reading `rate` here raised `KeyError` and took the whole
+        # report down with it. The rule is undefined there rather than 0%: 0%
+        # would say length never picks the chosen side, when what is true is that
+        # length picks neither. `pairs._fmt_rate` says the same thing on the
+        # command's own output.
+        if not rule["n"]:
+            print(
+                f"- longer side chosen: undefined — all {d['n']} sampled pairs tie on length,"
+                " so the rule has no pair to be right or wrong about"
+            )
+        else:
+            print(
+                f"- longer side chosen: {rule['rate'] * 100:.1f}%  ({rule['k']}/{rule['n']},"
+                f" 95% CI {rule['lo'] * 100:.1f}–{rule['hi'] * 100:.1f}%)"
+                + (f" — {d['ties']} pairs tie on length and are not counted" if d["ties"] else "")
+            )
         print(f"- chosen − rejected: mean {delta['mean']:+,.0f} characters, median {delta['median']:+,.0f}")
         if d.get("split"):
             print(
@@ -248,7 +261,7 @@ def _report_pairs(target_name: str, target: dict) -> None:
                 print(f"  - {m['chosen']} over {m['rejected']}: {m['n']} pairs")
         if d["degenerate"]:
             print(
-                f"- {d['degenerate']} pairs have no gradient-bearing text on a side —"
+                f"- {d['degenerate']} pairs have no gradient-bearing text on either side —"
                 " the two completions are identical, so the DPO loss cancels"
             )
         if d["truncated_rows"]:

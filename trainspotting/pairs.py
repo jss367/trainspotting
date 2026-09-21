@@ -43,6 +43,19 @@ from trainspotting.stats import cluster_wilson
 # with a high-cardinality column from writing a megabyte of singletons.
 MAX_BREAKDOWN_VALUES = 40
 
+# The columns a shortened cell has to land in before it can shorten a number
+# here. Deliberately narrower than `search.COLUMNS["dpo"]`, which also names
+# `prompt`: that column is the question both sides answer, and a DPO record
+# builds its two sides out of the `chosen` and `rejected` cells alone
+# (`context.build`), so every length below is computed without reading `prompt`
+# at all. A row the server cut only there arrived whole as far as this module is
+# concerned, and counting it would print "these lengths are lower bounds" over a
+# sample whose two measured sides are complete. `search` asks a different
+# question — which cells a *search* would have had to read — and gets a wider
+# answer to it, so this set is written out here rather than derived from that
+# one.
+MEASURED_COLUMNS = ("chosen", "rejected")
+
 
 def _sides(rec: dict) -> tuple[list[dict], list[dict]]:
     """The turns of each side that carry gradient, shared history removed.
@@ -166,6 +179,17 @@ def _breakdown(records: list[dict], flags: list[bool], rows: list[int | None]) -
     says the preference really does track length throughout. The stage's own
     provenance columns are the split, so this lines up with what `sources` counts
     and what the crosstab on the site already groups by.
+
+    `records`, `flags` and `rows` are the *decided* pairs only — the same subset
+    `length_rule` is computed over — and they have to be, because this is the
+    headline rate again per group and a row counted in one denominator but not
+    the other makes the two numbers answers to different questions. Handed every
+    pair instead, a tie would arrive as `False` and be scored as a group's
+    failure to prefer the longer side, which drags exactly those groups that
+    contain ties below the stage rate for a reason no reader could see: on the
+    committed Instruct sample that is 16 of 1,000 rows, enough to move a small
+    group several points. The three lists are indexed together, so any subset
+    passed here must be taken from all three at once.
     """
     columns: dict[str, dict[str, list[int]]] = {}
     for i, rec in enumerate(records):
@@ -235,13 +259,21 @@ def stage_pairs(ctx: dict) -> dict:
         chosen_chars.append(c)
         rejected_chars.append(r)
         deltas.append(c - r)
-        # A side the shared prefix swallowed whole has no completion at all. DPO
-        # reads the difference of the two sides' log probabilities, so a pair
-        # whose sides are identical cancels exactly and trains nothing — four of
-        # the sampled Instruct pairs are like this. They are still pairs in the
-        # mix and still counted below; naming them separately is what keeps a
+        # Both sides swallowed whole by the shared prefix, which is the same
+        # statement as "the two completions are identical": `_shared_turns` only
+        # advances over turns that match, so two empty remainders mean the two
+        # turn lists were equal. DPO reads the difference of the two sides' log
+        # probabilities, so such a pair cancels exactly and trains nothing — 12
+        # of the sampled Instruct pairs are like this. They are still pairs in
+        # the mix and still counted below; naming them separately is what keeps a
         # tie between two empty sides from reading as a tie between two answers.
-        if not chosen or not rejected:
+        #
+        # `and`, not `or`: one empty side against a non-empty one is a pair whose
+        # chosen (or rejected) completion is nothing at all. That is a real
+        # length difference the rule above should score, not a cancelling pair,
+        # and counting it here would attach "the loss cancels, they train
+        # nothing" to a row where neither clause is true.
+        if not chosen and not rejected:
             degenerate += 1
         chosen_reasoning.append(sum(_reasoning_chars(t) for t in chosen))
         rejected_reasoning.append(sum(_reasoning_chars(t) for t in rejected))
@@ -283,7 +315,14 @@ def stage_pairs(ctx: dict) -> dict:
             ),
             "matchups": _matchups(records),
         },
-        "by": _breakdown(records, longer, rows),
+        # The decided pairs only, so a group's rate here is the headline rate
+        # restricted to that group rather than a different statistic wearing the
+        # same label. See `_breakdown`.
+        "by": _breakdown(
+            [records[i] for i in decided],
+            [longer[i] for i in decided],
+            [rows[i] for i in decided],
+        ),
     }
     # Where the extra length is. A think stage's completions are mostly
     # thinking — the sampled 32B chosen sides average 7,649 characters of
@@ -301,12 +340,14 @@ def stage_pairs(ctx: dict) -> dict:
     # response limit, and a shortened cell arrives with fewer characters than it
     # has — so a length measured over one is short by an unknown amount, and the
     # cuts land on the longest cells by construction, which is the side this
-    # module is measuring. A run that was not looking reports null rather than
-    # zero: "no rows were cut" and "nobody checked" are different states, and
-    # collapsing them would put a clean bill of health on every sample committed
-    # before `context` learned to check.
+    # module is measuring. Only a cut in `MEASURED_COLUMNS` counts: a row whose
+    # `prompt` cell was shortened has both completions whole, and every number
+    # above is computed from the completions alone. A run that was not looking
+    # reports null rather than zero: "no rows were cut" and "nobody checked" are
+    # different states, and collapsing them would put a clean bill of health on
+    # every sample committed before `context` learned to check.
     out["truncated_rows"] = (
-        sum(1 for r in records if r.get("truncated"))
+        sum(1 for r in records if set(r.get("truncated") or ()) & set(MEASURED_COLUMNS))
         if ctx.get("truncation_recorded")
         else None
     )

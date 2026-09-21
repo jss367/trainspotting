@@ -419,7 +419,7 @@ would read as a statement about the reasoning budget.
 
 The breakdown by the stage's own provenance column is where the stage-wide
 number comes apart. On `Dolci-Instruct-DPO`, `preference_type` splits 66.4% into
-73.7% for `delta_learning` and 58.9% for `llm_judged`: the half built by pairing
+75.9% for `delta_learning` and 59.0% for `llm_judged`: the half built by pairing
 models is where most of the length asymmetry lives, and the judged half is much
 closer to a coin.
 
@@ -430,13 +430,22 @@ closer to a coin.
 - It says nothing about *why* the chosen side is longer. A longer answer can be
   the better answer; that is the point of a preference dataset. What the number
   bounds is how much of the label a model could reproduce without reading one.
-- `degenerate` counts pairs whose two completions are identical. DPO reads the
-  difference of the two sides' log probabilities, so those cancel exactly and
-  train nothing — 12 of the 1,000 sampled Instruct pairs.
+- `degenerate` counts pairs whose two completions are identical — both sides
+  swallowed whole by the history they share, so neither carries any gradient.
+  DPO reads the difference of the two sides' log probabilities, so those cancel
+  exactly and train nothing — 12 of the 1,000 sampled Instruct pairs. A pair
+  with one empty side and one real completion is not counted here: it is a
+  genuine length difference, and the length rule above scores it as one.
+- The breakdown shares the headline rate's denominator: ties drop out of both,
+  so a group's rate is the stage rate restricted to that group rather than a
+  number that also penalises the group for its equal-length pairs.
 - The datasets-server shortens a very large cell to fit its response limit, and
   cuts land on the longest cells by construction — the side this layer measures.
   A `context` run records which rows arrived cut; the samples committed before it
-  did report `truncated_rows: null`, which is *unknown* rather than none.
+  did report `truncated_rows: null`, which is *unknown* rather than none. Only a
+  cut in `chosen` or `rejected` counts: those are the two cells the lengths are
+  computed from, and a row shortened in its standalone `prompt` cell has both
+  measured sides whole.
 
 ## Where each label comes from
 

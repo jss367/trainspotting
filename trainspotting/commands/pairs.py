@@ -23,18 +23,39 @@ def _fmt_rate(r: dict) -> str:
 
 
 def cmd_pairs(args):
-    wrote = 0
+    """Two different non-results, and only one of them is a failure.
+
+    A target with no preference stage at all is not a failed run: the question
+    this command asks does not apply to it, the same way `rewards` has nothing
+    to say about an SFT-only pipeline. It exits 0 so a caller like
+    `scripts/refresh_samples.sh` does not have to blanket the status with
+    `|| true` — which is how a *real* failure, a preference stage whose context
+    run is missing or holds no DPO records, used to be swallowed in the middle of
+    a refresh that had just written that very run.
+    """
+    wrote, stages, failed = 0, 0, False
     for s in _select_stages(args, registry.post_training_stages, "post-training"):
         if registry.stage_kind(s) != "dpo":
             continue
+        stages += 1
         path = paths.find(f"{args.target}.{s['stage']}.context.json")
         if not path:
             print(
                 f"{s['stage']}: no context run — run `context {args.target} --stage {s['stage']}` first",
                 file=sys.stderr,
             )
+            failed = True
             continue
-        out = pairs.stage_pairs(json.loads(path.read_text()))
+        try:
+            out = pairs.stage_pairs(json.loads(path.read_text()))
+        except ValueError as exc:
+            # The context run exists but carries no DPO records — a stage the
+            # registry calls preference whose sample says otherwise. Reported as
+            # a line rather than a traceback, and still an exit code, because the
+            # run that wrote it thought it succeeded.
+            print(f"{s['stage']}: {exc}", file=sys.stderr)
+            failed = True
+            continue
         written = _write_json(RESULTS / f"{args.target}.{s['stage']}.pairs.json", out)
         rule = out["length_rule"]
         delta = out["delta"]
@@ -63,5 +84,14 @@ def cmd_pairs(args):
             )
         print(f"  -> {written}", file=sys.stderr)
         wrote += 1
-    if not wrote:
-        sys.exit(f"{args.target} has no preference stage with a committed context run")
+    if not stages:
+        print(
+            f"{args.target} has no preference stage among the selected ones — nothing to measure",
+            file=sys.stderr,
+        )
+        return
+    if failed or not wrote:
+        sys.exit(
+            f"{args.target} has a preference stage this could not measure —"
+            " see the lines above"
+        )

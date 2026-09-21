@@ -69,10 +69,11 @@ if [[ "$PHASE" == all || "$PHASE" == free ]]; then
   step "languages $TARGET"
   "${TS[@]}" languages "$TARGET"
   # After context, because it reads the run context just wrote. A target with no
-  # preference stage exits non-zero here and that is not a failure of the
-  # refresh, so the status is swallowed rather than tripping `set -e`.
+  # preference stage exits 0 with a line saying so, so the status is the real
+  # one: `context` has just run here, and a preference stage this cannot measure
+  # means that run went wrong rather than that the question does not apply.
   step "pairs $TARGET (what separates the two sides of each preference pair)"
-  "${TS[@]}" pairs "$TARGET" || true
+  "${TS[@]}" pairs "$TARGET"
 fi
 
 if [[ "$PHASE" == all || "$PHASE" == labels ]]; then

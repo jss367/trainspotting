@@ -9,7 +9,7 @@
 //
 // Run via pytest (tests/test_site_suites.py) or directly: node <this file>
 
-import { loadPage, read, dataFiles } from "./page.mjs";
+import { loadPage, read, dataFiles, pageSource } from "./page.mjs";
 
 const P = loadPage();
 
@@ -61,7 +61,33 @@ for (const name of files){
   if (d.split)
     ok(Math.abs(d.split.reasoning.mean + d.split.answer.mean - d.delta.mean) < 1e-6,
        `${tag}: thinking plus answer is the whole gap`);
+  // "The same rate by <column>" has to be the same rate: every breakdown runs
+  // over the pairs the headline rule could answer, so a column's denominators
+  // sum to at most its denominator. Summing to `d.n` instead would mean the
+  // groups are scoring the ties as failures while the headline never counted
+  // them, and the rows would sit below a stage rate for an invisible reason.
+  for (const [col, values] of Object.entries(d.by || {})){
+    const total = Object.values(values).reduce((a, st) => a + st.n, 0);
+    ok(total <= d.length_rule.n,
+       `${tag}: the ${col} breakdown shares the rule's denominator (${total} ≤ ${d.length_rule.n})`);
+  }
 }
+
+// ------------------------------------------------- the stage that ties throughout ---
+// `pairs._rate([])` returns a count and no rate, which is the shape the file
+// carries when every sampled pair ties on length. `pct(undefined)` is "NaN%"
+// and a bar of NaN width is a broken chart, so the card has to test the
+// denominator before it draws anything. No committed sample is like this — the
+// assertion is on the source, because the failure is a missing branch rather
+// than a wrong number, and nothing here can build a DOM to render one into.
+const source = pageSource();
+const cardStart = source.indexOf("function pairsCard(");
+const card = source.slice(cardStart, source.indexOf("\n// ---", cardStart));
+ok(cardStart > 0, "the page still has a pairsCard to check");
+ok(/if\s*\(!rule\.n\)/.test(card),
+   "the pairs card checks the length rule's denominator before drawing it");
+ok(card.indexOf("if (!rule.n)") < card.indexOf('barRow(card, "longer side is the chosen one"'),
+   "and checks it before, not after, the bar that would render NaN%");
 
 console.log(failures ? `\n${failures} failure(s)` : "\nall ok");
 process.exit(failures ? 1 : 0);

@@ -188,6 +188,9 @@ sampling run that quietly labels nothing.
   for a cut cell it is the length of what arrived. Cuts land on the longest
   cells, which is exactly what `pairs` measures, so a sample committed before
   the check existed reports `truncated_rows: null` — unknown rather than none.
+  `pairs` counts only the cuts that land in `chosen` or `rejected`: those are
+  the cells its lengths come from, and a row shortened in the standalone
+  `prompt` cell has both measured sides whole.
 - The stage ranking is evidence about where a string is, and only that. It does
   not weight the stages against each other, so a rate in RL and the same rate
   in pretraining rank equal even though the late one generally moves behaviour

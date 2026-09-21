@@ -14,13 +14,15 @@ Every failure this pins is a number that still looks like a number:
     beside it
 """
 
+import argparse
 import json
 import math
 from pathlib import Path
 
 import pytest
 
-from trainspotting import pairs
+from trainspotting import pairs, paths
+from trainspotting.commands.pairs import cmd_pairs
 
 DATA = Path(__file__).resolve().parent.parent / "docs" / "data"
 CONTEXTS = sorted(DATA.glob("*.dpo.context.json"))
@@ -87,6 +89,46 @@ def test_a_tie_is_not_an_answer_the_length_rule_got_wrong():
     assert (out["length_rule"]["k"], out["length_rule"]["n"]) == (1, 1)
 
 
+def test_every_pair_tying_leaves_the_rule_undefined_rather_than_zero():
+    """`_rate([])` has a denominator and no rate, and every reader of the file
+    has to see that shape rather than index into it: `report` raised `KeyError`
+    on `rule['rate']` and took the whole report down, and the site's card drew a
+    `NaN%` bar. A 0% would be worse than either — it says length never picks the
+    chosen side, where the truth is that length picks neither."""
+    out = pairs.stage_pairs(ctx([
+        pair([turn("assistant", 100, "a")], [turn("assistant", 100, "b")], meta={"src": "a"}),
+        pair([turn("assistant", 200, "c")], [turn("assistant", 200, "d")], meta={"src": "b"}),
+    ]))
+    assert out["ties"] == out["n"] == 2
+    assert out["length_rule"] == {"k": 0, "n": 0}
+    assert "rate" not in out["length_rule"]
+    # The share of *every* pair still answers: the rule is undefined, not the
+    # sample.
+    assert (out["longer_chosen"]["k"], out["longer_chosen"]["n"]) == (0, 2)
+    # And the breakdown is empty rather than two groups reported at 0%, because
+    # it now runs over the same decided pairs the rule does — of which there are
+    # none.
+    assert out["by"] == {}
+
+
+def test_the_breakdown_drops_the_same_ties_the_headline_rule_does():
+    """The breakdown is the headline rate per group, so it has to be over the
+    same rows. Handed every pair, a tie arrives as "the longer side was not
+    chosen" and is scored as the group's failure — which drags exactly the
+    groups that contain ties below a stage rate that never counted them."""
+    out = pairs.stage_pairs(ctx([
+        pair([turn("assistant", 10)], [turn("assistant", 5)], meta={"src": "a"}),
+        pair([turn("assistant", 5)], [turn("assistant", 5)], meta={"src": "a"}),
+        pair([turn("assistant", 10)], [turn("assistant", 5)], meta={"src": "b"}),
+    ]))
+    by = out["by"]["src"]
+    # The tie leaves `a`'s denominator rather than scoring 1/2 = 50%.
+    assert (by["a"]["k"], by["a"]["n"]) == (1, 1)
+    assert (by["b"]["k"], by["b"]["n"]) == (1, 1)
+    # Which is the headline denominator split across the groups, exactly.
+    assert sum(st["n"] for st in by.values()) == out["length_rule"]["n"] == out["n"] - out["ties"]
+
+
 def test_identical_sides_are_named_as_training_nothing():
     """DPO reads the difference of the two sides' log probabilities, so a pair
     whose sides are identical cancels exactly. It is still a row of the mix, so
@@ -97,6 +139,22 @@ def test_identical_sides_are_named_as_training_nothing():
     assert out["degenerate"] == 1
     assert out["ties"] == 1
     assert out["delta"]["mean"] == 0
+
+
+def test_one_empty_side_is_a_length_difference_and_not_a_cancelling_pair():
+    """The shared prefix can swallow one side without swallowing the other, and
+    that pair is nothing like an identical one: it has a real winner on length
+    and its loss does not cancel. Counting it as `degenerate` would attach "the
+    two completions are identical, so they train nothing" — what the report and
+    the card say about that number — to a row where neither clause holds."""
+    shared = [turn("user", 50, "ask")]
+    out = pairs.stage_pairs(ctx([
+        pair(list(shared), shared + [turn("assistant", 300, "only the rejected side answers")]),
+    ]))
+    assert out["degenerate"] == 0
+    assert out["ties"] == 0
+    assert out["delta"]["mean"] == -300
+    assert (out["length_rule"]["k"], out["length_rule"]["n"]) == (0, 1)
 
 
 def test_both_directions_survive_the_histograms():
@@ -235,6 +293,23 @@ def test_a_run_that_checked_reports_what_it_found():
     assert out["truncated_rows"] == 1
 
 
+def test_a_cut_in_a_column_this_layer_never_reads_is_not_a_shortened_length():
+    """`context` stores the cut cells this *stage* reads, which for DPO includes
+    the standalone `prompt` column. No length here comes from it — both sides are
+    built out of `chosen` and `rejected` — so a row cut only there arrived whole
+    for every number in this file, and counting it would put "these lengths are
+    lower bounds" on a sample where both measured sides are complete."""
+    out = pairs.stage_pairs(ctx(
+        [
+            pair([turn("assistant", 10)], [turn("assistant", 5)], truncated=["prompt"]),
+            pair([turn("assistant", 10)], [turn("assistant", 5)], truncated=["prompt", "rejected"]),
+            pair([turn("assistant", 10)], [turn("assistant", 5)]),
+        ],
+        truncation_recorded=True,
+    ))
+    assert out["truncated_rows"] == 1
+
+
 # ------------------------------------------------------------ wrong stage kind ---
 
 def test_a_stage_with_no_pairs_raises_rather_than_reporting_zeros():
@@ -242,6 +317,29 @@ def test_a_stage_with_no_pairs_raises_rather_than_reporting_zeros():
     answer is that the question does not apply, and only an exception says so."""
     with pytest.raises(ValueError):
         pairs.stage_pairs(ctx([{"kind": "sft", "turns": [turn("assistant", 10)]}]))
+
+
+# ----------------------------------------------------------- the exit status ---
+# `scripts/refresh_samples.sh` runs this straight after `context` and reads only
+# the status. It used to blanket it with `|| true`, because a target with no
+# preference stage exited non-zero — and that also swallowed a preference stage
+# whose freshly written context run could not be measured, which is a refresh
+# that failed while reporting success.
+
+def test_a_target_with_no_preference_stage_is_not_a_failure():
+    """The question does not apply, which is not the same as asking it and
+    failing. A non-zero here is what forced the caller to ignore the status."""
+    cmd_pairs(argparse.Namespace(target="olmo-3-7b-rl-zero-code", stage=None))
+
+
+def test_a_preference_stage_that_cannot_be_measured_is_a_failure(monkeypatch):
+    """The other half of the same contract: a DPO stage whose context run is
+    missing has to reach the caller as a failure, or a refresh writes nothing and
+    says it succeeded."""
+    monkeypatch.setattr(paths, "find", lambda name: None)
+    with pytest.raises(SystemExit) as exit_info:
+        cmd_pairs(argparse.Namespace(target="olmo-3-7b-instruct", stage=None))
+    assert exit_info.value.code != 0
 
 
 # -------------------------------------------------- against the committed data ---
