@@ -94,6 +94,11 @@ actually is, which is the only thing that says what fraction of the model the
 other five layers describe (see [Size](#size)), and which source dataset each
 labeled prompt came from (see [Where each label comes from](#where-each-label-comes-from)).
 
+A preference stage gets one more, for a reason the layers above cannot reach: a
+DPO pair teaches by contrast, so what it teaches depends on what tells the two
+sides apart — and two things do without reading either answer. See
+[What separates a preference pair](#what-separates-a-preference-pair).
+
 Everything above reads a sample of a mix. Asking whether one *particular* text
 is in a pretraining corpus needs an index instead — a whole blog is a rounding
 error in trillions of tokens, so no sample will ever land on it. See
@@ -132,6 +137,10 @@ trainspotting ask olmo-3-7b-instruct \
 
 # Store the full training example behind each sampled prompt (no API key needed)
 trainspotting context olmo-3-7b-instruct
+
+# What separates the two sides of each preference pair besides the answer:
+# length, and which model wrote each side (reads the committed context, no API key)
+trainspotting pairs olmo-3-7b-instruct
 
 # Find a regex anywhere in the sampled examples — responses included, DPO side
 # reported (no API key needed)
@@ -353,6 +362,81 @@ The estimate's weak part is the divisor, and it is one number
 (`derive.CHARS_PER_TOKEN`). Real tokenizers run about 3.5 characters per token on
 code and 4.5 on English prose; nothing in that range moves a finding that is a
 factor of ten thousand.
+
+## What separates a preference pair
+
+A DPO pair is two answers to one prompt, one chosen and one rejected, and the
+loss pushes the policy toward the first and away from the second. What that
+teaches depends on what tells the two apart — and two things do without reading
+either answer:
+
+- **length**, and
+- **which model generated each side**.
+
+Where either lines up with the preference, a policy can fit it instead of the
+preference. This measures what is available to fit; whether a trained model took
+it is a question about the model, and nothing here opens one.
+
+```bash
+trainspotting pairs olmo-3-7b-instruct
+```
+
+It reads the committed `context` run — the records already store each field's
+true length beside the 4,000 characters they keep for display — so there is no
+network call, no API key, and no model. Output lands in
+`results/<target>.<stage>.pairs.json`, and the same file is derived into
+`docs/data/` by the export so the site's card always describes the sample it
+serves.
+
+### What the committed samples say
+
+| Stage | longer side chosen | chosen − rejected (median) | generator name settles it |
+|---|---|---|---|
+| `olmo-3-7b-instruct` dpo | 66.4% (653/984) | +185 chars | 92.6%, over 159 matchups |
+| `olmo-3-7b-think` dpo | 77.2% (771/999) | +1,609 chars | 100%, one matchup |
+| `olmo-3-32b-think` dpo | 75.0% (750/1000) | +1,720 chars | 100%, one matchup |
+
+Three things in that table are worth reading carefully.
+
+**The think mixes have exactly one matchup.** Every sampled pair puts
+`qwen3-reasoning-32b` on the chosen side and `qwen3-reasoning-0.6b` on the
+rejected one. That is the delta-learning recipe working as designed — it pairs a
+strong generator against a weak one on purpose — and it means a rule reading
+nothing but the two model names is right every time. The number is reported as
+*fitted*: it is read off the same rows it is scored on, so it is a ceiling for
+this sample rather than a prediction about any other.
+
+**The Instruct mean and median disagree in sign.** The median pair prefers the
+longer side by 185 characters while the mean runs 23 characters the other way.
+That is a handful of very long rejected answers, not a stage that prefers
+brevity, and either statistic alone would say the wrong thing — so both are
+printed.
+
+**The length gap on a think stage is not only thinking.** The 32B gap splits
+into 961 characters of reasoning and 938 of answer, so the answers differ in
+length about as much as the reasoning does. A card that reported the total alone
+would read as a statement about the reasoning budget.
+
+The breakdown by the stage's own provenance column is where the stage-wide
+number comes apart. On `Dolci-Instruct-DPO`, `preference_type` splits 66.4% into
+73.7% for `delta_learning` and 58.9% for `llm_judged`: the half built by pairing
+models is where most of the length asymmetry lives, and the judged half is much
+closer to a coin.
+
+### What it does not say
+
+- It reads a sample, like every other sampled layer here, so the rate carries a
+  Wilson interval widened for the sampler's pages of adjacent rows.
+- It says nothing about *why* the chosen side is longer. A longer answer can be
+  the better answer; that is the point of a preference dataset. What the number
+  bounds is how much of the label a model could reproduce without reading one.
+- `degenerate` counts pairs whose two completions are identical. DPO reads the
+  difference of the two sides' log probabilities, so those cancel exactly and
+  train nothing — 12 of the 1,000 sampled Instruct pairs.
+- The datasets-server shortens a very large cell to fit its response limit, and
+  cuts land on the longest cells by construction — the side this layer measures.
+  A `context` run records which rows arrived cut; the samples committed before it
+  did report `truncated_rows: null`, which is *unknown* rather than none.
 
 ## Where each label comes from
 

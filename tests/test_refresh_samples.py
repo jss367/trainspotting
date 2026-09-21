@@ -155,7 +155,7 @@ def test_labels_keep_each_stages_classifier_and_still_run_new_stages(refresh, ph
     assert [c for c in calls if c[0] == "agreement"] == [["agreement", target, "--stage", "rlvr"]]
     if phase == "all":
         assert [c[0] for c in calls] == [
-            "context", "languages", "classify", "classify", "classify", "classify", "agreement", "export",
+            "context", "languages", "pairs", "classify", "classify", "classify", "classify", "agreement", "export",
         ]
 
 
@@ -194,7 +194,7 @@ def test_all_refresh_phases_use_the_canonical_target_for_saved_questions(refresh
     ]
     assert all(c[1] == target for c in calls if c[0] != "export")
     if phase == "all":
-        assert [c[0] for c in calls] == ["context", "languages", "classify", "ask", "stance", "export"]
+        assert [c[0] for c in calls] == ["context", "languages", "pairs", "classify", "ask", "stance", "export"]
 
 
 def test_canonical_base_only_target_can_still_refresh_saved_corpus_questions(refresh):
@@ -224,7 +224,7 @@ def test_saved_repeatability_runs_refresh_in_order_with_their_own_classifiers(re
         ["agreement", target, "--stage", "chat"],
     ]
     if phase == "all":
-        assert [c[0] for c in calls] == ["context", "languages", "classify", "classify", "agreement", "export"]
+        assert [c[0] for c in calls] == ["context", "languages", "pairs", "classify", "classify", "agreement", "export"]
 
 
 @pytest.mark.parametrize("directory", ["results", "docs/data"])

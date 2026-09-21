@@ -154,6 +154,8 @@ def cmd_report(args):
             print(f"- undetermined: {und / n * 100:.1f}%  ({und}/{n}) — too short, too much code, or too evenly mixed to call")
         print()
 
+    _report_pairs(args.target, target)
+
     # String traces before the budget: main puts the budget last on purpose,
     # because the rates above it are per stage and not comparable to each other.
     if target["is_model"]:
@@ -200,6 +202,62 @@ def _report_influence(target_name: str) -> None:
     for res in runs:
         for line in bif.render(res):
             print(line)
+        print()
+
+
+def _report_pairs(target_name: str, target: dict) -> None:
+    """What separates the two sides of each preference pair, besides the answer.
+
+    Printed under the sampled layers rather than beside the budget, because it
+    is a property of the mix and not a share of training: it says what a policy
+    could fit without reading a response, not what any policy did fit.
+    """
+    stages = [s for s in registry.post_training_stages(target) if registry.stage_kind(s) == "dpo"]
+    if not stages:
+        return
+    print("\n## Preference pairs (sampled)\n")
+    for s in stages:
+        path = paths.find(f"{target_name}.{s['stage']}.pairs.json")
+        if not path:
+            print(f"- {s['stage']}: no pairs run yet (`trainspotting pairs {target_name} --stage {s['stage']}`)")
+            continue
+        d = json.loads(path.read_text())
+        rule, delta = d["length_rule"], d["delta"]
+        print(f"### {s['stage']} — {d['dataset']} (n={d['n']} pairs)\n")
+        print(
+            f"- longer side chosen: {rule['rate'] * 100:.1f}%  ({rule['k']}/{rule['n']},"
+            f" 95% CI {rule['lo'] * 100:.1f}–{rule['hi'] * 100:.1f}%)"
+            + (f" — {d['ties']} pairs tie on length and are not counted" if d["ties"] else "")
+        )
+        print(f"- chosen − rejected: mean {delta['mean']:+,.0f} characters, median {delta['median']:+,.0f}")
+        if d.get("split"):
+            print(
+                f"  - of which reasoning {d['split']['reasoning']['mean']:+,.0f}"
+                f" and answer {d['split']['answer']['mean']:+,.0f}"
+            )
+        rules = d["models"]["rule"]
+        if rules:
+            # "Fits", not "predicts": the rule is read off the same rows it is
+            # scored on, so it is a ceiling for this sample and not an estimate
+            # for any other.
+            print(
+                f"- generator names alone fit the choice in {rules['rate'] * 100:.1f}%"
+                f"  ({rules['k']}/{rules['n']} over {rules['matchups']} matchup(s), fitted in-sample)"
+            )
+            for m in d["models"]["matchups"][:3]:
+                print(f"  - {m['chosen']} over {m['rejected']}: {m['n']} pairs")
+        if d["degenerate"]:
+            print(
+                f"- {d['degenerate']} pairs have no gradient-bearing text on a side —"
+                " the two completions are identical, so the DPO loss cancels"
+            )
+        if d["truncated_rows"]:
+            print(
+                f"- {d['truncated_rows']} rows arrived with a read column shortened upstream,"
+                " so their lengths are lower bounds"
+            )
+        elif d["truncated_rows"] is None:
+            print("- upstream truncation was not recorded for this sample, so the lengths are unchecked")
         print()
 
 

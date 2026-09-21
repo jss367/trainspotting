@@ -15,7 +15,7 @@
 #   scripts/refresh_samples.sh <target> [phase]
 #
 #   phase   all (default) | free | labels | asks | export
-#           free    context + languages, no API key needed
+#           free    context + languages + pairs, no API key needed
 #           labels  classify, plus existing replicate/agreement checks
 #                   (needs ANTHROPIC_API_KEY; one extra judging run per replicate)
 #           asks    re-run existing ask/stance questions in their saved stages
@@ -68,6 +68,11 @@ if [[ "$PHASE" == all || "$PHASE" == free ]]; then
   "${TS[@]}" context "$TARGET"
   step "languages $TARGET"
   "${TS[@]}" languages "$TARGET"
+  # After context, because it reads the run context just wrote. A target with no
+  # preference stage exits non-zero here and that is not a failure of the
+  # refresh, so the status is swallowed rather than tripping `set -e`.
+  step "pairs $TARGET (what separates the two sides of each preference pair)"
+  "${TS[@]}" pairs "$TARGET" || true
 fi
 
 if [[ "$PHASE" == all || "$PHASE" == labels ]]; then

@@ -34,6 +34,8 @@ const EXPORTS = [
   "pieSlices",
   // the search box
   "searchFields", "scanRecords", "branchPoint", "matchIndex",
+  // the preference-pair card's signed character counts
+  "fmtSigned",
   // the one hook into page internals: the language card reads its display
   // names from a module-scope cache boot() fills, and nothing serves that
   // file here.
