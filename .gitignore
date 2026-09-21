@@ -226,6 +226,11 @@ results/*.docs.json
 # scripts/export_site_data.py rather than copied from here — a committed one
 # would go stale the next time a question is re-asked, and nothing would say so.
 results/*.budget-*.json
+# `trainspotting pairs`, for the same reason: derived from the committed context
+# run and nothing else, so the copy under docs/data/ is rebuilt by the export
+# rather than copied from here. A committed one would also shadow the fresh copy
+# — `paths.find` prefers results/ — the next time the sample is re-drawn.
+results/*.pairs.json
 
 # Cached HuggingFace shard listings for the pretraining sampler (re-fetchable).
 .shard-cache/

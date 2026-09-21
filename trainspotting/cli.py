@@ -25,6 +25,7 @@ from .commands.grep import cmd_grep
 from .commands.labeling import cmd_ask, cmd_classify
 from .commands.languages import cmd_languages
 from .commands.lookup import cmd_lookup
+from .commands.pairs import cmd_pairs
 from .commands.pretrain import cmd_pretrain
 from .commands.report import cmd_report
 from .commands.search import cmd_search
@@ -292,6 +293,15 @@ def main():
     p.add_argument("--sample", type=_positive_int, default=SAMPLE)
     p.add_argument("--seed", type=int, default=0)
     p.set_defaults(fn=cmd_context)
+
+    p = sub.add_parser(
+        "pairs",
+        help="what separates the two sides of a preference pair besides the answer: "
+        "length, and which model wrote each side (reads committed context, no API key)",
+    )
+    p.add_argument("target", help=TARGET_HELP)
+    p.add_argument("--stage", help="only this preference stage (dpo)")
+    p.set_defaults(fn=cmd_pairs)
 
     p = sub.add_parser("languages", help="detect the natural language of sampled prompts (local, no API key)")
     p.add_argument("target", help=TARGET_HELP)

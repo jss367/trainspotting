@@ -1059,7 +1059,7 @@ function barRow(parent, label, frac, lo, hi, max, tipHtml, isValue, records, ctx
       <div class="fill ${frac ? "" : "zero"}" style="width:${w(frac)}%${color ? `;background:${color}` : ""}"></div>
       ${hi > lo ? `<div class="ci" style="left:${w(lo)}%;width:${Math.max(0, w(hi)-w(lo))}%"></div>` : ""}
     </div>
-    <div class="val">${pct(frac)} <small>${pct(lo)}–${pct(hi)}</small></div>`;
+    <div class="val">${pct(frac)}${hi > lo ? ` <small>${pct(lo)}–${pct(hi)}</small>` : ""}</div>`;
   hover(row.querySelector(".trackbar"), tipHtml);
   parent.appendChild(row);
   if (records && records.length){
@@ -1162,6 +1162,12 @@ function corpusComposition(parent, groups, totalBytes, limit = 14){
 // elements; what those numbers mean is decided by the cards below.
 
 const fmtChars = n => trim(n >= 1e6 ? (n/1e6).toFixed(1) + "M" : n >= 1e3 ? Math.round(n/1e3) + "k" : String(Math.round(n)));
+// A difference between two lengths, signed and at full resolution. Not
+// `fmtChars`: it drops the sign, which is the whole content of the number, and
+// it rounds to two significant figures, which on Dolci-Think-DPO-7B renders a
+// mean of 2,067 and a median of 1,609 as "2k" and "2k" — two statistics printed
+// side by side precisely because they differ.
+const fmtSigned = n => (n < 0 ? "−" : "+") + num(Math.abs(Math.round(n)));
 
 // Ink that stays readable on a filled mark. The two ramps used for fills run
 // light-to-dark on the light surface and dark-to-light on the dark one, so
@@ -1364,7 +1370,7 @@ function logChart(parent, rows){
 
 // One stage's length distribution, on bins shared by every other stage so the
 // rows read as small multiples of one axis.
-function histRow(parent, label, stats, color, tipHead){
+function histRow(parent, label, stats, color, tipHead, valueHtml){
   const bins = stats.hist || [];
   const max = Math.max(...bins, 1);
   const row = document.createElement("div");
@@ -1372,9 +1378,17 @@ function histRow(parent, label, stats, color, tipHead){
   row.innerHTML = `<div class="lbl">${label}</div>
     <div class="spark">${bins.map((c, i) => {
       const from = HIST_EDGES[i], to = HIST_EDGES[i+1];
-      return `<i style="height:${Math.max(c ? 2 : 0, c/max*100)}%;background:${color}" data-tip="<b>${escAttr(tipHead)}</b><br>${c} of ${stats.n} sampled (${pct(c/stats.n)})<br>${fmtChars(from)}–${fmtChars(to)} characters"></i>`;
+      // The two end bins are open, not bounded: `derive.histogram` clamps a
+      // positive value below the first edge into the first bin and anything
+      // above the last edge into the last one, so labelling them as ranges
+      // tells a reader the bin holds less than it does — and the overflow bin
+      // is where the long completions this page cares about land.
+      const range = i === 0 ? `&lt;${fmtChars(to)}`
+        : i === bins.length - 1 ? `≥${fmtChars(from)}`
+        : `${fmtChars(from)}–${fmtChars(to)}`;
+      return `<i style="height:${Math.max(c ? 2 : 0, c/max*100)}%;background:${color}" data-tip="<b>${escAttr(tipHead)}</b><br>${c} of ${stats.n} sampled (${pct(c/stats.n)})<br>${range} characters"></i>`;
     }).join("")}</div>
-    <div class="val">${fmtChars(stats.median)} <small>median</small></div>`;
+    <div class="val">${valueHtml ?? `${fmtChars(stats.median)} <small>median</small>`}</div>`;
   wireTips(row);
   parent.appendChild(row);
 }
@@ -1953,6 +1967,153 @@ function lengthCard(m, rows){
     + `median is printed beside it. The longest single item sampled is ${num(Math.round(longest.lengths.max))} `
     + `characters, in ${stageLabel(longest.stage)}. Anything past ${fmtChars(HIST_EDGES[11])} characters is counted in the last bin.`;
   card.appendChild(note);
+  return card;
+}
+
+// --------------------------------------------------------- preference pairs ---
+
+// What tells the two sides of a DPO pair apart, besides the answer. Both things
+// measured here are readable without reading a response — how long each side is,
+// and which model wrote it — so a rate near 1 is a shortcut a policy can fit
+// instead of the preference. It says the shortcut is available, not that it was
+// taken: nothing on this page touches a trained model.
+//
+// The two directions are drawn as separate rows rather than one signed axis.
+// A signed axis over three orders of magnitude has to be log on both sides of a
+// zero it cannot show, and the question — how often, and by how much, each way —
+// reads straight off two rows on the shared bins every other length chart uses.
+// Green and orange mean "the chosen side" and "the rejected side" wherever they
+// appear in this card, including the two histograms — so the generator rule,
+// which is about neither side, gets a third colour rather than borrowing one
+// and saying something it does not mean.
+const PAIR_HUE = {chosen: "var(--series-3)", rejected: "var(--series-2)", rule: "var(--series-4)"};
+
+function pairsCard(model, m, post, runs){
+  const usable = post.map(s => [s, runs[s.stage]]).filter(([, d]) => d && d.n);
+  if (!usable.length) return null;
+  const card = document.createElement("section");
+  card.className = "card";
+  card.id = "card-pairs";
+  card.innerHTML = `<h2>What separates the two sides of a preference pair?</h2>
+    <p class="sub">A DPO stage teaches by contrast, so what it teaches depends on what tells the
+      chosen answer from the rejected one. Two things do without reading either: length, and which
+      model generated the side. Where those line up with the preference, a policy can fit them
+      instead — this measures what is available to fit, not what any model fit.
+      Whiskers: Wilson 95% CI, widened for the sampler's pages of adjacent rows.</p>`;
+  for (const [s, d] of usable){
+    const h = document.createElement("h3");
+    h.className = "stage";
+    h.style.setProperty("--bar", hueFor(s.stage));
+    h.innerHTML = `${esc(stageLabel(s.stage))} <span class="ds">${esc(d.dataset)}</span>`;
+    card.appendChild(h);
+    const sub = document.createElement("p");
+    sub.className = "stage-sub";
+    sub.innerHTML = `n=${num(d.n)} sampled pairs`
+      + (d.ties ? ` · ${num(d.ties)} tie on length and are left out of the rate below` : "")
+      + (d.degenerate ? ` · <b>${num(d.degenerate)}</b> have two identical completions, so the DPO loss cancels exactly and they train nothing` : "");
+    card.appendChild(sub);
+
+    const rule = d.length_rule;
+    // A stage where every sampled pair ties has no pair the rule can answer, so
+    // the file carries `{k: 0, n: 0}` and no rate — `pct(undefined)` renders
+    // "NaN%" and the bar comes out at NaN width, which is a broken chart rather
+    // than a missing one. A 0% bar would be worse still: it reads as "length
+    // never picks the chosen side" where the truth is that length picks neither.
+    if (!rule.n){
+      const none = document.createElement("p");
+      none.className = "note";
+      none.textContent = `All ${num(d.n)} sampled pairs tie on length, so the length rule has no pair `
+        + `to be right or wrong about and there is no rate to draw.`;
+      card.appendChild(none);
+    } else {
+      barRow(card, "longer side is the chosen one", rule.rate, rule.lo, rule.hi, 1,
+        `<b>longer side is the chosen one</b><br>${num(rule.k)} of ${num(rule.n)} pairs whose sides differ in length (${pct(rule.rate)})`
+        + `<br>95% CI ${pct(rule.lo)}–${pct(rule.hi)}`
+        + `<br>a coin would be 50%`, true, null, null, PAIR_HUE.chosen);
+    }
+    const mr = d.models?.rule;
+    if (mr)
+      // No interval: this rule is read off the same rows it is scored on, so
+      // the number is a ceiling for this sample rather than an estimate with
+      // sampling error around it. Drawing whiskers would claim otherwise.
+      barRow(card, "generator name alone settles it", mr.rate, mr.rate, mr.rate, 1,
+        `<b>generator name alone settles it</b><br>${num(mr.k)} of ${num(mr.n)} pairs whose two sides came from different models (${pct(mr.rate)})`
+        + `<br>over ${num(mr.matchups)} model matchup${mr.matchups === 1 ? "" : "s"}`
+        + `<br>fitted on these rows and scored on them — a ceiling, not a prediction`,
+        true, null, null, PAIR_HUE.rule);
+
+    const delta = d.delta;
+    const nChosen = delta.hist_chosen.reduce((a, b) => a + b, 0);
+    const nRejected = delta.hist_rejected.reduce((a, b) => a + b, 0);
+    histRow(card, "chosen side longer by", {hist: delta.hist_chosen, n: d.n}, PAIR_HUE.chosen,
+      "chosen longer", `${num(nChosen)} <small>pairs</small>`);
+    histRow(card, "rejected side longer by", {hist: delta.hist_rejected, n: d.n}, PAIR_HUE.rejected,
+      "rejected longer", `${num(nRejected)} <small>pairs</small>`);
+    const axis = document.createElement("div");
+    axis.className = "histaxis";
+    const last = HIST_EDGES.length - 1;
+    axis.innerHTML = `<div></div><div class="ticks">${[0, 2, 4, 6, 8, 10, last].map(i =>
+      `<span style="left:${i/last*100}%;transform:translateX(${i === 0 ? "0" : i === last ? "-100%" : "-50%"})">${fmtChars(HIST_EDGES[i])}</span>`
+    ).join("")}</div><div></div>`;
+    card.appendChild(axis);
+
+    const note = document.createElement("p");
+    note.className = "note";
+    // Mean and median both, because on Dolci-Instruct-DPO they disagree in
+    // sign: the median pair prefers the longer side by 185 characters while the
+    // mean is 23 characters the other way, which is a handful of very long
+    // rejected answers and not a stage that prefers brevity.
+    let text = `Chosen minus rejected: mean ${fmtSigned(delta.mean)} characters, median ${fmtSigned(delta.median)}.`;
+    if (d.split)
+      text += ` Of that mean, ${fmtSigned(d.split.reasoning.mean)} is thinking and `
+        + `${fmtSigned(d.split.answer.mean)} is the answer after it.`;
+    if (d.truncated_rows)
+      text += ` ${num(d.truncated_rows)} rows arrived with a read column shortened by the `
+        + `datasets-server, so their lengths — and this gap — are lower bounds.`;
+    else if (d.truncated_rows === null)
+      text += ` This sample predates the check for cells the datasets-server shortens, so whether `
+        + `any length here is cut short is unknown rather than ruled out.`;
+    note.textContent = text;
+    card.appendChild(note);
+
+    const matchups = d.models?.matchups || [];
+    if (matchups.length){
+      const det = document.createElement("details");
+      det.innerHTML = `<summary>which model wrote which side (${num(matchups.length)} matchup${matchups.length === 1 ? "" : "s"})</summary>`;
+      const list = document.createElement("div");
+      list.className = "chips";
+      list.innerHTML = matchups.slice(0, 24).map(x =>
+        `<span class="chip">${esc(x.chosen ?? "unknown")} <b>over</b> ${esc(x.rejected ?? "unknown")} · ${num(x.n)}</span>`).join("");
+      det.appendChild(list);
+      if (matchups.length > 24){
+        const rest = document.createElement("p");
+        rest.className = "note";
+        rest.textContent = `+${matchups.length - 24} more matchups, in the result file.`;
+        det.appendChild(rest);
+      }
+      card.appendChild(det);
+    }
+
+    for (const [col, values] of Object.entries(d.by || {})){
+      const det = document.createElement("details");
+      const entries = Object.entries(values);
+      det.innerHTML = `<summary>the same rate by <code>${esc(col)}</code> (${entries.length} values)</summary>`;
+      card.appendChild(det);
+      for (const [value, st] of entries.slice(0, 12)){
+        if (!st.n) continue;
+        barRow(det, esc(value), st.rate, st.lo ?? st.rate, st.hi ?? st.rate, 1,
+          `<b>${escAttr(value)}</b><br>${num(st.k)} of ${num(st.n)} pairs (${pct(st.rate)})`
+          + (st.lo == null ? "" : `<br>95% CI ${pct(st.lo)}–${pct(st.hi)}`),
+          false, null, null, PAIR_HUE.chosen);
+      }
+      if (entries.length > 12){
+        const rest = document.createElement("p");
+        rest.className = "note";
+        rest.textContent = `+${entries.length - 12} smaller groups, in the result file.`;
+        det.appendChild(rest);
+      }
+    }
+  }
   return card;
 }
 
@@ -3186,6 +3347,20 @@ async function renderModel(model, gen){
     }
     main.appendChild(mix);
   }
+
+  // ---- what separates the two sides of a preference pair ----
+  // Between the composition and the values: it is a property of the mix, like
+  // the composition above it, and it qualifies every values share below — a
+  // stage whose preference is settled by length is a stage whose harmlessness
+  // bar describes the prompts rather than what the pair taught.
+  const pairRuns = {};
+  for (const s of post){
+    const name = `${model}.${s.stage}.pairs.json`;
+    if (MANIFEST.includes(name)) pairRuns[s.stage] = await getData(name);
+  }
+  if (gen !== GEN) return;
+  const pairs = pairsCard(model, m, post, pairRuns);
+  if (pairs) main.appendChild(pairs);
 
   // ---- HHH classification ----
   const hhh = document.createElement("section");
@@ -4669,7 +4844,7 @@ export async function boot(){
 // What the tests reach for. The page itself only needs boot(); the rest is
 // exported so tests/site can import the functions the browser runs rather than
 // a copy lifted out of the file.
-export { questionFiles, splitModelKey, sameDraw, sameRevision, resolverFor, pairingEvidence, crossRows, promptKey, comparisonColors, stabilityNote, stageLabel, rewardFamily, rewardComposition, renderRewardComposition, renderRLVR, diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, pieSlices, searchFields, scanRecords, branchPoint, matchIndex };
+export { questionFiles, splitModelKey, sameDraw, sameRevision, resolverFor, pairingEvidence, crossRows, promptKey, comparisonColors, stabilityNote, stageLabel, rewardFamily, rewardComposition, renderRewardComposition, renderRLVR, diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, pieSlices, searchFields, scanRecords, branchPoint, matchIndex, fmtSigned };
 // The language card reads its display names from a module-scope cache boot()
 // fills from language-names.json; nothing serves that file under node, so the
 // tests set it through here.

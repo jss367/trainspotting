@@ -186,7 +186,8 @@ def _reward(row: dict, dataset: str | None = None) -> dict:
     }
 
 
-def build(row: dict, kind: str, prompt: str, row_index: int, source_columns=(), dataset: str | None = None) -> dict:
+def build(row: dict, kind: str, prompt: str, row_index: int, source_columns=(), dataset: str | None = None,
+          truncated=()) -> dict:
     """One kind-appropriate context record for an already-sampled row.
 
     `kind` is `registry.stage_kind` of the stage the row came from — the shape
@@ -206,12 +207,28 @@ def build(row: dict, kind: str, prompt: str, row_index: int, source_columns=(), 
     committed before result records carried a row — two rows sharing a
     400-character opening collapse to the first of them under it, which a
     curated mix mostly gets away with and a chat log does not.
+
+    `truncated` names the columns the datasets-server shortened to fit its
+    response limit, narrowed to the ones this stage reads
+    (`search.truncated_columns`). It is stored because `chars` is otherwise read
+    as the field's true length, and for a shortened cell it is the length of
+    what arrived. Cuts land on the longest cells by construction, so a layer
+    comparing two fields' lengths — `pairs` — needs to know which rows cannot
+    settle the comparison.
+
+    Only a row that was cut carries the field, and the *run* says whether it was
+    looking (`truncation_recorded` in the file header). Without that flag an
+    absent field means the run predates this and the row is unknown rather than
+    whole, which is the distinction a zero would erase — and writing an empty
+    list on every row to make the distinction would add 17 kB to each committed
+    sample to say nothing happened.
     """
     rec = {
         "key": prompt[:KEY_CHARS],
         "prompt_full": _text(prompt),
         "row": row_index,
         "id": row.get("id") or row.get("prompt_id") or row.get("custom_id"),
+        **({"truncated": list(truncated)} if truncated else {}),
     }
     if kind == "sft":
         rec["kind"] = "sft"

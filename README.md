@@ -22,6 +22,7 @@ Each is a command; each is a layer of the same audit.
 | Values | `classify`, `ask` | How much of the post-training data is about being helpful, honest and harmless versus skill content, by sampling prompts and labeling them with Claude. |
 | Language | `languages` | Which natural language each sampled prompt is in, detected locally. |
 | Context | `context` | The whole training example behind a prompt: the response fit, the pair pushed between, or the verifier that scores. |
+| Preference | `pairs` | What tells the two sides of a DPO pair apart besides the answer: how much longer the chosen side is, and which model wrote each side. |
 | Strings, in the samples | `search` | Where a string appears in the sampled examples, and on which side. |
 | Strings, over every row | `grep` | How many rows of a mix contain a string, exactly, over the whole mix. |
 | Direction | `stance` | Which way an example pushes on a question: toward, away, or neither. |

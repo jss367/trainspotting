@@ -95,6 +95,17 @@ that: one search's stages together, two searches under one slug apart.
 yield more than its prompt, or a search of it is the prompt-only search the
 layer exists to replace.
 
+`tests/test_pairs.py` pins the preference-pair arithmetic where it would be
+wrong and still look like a number: a multi-turn pair's shared history counted
+on both sides (which cancels out of the difference and not out of the two
+totals), a tie scored as an answer the length rule got wrong, a think stage's
+reasoning and answer halves that do not add back up to the gap printed above
+them, a signed distribution binned through `derive.histogram` — which drops
+everything at or below zero, so the rejected side's half of the chart simply
+would not be there — and a `pairs.json` that has drifted from the context
+sample the site serves beside it. The last is checked against the committed
+samples rather than a fixture, for the same reason the derived numbers are.
+
 `grep` is covered twice over. Its column-to-field mapping runs against one saved
 Parquet schema per stage (`tests/fixtures/schemas/`, re-captured by
 `scripts/capture_parquet_schemas.py`), and the query it builds runs for real
@@ -163,6 +174,23 @@ sampling run that quietly labels nothing.
   published with the dataset, so those rows are still labeled from the prompt
   alone. The `sources` layer's reward-type breakdown and the `context` layer's
   verifier view are the complement.
+- `pairs` measures what is *available* to be fit from a preference stage
+  without reading either answer — the length asymmetry and the generator
+  asymmetry — not what any trained policy fit. The generator rule in particular
+  is read off the same rows it is scored on, so it is a ceiling for that sample
+  and carries `fitted: true` rather than an interval. And on Dolci the asymmetry
+  is partly by design: `delta_learning` pairs a strong generator against a weak
+  one on purpose, so a rate of 1.0 there is the recipe rather than a defect in
+  it. What the layer adds is the price — how much of the label a length rule
+  also recovers.
+- `context` records which sampled rows arrived with a cell the datasets-server
+  had shortened, because `chars` is otherwise read as a field's true length and
+  for a cut cell it is the length of what arrived. Cuts land on the longest
+  cells, which is exactly what `pairs` measures, so a sample committed before
+  the check existed reports `truncated_rows: null` — unknown rather than none.
+  `pairs` counts only the cuts that land in `chosen` or `rejected`: those are
+  the cells its lengths come from, and a row shortened in the standalone
+  `prompt` cell has both measured sides whole.
 - The stage ranking is evidence about where a string is, and only that. It does
   not weight the stages against each other, so a rate in RL and the same rate
   in pretraining rank equal even though the late one generally moves behaviour

@@ -26,6 +26,7 @@ from trainspotting import (  # noqa: E402
     casestudy,
     derive,
     languages,
+    pairs,
     paths,
     registry,
     rewards,
@@ -117,7 +118,13 @@ for f in sorted((ROOT / "results").glob("*.json")):
     # manifest listed it twice.
     #
     # UNRENDERED is the same idea for runs the page has no card for at all.
-    if ".budget-" in f.name or any(marker in f.name for marker in UNRENDERED):
+    # Derived below from the committed context run, never copied — the same
+    # rule the budgets follow, and for the same reason: a local `pairs` run
+    # leaves one in results/, and copying it would put its name in `copied` a
+    # second time when the derive loop writes the real one.
+    if ".budget-" in f.name or f.name.endswith(".pairs.json") or any(
+        marker in f.name for marker in UNRENDERED
+    ):
         continue
     if f.name.endswith(BULK):
         (out / f.name).write_text(redact.redact_credentials(json.dumps(json.loads(f.read_text()), separators=(",", ":"))))
@@ -238,6 +245,15 @@ for ctx_file in sorted(out.glob("*.context.json")):
         )
         print(f"  ! {ctx_file.name}: {why} — no token estimate, re-run it")
     write_derived(ctx_file.name.replace(".context.json", ".profile.json"), profile)
+    # What separates the two sides of each preference pair besides the answer.
+    # Derived here rather than copied so the site's numbers always describe the
+    # sample it serves, and only for the stages that have pairs at all — an SFT
+    # stage has no chosen and rejected side, and a zero there would read as an
+    # absence of length asymmetry rather than as a question that does not apply.
+    if any(r.get("kind") == "dpo" for r in d.get("records") or []):
+        write_derived(
+            ctx_file.name.replace(".context.json", ".pairs.json"), pairs.stage_pairs(d)
+        )
 
 total += sum((out / name).stat().st_size for name in derived)
 
