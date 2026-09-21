@@ -1,0 +1,106 @@
+{
+  "stages": [
+    {
+      "stage": "pretrain",
+      "coverage": "full_stage",
+      "lineage_source": "https://huggingface.co/allenai/Olmo-3-1025-7B/blob/main/README.md",
+      "checkpoints": [
+        {
+          "repo": "allenai/Olmo-3-1025-7B",
+          "revision": "stage1-step0",
+          "label": "Phase start"
+        },
+        {
+          "repo": "allenai/Olmo-3-1025-7B",
+          "revision": "stage1-step1413814",
+          "label": "Phase end"
+        }
+      ]
+    },
+    {
+      "stage": "midtrain",
+      "coverage": "full_stage",
+      "lineage_source": "https://huggingface.co/allenai/Olmo-3-1025-7B/blob/main/README.md",
+      "checkpoints": [
+        {
+          "repo": "allenai/Olmo-3-1025-7B",
+          "revision": "stage1-step1413814",
+          "label": "Phase start"
+        },
+        {
+          "repo": "allenai/Olmo-3-1025-7B",
+          "revision": "stage2-step47684",
+          "label": "Phase end"
+        }
+      ]
+    },
+    {
+      "stage": "long-context",
+      "coverage": "full_stage",
+      "lineage_source": "https://huggingface.co/allenai/Olmo-3-1025-7B/blob/main/README.md",
+      "checkpoints": [
+        {
+          "repo": "allenai/Olmo-3-1025-7B",
+          "revision": "stage2-step47684",
+          "label": "Phase start"
+        },
+        {
+          "repo": "allenai/Olmo-3-1025-7B",
+          "revision": "main",
+          "label": "Phase end"
+        }
+      ]
+    },
+    {
+      "stage": "sft",
+      "coverage": "full_stage",
+      "lineage_source": "https://huggingface.co/allenai/Olmo-3-7B-Instruct-SFT/blob/main/README.md",
+      "checkpoints": [
+        {
+          "repo": "allenai/Olmo-3-1025-7B",
+          "revision": "main",
+          "label": "Phase start"
+        },
+        {
+          "repo": "allenai/Olmo-3-7B-Instruct-SFT",
+          "revision": "main",
+          "label": "Phase end"
+        }
+      ]
+    },
+    {
+      "stage": "dpo",
+      "coverage": "full_stage",
+      "lineage_source": "https://huggingface.co/allenai/Olmo-3-7B-Instruct-DPO/blob/main/README.md",
+      "checkpoints": [
+        {
+          "repo": "allenai/Olmo-3-7B-Instruct-SFT",
+          "revision": "main",
+          "label": "Phase start"
+        },
+        {
+          "repo": "allenai/Olmo-3-7B-Instruct-DPO",
+          "revision": "main",
+          "label": "Phase end"
+        }
+      ]
+    },
+    {
+      "stage": "rlvr",
+      "coverage": "full_stage",
+      "lineage_source": "https://huggingface.co/allenai/Olmo-3-7B-Instruct/blob/main/README.md",
+      "checkpoints": [
+        {
+          "repo": "allenai/Olmo-3-7B-Instruct-DPO",
+          "revision": "main",
+          "label": "Phase start"
+        },
+        {
+          "repo": "allenai/Olmo-3-7B-Instruct",
+          "revision": "main",
+          "label": "Phase end"
+        }
+      ]
+    }
+  ]
+}

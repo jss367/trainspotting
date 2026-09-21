@@ -20,6 +20,7 @@ from trainspotting import bif, cli, registry
 # Handler attribute per subcommand, and the minimum argv that reaches it. The
 # handlers are patched out: this is a test of dispatch, not of what they do.
 COMMANDS = [
+    ("changes", "cmd_changes", ["changes", "pythia-70m-deduped"]),
     ("facts", "cmd_facts", ["facts", "olmo-3-7b-instruct"]),
     ("sources", "cmd_sources", ["sources", "olmo-3-7b-instruct"]),
     ("report", "cmd_report", ["report", "olmo-3-7b-instruct"]),

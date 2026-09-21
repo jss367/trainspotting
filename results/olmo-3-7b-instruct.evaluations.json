@@ -1,0 +1,191 @@
+{
+  "target": "olmo-3-7b-instruct",
+  "kind": "published_evaluations",
+  "source": "https://huggingface.co/allenai/Olmo-3-7B-Instruct-SFT/blob/e1452fc572d51966ff4aaeb25118b891eb93e549/README.md",
+  "source_revision": "e1452fc572d51966ff4aaeb25118b891eb93e549",
+  "source_sha256": "a7beafa19f6d10b30bdca1acb3cfe0e4c8e0913dea953d2bd794f683fa341c9e",
+  "retrieved_at": "2026-09-21T18:57:54.662391+00:00",
+  "note": "Publisher-reported scores from one stage-comparison table. Evaluation settings are those of the release; these are not our fixed-prompt probes. No base-model scores are supplied in this table.",
+  "benchmarks": [
+    {
+      "name": "MATH",
+      "category": "Mathematics",
+      "scores": {
+        "sft": 65.1,
+        "dpo": 79.6,
+        "rlvr": 87.3
+      }
+    },
+    {
+      "name": "AIME 2024",
+      "category": "Mathematics",
+      "scores": {
+        "sft": 6.7,
+        "dpo": 23.5,
+        "rlvr": 44.3
+      }
+    },
+    {
+      "name": "AIME 2025",
+      "category": "Mathematics",
+      "scores": {
+        "sft": 7.2,
+        "dpo": 20.4,
+        "rlvr": 32.5
+      }
+    },
+    {
+      "name": "OMEGA",
+      "category": "Mathematics",
+      "scores": {
+        "sft": 14.4,
+        "dpo": 22.8,
+        "rlvr": 28.9
+      }
+    },
+    {
+      "name": "BigBenchHard",
+      "category": "Reasoning",
+      "scores": {
+        "sft": 51.0,
+        "dpo": 69.3,
+        "rlvr": 71.2
+      }
+    },
+    {
+      "name": "ZebraLogic",
+      "category": "Reasoning",
+      "scores": {
+        "sft": 18.0,
+        "dpo": 28.4,
+        "rlvr": 32.9
+      }
+    },
+    {
+      "name": "AGI Eval English",
+      "category": "Reasoning",
+      "scores": {
+        "sft": 59.2,
+        "dpo": 64.0,
+        "rlvr": 64.4
+      }
+    },
+    {
+      "name": "HumanEvalPlus",
+      "category": "Code",
+      "scores": {
+        "sft": 69.8,
+        "dpo": 72.9,
+        "rlvr": 77.2
+      }
+    },
+    {
+      "name": "MBPP+",
+      "category": "Code",
+      "scores": {
+        "sft": 56.5,
+        "dpo": 55.9,
+        "rlvr": 60.2
+      }
+    },
+    {
+      "name": "LiveCodeBench v3",
+      "category": "Code",
+      "scores": {
+        "sft": 20.0,
+        "dpo": 18.8,
+        "rlvr": 29.5
+      }
+    },
+    {
+      "name": "IFEval",
+      "category": "Instruction following",
+      "scores": {
+        "sft": 81.7,
+        "dpo": 82.0,
+        "rlvr": 85.6
+      }
+    },
+    {
+      "name": "IFBench",
+      "category": "Instruction following",
+      "scores": {
+        "sft": 27.4,
+        "dpo": 29.3,
+        "rlvr": 32.3
+      }
+    },
+    {
+      "name": "MMLU",
+      "category": "Knowledge",
+      "scores": {
+        "sft": 67.1,
+        "dpo": 69.1,
+        "rlvr": 69.1
+      }
+    },
+    {
+      "name": "PopQA",
+      "category": "Question answering",
+      "scores": {
+        "sft": 16.5,
+        "dpo": 20.7,
+        "rlvr": 14.1
+      }
+    },
+    {
+      "name": "GPQA",
+      "category": "Question answering",
+      "scores": {
+        "sft": 30.0,
+        "dpo": 37.9,
+        "rlvr": 40.4
+      }
+    },
+    {
+      "name": "AlpacaEval 2 LC",
+      "category": "Conversation",
+      "scores": {
+        "sft": 21.8,
+        "dpo": 43.3,
+        "rlvr": 40.9
+      }
+    },
+    {
+      "name": "SimpleQA",
+      "category": "Tool Use",
+      "scores": {
+        "sft": 74.2,
+        "dpo": 79.8,
+        "rlvr": 79.3
+      }
+    },
+    {
+      "name": "LitQA2",
+      "category": "Tool Use",
+      "scores": {
+        "sft": 38.0,
+        "dpo": 43.3,
+        "rlvr": 38.2
+      }
+    },
+    {
+      "name": "BFCL",
+      "category": "Tool Use",
+      "scores": {
+        "sft": 48.9,
+        "dpo": 49.6,
+        "rlvr": 49.8
+      }
+    },
+    {
+      "name": "Safety",
+      "category": "Safety",
+      "scores": {
+        "sft": 89.2,
+        "dpo": 90.2,
+        "rlvr": 87.3
+      }
+    }
+  ]
+}
