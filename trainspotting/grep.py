@@ -313,12 +313,13 @@ def _pair_exprs(typ: str) -> list[tuple[str, str, tuple[str, ...]]]:
             # reintroduced one field over by the commit that added these.
             scope = tail(col) if side in PAIR else col
             out.append((side, f"list_transform({scope}, m -> m.{_ident(sub)})", (name, sub)))
-        if group != "response":
-            # An input field on the shared prefix is prompt, and would otherwise
-            # be dropped by the slicing above.
-            out.append(("prompt",
-                        f"list_transform(list_slice({c}, 1, {b} - 1), m -> m.{_ident(sub)})",
-                        ("chosen", sub)))
+        # Any field on the shared prefix is prompt: history the model reads,
+        # assistant turns included, exactly as the prefix's content is. For a
+        # tool call or reasoning trace the slicing above would otherwise drop it
+        # and the row would go uncounted.
+        out.append(("prompt",
+                    f"list_transform(list_slice({c}, 1, {b} - 1), m -> m.{_ident(sub)})",
+                    ("chosen", sub)))
     return out
 
 

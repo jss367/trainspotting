@@ -18,11 +18,11 @@ misread:
   * `count` counts **occurrences, not documents**. A page that repeats a phrase
     twice contributes 2. Reporting a count as "copies in the training data" is
     wrong, and wrong in the direction that inflates it.
-  * `search_docs` returns a **uniform random sample of occurrences**, capped at
-    ten per call and different on every call. So the documents are exhaustive
-    only when the count is at most ten; above that they are a sample, and a
-    committed result file is a snapshot rather than something a re-run
-    reproduces.
+  * `search_docs` returns a **uniform random sample of occurrences**, drawn
+    with replacement, capped at ten per call and different on every call. So
+    it is never exhaustive, even at a count of two; a complete list comes from
+    walking the occurrence ranks (`every_document`), and a sampled result file
+    is a snapshot rather than something a re-run reproduces.
 
 Neither corpus here is Dolma 3, because no public infini-gram index covers it.
 Everything this module returns is about a different corpus than the rest of the
@@ -368,25 +368,22 @@ def sample_documents(index: str, query: str, occurrences: int, want: int = MAX_D
     off a denominator that had already collapsed a site's five copies into one.
 
     `exhaustive` is the only claim worth making carefully: it means the sample
-    holds every occurrence, which takes both a count at or under the cap (one
-    call can see them all) and a `want` that reached for all of them. Anything
-    else is a snapshot, including three documents of a phrase that occurs eight
-    times.
+    holds every occurrence. A random draw can never show that — the server
+    samples with replacement, so asking a two-occurrence phrase for two draws
+    routinely returns the same document twice — so when the caller wants every
+    occurrence and there are few enough to fetch one by one, this takes the
+    census with `every_document` instead. Anything else is a snapshot,
+    including three documents of a phrase that occurs eight times.
     """
+    if 0 < occurrences <= MAX_DOCS_PER_CALL and want >= occurrences:
+        return every_document(index, query)
     # Asking for more documents than there are occurrences does not return
     # fewer — the server samples occurrences with replacement and pads to
-    # `maxnum`, so a two-occurrence query answered ten of the same two. Ask for
-    # exactly the occurrences that exist and the result is each of them once.
-    # Asking for more than the caller wanted is the same error in the other
-    # direction: `--docs 11` used to spend two full ten-document calls and hand
-    # back twenty, which breaks the "up to N" the CLI promises and, worse, puts
-    # twenty in the `drawn` denominator every share is computed over.
+    # `maxnum`. Asking for more than the caller wanted is the same error in the
+    # other direction: `--docs 11` used to spend two full ten-document calls
+    # and hand back twenty, which breaks the "up to N" the CLI promises and,
+    # worse, puts twenty in the `drawn` denominator every share is computed over.
     budget = min(want, occurrences)
-    # The claim is that the sample holds every occurrence, which needs both: one
-    # call can see them all, and this call asked for them all. A caller that
-    # asked for three of eight has a sample, not a census, however small the
-    # count is.
-    exhaustive = occurrences <= MAX_DOCS_PER_CALL and budget == occurrences
     seen: dict[int, dict] = {}
     drawn = 0
     remaining = budget
@@ -420,11 +417,7 @@ def sample_documents(index: str, query: str, occurrences: int, want: int = MAX_D
     # reader opens, the count is what any share over the sample is weighted by.
     return {
         "drawn": drawn,
-        # What was asked for is not what arrived. A count of eight can come back
-        # with three documents, or none, and the claim "this is every copy" has
-        # to answer to the reply rather than to the request — otherwise a short
-        # answer from the index reads on the page as an exhaustive list.
-        "exhaustive": exhaustive and drawn >= budget,
+        "exhaustive": False,
         "documents": sorted(seen.values(), key=lambda d: -d["occurrences_drawn"]),
     }
 

@@ -6,7 +6,7 @@ import sys
 from .. import context, extract, hf, registry, search
 from ..paths import RESULTS
 from ..stats import wilson as _wilson
-from .common import _pattern_slug, _print_match_rate, _select_stages, _stamp, _write_json
+from .common import _filename_part, _pattern_slug, _print_match_rate, _select_stages, _stamp, _write_json
 
 
 def cmd_search(args):
@@ -28,7 +28,9 @@ def cmd_search(args):
         pattern = re.compile(args.pattern, 0 if args.case_sensitive else re.IGNORECASE)
     except re.error as e:
         sys.exit(f"bad pattern {args.pattern!r}: {e}")
-    slug = args.slug or _pattern_slug(args.pattern, args.case_sensitive)
+    # `--slug` lands in a path that `_write_json` creates parents for, so a
+    # separator in it would write outside results/.
+    slug = _filename_part(args.slug) if args.slug else _pattern_slug(args.pattern, args.case_sensitive)
     for s in _select_stages(args, registry.post_training_stages, "post-training"):
         # The shape of this stage's examples, which is what decides the sides a
         # hit can land on: a model stage's pipeline position, a dataset's

@@ -792,7 +792,10 @@ groups by slug, so scanning the missing stage under a new one without moving the
 existing files just opens a third group. The report names the renames and leaves
 them to the reader rather than rewriting `results/` itself; the filename is then
 the authority for a run's slug, since `--slug` is what decides the filename and a
-moved file still carries the contested one in its payload.
+moved file still carries the contested one in its payload. `grep` itself will
+not write over a saved stage whose pattern or flags differ under the same slug:
+it stops before reading anything and asks for `--slug`. The default slug drops
+punctuation and case, so `a.b` and `a b` would otherwise share a file.
 
 What the ranking deliberately does not do is weight the stages against each
 other. Identity behaviour is mostly set after pretraining, so the same rate in
@@ -1532,15 +1535,16 @@ to get backwards:
 - **The count is occurrences, not documents.** A page that repeats a phrase
   three times contributes three. Reading a count as "copies in the training
   data" inflates it.
-- **Sampled documents are exhaustive only at or under ten occurrences, and
-  only when the run asked for all of them.** Ten is the API's per-call cap.
-  Above it the index draws occurrences uniformly at random, with replacement,
-  and a re-run returns different ones, so a committed result is a snapshot;
-  below it, `--docs 3` against a phrase occurring eight times is still a sample
-  of three, and the flag says so. It is also cleared when the index returns
-  fewer documents than were asked for. Result files carry `exhaustive` per pull
-  and a `run_on` date instead of a revision, because a live index has nothing
-  to pin.
+- **Sampled documents are never exhaustive.** The index draws occurrences
+  uniformly at random, with replacement, so even two draws of a two-occurrence
+  phrase can return the same document twice, and a re-run returns different
+  ones, so a committed result is a snapshot. When a run asks for every
+  occurrence of a phrase counted at ten or fewer (ten is the API's per-call
+  cap), it takes the census below instead, and `exhaustive` is set only if
+  every occurrence came back. `--docs 3` against a phrase occurring eight times
+  is still a sample of three, and the flag says so. Result files carry
+  `exhaustive` per pull and a `run_on` date instead of a revision, because a
+  live index has nothing to pin.
 - **`--docs all` takes the census instead.** The index also lists occurrences
   by rank, one request each, so `trainspotting lookup "For the pointer I
   thank" --docs all` fetches all 333 and reports how many distinct documents

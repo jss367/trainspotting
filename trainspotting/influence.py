@@ -736,14 +736,14 @@ def _stage_lines(r: dict, hoisted: bool = False) -> list[str]:
             out.append(f"  - not in the ranking: {r['rank_block']} — a gap in the measurement "
                        "rather than a low score.")
         side = r["conc_side"]
-        hk, rk, lk = (("hits", "rate", "lift") if side == "all"
-                      else ("produced_hits", "produced_rate", "produced_lift"))
+        hk, rk, lk = SIDE_KEYS[side]
         what = ("produce side" if side == "produced"
                 else "readable" if side == "read" else "source")
-        # The produce-side lift divides a floor by a ceiling, so it is the lift
-        # the counts guarantee rather than the lift itself, except where the
-        # interval closed.
-        least = "at least " if (side == "produced" and r["produced"][0] != r["produced"][1]) else ""
+        # The produce-side and readable lifts divide a floor by a ceiling, so
+        # each is the lift the counts guarantee rather than the lift itself,
+        # except where the interval closed.
+        bounds = r["produced"] if side == "produced" else r.get("read") if side == "read" else None
+        least = "at least " if (bounds and bounds[0] != bounds[1]) else ""
         src = r["concentration"]
         if src:
             out.append(f"  - {what} concentrated in `{src['name']}`: {_source_count(src, side)} of "
@@ -752,7 +752,7 @@ def _stage_lines(r: dict, hoisted: bool = False) -> list[str]:
             # Both the share and the lift are computed over the columns that
             # were read. A produce column left unopened can hold matches in
             # other sources, which moves the denominator and the ordering.
-            gap = _understated(r, "rows" if side == "all" else "produced")
+            gap = _understated(r, "produced" if side == "produced" else "rows")
             if gap and not (gap == UNRECORDED and hoisted):
                 where = "produce columns" if side == "produced" else "columns"
                 out.append(f"    over the {where} this run read, and {gap} — a column "
@@ -905,8 +905,16 @@ def _verdict(t: dict) -> list[str]:
                         "so a column it did not open could move it.")
         return _tail(t, best, other, key, measure, line)
     if src:
-        line.append(f"{src['hits']:,} of the {src['rows']:,} `{src['name']}` rows "
-                    f"({_source_rate(src, 'rows')}, {src['lift']:.0f}× the stage) hold it,")
+        # Count, rate and lift all on the side the concentration was chosen on.
+        # Under the row basis that is the readable rows, and quoting every
+        # matched row beside the readable rate mixed two measurements and put
+        # the rejected rows back into the sentence.
+        side = best["conc_side"]
+        _, _, lk = SIDE_KEYS[side]
+        read = best.get("read") if side == "read" else None
+        least = "at least " if (read and read[0] != read[1]) else ""
+        line.append(f"{_source_count(src, side)} of the {src['rows']:,} `{src['name']}` rows "
+                    f"({_source_rate(src, side)}, {least}{src[lk]:.0f}× the stage) hold it,")
         rows_gap = _understated(best, "rows")
     else:
         rows_gap = None

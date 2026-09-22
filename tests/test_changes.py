@@ -8,7 +8,7 @@ import pytest
 
 from trainspotting import changes
 from trainspotting.commands.changes import cmd_changes
-from tests.sitejs import run_suite
+from sitejs import run_suite
 
 
 def test_path_can_move_and_return_to_its_start():
@@ -146,3 +146,12 @@ def test_supplied_olmo_plan_has_all_six_phases():
     for before, after in zip(plan['stages'], plan['stages'][1:]):
         end, start = before['checkpoints'][-1], after['checkpoints'][0]
         assert (end['repo'], end['revision']) == (start['repo'], start['revision'])
+
+
+def test_pythia_output_head_is_not_an_embedding():
+    """GPT-NeoX calls its unembedding `embed_out`; matching on "embed" merged it
+    into the input embeddings and the output group vanished."""
+    assert changes.layer_name("gpt_neox.embed_in.weight") == "Embeddings"
+    assert changes.layer_name("embed_out.weight") == "Output and other parameters"
+    assert changes.layer_name("model.embed_tokens.weight") == "Embeddings"
+    assert changes.layer_name("lm_head.weight") == "Output and other parameters"

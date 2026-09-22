@@ -1155,6 +1155,9 @@ def test_a_tool_call_in_shared_history_is_not_either_completion(con, tmp_path):
     exprs, _, _ = grep.text_fields(schema)
     r = grep.scan(con, grep.read_parquet_sql([str(path)]), exprs, None, "ChatGPT")
     assert r["by_group"]["chosen"] == 0 and r["by_group"]["rejected"] == 0
+    # ...and it is still in the mix, as prompt history. Dropping it from both
+    # completions without adding it back left the row uncounted.
+    assert r["matched"] == 1 and r["by_group"]["prompt"] == 1
 
 
 # --- resumed after the cap --------------------------------------------------
@@ -1259,3 +1262,49 @@ class TestTheReadmeTranscript:
             f"the README shows {shown} sources of {len(result['by_source'])}, "
             f"so {rest} are elided"
         )
+
+
+# --- the default slug ---------------------------------------------------------
+
+
+def _cmd_grep_until_scan(tmp_path, monkeypatch, pattern, **flags):
+    """Run `cmd_grep` against a one-stage plan, stopping at the scan."""
+    from types import SimpleNamespace
+
+    from trainspotting.commands import grep as cmd
+
+    stage = {"stage": "dpo", "hf_dataset": "allenai/x"}
+    plan = [{"stage": stage, "listing": {"urls": [], "partial": False}, "exprs": {"prompt": []},
+             "unsearched": [], "bytes": 0, "rows": 0, "source": None}]
+    monkeypatch.setattr(cmd, "RESULTS", tmp_path)
+    monkeypatch.setattr(cmd.grep, "connect", lambda: None)
+    monkeypatch.setattr(cmd, "_select_stages", lambda *a: [stage])
+    monkeypatch.setattr(cmd, "_grep_plan", lambda *a: plan)
+
+    class Scanned(Exception):
+        pass
+
+    def scan(*a, **k):
+        raise Scanned
+
+    monkeypatch.setattr(cmd.grep, "scan", scan)
+    args = SimpleNamespace(target="olmo-3-7b-think", pattern=pattern, slug=None, max_gb=1,
+                           yes=True, regex=flags.get("regex", False),
+                           case_sensitive=flags.get("case_sensitive", False), examples=0)
+    with pytest.raises((Scanned, SystemExit)) as e:
+        cmd.cmd_grep(args)
+    return e
+
+
+def test_a_different_search_under_the_same_slug_is_not_overwritten(tmp_path, monkeypatch):
+    """`a.b` and `a b` both slug to `a-b`; the second scan used to replace the
+    first stage's saved result without a word."""
+    saved = tmp_path / "olmo-3-7b-think.dpo.grep-a-b.json"
+    saved.write_text(json.dumps({"pattern": "a b", "regex": False, "case_sensitive": False}))
+    e = _cmd_grep_until_scan(tmp_path, monkeypatch, "a.b")
+    assert e.type is SystemExit and "--slug" in str(e.value)
+    e = _cmd_grep_until_scan(tmp_path, monkeypatch, "a b", regex=True)
+    assert e.type is SystemExit
+    # The same search again is a rerun, and goes ahead.
+    e = _cmd_grep_until_scan(tmp_path, monkeypatch, "a b")
+    assert e.type is not SystemExit

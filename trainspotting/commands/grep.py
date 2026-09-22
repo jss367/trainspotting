@@ -1,5 +1,6 @@
 """`grep`: exact string search over every row of each post-training mix."""
 
+import json
 import sys
 
 from .. import grep, hf, influence, registry
@@ -89,6 +90,26 @@ def cmd_grep(args):
     # neither `_grep_traces` nor the site export looks, and `../..` would write
     # outside results/ entirely. Same treatment `find` gives its components.
     slug = _filename_part(args.slug) if args.slug else grep.slugify(args.pattern)
+    # The slug drops punctuation and case and is cut to a length, so `a.b` and
+    # `a b`, or a `--regex` run of the same text, share a filename. Refuse to
+    # overwrite a different search's saved stage rather than lose a scan this
+    # size, and do it before anything is read.
+    for p in plan:
+        prior = RESULTS / f"{args.target}.{p['stage']['stage']}.grep-{slug}.json"
+        if not prior.exists():
+            continue
+        try:
+            saved = json.loads(prior.read_text())
+        except (OSError, ValueError):
+            continue
+        mine = (args.pattern, bool(args.regex), bool(args.case_sensitive))
+        theirs = (saved.get("pattern"), bool(saved.get("regex")), bool(saved.get("case_sensitive")))
+        if theirs != mine:
+            sys.exit(
+                f"{prior} holds a different search ({theirs[0]!r}"
+                f"{', regex' if theirs[1] else ''}{', case-sensitive' if theirs[2] else ''}) "
+                "under the same slug. Pass --slug to name this one."
+            )
     written = []
     for p in plan:
         s = p["stage"]

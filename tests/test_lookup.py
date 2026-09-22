@@ -52,22 +52,32 @@ def test_a_request_under_the_cap_is_one_call_for_exactly_what_was_asked(calls):
 
 
 def test_never_asks_for_more_than_the_occurrences_that_exist(calls):
-    """The server samples with replacement and pads, so asking for ten of a
-    two-occurrence phrase returns the same two documents five times over."""
-    out = lookup.sample_documents("idx", "q", occurrences=2, want=10)
+    """The server samples with replacement and pads, so asking for fifty of a
+    twelve-occurrence phrase returns the same twelve documents over and over."""
+    out = lookup.sample_documents("idx", "q", occurrences=12, want=50)
 
-    assert calls == [2]
-    assert out["exhaustive"]
+    assert calls == [10, 2]
+    assert not out["exhaustive"]
 
 
-def test_exhaustive_needs_the_caller_to_have_asked_for_all_of_them(calls):
-    """Three of eight occurrences is a sample, not a census, even though one
-    call could have seen all eight."""
+def test_a_draw_is_never_exhaustive(calls):
+    """Three of eight occurrences is a sample, not a census, and so is twelve
+    of twelve: draws with replacement can repeat a document and miss another."""
     out = lookup.sample_documents("idx", "q", occurrences=8, want=3)
 
     assert calls == [3]
     assert not out["exhaustive"]
-    assert lookup.sample_documents("idx", "q", occurrences=8, want=8)["exhaustive"]
+    assert not lookup.sample_documents("idx", "q", occurrences=12, want=12)["exhaustive"]
+
+
+def test_every_occurrence_under_the_cap_is_a_census(ranked):
+    """Asking two draws of a two-occurrence phrase returned the same document
+    twice about half the time, and the result still said it was every copy.
+    Wanting all of a small count walks the ranks instead."""
+    out = lookup.sample_documents("idx", "q", occurrences=5, want=10)
+
+    assert ranked == [(0, 10), (0, 11), (0, 12), (1, 50), (1, 51)]
+    assert out["exhaustive"] and out["drawn"] == 5
 
 
 def test_a_phrase_with_no_occurrences_costs_no_call(calls):
@@ -77,20 +87,20 @@ def test_a_phrase_with_no_occurrences_costs_no_call(calls):
     assert out["drawn"] == 0 and out["documents"] == []
 
 
-def test_exhaustive_answers_to_the_reply_not_the_request(monkeypatch):
+def test_exhaustive_answers_to_the_reply_not_the_request(ranked, monkeypatch):
     """A count at or under the cap asks for every occurrence, but the index can
-    still answer short. Computing the flag before looking at the reply let a
-    phrase counted at eight occurrences come back with three documents — or
-    none — while the CLI and the site called the list complete."""
-    monkeypatch.setattr(
-        lookup,
-        "_post",
-        lambda payload: {"documents": [{"doc_ix": 1, "spans": [["t", None]], "doc_len": 9}]},
-    )
+    still answer short, and the list is then not complete."""
+    real = lookup._post
 
-    out = lookup.sample_documents("idx", "q", occurrences=8, want=10)
+    def flaky(payload):
+        if payload.get("rank") == 51:
+            return {"blocked": True}
+        return real(payload)
 
-    assert out["drawn"] == 1
+    monkeypatch.setattr(lookup, "_post", flaky)
+    out = lookup.sample_documents("idx", "q", occurrences=5, want=10)
+
+    assert out["drawn"] == 4
     assert not out["exhaustive"]
 
 
@@ -162,7 +172,7 @@ def test_two_documents_sharing_a_doc_ix_are_not_merged(monkeypatch):
     ]
     monkeypatch.setattr(lookup, "_post", lambda payload: {"documents": hits})
 
-    out = lookup.sample_documents("idx", "q", occurrences=2, want=2)
+    out = lookup.sample_documents("idx", "q", occurrences=50, want=2)
 
     assert len(out["documents"]) == 2
     assert out["drawn"] == 2
@@ -173,7 +183,7 @@ def test_the_same_document_drawn_twice_is_counted_once(monkeypatch):
            "metadata": json.dumps({"path": "cc_en_head/cc_en_head-0001.json.gz"})}
     monkeypatch.setattr(lookup, "_post", lambda payload: {"documents": [hit, dict(hit)]})
 
-    out = lookup.sample_documents("idx", "q", occurrences=2, want=2)
+    out = lookup.sample_documents("idx", "q", occurrences=50, want=2)
 
     assert len(out["documents"]) == 1
     assert out["documents"][0]["occurrences_drawn"] == 2
@@ -229,7 +239,7 @@ def test_one_unreadable_document_does_not_abort_the_sample(metadata, monkeypatch
     ]
     monkeypatch.setattr(lookup, "_post", lambda payload: {"documents": hits})
 
-    out = lookup.sample_documents("idx", "q", occurrences=2, want=2)
+    out = lookup.sample_documents("idx", "q", occurrences=50, want=2)
 
     assert len(out["documents"]) == 2
     assert any(d["url"] == "http://example.com/b" for d in out["documents"])
@@ -251,7 +261,7 @@ def test_hits_with_no_identity_at_all_are_not_merged(monkeypatch):
         },
     )
 
-    out = lookup.sample_documents("idx", "q", occurrences=2, want=2)
+    out = lookup.sample_documents("idx", "q", occurrences=50, want=2)
 
     assert len(out["documents"]) == 2
     assert all(d["occurrences_drawn"] == 1 for d in out["documents"])
@@ -263,7 +273,7 @@ def test_a_url_identifies_a_document_when_the_file_does_not(monkeypatch):
            "metadata": json.dumps({"metadata": {"url": "http://example.com/a"}})}
     monkeypatch.setattr(lookup, "_post", lambda payload: {"documents": [hit, dict(hit)]})
 
-    out = lookup.sample_documents("idx", "q", occurrences=2, want=2)
+    out = lookup.sample_documents("idx", "q", occurrences=50, want=2)
 
     assert len(out["documents"]) == 1
     assert out["documents"][0]["occurrences_drawn"] == 2
