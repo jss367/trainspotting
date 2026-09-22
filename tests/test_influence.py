@@ -1462,3 +1462,33 @@ def test_every_side_has_a_full_key_triple():
     for side, (hk, rk, lk) in influence.SIDE_KEYS.items():
         assert hk and rk and lk, side
     assert set(influence.SIDE_KEYS) == {"all", "read", "produced"}
+
+
+# Readable hits bunched in one small source, rejected hits in another, so the
+# row basis names a concentration on the readable side.
+BUNCHED_READ_SPREAD_REJECTED = _srcrun(
+    "dpo", 220, 100_000, {"prompt": 20, "chosen": 0, "rejected": 200},
+    {"bunched": 210, "spread": 10},
+    {"bunched": 300, "spread": 99_700},
+    {"bunched": {"prompt": 20, "chosen": 0, "rejected": 190},
+     "spread": {"prompt": 0, "chosen": 0, "rejected": 10}},
+)
+
+
+def test_a_readable_concentration_renders_on_readable_numbers():
+    """The stage line used to read the produce-side keys for a readable
+    concentration, where the lift is None, and crashed formatting it."""
+    t = influence.compare([BUNCHED_READ_SPREAD_REJECTED], THINK)
+    assert t["best"]["conc_side"] == "read"
+    assert t["best"]["concentration"]["name"] == "bunched"
+    text = "\n".join(influence.render(t, "olmo-3-7b-think"))
+    assert "readable concentrated in `bunched`: 20 of its 300 rows" in text
+
+
+def test_the_verdict_quotes_a_readable_concentration_on_readable_rows():
+    """The verdict took its count from every matched row (210, rejected
+    included) and its rate from the readable rows (6.7%)."""
+    t = influence.compare([BUNCHED_READ_SPREAD_REJECTED], THINK)
+    text = "\n".join(influence.render(t, "olmo-3-7b-think"))
+    assert "20 of the 300 `bunched` rows (6.7%" in text
+    assert "210 of the 300" not in text

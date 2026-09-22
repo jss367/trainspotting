@@ -75,7 +75,13 @@ def _get(path: str, server_error_retries: int = 6, **params) -> dict:
         headers = {} if _CREDENTIALS_REJECTED else HEADERS
         try:
             r = requests.get(f"{BASE}/{path}", params=params, timeout=120, headers=headers)
-        except (requests.Timeout, requests.ConnectionError):
+        except (
+            requests.Timeout,
+            requests.ConnectionError,
+            # A connection dropped mid-body. Not a ConnectionError subclass and
+            # not re-exported at the top level; `pretrain._get` retries it too.
+            requests.exceptions.ChunkedEncodingError,
+        ):
             # A slow page is worth waiting on; a dead network is not. Five
             # tries with growing pauses tells the two apart without letting an
             # offline host consume the whole 60-iteration budget half a minute

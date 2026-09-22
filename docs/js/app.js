@@ -1446,7 +1446,8 @@ function heatTable(parent, rows, cols, ctx){
       // lightest step, which would make "none" and "a couple" look alike.
       const step = f <= 0 ? null : STEPS[Math.min(STEPS.length - 1, Math.floor(f * STEPS.length))];
       td.style.background = step || "var(--track)";
-      if (step) td.style.color = inkOn(step);
+      // `data-ink` so `repaintInk` recomputes it when the colour scheme flips.
+      if (step){ td.style.color = inkOn(step); td.dataset.ink = step; }
       td.textContent = recs.length || "·";
       hover(td, `<b>${escAttr(r.name)}</b> · ${escAttr(c.label)}<br>${recs.length} of ${r.total} sampled prompts (${pct(f)})`
         + (recs.length && ctx ? "<br>click to read them" : ""));
@@ -2629,9 +2630,10 @@ function mixedWhat(est){
 // documents are different denominators — and this is where they become one
 // number. Built by scripts/export_site_data.py from the committed ask runs, so
 // it cannot disagree with the bars above it.
-async function budgetCard(main, model, slug){
+async function budgetCard(main, model, slug, gen){
   const est = await getData(`${model}.budget-${slug}.json`);
-  if (!est) return;
+  // A view switched while this loaded owns `main` now.
+  if (!est || gen !== GEN) return;
   const card = document.createElement("section");
   card.className = "card";
   card.innerHTML = `<h2>How much training is that?</h2>
@@ -2797,13 +2799,14 @@ const STANCE_TIP = {
 // `trainspotting stance`: the same question asked of whole examples instead of
 // prompts, so the answer can be signed. A yes/no over prompts cannot say that a
 // stage contains training pushing the other way, and this data has some.
-async function stanceCard(main, model, slug, stages, ctxFor, post, askKeys){
+async function stanceCard(main, model, slug, stages, ctxFor, post, askKeys, gen){
   const loaded = [];
   for (const stage of stages){
     const d = await getData(`${model}.${stage}.stance-${slug}.json`);
     if (d) loaded.push({stage, d});
   }
-  if (!loaded.length) return false;
+  // A view switched while these loaded owns `main` now.
+  if (!loaded.length || gen !== GEN) return false;
   // Group by the instrument actually stored in each file, exactly as the ask
   // cards above do. A slug is not a question — `--slug` takes any string and a
   // generated one is cut to 60 characters — so stages sharing one can have been
@@ -3757,9 +3760,9 @@ async function renderModel(model, gen){
       // same way the stance files are, so a stance run that used other words or
       // another judge can be told apart from one that matches.
       const askKeys = new Set([...buckets.values()].map(b => `${b.question}\u0000${b.classifier}`));
-      await stanceCard(main, model, slug, stanceStages[slug] || [], ctxFor, post, askKeys);
+      await stanceCard(main, model, slug, stanceStages[slug] || [], ctxFor, post, askKeys, gen);
       if (gen !== GEN) return;
-      await budgetCard(main, model, slug);
+      await budgetCard(main, model, slug, gen);
     }
     if (gen !== GEN) return;
   }
@@ -3776,9 +3779,9 @@ async function renderModel(model, gen){
       main.appendChild(part("Custom questions", "asked of whichever stages you ran them against"));
       askDivider = true;
     }
-    await stanceCard(main, model, slug, stanceStages[slug], ctxFor, post, new Set());
+    await stanceCard(main, model, slug, stanceStages[slug], ctxFor, post, new Set(), gen);
     if (gen !== GEN) return;
-    await budgetCard(main, model, slug);
+    await budgetCard(main, model, slug, gen);
     if (gen !== GEN) return;
   }
 

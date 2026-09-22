@@ -126,3 +126,15 @@ def test_backfill_skips_summaries_and_nonprompt_records_before_fetching(tmp_path
     main()
     for suffix, expected in files.items():
         assert json.loads((results / f"olmo-3-7b-think.sft.{suffix}.json").read_text()) == expected
+
+
+def test_a_token_after_an_escape_is_masked_in_serialized_json():
+    """Result files are redacted after `json.dumps`, where a newline before the
+    token becomes the two characters `\\n` and the `n` read as part of a word."""
+    value = token()
+    for before in ("line\n", "tab\t", "café", "\r\n", "C:\\", " "):
+        text = json.dumps({"prompt": before + value})
+        assert value not in redact_credentials(text), repr(before)
+        assert json.loads(redact_credentials(text)) == {"prompt": before + MARKER}
+    # A token glued to an ordinary word is still left alone.
+    assert redact_credentials("x" + value) == "x" + value

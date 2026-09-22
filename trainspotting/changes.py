@@ -58,7 +58,8 @@ def layer_name(name):
     match = re.search(r"(?:layers|h)\.(\d+)\.", name)
     if match:
         return f"Transformer block {int(match[1]) + 1}"
-    if "embed" in name:
+    # GPT-NeoX names its unembedding `embed_out`, which is the output head.
+    if "embed" in name and "embed_out" not in name:
         return "Embeddings"
     if "norm" in name:
         return "Final normalization"

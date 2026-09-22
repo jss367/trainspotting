@@ -64,3 +64,21 @@ def test_a_401_without_a_token_is_still_an_error(monkeypatch):
 
     with pytest.raises(AssertionError, match="401"):
         hf._get("info", dataset="d")
+
+
+def test_a_connection_dropped_mid_body_is_retried(monkeypatch):
+    """`ChunkedEncodingError` is not a `ConnectionError`, so one hangup partway
+    through a page used to end the whole run."""
+    seen = []
+
+    def fake_get(url, params=None, timeout=None, headers=None):
+        seen.append(url)
+        if len(seen) == 1:
+            raise hf.requests.exceptions.ChunkedEncodingError("connection broken")
+        return Response(200, {"ok": True})
+
+    monkeypatch.setattr(hf.requests, "get", fake_get)
+    monkeypatch.setattr(hf.time, "sleep", lambda s: None)
+
+    assert hf._get("info", dataset="d") == {"ok": True}
+    assert len(seen) == 2
