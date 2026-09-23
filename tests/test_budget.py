@@ -163,7 +163,7 @@ def test_an_identical_pair_fits_nothing():
     # The two sides cancel in the DPO loss, so the pair carries no gradient.
     # This used to clamp the cut to keep a last turn per side and counted 100,
     # while `derive` and `pairs` called the same pair empty.
-    same = {"turns": [turn("user", 100), turn("assistant", 50)]}
+    same = {"turns": [turn("user", 100), {**turn("assistant", 50), "raw": True}]}
     rec = {"kind": "dpo", "chosen": same, "rejected": same}
     assert budget.fit_chars(rec) == 0
     assert derive.example_chars(rec)[1] == budget.fit_chars(rec)

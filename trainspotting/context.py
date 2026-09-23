@@ -99,7 +99,12 @@ def _turns(messages) -> list[dict]:
         stored_as_written = raw_content is None or isinstance(raw_content, str)
         if stored_as_written and turn["text"] == content and not omitted:
             turn["raw"] = True
-        elif stored_as_written:
+        elif stored_as_written and not omitted:
+            # The turn as written, digested, so two turns whose stored halves
+            # agree can still be proven identical — or not: `<think> a</think>x`
+            # and `<think>a </think>x` split into the same halves.
+            turn["raw_sha"] = hashlib.sha256(content.encode("utf-8", "surrogatepass")).hexdigest()
+        if not turn.get("raw") and stored_as_written:
             # Not stored as written, so the halves above no longer add up to
             # what the model read: the `<think>` markers and the whitespace
             # around them are gone, and a long field is cut. `derive` measures
