@@ -132,3 +132,13 @@ def test_a_cut_field_carries_the_digest_derive_compares():
     rejected = [ask, {"role": "assistant", **context._text(b)}]
     assert derive._shared_turns(chosen, rejected) == 1
     assert context.branch_point(chosen + [ask], rejected + [ask]) == 1
+
+
+def test_branch_point_falls_back_to_text_where_one_side_has_no_digest():
+    """The same rule `derive` uses: a digest only settles it when both sides
+    carry one."""
+    long = "x" * 4001
+    with_sha = {"role": "assistant", **context._text(long)}
+    without = {k: v for k, v in with_sha.items() if k != "sha"}
+    ask = {"role": "user", **context._text("q")}
+    assert context.branch_point([ask, with_sha, ask], [ask, without, ask]) == 2
