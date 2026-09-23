@@ -213,6 +213,9 @@ def _fmt_est(n: float | None) -> str:
     """
     if n is None:
         return "—"
+    # Rounded to three figures before the unit is picked, so 999,700 is "1M"
+    # rather than "1000K".
+    n = float(f"{n:.3g}")
     for scale, suffix in ((1e12, "T"), (1e9, "B"), (1e6, "M"), (1e3, "K")):
         if n >= scale:
             v = n / scale

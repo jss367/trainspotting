@@ -8,7 +8,7 @@ per kind, the length weighting, and what happens to a stage nobody can size.
 
 import pytest
 
-from trainspotting import budget
+from trainspotting import budget, derive
 
 
 def turn(role, chars, reasoning=None):
@@ -159,12 +159,14 @@ def test_a_multi_turn_pair_branches_where_it_branches_not_by_role():
     assert budget.fit_chars(rec) == 120
 
 
-def test_an_identical_pair_still_has_two_completions():
-    # Every turn agrees, so a plain prefix scan would call the whole thing
-    # shared and leave the pair with no completions at all. The last turn is a
-    # candidate answer by definition.
+def test_an_identical_pair_fits_nothing():
+    # The two sides cancel in the DPO loss, so the pair carries no gradient.
+    # This used to clamp the cut to keep a last turn per side and counted 100,
+    # while `derive` and `pairs` called the same pair empty.
     same = {"turns": [turn("user", 100), turn("assistant", 50)]}
-    assert budget.fit_chars({"kind": "dpo", "chosen": same, "rejected": same}) == 100
+    rec = {"kind": "dpo", "chosen": same, "rejected": same}
+    assert budget.fit_chars(rec) == 0
+    assert derive.example_chars(rec)[1] == budget.fit_chars(rec)
 
 
 def test_a_pair_that_never_agrees_is_all_completion():

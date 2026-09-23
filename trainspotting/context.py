@@ -14,6 +14,8 @@ Records are keyed by the same prompt text the classifier saw, so the site can
 join them onto committed label and ask results without re-running any model.
 """
 
+import hashlib
+
 from trainspotting import rewards, search
 
 MAX_TEXT = 4000  # per field; the full row stays one click away on HuggingFace
@@ -21,9 +23,17 @@ KEY_CHARS = 400  # prompt prefix that joins a context record to a labeled prompt
 
 
 def _text(value) -> dict:
-    """A text field plus its true length, so truncation is visible and lengths stay honest."""
+    """A text field plus its true length, so truncation is visible and lengths stay honest.
+
+    A field cut for display also carries a digest of the whole of it, so two
+    fields that agree on their first MAX_TEXT characters and have the same
+    length can still be told apart (`derive._shared_turns`, `branch_point`).
+    """
     s = "" if value is None else str(value)
-    return {"text": s[:MAX_TEXT], "chars": len(s)}
+    out = {"text": s[:MAX_TEXT], "chars": len(s)}
+    if len(s) > MAX_TEXT:
+        out["sha"] = hashlib.sha256(s.encode("utf-8", "surrogatepass")).hexdigest()
+    return out
 
 
 def _split_think(text: str) -> tuple[str | None, str]:
@@ -108,16 +118,20 @@ def _turns(messages) -> list[dict]:
 def _turn_key(turn: dict) -> tuple:
     """A stored turn reduced to what makes it the same turn as another.
 
-    `text` is cut at MAX_TEXT and `chars` is not, so two different turns that
-    agree on their first 4,000 characters still differ here.
+    `text` is cut at MAX_TEXT and `chars` is not, and a cut field carries the
+    digest of the whole, so two different turns that agree on their first 4,000
+    characters still differ here — unless they are the same length and the
+    record predates the digest, where the prefix is all there is.
     """
     reasoning = turn.get("reasoning") or {}
     return (
         turn.get("role"),
         turn.get("text"),
         turn.get("chars"),
+        turn.get("sha"),
         reasoning.get("text"),
         reasoning.get("chars"),
+        reasoning.get("sha"),
     )
 
 

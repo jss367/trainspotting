@@ -114,3 +114,21 @@ class TestTheAnswerKey:
 
     def test_no_answer_key_at_all_is_none(self):
         assert self.build({}) is None
+
+
+def test_a_cut_field_carries_the_digest_derive_compares():
+    """`derive._shared_turns` compares `sha` on fields cut for display, and
+    nothing wrote one, so two same-length completions that agree on their first
+    4,000 characters scanned as one shared turn and the pair fit nothing."""
+    from trainspotting import derive
+
+    a, b = "x" * 4000 + "a", "x" * 4000 + "b"
+    assert "sha" not in context._text("short")
+    assert context._text(a)["sha"] != context._text(b)["sha"]
+    assert context._text(a)["sha"] == context._text(a)["sha"]
+
+    ask = {"role": "user", **context._text("q")}
+    chosen = [ask, {"role": "assistant", **context._text(a)}]
+    rejected = [ask, {"role": "assistant", **context._text(b)}]
+    assert derive._shared_turns(chosen, rejected) == 1
+    assert context.branch_point(chosen + [ask], rejected + [ask]) == 1

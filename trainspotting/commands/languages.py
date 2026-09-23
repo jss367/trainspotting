@@ -26,6 +26,13 @@ def cmd_languages(args):
             if not labels_path.exists():
                 sys.exit(f"{labels_path} not found — drop --from-labels to sample from HuggingFace")
             prior = json.loads(labels_path.read_text())
+            # The prompts are that run's rows, and this file is stamped with the
+            # stage's current dataset, so the two have to be the same dataset.
+            if prior.get("dataset") and prior["dataset"] != s["hf_dataset"]:
+                sys.exit(
+                    f"{labels_path.name} was drawn from {prior['dataset']}, but {s['stage']} is now "
+                    f"{s['hf_dataset']} — drop --from-labels to sample the current dataset"
+                )
             # A classify run written before result records carried their row
             # index has no row to reuse; those records keep joining to their
             # context by prompt text, as they did before.

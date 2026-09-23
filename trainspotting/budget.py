@@ -94,7 +94,7 @@ an attribution of behaviour.
 
 import json
 
-from . import context, extract, paths, registry
+from . import derive, extract, paths, registry
 from .stats import cluster_wilson, wilson
 
 # Characters per token, for turning a measured character count into the unit the
@@ -121,12 +121,11 @@ def _turn_chars(turn: dict) -> int:
     `context` splits a `<think>` span out of the turn it precedes so the answer
     stays visible under truncation, but the model was fit to both, and in a
     think mix the reasoning is most of the length. Counting only the answer
-    would understate Dolci-Think-SFT by about 20x.
-
-    `chars` is the length before the 4,000-character display cut, so these are
-    the real lengths and not what the record shows.
+    would understate Dolci-Think-SFT by about 20x. `derive._turn_chars` is the
+    measure, markup between the halves included, so this and the site's token
+    strips count one turn the same way.
     """
-    return turn.get("chars", 0) + (turn.get("reasoning") or {}).get("chars", 0)
+    return derive._turn_chars(turn)
 
 
 def fit_chars(rec: dict) -> int | None:
@@ -145,10 +144,12 @@ def fit_chars(rec: dict) -> int | None:
         # so an earlier assistant turn is shared history the pair is judged in
         # rather than either completion the preference loss scores — counting it
         # once per side charges the stage twice for text it was never preferred
-        # for. See context.branch_point.
+        # for. The cut is `derive._shared_turns`, unclamped: a pair whose sides
+        # are identical cancels in the DPO loss and carries no gradient, so it
+        # fits nothing. `pairs` and the site's profiles make the same cut.
         chosen = (rec.get("chosen") or {}).get("turns", [])
         rejected = (rec.get("rejected") or {}).get("turns", [])
-        shared = context.branch_point(chosen, rejected)
+        shared = derive._shared_turns(chosen, rejected)
         return sum(
             _turn_chars(t)
             for side in (chosen, rejected)

@@ -315,7 +315,7 @@ def main():
     p = sub.add_parser("languages", help="detect the natural language of sampled prompts (local, no API key)")
     p.add_argument("target", help=TARGET_HELP)
     p.add_argument("--stage", help="only this stage (sft/dpo/rlvr for a model; a dataset has one)")
-    p.add_argument("--sample", type=int, default=SAMPLE)
+    p.add_argument("--sample", type=_positive_int, default=SAMPLE)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--from-labels", action="store_true",
                    help="read prompts from the committed classify run instead of re-sampling HuggingFace")
