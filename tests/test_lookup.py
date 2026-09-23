@@ -475,3 +475,28 @@ def test_every_document_keeps_the_same_doc_ix_in_different_shards_apart(monkeypa
     assert out["drawn"] == 2 and out["exhaustive"]
     assert len(out["documents"]) == 2
     assert all(d["occurrences_drawn"] == 1 for d in out["documents"])
+
+
+def test_a_4xx_is_reported_once_rather_than_as_unreachable(monkeypatch):
+    """A 400 is about the request, so retrying sends it again. It used to be
+    retried five times with backoff and then reported as the server being down."""
+    class R:
+        status_code = 400
+        text = "bad query"
+
+    posts = []
+    monkeypatch.setattr(lookup.requests, "post", lambda *a, **k: posts.append(1) or R())
+    monkeypatch.setattr(lookup.time, "sleep", lambda s: None)
+    with pytest.raises(lookup.LookupError_, match="HTTP 400"):
+        lookup._post({"query": "q"})
+    assert len(posts) == 1
+
+
+def test_a_rate_limit_that_never_clears_names_the_status(monkeypatch):
+    class R:
+        status_code = 429
+
+    monkeypatch.setattr(lookup.requests, "post", lambda *a, **k: R())
+    monkeypatch.setattr(lookup.time, "sleep", lambda s: None)
+    with pytest.raises(lookup.LookupError_, match="HTTP 429"):
+        lookup._post({"query": "q"})

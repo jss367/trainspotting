@@ -14,6 +14,8 @@ Records are keyed by the same prompt text the classifier saw, so the site can
 join them onto committed label and ask results without re-running any model.
 """
 
+import hashlib
+
 from trainspotting import rewards, search
 
 MAX_TEXT = 4000  # per field; the full row stays one click away on HuggingFace
@@ -21,9 +23,17 @@ KEY_CHARS = 400  # prompt prefix that joins a context record to a labeled prompt
 
 
 def _text(value) -> dict:
-    """A text field plus its true length, so truncation is visible and lengths stay honest."""
+    """A text field plus its true length, so truncation is visible and lengths stay honest.
+
+    A field cut for display also carries a digest of the whole of it, so two
+    fields that agree on their first MAX_TEXT characters and have the same
+    length can still be told apart (`derive._shared_turns`, `branch_point`).
+    """
     s = "" if value is None else str(value)
-    return {"text": s[:MAX_TEXT], "chars": len(s)}
+    out = {"text": s[:MAX_TEXT], "chars": len(s)}
+    if len(s) > MAX_TEXT:
+        out["sha"] = hashlib.sha256(s.encode("utf-8", "surrogatepass")).hexdigest()
+    return out
 
 
 def _split_think(text: str) -> tuple[str | None, str]:
@@ -89,7 +99,12 @@ def _turns(messages) -> list[dict]:
         stored_as_written = raw_content is None or isinstance(raw_content, str)
         if stored_as_written and turn["text"] == content and not omitted:
             turn["raw"] = True
-        elif stored_as_written:
+        elif stored_as_written and not omitted:
+            # The turn as written, digested, so two turns whose stored halves
+            # agree can still be proven identical — or not: `<think> a</think>x`
+            # and `<think>a </think>x` split into the same halves.
+            turn["raw_sha"] = hashlib.sha256(content.encode("utf-8", "surrogatepass")).hexdigest()
+        if not turn.get("raw") and stored_as_written:
             # Not stored as written, so the halves above no longer add up to
             # what the model read: the `<think>` markers and the whitespace
             # around them are gone, and a long field is cut. `derive` measures
@@ -105,19 +120,24 @@ def _turns(messages) -> list[dict]:
     return out
 
 
-def _turn_key(turn: dict) -> tuple:
-    """A stored turn reduced to what makes it the same turn as another.
+def _field_same(a: dict, b: dict) -> bool:
+    """One field of two turns: its length, and its content as far as the record
+    proves it. A cut field carries a digest of the whole, compared where both
+    sides have one; a record written before the digest has only the prefix."""
+    if a.get("chars") != b.get("chars"):
+        return False
+    if a.get("sha") and b.get("sha"):
+        return a["sha"] == b["sha"]
+    return a.get("text") == b.get("text")
 
-    `text` is cut at MAX_TEXT and `chars` is not, so two different turns that
-    agree on their first 4,000 characters still differ here.
-    """
-    reasoning = turn.get("reasoning") or {}
+
+def _turn_same(a: dict, b: dict) -> bool:
+    """Whether two stored turns are the same turn — the rule
+    `derive._shared_turns` uses, answer and reasoning span both."""
     return (
-        turn.get("role"),
-        turn.get("text"),
-        turn.get("chars"),
-        reasoning.get("text"),
-        reasoning.get("chars"),
+        a.get("role") == b.get("role")
+        and _field_same(a, b)
+        and _field_same(a.get("reasoning") or {}, b.get("reasoning") or {})
     )
 
 
@@ -142,7 +162,7 @@ def branch_point(chosen: list[dict], rejected: list[dict]) -> int:
     """
     n = 0
     for a, b in zip(chosen or [], rejected or []):
-        if _turn_key(a) != _turn_key(b):
+        if not _turn_same(a, b):
             break
         n += 1
     return min(n, max(0, len(chosen or []) - 1), max(0, len(rejected or []) - 1))

@@ -150,7 +150,26 @@ def _shared_turns(chosen: list[dict], rejected: list[dict]) -> int:
     # other: everything up to where the shorter side ends is conditioned
     # identically and cancels, and the difference is exactly the turns only the
     # longer side has.
+    #
+    # Cancelling a candidate answer removes a gradient, so it takes proof that
+    # the two turns were byte-identical as scored, not only that their stored
+    # halves agree: `<think> a</think>x` and `<think>a </think>x` split into the
+    # same reasoning and answer at the same length. History before the last
+    # turn is held to the stored comparison, because miscounting it only moves
+    # characters between context and target; past it, an unproven match keeps
+    # the turn as a completion.
+    last = max(0, min(len(chosen), len(rejected)) - 1)
+    if n > last and not all(_proven_same(a, b) for a, b in zip(chosen[last:n], rejected[last:n])):
+        n = last
     return n
+
+
+def _proven_same(a: dict, b: dict) -> bool:
+    """Whether the record proves two turns identical as the model was scored on
+    them: both stored as written (`raw`), or both digested whole (`raw_sha`)."""
+    if a.get("raw") and b.get("raw"):
+        return True
+    return bool(a.get("raw_sha")) and a.get("raw_sha") == b.get("raw_sha")
 
 
 def example_chars(rec: dict) -> tuple[int, int]:

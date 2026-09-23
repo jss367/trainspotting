@@ -30,10 +30,12 @@ PROFILES = sorted(DATA.glob("*.profile.json"))
 PROFILE_IDS = [p.name.replace(".profile.json", "") for p in PROFILES]
 
 
-def turn(role, chars, text="x", reasoning=None):
+def turn(role, chars, text="x", reasoning=None, raw=False):
     t = {"role": role, "text": text, "chars": chars}
     if reasoning:
         t["reasoning"] = {"text": "r", "chars": reasoning}
+    if raw:
+        t["raw"] = True
     return t
 
 
@@ -66,18 +68,39 @@ def test_dpo_with_identical_sides_has_no_target_because_it_has_no_signal():
     a pair whose sides are identical cancels exactly and carries no gradient.
     Manufacturing a final-turn branch would report two copies of one answer as
     gradient-bearing. Four sampled Instruct DPO pairs are identical in full."""
-    same = [turn("user", 10, "q"), turn("assistant", 20, "a")]
+    same = [turn("user", 10, "q", raw=True), turn("assistant", 20, "a", raw=True)]
     rec = {"kind": "dpo", "chosen": {"turns": list(same)}, "rejected": {"turns": list(same)}}
     total, target = derive.example_chars(rec)
     assert target == 0
     assert total == 30      # the conversation is there; none of it is a target
 
 
+def test_a_candidate_answer_cancels_only_where_the_record_proves_it():
+    """`<think> a</think>x` and `<think>a </think>x` split into the same stored
+    halves at the same length, and are two different sequences. Cancelling them
+    removed a real gradient; the stored comparison is not proof, `raw` or a
+    digest of the unsplit turn is."""
+    from trainspotting import context
+
+    ask = context._turns([{"role": "user", "content": "q"}])[0]
+    a = context._turns([{"role": "assistant", "content": "<think> a</think>x"}])[0]
+    b = context._turns([{"role": "assistant", "content": "<think>a </think>x"}])[0]
+    assert derive._turn_chars(a) == derive._turn_chars(b)
+    rec = {"kind": "dpo", "chosen": {"turns": [ask, a]}, "rejected": {"turns": [ask, b]}}
+    assert derive._shared_turns([ask, a], [ask, b]) == 1
+    assert derive.example_chars(rec)[1] == 2 * derive._turn_chars(a)
+    # The same unsplit turn on both sides is proven, and cancels.
+    assert derive._shared_turns([ask, a], [ask, dict(a)]) == 2
+    # A record with neither proof keeps the answers as completions.
+    bare = {k: v for k, v in a.items() if k != "raw_sha"}
+    assert derive._shared_turns([ask, bare], [ask, dict(bare)]) == 1
+
+
 def test_dpo_with_one_side_a_prefix_of_the_other_scores_only_the_extra_turns():
     """Everything up to where the shorter side ends is conditioned identically
     on both sequences and cancels, so the difference between them is exactly
     what only the longer side has."""
-    shared = [turn("user", 10, "q"), turn("assistant", 20, "a")]
+    shared = [turn("user", 10, "q", raw=True), turn("assistant", 20, "a", raw=True)]
     rec = {
         "kind": "dpo",
         "chosen": {"turns": shared + [turn("assistant", 30, "more")]},
@@ -101,7 +124,10 @@ def test_dpo_branches_where_the_reasoning_diverges_even_if_the_answer_matches():
         "rejected": {"turns": [opening, turn("assistant", 30, "same answer", reasoning=70),
                                turn("assistant", 10, "tail")]},
     }
-    # Identical on both sides: shared all the way down, so nothing is a target.
+    # Identical on both sides: shared all the way down, so nothing is a target
+    # — given proof that the final turns match as written.
+    for side in ("chosen", "rejected"):
+        rec[side]["turns"][2]["raw"] = True
     assert derive._shared_turns(rec["chosen"]["turns"], rec["rejected"]["turns"]) == 3
 
     rec["rejected"]["turns"][1] = turn("assistant", 30, "same answer", reasoning=70)
@@ -129,13 +155,14 @@ def test_dpo_branches_on_a_digest_where_the_stored_text_was_cut():
     assert derive._shared_turns(rec["chosen"]["turns"], rec["rejected"]["turns"]) == 1
     assert target == 4001 * 2      # two responses, not one shared one
 
-    # Same digest is the same text however long it is.
-    rec["rejected"]["turns"][1] = dict(long_a)
-    assert derive._shared_turns(rec["chosen"]["turns"], rec["rejected"]["turns"]) == 2
+    # Same digest is the same text however long it is, which settles shared
+    # history ahead of the answers.
+    tail_a, tail_b = turn("assistant", 5, "one"), turn("assistant", 5, "two")
+    assert derive._shared_turns([opening, long_a, tail_a], [opening, dict(long_a), tail_b]) == 2
 
     # A record written before digests existed compares on what it has.
     no_sha = [{k: v for k, v in t.items() if k != "sha"} for t in (long_a, long_b)]
-    assert derive._shared_turns([opening, no_sha[0]], [opening, no_sha[1]]) == 2
+    assert derive._shared_turns([opening, no_sha[0], tail_a], [opening, no_sha[1], tail_b]) == 2
 
 
 def test_rl_stores_no_target_and_chat_is_not_a_training_example():

@@ -134,7 +134,7 @@ def test_identical_sides_are_named_as_training_nothing():
     whose sides are identical cancels exactly. It is still a row of the mix, so
     it is still counted — but a tie between two empty sides is not the same
     observation as a tie between two answers."""
-    same = [turn("user", 50, "ask"), turn("assistant", 100, "identical")]
+    same = [turn("user", 50, "ask"), {**turn("assistant", 100, "identical"), "raw": True}]
     out = pairs.stage_pairs(ctx([pair(list(same), list(same))]))
     assert out["degenerate"] == 1
     assert out["ties"] == 1

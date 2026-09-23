@@ -105,9 +105,13 @@ def _post(payload: dict) -> dict:
             # hit it, so back off rather than reporting "forbidden" and losing
             # the whole run at the last query.
             if r.status_code in (403, 429) or r.status_code >= 500:
+                last = requests.HTTPError(f"HTTP {r.status_code}")
                 time.sleep(5 * 2**attempt)
                 continue
-            r.raise_for_status()
+            # Any other 4xx is about the request, and asking again sends the
+            # same request. Say so rather than calling the server unreachable.
+            if r.status_code >= 400:
+                raise LookupError_(f"infini-gram refused the request: HTTP {r.status_code} {r.text[:200]}")
             j = r.json()
         except requests.RequestException as e:
             last = e
