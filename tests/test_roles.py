@@ -155,3 +155,22 @@ def test_a_pair_counts_its_shared_system_turn_once(con, tmp_path):
     assert r["system"]["rows"] == 1
     assert r["system"]["by_source"] == {grep.NO_SOURCE_COLUMN: 1}
     assert r["system"]["prompts"][0]["preview"] == "Be terse."
+
+
+@pytest.mark.parametrize("paired", [False, True])
+def test_null_system_content_preserves_the_first_present_turn(con, tmp_path, paired):
+    """A null chosen prompt stays empty rather than falling through to rejected."""
+    path = tmp_path / "null-system.parquet"
+    first = "[{'role': 'system', 'content': NULL::VARCHAR}]"
+    columns = ["chosen", "rejected"] if paired else ["messages"]
+    extra = ", [{'role': 'system', 'content': 'Rejected prompt'}] AS rejected" if paired else ""
+    con.execute(f"COPY (SELECT {first} AS {columns[0]}{extra}) TO '{path}' (FORMAT parquet)")
+    result = _scan(con, path, columns, source_col="none")
+    system = result["system"]
+    assert system["rows"] == 1
+    assert system["distinct_texts"] == 1
+    assert system["groups"] == 1
+    prompt = system["prompts"][0]
+    assert prompt["preview"] == ""
+    assert prompt["distinct_texts"] == 1
+    assert prompt["chars"] == {"min": 0, "max": 0}

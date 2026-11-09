@@ -83,10 +83,13 @@ def scan(con, from_sql: str, columns: list[str], source: str | None) -> dict:
     `distinct_texts` figure is over the same choice.
     """
     turns = grep._flatten([f"coalesce({grep._ident(c)}, [])" for c in columns])
-    system_text = "coalesce(" + ", ".join(
-        f"list_filter({grep._ident(c)}, lambda m: {_role('m.role')} = 'system')[1].content"
+    system_turn = "coalesce(" + ", ".join(
+        f"list_filter({grep._ident(c)}, lambda m: {_role('m.role')} = 'system')[1]"
         for c in columns
     ) + ")"
+    # Choose the first present turn, even when its content is NULL. A missing
+    # text is an empty prompt, not permission to take the other DPO side.
+    system_text = f"coalesce(({system_turn}).content, '')"
     con.execute(f"""
         CREATE OR REPLACE TEMP TABLE roles_scan AS
         SELECT {source or 'NULL'} AS src,
