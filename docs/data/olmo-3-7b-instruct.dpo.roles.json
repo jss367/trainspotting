@@ -1,0 +1,35 @@
+{
+  "dataset": "allenai/Dolci-Instruct-DPO",
+  "stage": "dpo",
+  "generated": "2026-11-09T21:42:49+00:00",
+  "revision": "aed155cf32e809b590490b6c3577ee4b0d0a5019",
+  "parquet_revision": "45ed895db8f8eabcb2c9f6dd5bf93c5c27157d28",
+  "partial": false,
+  "shards": 4,
+  "bytes_read": 799243919,
+  "columns": [
+    "chosen",
+    "rejected"
+  ],
+  "source_column": "preference_type",
+  "preview_chars": 200,
+  "rows_by_source": {
+    "llm_judged": 124980,
+    "delta_learning": 124942,
+    "multiturn_self_talk": 5000,
+    "multiturn_synthetic_context": 5000
+  },
+  "total_rows": 259922,
+  "rows_with_turns": 259922,
+  "rows_by_role": {
+    "assistant": 259922,
+    "user": 259922
+  },
+  "system": {
+    "rows": 0,
+    "by_source": {},
+    "distinct_texts": 0,
+    "groups": 0,
+    "prompts": []
+  }
+}

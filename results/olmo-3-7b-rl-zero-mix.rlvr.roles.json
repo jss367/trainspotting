@@ -1,0 +1,34 @@
+{
+  "dataset": "allenai/Dolci-RL-Zero-Mix-7B",
+  "stage": "rlvr",
+  "generated": "2026-11-09T22:58:13+00:00",
+  "revision": "75a351ffaa56ebe4cbce06b0ba9ad1977a62daa7",
+  "parquet_revision": "41d1a768ea2cbb11e15404e37a2eaaae78ed474e",
+  "partial": false,
+  "shards": 8,
+  "bytes_read": 23950843,
+  "columns": [
+    "messages",
+    "source_prompt"
+  ],
+  "source_column": "dataset",
+  "preview_chars": 200,
+  "rows_by_source": {
+    "ifeval": 15644,
+    "math": 15643,
+    "code": 7830,
+    "code_stdio": 7814
+  },
+  "total_rows": 46931,
+  "rows_with_turns": 46931,
+  "rows_by_role": {
+    "user": 46931
+  },
+  "system": {
+    "rows": 0,
+    "by_source": {},
+    "distinct_texts": 0,
+    "groups": 0,
+    "prompts": []
+  }
+}

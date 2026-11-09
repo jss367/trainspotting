@@ -1,0 +1,86 @@
+{
+  "dataset": "allenai/Dolci-Instruct-SFT",
+  "stage": "sft",
+  "generated": "2026-11-09T21:41:35+00:00",
+  "revision": "bd3c8f3a9b2cc5a9682e44b96ddd0bb2ff027221",
+  "parquet_revision": "e6c2164ac07dc7ba8b5fa9814cc32ae9e5eb8ec7",
+  "partial": false,
+  "shards": 15,
+  "bytes_read": 2891748255,
+  "columns": [
+    "messages"
+  ],
+  "source_column": "domain",
+  "preview_chars": 200,
+  "rows_by_source": {
+    "Coding": 328614,
+    "Reasoning": 310572,
+    "Chat": 309538,
+    "Math": 269937,
+    "Other": 254863,
+    "Tool Use": 227579,
+    "Precise IF": 136833,
+    "Safety": 110295,
+    "Science": 103825,
+    "Multilingual": 99987,
+    "Hardcoded Data": 69
+  },
+  "total_rows": 2152112,
+  "rows_with_turns": 2152112,
+  "rows_by_role": {
+    "assistant": 2152112,
+    "user": 2152109,
+    "system": 227639,
+    "environment": 197363
+  },
+  "system": {
+    "rows": 227639,
+    "by_source": {
+      "Tool Use": 227579,
+      "Hardcoded Data": 60
+    },
+    "distinct_texts": 4,
+    "groups": 3,
+    "prompts": [
+      {
+        "preview": "You are a helpful function-calling AI assistant. You are provided with function signatures within <functions></functions> XML tags. You may call one or more functions to assist with the user query. Ou",
+        "truncated": true,
+        "rows": 227579,
+        "distinct_texts": 2,
+        "chars": {
+          "min": 339,
+          "max": 992
+        },
+        "sources": {
+          "Tool Use": 227579
+        }
+      },
+      {
+        "preview": "You are Olmo, a helpful function-calling AI assistant built by Ai2. Your date cutoff is December 2024, and your model weights are available at https://huggingface.co/allenai.",
+        "truncated": false,
+        "rows": 57,
+        "distinct_texts": 1,
+        "chars": {
+          "min": 174,
+          "max": 174
+        },
+        "sources": {
+          "Hardcoded Data": 57
+        }
+      },
+      {
+        "preview": "I am Olmo a helpful assistant made by Ai2, the Allen Institute for AI. My training data is up to December 2024. I do not have the ability to run code, search, read previous conversations, and so on, b",
+        "truncated": true,
+        "rows": 3,
+        "distinct_texts": 1,
+        "chars": {
+          "min": 249,
+          "max": 249
+        },
+        "sources": {
+          "Hardcoded Data": 3
+        }
+      }
+    ]
+  }
+}

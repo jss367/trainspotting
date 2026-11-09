@@ -2120,6 +2120,142 @@ function pairsCard(model, m, post, runs){
   return card;
 }
 
+// ------------------------------------------------------------ turn roles ---
+
+// Who speaks in a stage's examples, counted over every row: how many carry a
+// system turn, a tool turn and so on, and what the system turns say. A
+// composition table cannot show this, because no source column records which
+// rows have a system prompt — and how a model treats one is learned from
+// exactly that.
+//
+// A stage whose rows store the prompt as one string has no roles to count. The
+// file says so with an empty `columns`, and the card says "not recorded", never
+// 0%: the chat template decides whether those prompts were wrapped in a system
+// turn, and the data cannot say.
+function rolesSummary(d){
+  if (!d) return null;
+  const total = d.total_rows || 0;
+  if (!(d.columns && d.columns.length)) return {recorded: false, total};
+  const sys = d.system || {};
+  const prompts = sys.prompts || [];
+  const shown = prompts.reduce((a, p) => a + p.rows, 0);
+  // Shares are over the rows that store turns, not over the stage. Dolci's RL
+  // mixes keep a `source_prompt` conversation for a few thousand of their rows
+  // and a flat prompt string for the rest; dividing by the stage would report
+  // the unrecorded rows as rows without a system turn.
+  const base = d.rows_with_turns || 0;
+  return {
+    recorded: true,
+    total,
+    base,
+    system: sys.rows || 0,
+    share: base ? (sys.rows || 0) / base : 0,
+    distinct: sys.distinct_texts || 0,
+    groups: sys.groups || 0,
+    roles: Object.entries(d.rows_by_role || {}).map(([role, n]) => ({role, n, frac: base ? n / base : 0})),
+    prompts,
+    // Rows whose system prompt opens differently from every one listed. The
+    // file keeps the biggest groups only, and the remainder is still rows a
+    // model was fit to, so the card names it rather than letting the list
+    // read as the whole of it.
+    unlisted: (sys.rows || 0) - shown,
+    unlistedGroups: (sys.groups || 0) - prompts.length,
+  };
+}
+
+// Dolci's SFT tool rows hand function results back as `environment` turns.
+const ROLE_ORDER = ["system", "user", "assistant", "tool", "environment", "function"];
+
+function rolesCard(model, m, post, runs){
+  const usable = post.map(s => [s, runs[s.stage], rolesSummary(runs[s.stage])]).filter(([, , r]) => r);
+  if (!usable.length) return null;
+  const card = document.createElement("section");
+  card.className = "card";
+  card.id = "card-roles";
+  card.innerHTML = m.is_model === false
+    ? `<h2>Who speaks in each conversation?</h2>
+       <p class="sub">Rows carrying each turn role, and what the system turns say — counted over every
+         row, not sampled.</p>`
+    : `<h2>Who speaks in each example, and what does the system prompt say?</h2>
+       <p class="sub">How much a model weighs a system prompt is learned from the rows that have one:
+         how many there are, and whether they set a persona or a rule the assistant then keeps, or only
+         list tools. Counted over every row, not sampled. The released OLMo 3 chat templates add a
+         default system turn to any conversation without one, so a row with no system turn here was
+         most likely trained under that fixed text rather than under none.</p>`;
+  for (const [s, d, r] of usable){
+    const h = document.createElement("h3");
+    h.className = "stage";
+    h.style.setProperty("--bar", hueFor(s.stage));
+    h.innerHTML = `${esc(stageLabel(s.stage))} <span class="ds">— <a href="https://huggingface.co/datasets/${escAttr(d.dataset)}"
+      target="_blank" rel="noopener">${esc(d.dataset)} ↗</a>${revLink(d)} (${num(r.total)} examples)</span>`;
+    card.appendChild(h);
+    if (!r.recorded){
+      const p = document.createElement("p");
+      p.className = "note";
+      p.textContent = "Not recorded: this mix stores each prompt as one string with no turn roles, "
+        + "so whether a system turn wrapped it was decided by the chat template at training time, "
+        + "not by anything in the data.";
+      card.appendChild(p);
+      continue;
+    }
+    const sub = document.createElement("p");
+    sub.className = "stage-sub";
+    sub.textContent = `share of rows with at least one turn of each role · read from ${d.columns.join(" and ")}`
+      + (r.base < r.total ? ` · turns are stored for ${num(r.base)} of the ${num(r.total)} rows; the rest hold the prompt as one string and are left out` : "")
+      + (d.partial ? " · the server converted only part of this repo, so these are lower bounds" : "");
+    card.appendChild(sub);
+    const rank = role => { const i = ROLE_ORDER.indexOf(role); return i < 0 ? ROLE_ORDER.length : i; };
+    for (const x of [...r.roles].sort((a, b) => rank(a.role) - rank(b.role) || b.n - a.n)){
+      barRow(card, esc(x.role), x.frac, x.frac, x.frac, 1,
+        `<b>${esc(x.role)}</b><br>${num(x.n)} of ${num(r.base)} rows with stored turns (${pct(x.frac)})`,
+        x.role === "system", null, {stage: s.stage});
+    }
+    if (!r.system){
+      const p = document.createElement("p");
+      p.className = "note";
+      p.textContent = `No row of the ${num(r.base)} with stored turns carries a system turn.`;
+      card.appendChild(p);
+      continue;
+    }
+    const lead = document.createElement("p");
+    lead.className = "note";
+    lead.textContent = `${num(r.system)} rows have a system turn, holding ${num(r.distinct)} distinct texts `
+      + `that open ${num(r.groups)} different way${r.groups === 1 ? "" : "s"}. `
+      + `Grouped by their first ${num(d.preview_chars)} characters, biggest first:`;
+    card.appendChild(lead);
+    const list = (into, items) => {
+      for (const p of items){
+        const meta = document.createElement("p");
+        meta.className = "sysmeta";
+        const srcs = Object.entries(p.sources || {});
+        meta.textContent = `${num(p.rows)} rows (${pct(p.rows / r.base)})`
+          + (p.distinct_texts > 1 ? ` · ${num(p.distinct_texts)} distinct texts` : "")
+          + (srcs.length ? ` · ${srcs.slice(0, 3).map(([k, n]) => `${k} ${num(n)}`).join(", ")}`
+            + (srcs.length > 3 ? `, +${srcs.length - 3} more` : "") : "");
+        into.appendChild(meta);
+        const text = document.createElement("div");
+        text.className = "sysprompt";
+        text.textContent = (p.preview || "(empty)") + (p.truncated ? "…" : "");
+        into.appendChild(text);
+      }
+    };
+    list(card, r.prompts.slice(0, 3));
+    if (r.prompts.length > 3){
+      const det = document.createElement("details");
+      det.innerHTML = `<summary>${r.prompts.length - 3} more system prompt openings</summary>`;
+      list(det, r.prompts.slice(3));
+      card.appendChild(det);
+    }
+    if (r.unlisted > 0){
+      const p = document.createElement("p");
+      p.className = "note";
+      p.textContent = `+${num(r.unlisted)} rows under ${num(r.unlistedGroups)} smaller openings, counted in the result file.`;
+      card.appendChild(p);
+    }
+  }
+  return card;
+}
+
 // ----------------------------------------------------------------- treemap ---
 // The bars in the cards above compare sources within one stage. This is the
 // only view that puts every source in the pipeline in one frame at once: area
@@ -3360,6 +3496,18 @@ async function renderModel(model, gen){
     }
     main.appendChild(mix);
   }
+
+  // ---- who speaks in each example ----
+  // Beside the composition, because it is one: a count over every row of what
+  // the rows are made of, only by turn role rather than by source.
+  const roleRuns = {};
+  for (const s of post){
+    const name = `${model}.${s.stage}.roles.json`;
+    if (MANIFEST.includes(name)) roleRuns[s.stage] = await getData(name);
+  }
+  if (gen !== GEN) return;
+  const rolesEl = rolesCard(model, m, post, roleRuns);
+  if (rolesEl) main.appendChild(rolesEl);
 
   // ---- what separates the two sides of a preference pair ----
   // Between the composition and the values: it is a property of the mix, like
@@ -4857,7 +5005,7 @@ export async function boot(){
 // What the tests reach for. The page itself only needs boot(); the rest is
 // exported so tests/site can import the functions the browser runs rather than
 // a copy lifted out of the file.
-export { questionFiles, splitModelKey, sameDraw, sameRevision, resolverFor, pairingEvidence, crossRows, promptKey, comparisonColors, stabilityNote, stageLabel, rewardFamily, rewardComposition, renderRewardComposition, renderRLVR, diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, pieSlices, searchFields, scanRecords, branchPoint, matchIndex, fmtSigned };
+export { questionFiles, splitModelKey, sameDraw, sameRevision, resolverFor, pairingEvidence, crossRows, promptKey, comparisonColors, stabilityNote, stageLabel, rewardFamily, rewardComposition, renderRewardComposition, renderRLVR, diffPair, opChars, uniqueChars, sideText, sideCut, demotePrefix, gradientSection, rawResponseStored, renderDPO, sharedTurns, candidateTurns, postBranchContext, langCode, columnLangShares, langSummary, langColumn, wilson, childrenOf, treemapLayout, pieSlices, searchFields, scanRecords, branchPoint, matchIndex, fmtSigned, rolesSummary };
 // The language card reads its display names from a module-scope cache boot()
 // fills from language-names.json; nothing serves that file under node, so the
 // tests set it through here.
