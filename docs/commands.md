@@ -99,6 +99,11 @@ DPO pair teaches by contrast, so what it teaches depends on what tells the two
 sides apart — and two things do without reading either answer. See
 [What separates a preference pair](#what-separates-a-preference-pair).
 
+Which turn roles a mix's rows carry, and what their system prompts say, is
+counted over every row rather than sampled: no source column records it, and how
+a model weighs a system prompt is learned from the rows that have one. See
+[Who speaks in each example](#who-speaks-in-each-example).
+
 Everything above reads a sample of a mix. Asking whether one *particular* text
 is in a pretraining corpus needs an index instead — a whole blog is a rounding
 error in trillions of tokens, so no sample will ever land on it. See
@@ -141,6 +146,10 @@ trainspotting context olmo-3-7b-instruct
 # What separates the two sides of each preference pair besides the answer:
 # length, and which model wrote each side (reads the committed context, no API key)
 trainspotting pairs olmo-3-7b-instruct
+
+# Which turn roles every row carries, and what the system prompts say
+# (scans the whole mix like grep; needs duckdb, no API key)
+trainspotting roles olmo-3-7b-instruct --yes
 
 # Find a regex anywhere in the sampled examples — responses included, DPO side
 # reported (no API key needed)
@@ -446,6 +455,61 @@ closer to a coin.
   cut in `chosen` or `rejected` counts: those are the two cells the lengths are
   computed from, and a row shortened in its standalone `prompt` cell has both
   measured sides whole.
+
+## Who speaks in each example
+
+A system prompt is the instruction a deployed model is meant to weigh above the
+conversation, and how far it does is learned from the training rows that have
+one: how many there are, and whether they set a persona, a style or a rule the
+assistant then keeps, or only list tools. No composition table shows this,
+because no source column records which rows carry a system turn.
+
+```bash
+trainspotting roles olmo-3-7b-instruct --yes
+```
+
+It reads the same Parquet conversion `grep` scans, over every row, and counts
+rows per turn role. System prompts are grouped by their first 200 characters,
+because a group of full texts groups nothing when a fixed preamble is followed by
+row-specific text, and each group reports how many distinct full texts share
+that opening. A DPO pair repeats its conversation on both sides, so a row counts
+once per role whichever side the turn is in. Output lands in
+`results/<target>.<stage>.roles.json`. The byte cap and the plan printed before
+the scan work as they do for `grep`; the Think SFT mixes are tens of gigabytes of
+message text, hence `--yes`.
+
+Some mixes store the prompt as one string with no roles: the Think RL mixes and
+three of the RL-Zero ones. Those stages report an empty `columns` and no counts,
+and the site says "not recorded", never 0%. Dolci-Instruct-RL keeps a
+`source_prompt` conversation for 7,000 of its 169,964 rows and a flat string for
+the rest, so its shares are over those 7,000.
+
+### What the full scans say
+
+| Stage | rows with a system turn | what the system turns say |
+|---|---|---|
+| Instruct SFT (`Dolci-Instruct-SFT`) | 227,639 of 2,152,112 (10.6%) | 227,579 are the tool-use preamble ("You are a helpful function-calling AI assistant. You are provided with function signatures…"); 60 are identity rows ("You are Olmo…") |
+| Instruct DPO | 0 of 259,922 | — |
+| Instruct RL | 0 of the 7,000 that store turns | — |
+| Think SFT 7B | 0 of 2,268,178 | — |
+| Think SFT 32B | 58 of 2,253,684 | all one identity prompt ("You are Olmo, a helpful AI assistant built by Ai2…") |
+| Think DPO 7B / 32B | 0 of 150,000 / 0 of 200,000 | — |
+| Think RL, RL-Zero code/general/IF | not recorded | — |
+| RL-Zero math / mix | 0 of 13,314 / 0 of 46,931 | — |
+
+Four distinct system-prompt texts across all of Instruct SFT. No row in any OLMo 3
+mix uses the system turn for a persona, a style or a rule. The tool-use rows put
+their function signatures in a separate `functions` field, which is why 227,579
+rows share one text.
+
+This does not mean the Think models were trained without a system prompt. The
+released chat templates add a default system turn to any conversation that has
+none: "You are a helpful function-calling AI assistant. You do not currently have
+access to any functions." for Instruct, and "You are OLMo, a helpful
+function-calling AI assistant built by Ai2. Your date cutoff is November 2024…"
+for Think. If training applied the same templates, every row with no system turn
+was fit under that one fixed text. Either way the model never sees the system
+turn vary with what the assistant then does.
 
 ## Where each label comes from
 

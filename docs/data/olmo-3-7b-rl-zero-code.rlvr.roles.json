@@ -1,0 +1,15 @@
+{
+  "dataset": "allenai/Dolci-RL-Zero-Code-7B",
+  "stage": "rlvr",
+  "generated": "2026-11-09T22:57:55+00:00",
+  "revision": "054c0a1f9c5fd52566ad9124aa2e702924803cd3",
+  "parquet_revision": "54c407837dfcc09ae5562c29a6994f051ce03637",
+  "partial": false,
+  "shards": 2,
+  "bytes_read": 0,
+  "columns": [],
+  "source_column": null,
+  "preview_chars": 200,
+  "rows_by_source": {},
+  "total_rows": 13312
+}

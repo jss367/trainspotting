@@ -1,0 +1,63 @@
+{
+  "dataset": "allenai/Dolci-Think-SFT-32B",
+  "stage": "sft",
+  "generated": "2026-11-09T22:51:09+00:00",
+  "revision": "7668c638cc84100951973b456069a1a462d6d915",
+  "parquet_revision": "a29c19bc75ad8bb85893df3faf087bcfaaaefbad",
+  "partial": false,
+  "shards": 156,
+  "bytes_read": 35942260407,
+  "columns": [
+    "messages"
+  ],
+  "source_column": "source",
+  "preview_chars": 200,
+  "rows_by_source": {
+    "Dolci Think OpenThoughts3 Math": 752997,
+    "Dolci Think Python Algorithms": 466676,
+    "Persona Precise IF": 220530,
+    "Dolci Think Precise IF": 135722,
+    "Nemotron Code": 113777,
+    "SYNTHETIC-2-SFT-Verified": 104548,
+    "Dolci Think OpenThoughts3 STEM": 99268,
+    "Aya": 97156,
+    "Dolci Think OpenThoughts3 Code": 88899,
+    "Wildchat": 76209,
+    "WildJailbreak": 40002,
+    "WildGuardMix": 36673,
+    "CoCoNot": 9549,
+    "OpenAssistant": 6647,
+    "TableGPT": 4973,
+    "Olmo Identity Hardcoded Data": 58
+  },
+  "total_rows": 2253684,
+  "rows_with_turns": 2253684,
+  "rows_by_role": {
+    "assistant": 2253684,
+    "user": 2253684,
+    "system": 58
+  },
+  "system": {
+    "rows": 58,
+    "by_source": {
+      "Olmo Identity Hardcoded Data": 58
+    },
+    "distinct_texts": 1,
+    "groups": 1,
+    "prompts": [
+      {
+        "preview": "You are Olmo, a helpful AI assistant built by Ai2. Your date cutoff is December 2024, and your model weights are available at https://huggingface.co/allenai.",
+        "truncated": false,
+        "rows": 58,
+        "distinct_texts": 1,
+        "chars": {
+          "min": 157,
+          "max": 157
+        },
+        "sources": {
+          "Olmo Identity Hardcoded Data": 58
+        }
+      }
+    ]
+  }
+}

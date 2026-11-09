@@ -1,0 +1,46 @@
+{
+  "dataset": "allenai/Dolci-Think-SFT-7B",
+  "stage": "sft",
+  "generated": "2026-11-09T22:13:33+00:00",
+  "revision": "83f618e2fe0aed29ee3440a3658a0326c175d09d",
+  "parquet_revision": "85de58cbcfbc0c4e0e522e1147daaec48ec6644a",
+  "partial": false,
+  "shards": 156,
+  "bytes_read": 36095734476,
+  "columns": [
+    "messages"
+  ],
+  "source_column": "dataset_source",
+  "preview_chars": 200,
+  "rows_by_source": {
+    "saumyamalik/OpenThoughts3-full-filtered-math-decontam-v2": 752997,
+    "saumyamalik/correct-python-sft-187k-x16-thoughts-filtered-decontam-v2": 466677,
+    "allenai/persona-precise-if-r1-final-content-filtered-chinese-filtered": 223123,
+    "saumyamalik/if_qwq_reasoning_verified_filtered_decontam_v2": 135792,
+    "allenai/nemotron-post-training-dataset-subset-ngram-filtered-no-tool-calls": 113777,
+    "allenai/SYNTHETIC-2-SFT-cn-fltrd-final-ngram-filtered-chinese-filtered": 104569,
+    "saumyamalik/OpenThoughts3-full-filtered-science-decontam-v2": 99269,
+    "allenai/aya-100k-r1-format-filtered-keyword-filtered-filter-datecutoff-ngram-filtered": 98597,
+    "saumyamalik/OpenThoughts3-full-filtered-code-subsampled-decontam-v2": 88900,
+    "allenai/tulu_v3.9_wildchat_100k_english-r1-final-content-filtered": 46312,
+    "allenai/wildjailbreak-r1-v2-format-filtered-keyword-filtered-filter-datecutoff-final-content-filtered": 41100,
+    "allenai/wildguardmix-r1-v2-all-filtered-ngram-filtered-chinese-filtered": 38315,
+    "allenai/wildchat-r1-p2-repetition-filter": 36742,
+    "allenai/coconot-r1-format-domain-filtered-keyword-filtered-filter-datecutoff-chinese-filtered": 10227,
+    "allenai/oasst1-r1-format-filtered-keyword-filtered-filter-datecutoff-chinese-filtered": 6800,
+    "allenai/tablegpt_r1-format-filtered-keyword-filtered-filter-datecutoff": 4981
+  },
+  "total_rows": 2268178,
+  "rows_with_turns": 2268178,
+  "rows_by_role": {
+    "assistant": 2268178,
+    "user": 2268178
+  },
+  "system": {
+    "rows": 0,
+    "by_source": {},
+    "distinct_texts": 0,
+    "groups": 0,
+    "prompts": []
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "dataset": "allenai/Dolci-Think-DPO-32B",
+  "stage": "dpo",
+  "generated": "2026-11-09T22:53:01+00:00",
+  "revision": "0898aac9657c0fa79b02c0e91627b370bed2a127",
+  "parquet_revision": "0ca37b39b72fc58fa1f941a426f22131bac5ca7b",
+  "partial": false,
+  "shards": 9,
+  "bytes_read": 1769812891,
+  "columns": [
+    "chosen",
+    "rejected"
+  ],
+  "source_column": "dataset",
+  "preview_chars": 200,
+  "rows_by_source": {
+    "ultrafeedback_cleaned_olmo2_7b": 32778,
+    "flan_v2_converted": 19660,
+    "OpenThoughts3-full-filtered-science-no-cot": 19023,
+    "filtered_wc_sample_500k": 18106,
+    "valpy_if_qwq_reasoning_verified_no_reasoning": 15836,
+    "Wildchat-1M-gpt-4.1-regenerated-english": 15803,
+    "correct-python-sft-187k": 13236,
+    "tulu-3-sft-personas-math": 10657,
+    "evol_codealpaca_heval_decontaminated": 7634,
+    "Wildchat-1m-gpt-4.1-regeneration-not-english": 6792,
+    "tulu_v3.9_wildjailbreak_decontaminated_50k": 5616,
+    "tulu_v3.9_synthetic_finalresp_wildguardmixtrain_decontaminated_50k": 5338,
+    "tulu_v3.9_aya_100k": 4078,
+    "tulu-3-sft-personas-math-grade": 3681,
+    "tulu_v3.9_open_math_2_gsm8k_50k": 3615,
+    "IF_sft_data_verified_permissive": 3529,
+    "tulu-3-sft-personas-instruction-following-o3": 3486,
+    "personahub_code_v2_34999": 2514,
+    "tulu_v3.9_sciriff_10k": 2253,
+    "oasst1_converted": 1762,
+    "tulu-3-sft-personas-algebra": 1417,
+    "tulu_v3.9_table_gpt_5k": 1170,
+    "DaringAnteater-prefs_olmo2_7b": 1089,
+    "tulu-3-sft-coconot-regenerated": 927
+  },
+  "total_rows": 200000,
+  "rows_with_turns": 200000,
+  "rows_by_role": {
+    "assistant": 200000,
+    "user": 200000
+  },
+  "system": {
+    "rows": 0,
+    "by_source": {},
+    "distinct_texts": 0,
+    "groups": 0,
+    "prompts": []
+  }
+}

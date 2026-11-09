@@ -1,0 +1,30 @@
+{
+  "dataset": "allenai/Dolci-RL-Zero-Math-7B",
+  "stage": "rlvr",
+  "generated": "2026-11-09T22:58:05+00:00",
+  "revision": "93b5e498577804a93fb11bfe8821428f8535f2d8",
+  "parquet_revision": "248dfe2cae39141ddf3eb2ea36e6f0c47d449a4b",
+  "partial": false,
+  "shards": 1,
+  "bytes_read": 2118819,
+  "columns": [
+    "messages"
+  ],
+  "source_column": "dataset",
+  "preview_chars": 200,
+  "rows_by_source": {
+    "math": 13314
+  },
+  "total_rows": 13314,
+  "rows_with_turns": 13314,
+  "rows_by_role": {
+    "user": 13314
+  },
+  "system": {
+    "rows": 0,
+    "by_source": {},
+    "distinct_texts": 0,
+    "groups": 0,
+    "prompts": []
+  }
+}

@@ -30,6 +30,7 @@ from .commands.lookup import cmd_lookup
 from .commands.pairs import cmd_pairs
 from .commands.pretrain import cmd_pretrain
 from .commands.report import cmd_report
+from .commands.roles import cmd_roles
 from .commands.search import cmd_search
 from .commands.sources import cmd_sources
 from .commands.stance import cmd_stance
@@ -371,6 +372,21 @@ def main():
     p.add_argument("--yes", action="store_true", help="scan whatever it costs")
     p.add_argument("--slug", help="short name for the result files (default: derived from the pattern)")
     p.set_defaults(fn=cmd_grep)
+
+    p = sub.add_parser(
+        "roles",
+        help="which turn roles every row of each post-training mix carries, and what its system prompts say",
+    )
+    p.add_argument("target", help=TARGET_HELP)
+    p.add_argument("--stage", help="only this post-training stage (sft/dpo/rlvr)")
+    p.add_argument(
+        "--max-gb",
+        type=float,
+        default=5.0,
+        help="refuse to read more than this over the network; the plan is printed either way",
+    )
+    p.add_argument("--yes", action="store_true", help="scan whatever it costs")
+    p.set_defaults(fn=cmd_roles)
 
     p = sub.add_parser(
         "contaminate",

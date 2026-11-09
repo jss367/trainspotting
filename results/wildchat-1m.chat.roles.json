@@ -1,0 +1,37 @@
+{
+  "dataset": "allenai/WildChat-1M",
+  "stage": "chat",
+  "generated": "2026-11-09T23:00:40+00:00",
+  "revision": "7d6490e462285cf85d91eabea0f9a954fbddcd1f",
+  "parquet_revision": "e6776af2aec2176bfb5d9594acad5dbdd80d9192",
+  "partial": false,
+  "shards": 14,
+  "bytes_read": 2432128704,
+  "columns": [
+    "conversation"
+  ],
+  "source_column": "model",
+  "preview_chars": 200,
+  "rows_by_source": {
+    "gpt-3.5-turbo-0613": 371271,
+    "gpt-3.5-turbo-0301": 195157,
+    "gpt-4-1106-preview": 98905,
+    "gpt-4-0125-preview": 61951,
+    "gpt-3.5-turbo-0125": 57426,
+    "gpt-4-0314": 53277,
+    "gpt-4-0613": 2
+  },
+  "total_rows": 837989,
+  "rows_with_turns": 837989,
+  "rows_by_role": {
+    "assistant": 837989,
+    "user": 837989
+  },
+  "system": {
+    "rows": 0,
+    "by_source": {},
+    "distinct_texts": 0,
+    "groups": 0,
+    "prompts": []
+  }
+}

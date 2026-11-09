@@ -1,0 +1,15 @@
+{
+  "dataset": "allenai/Dolci-Think-RL-32B",
+  "stage": "rlvr",
+  "generated": "2026-11-09T22:53:01+00:00",
+  "revision": "d581ecde5cb4bb2a550c2499a7408a3b8dca79f6",
+  "parquet_revision": "d6bd0440d6d4e32425800ab44b8bd58dc613ec08",
+  "partial": false,
+  "shards": 4,
+  "bytes_read": 0,
+  "columns": [],
+  "source_column": "dataset_source",
+  "preview_chars": 200,
+  "rows_by_source": {},
+  "total_rows": 102026
+}

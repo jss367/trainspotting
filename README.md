@@ -23,6 +23,7 @@ Each is a command; each is a layer of the same audit.
 | Language | `languages` | Which natural language each sampled prompt is in, detected locally. |
 | Context | `context` | The whole training example behind a prompt: the response fit, the pair pushed between, or the verifier that scores. |
 | Preference | `pairs` | What tells the two sides of a DPO pair apart besides the answer: how much longer the chosen side is, and which model wrote each side. |
+| Turn roles | `roles` | Which turn roles every row carries, and what its system prompts say, over every row of a mix. |
 | Strings, in the samples | `search` | Where a string appears in the sampled examples, and on which side. |
 | Strings, over every row | `grep` | How many rows of a mix contain a string, exactly, over the whole mix. |
 | Direction | `stance` | Which way an example pushes on a question: toward, away, or neither. |
@@ -55,7 +56,7 @@ pip install -e .
 ```
 
 `classify`, `ask` and `stance` need an Anthropic API key (`ANTHROPIC_API_KEY`).
-`grep` and `contaminate` need DuckDB (`pip install -e '.[grep]'`). `bif` needs
+`grep`, `contaminate` and `roles` need DuckDB (`pip install -e '.[grep]'`). `bif` needs
 torch and transformers (`pip install -e '.[bif]'`) and downloads weights.
 `steps` needs `tokenizers` (`pip install -e '.[steps]'`).
 

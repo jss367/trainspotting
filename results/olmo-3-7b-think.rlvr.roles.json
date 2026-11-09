@@ -1,0 +1,15 @@
+{
+  "dataset": "allenai/Dolci-Think-RL-7B",
+  "stage": "rlvr",
+  "generated": "2026-11-09T22:15:00+00:00",
+  "revision": "0fb6466d31ef3a9dd16985ef635e6429e05a6491",
+  "parquet_revision": "32c49640832240a6c3cd7ae5766eb377d8a4a562",
+  "partial": false,
+  "shards": 9,
+  "bytes_read": 0,
+  "columns": [],
+  "source_column": "dataset_source",
+  "preview_chars": 200,
+  "rows_by_source": {},
+  "total_rows": 102014
+}

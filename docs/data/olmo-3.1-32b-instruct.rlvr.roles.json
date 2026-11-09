@@ -1,0 +1,37 @@
+{
+  "dataset": "allenai/Dolci-Instruct-RL",
+  "stage": "rlvr",
+  "generated": "2026-11-09T22:57:51+00:00",
+  "revision": "1a8d79b1012d77e4bb1fd7f699c5c7eb33ef931e",
+  "parquet_revision": "5327da53e02eb4cc0fa6a2d8860f6c9c3df3fcda",
+  "partial": false,
+  "shards": 3,
+  "bytes_read": 1232153,
+  "columns": [
+    "source_prompt"
+  ],
+  "source_column": "dataset_source",
+  "preview_chars": 200,
+  "rows_by_source": {
+    "allenai/rlvr_general_mix-keyword-filtered-topic-chars-char-filt-topic-filtered": 48398,
+    "allenai/IF_multi_constraints_upto5_filtered_dpo_0625_filter-keyword-filtered-topic-char-topic-filtered": 37568,
+    "hamishivi/omega-combined-no-boxed_filtered": 20000,
+    "hamishivi/rlvr_acecoder_filtered_filtered": 20000,
+    "hamishivi/polaris_53k": 14000,
+    "hamishivi/rlvr_orz_math_57k_collected_filtered": 14000,
+    "hamishivi/MathSub-30K_filtered": 8998,
+    "hamishivi/DAPO-Math-17k-Processed_filtered": 7000
+  },
+  "total_rows": 169964,
+  "rows_with_turns": 7000,
+  "rows_by_role": {
+    "user": 7000
+  },
+  "system": {
+    "rows": 0,
+    "by_source": {},
+    "distinct_texts": 0,
+    "groups": 0,
+    "prompts": []
+  }
+}
