@@ -376,7 +376,7 @@ def test_tool_turns_count_as_model_input():
     typ = 'STRUCT("content" VARCHAR, "role" VARCHAR)[]'
     exprs, _, _ = grep.text_fields({"messages": typ})
     assert "'assistant', 'model'" in exprs["response"][0]
-    assert exprs["prompt"][0].startswith("list_transform(list_filter(\"messages\", m -> NOT (")
+    assert exprs["prompt"][0].startswith("list_transform(list_filter(\"messages\", lambda m: NOT (")
 
 
 @pytest.fixture

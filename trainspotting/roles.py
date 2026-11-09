@@ -84,13 +84,13 @@ def scan(con, from_sql: str, columns: list[str], source: str | None) -> dict:
     """
     turns = grep._flatten([f"coalesce({grep._ident(c)}, [])" for c in columns])
     system_text = "coalesce(" + ", ".join(
-        f"list_filter({grep._ident(c)}, m -> {_role('m.role')} = 'system')[1].content"
+        f"list_filter({grep._ident(c)}, lambda m: {_role('m.role')} = 'system')[1].content"
         for c in columns
     ) + ")"
     con.execute(f"""
         CREATE OR REPLACE TEMP TABLE roles_scan AS
         SELECT {source or 'NULL'} AS src,
-               list_distinct(list_transform({turns}, m -> {_role('m.role')})) AS roles,
+               list_distinct(list_transform({turns}, lambda m: {_role('m.role')})) AS roles,
                left(s, {PREVIEW_CHARS}) AS preview,
                length(s) AS chars,
                hash(s) AS digest

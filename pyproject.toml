@@ -14,9 +14,9 @@ dependencies = [
 trainspotting = "trainspotting.cli:main"
 
 [project.optional-dependencies]
-# Only the grep layer needs duckdb, and only it needs a query engine at all —
-# every other layer talks to the datasets-server over HTTP.
-grep = ["duckdb>=1.0"]
+# The grep and roles layers scan Parquet with DuckDB. Python-style SQL
+# lambdas require DuckDB 1.3 or newer.
+grep = ["duckdb>=1.3"]
 # Experimental standalone-text sampling on Pythia-70m. Torch also runs the
 # exact-posterior CPU validation. Imports stay local to the model-based commands.
 bif = ["torch>=2.2", "transformers>=4.57"]
@@ -24,7 +24,7 @@ changes = ["torch>=2.2", "transformers>=4.57"]
 # Only the steps layer decodes tokens: Pythia's training order is published as
 # token ids, not text, so reading a batch back means the GPT-NeoX tokenizer.
 steps = ["tokenizers>=0.15"]
-dev = ["pytest>=8", "duckdb>=1.0", "tokenizers>=0.15"]
+dev = ["pytest>=8", "duckdb>=1.3", "tokenizers>=0.15"]
 
 [build-system]
 requires = ["setuptools>=68"]

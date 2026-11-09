@@ -199,8 +199,8 @@ def connect():
         import duckdb
     except ModuleNotFoundError:
         sys.exit(
-            "trainspotting grep needs duckdb: pip install 'duckdb>=1.0'\n"
-            "(it is the only layer that needs it, so it is an optional extra: "
+            "trainspotting grep/roles needs duckdb: pip install 'duckdb>=1.3'\n"
+            "(these layers use the optional extra: "
             "pip install -e '.[grep]')"
         )
     con = duckdb.connect()
@@ -270,7 +270,7 @@ def _pair_exprs(typ: str) -> list[tuple[str, str, tuple[str, ...]]]:
         f"coalesce(z[1].{_ident(f)}, '') IS NOT DISTINCT FROM coalesce(z[2].{_ident(f)}, '')"
         for f in fields
     )
-    same = f"list_transform(list_zip({c}, {r}), z -> ({same_turn}))"
+    same = f"list_transform(list_zip({c}, {r}), lambda z: ({same_turn}))"
     # Capped so the last turn of each list is never swallowed by the prefix. With
     # two identical completions `list_position` finds no disagreement, the
     # coalesce lands one past the end, both tails come back empty and the answer
@@ -285,11 +285,11 @@ def _pair_exprs(typ: str) -> list[tuple[str, str, tuple[str, ...]]]:
         return f"list_slice({col}, {b}, len({col}))"
 
     def content(expr, keep):
-        return f"list_transform(list_filter({expr}, m -> {keep}), m -> m.content)"
+        return f"list_transform(list_filter({expr}, lambda m: {keep}), lambda m: m.content)"
 
     out = [
         # The shared prefix in full, whatever role each turn carries.
-        ("prompt", f"list_transform(list_slice({c}, 1, {b} - 1), m -> m.content)", both),
+        ("prompt", f"list_transform(list_slice({c}, 1, {b} - 1), lambda m: m.content)", both),
         ("chosen", content(tail(c), emitted), both),
         ("rejected", content(tail(r), emitted), both),
     ]
@@ -312,13 +312,13 @@ def _pair_exprs(typ: str) -> list[tuple[str, str, tuple[str, ...]]]:
             # completions — the same defect the branch split fixed for content,
             # reintroduced one field over by the commit that added these.
             scope = tail(col) if side in PAIR else col
-            out.append((side, f"list_transform({scope}, m -> m.{_ident(sub)})", (name, sub)))
+            out.append((side, f"list_transform({scope}, lambda m: m.{_ident(sub)})", (name, sub)))
         # Any field on the shared prefix is prompt: history the model reads,
         # assistant turns included, exactly as the prefix's content is. For a
         # tool call or reasoning trace the slicing above would otherwise drop it
         # and the row would go uncounted.
         out.append(("prompt",
-                    f"list_transform(list_slice({c}, 1, {b} - 1), m -> m.{_ident(sub)})",
+                    f"list_transform(list_slice({c}, 1, {b} - 1), lambda m: m.{_ident(sub)})",
                     ("chosen", sub)))
     return out
 
@@ -345,7 +345,7 @@ def _message_exprs(col: str, typ: str) -> list[tuple[str, str, tuple[str, ...]]]
     # where the model learned to say it. `search` puts those turns on the prompt
     # side for the same reason.
     if col == "source_prompt" and "content" in typ:
-        return [("prompt", f"list_transform({q}, m -> m.content)", ("content",))]
+        return [("prompt", f"list_transform({q}, lambda m: m.content)", ("content",))]
     if "content" in typ:
         emitted = f"lower(coalesce(m.role, '')) IN ({roles})"
         both = ("content", "role")
@@ -354,11 +354,11 @@ def _message_exprs(col: str, typ: str) -> list[tuple[str, str, tuple[str, ...]]]
         # else produced is `response`. The input side is shared — a pair's user
         # turns are the same turns — so it stays `prompt` either way.
         produced = col if col in ("chosen", "rejected") else "response"
-        out.append((produced, f"list_transform(list_filter({q}, m -> {emitted}), m -> m.content)", both))
-        out.append(("prompt", f"list_transform(list_filter({q}, m -> NOT ({emitted})), m -> m.content)", both))
+        out.append((produced, f"list_transform(list_filter({q}, lambda m: {emitted}), lambda m: m.content)", both))
+        out.append(("prompt", f"list_transform(list_filter({q}, lambda m: NOT ({emitted})), lambda m: m.content)", both))
     for sub, group in MESSAGE_EXTRAS.items():
         if _text_subfield(typ, sub):
-            out.append((group, f"list_transform({q}, m -> m.{_ident(sub)})", (sub,)))
+            out.append((group, f"list_transform({q}, lambda m: m.{_ident(sub)})", (sub,)))
     return out
 
 
@@ -577,7 +577,7 @@ def _flatten(exprs: list[str]) -> str:
 
 
 def _matching(exprs: list[str], test: str) -> str:
-    return f"list_filter({_flatten(exprs)}, t -> t IS NOT NULL AND {test})"
+    return f"list_filter({_flatten(exprs)}, lambda t: t IS NOT NULL AND {test})"
 
 
 def _match_sql(exprs: list[str], test: str) -> str:
